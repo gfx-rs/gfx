@@ -178,21 +178,62 @@ impl QueueBlocker {
     }
 }
 
+#[derive(Debug, Default)]
+struct RenderPassDescriptorCache {
+    spare_descriptors: Vec<metal::RenderPassDescriptor>,
+}
+
+#[cfg(feature = "dispatch")]
+unsafe impl Send for RenderPassDescriptorCache {}
+#[cfg(feature = "dispatch")]
+unsafe impl Sync for RenderPassDescriptorCache {}
+
+impl RenderPassDescriptorCache {
+    fn alloc(&mut self, shared: &Shared) -> metal::RenderPassDescriptor {
+        if let Some(rp_desc) = self.spare_descriptors.pop() {
+            rp_desc
+        } else {
+            let rp_desc = metal::RenderPassDescriptor::new();
+            rp_desc.set_visibility_result_buffer(Some(&shared.visibility.buffer));
+            rp_desc.to_owned()
+        }
+    }
+
+    fn free(&mut self, rp_desc: metal::RenderPassDescriptor) {
+        rp_desc.set_render_target_array_length(0);
+        for i in 0..MAX_COLOR_ATTACHMENTS {
+            let desc = rp_desc.color_attachments().object_at(i as _).unwrap();
+            desc.set_texture(None);
+            desc.set_resolve_texture(None);
+            desc.set_slice(0);
+        }
+        if let Some(desc) = rp_desc.depth_attachment() {
+            desc.set_texture(None);
+            desc.set_slice(0);
+        }
+        if let Some(desc) = rp_desc.stencil_attachment() {
+            desc.set_texture(None);
+            desc.set_slice(0);
+        }
+        self.spare_descriptors.push(rp_desc);
+    }
+}
+
 #[derive(Debug)]
 struct PoolShared {
     online_recording: OnlineRecording,
+    render_pass_descriptors: Mutex<RenderPassDescriptorCache>,
     #[cfg(feature = "dispatch")]
     dispatch_queue: Option<NoDebug<dispatch::Queue>>,
 }
 
 type CommandBufferInnerPtr = Arc<RefCell<CommandBufferInner>>;
-type PoolSharedPtr = Arc<RefCell<PoolShared>>;
 
 #[derive(Debug)]
 pub struct CommandPool {
     shared: Arc<Shared>,
     allocated: Vec<CommandBufferInnerPtr>,
-    pool_shared: PoolSharedPtr,
+    pool_shared: Arc<PoolShared>,
 }
 
 unsafe impl Send for CommandPool {}
@@ -209,11 +250,12 @@ impl CommandPool {
                 }
             },
             online_recording,
+            render_pass_descriptors: Mutex::new(RenderPassDescriptorCache::default()),
         };
         CommandPool {
             shared: Arc::clone(shared),
             allocated: Vec::new(),
-            pool_shared: Arc::new(RefCell::new(pool_shared)),
+            pool_shared: Arc::new(pool_shared),
         }
     }
 }
@@ -221,7 +263,7 @@ impl CommandPool {
 #[derive(Debug)]
 pub struct CommandBuffer {
     shared: Arc<Shared>,
-    pool_shared: PoolSharedPtr,
+    pool_shared: Arc<PoolShared>,
     inner: CommandBufferInnerPtr,
     state: State,
     temp: Temp,
@@ -776,8 +818,14 @@ unsafe impl Send for SharedCommandBuffer {}
 
 #[cfg(feature = "dispatch")]
 impl EncodePass {
-    fn schedule(self, queue: &dispatch::Queue, cmd_buffer_arc: &Arc<Mutex<metal::CommandBuffer>>) {
+    fn schedule(
+        self,
+        queue: &dispatch::Queue,
+        cmd_buffer_arc: &Arc<Mutex<metal::CommandBuffer>>,
+        pool_shared_arc: &Arc<PoolShared>,
+    ) {
         let cmd_buffer = SharedCommandBuffer(Arc::clone(cmd_buffer_arc));
+        let pool_shared = Arc::clone(pool_shared_arc);
         queue.exec_async(move || match self {
             EncodePass::Render(list, resources, desc, label) => {
                 let encoder = cmd_buffer
@@ -785,6 +833,7 @@ impl EncodePass {
                     .lock()
                     .new_render_command_encoder(&desc)
                     .to_owned();
+                pool_shared.render_pass_descriptors.lock().free(desc);
                 encoder.set_label(&label);
                 for command in list {
                     exec_render(&encoder, command, &resources);
@@ -833,12 +882,18 @@ struct Journal {
 }
 
 impl Journal {
-    fn clear(&mut self) {
+    fn clear(&mut self, pool_shared: &PoolShared) {
         self.resources.clear();
-        self.passes.clear();
         self.render_commands.clear();
         self.compute_commands.clear();
         self.blit_commands.clear();
+
+        let mut rp_desc_cache = pool_shared.render_pass_descriptors.lock();
+        for (pass, _, _) in self.passes.drain(..) {
+            if let soft::Pass::Render(desc) = pass {
+                rp_desc_cache.free(desc);
+            }
+        }
     }
 
     fn stop(&mut self) {
@@ -958,6 +1013,7 @@ enum CommandSink {
     Remote {
         queue: NoDebug<dispatch::Queue>,
         cmd_buffer: Arc<Mutex<metal::CommandBuffer>>,
+        pool_shared: Arc<PoolShared>,
         token: Token,
         pass: Option<EncodePass>,
         capacity: Capacity,
@@ -1086,11 +1142,12 @@ impl CommandSink {
                 ref cmd_buffer,
                 ref mut pass,
                 ref mut capacity,
+                ref pool_shared,
                 ..
             } => {
                 if let Some(pass) = pass.take() {
                     pass.update(capacity);
-                    pass.schedule(queue, cmd_buffer);
+                    pass.schedule(queue, cmd_buffer, pool_shared);
                 }
             }
         }
@@ -1124,7 +1181,11 @@ impl CommandSink {
     }
 
     /// Switch the active encoder to render by starting a render pass.
-    fn switch_render(&mut self, descriptor: metal::RenderPassDescriptor) -> PreRender {
+    fn switch_render(
+        &mut self,
+        descriptor: metal::RenderPassDescriptor,
+        pool_shared: &Arc<PoolShared>,
+    ) -> PreRender {
         //assert!(AutoReleasePool::is_active());
         self.stop_encoding();
 
@@ -1138,6 +1199,7 @@ impl CommandSink {
             } => {
                 *num_passes += 1;
                 let encoder = cmd_buffer.new_render_command_encoder(&descriptor);
+                pool_shared.render_pass_descriptors.lock().free(descriptor);
                 if !label.is_empty() {
                     encoder.set_label(label);
                 }
@@ -1188,12 +1250,13 @@ impl CommandSink {
         &mut self,
         label: &str,
         descriptor: metal::RenderPassDescriptor,
+        pool_shared: &Arc<PoolShared>,
         commands: I,
     ) where
         I: Iterator<Item = soft::RenderCommand<&'a soft::Ref>>,
     {
         {
-            let mut pre = self.switch_render(descriptor);
+            let mut pre = self.switch_render(descriptor, pool_shared);
             if !label.is_empty() {
                 if let PreRender::Immediate(encoder) = pre {
                     encoder.set_label(label);
@@ -1264,11 +1327,12 @@ impl CommandSink {
                 ref mut pass,
                 ref mut capacity,
                 ref label,
+                ref pool_shared,
                 ..
             } => {
                 if let Some(pass) = pass.take() {
                     pass.update(capacity);
-                    pass.schedule(queue, cmd_buffer);
+                    pass.schedule(queue, cmd_buffer, pool_shared);
                 }
                 let list = Vec::with_capacity(capacity.blit);
                 *pass = Some(EncodePass::Blit(list, label.clone()));
@@ -1376,11 +1440,12 @@ impl CommandSink {
                 ref mut pass,
                 ref mut capacity,
                 ref label,
+                ref pool_shared,
                 ..
             } => {
                 if let Some(pass) = pass.take() {
                     pass.update(capacity);
-                    pass.schedule(queue, cmd_buffer);
+                    pass.schedule(queue, cmd_buffer, pool_shared);
                 }
                 let list = Vec::with_capacity(capacity.compute);
                 *pass = Some(EncodePass::Compute(
@@ -1448,7 +1513,7 @@ impl Drop for CommandBufferInner {
 }
 
 impl CommandBufferInner {
-    pub(crate) fn reset(&mut self, shared: &Shared, release: bool) {
+    fn reset(&mut self, shared: &Shared, pool_shared: &PoolShared, release: bool) {
         match self.sink.take() {
             Some(CommandSink::Immediate {
                 token,
@@ -1460,7 +1525,7 @@ impl CommandBufferInner {
             }
             Some(CommandSink::Deferred { mut journal, .. }) => {
                 if !release {
-                    journal.clear();
+                    journal.clear(pool_shared);
                     self.backup_journal = Some(journal);
                 }
             }
@@ -2249,10 +2314,11 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                 blocker.submit_impl(cmd_buffer);
 
                 if let Some(fence) = fence {
-                    debug!("\tmarking fence ptr {:?} as pending", fence.0.as_ptr());
-                    fence
-                        .0
-                        .replace(native::FenceInner::PendingSubmission(cmd_buffer.to_owned()));
+                    debug!(
+                        "\tmarking fence ptr {:?} as pending",
+                        fence.0.raw() as *const _
+                    );
+                    *fence.0.lock() = native::FenceInner::PendingSubmission(cmd_buffer.to_owned());
                 }
             } else if let Some(cmd_buffer) = deferred_cmd_buffer {
                 blocker.submit_impl(cmd_buffer);
@@ -2320,7 +2386,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
         for cmd_buffer in &self.allocated {
             cmd_buffer
                 .borrow_mut()
-                .reset(&self.shared, release_resources);
+                .reset(&self.shared, &self.pool_shared, release_resources);
         }
     }
 
@@ -2437,7 +2503,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let can_immediate = inner.level == com::Level::Primary
             && flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT);
-        let sink = match self.pool_shared.borrow_mut().online_recording {
+        let sink = match self.pool_shared.online_recording {
             OnlineRecording::Immediate if can_immediate => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
                 if !self.name.is_empty() {
@@ -2461,19 +2527,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     queue: NoDebug(dispatch::Queue::with_target_queue(
                         "gfx-metal",
                         dispatch::QueueAttribute::Serial,
-                        &self
-                            .pool_shared
-                            .borrow_mut()
-                            .dispatch_queue
-                            .as_ref()
-                            .unwrap()
-                            .0,
+                        &self.pool_shared.dispatch_queue.as_ref().unwrap().0,
                     )),
                     cmd_buffer: Arc::new(Mutex::new(cmd_buffer)),
                     token,
                     pass: None,
                     capacity: inner.backup_capacity.take().unwrap_or_default(),
                     label: String::new(),
+                    pool_shared: Arc::clone(&self.pool_shared),
                 }
             }
             _ => CommandSink::Deferred {
@@ -2510,7 +2571,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     ..
                 }) => {
                     *is_encoding = true;
-                    let pass_desc = metal::RenderPassDescriptor::new().to_owned();
+                    let pass_desc = self
+                        .pool_shared
+                        .render_pass_descriptors
+                        .lock()
+                        .alloc(&self.shared);
                     journal.passes.alloc().init((
                         soft::Pass::Render(pass_desc),
                         0..0,
@@ -2532,7 +2597,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         self.state.reset_resources();
         self.inner
             .borrow_mut()
-            .reset(&self.shared, release_resources);
+            .reset(&self.shared, &self.pool_shared, release_resources);
     }
 
     unsafe fn pipeline_barrier<'a, T>(
@@ -2689,7 +2754,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
                 for layer in layers {
                     for level in sub.level_start..sub.level_start + num_levels {
-                        let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                        let descriptor = self
+                            .pool_shared
+                            .render_pass_descriptors
+                            .lock()
+                            .alloc(&self.shared);
                         if base_extent.depth > 1 {
                             assert_eq!((sub.layer_start, num_layers), (0, 1));
                             let depth = base_extent.at_level(level).depth as u64;
@@ -2755,6 +2824,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         sink.as_mut().unwrap().quick_render(
                             "clear_image",
                             descriptor,
+                            &self.pool_shared,
                             iter::empty(),
                         );
                     }
@@ -3161,6 +3231,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         };
 
         let layered_rendering = self.shared.private_caps.layered_rendering;
+        let pool_shared = &self.pool_shared;
+        let shared = &self.shared;
         autoreleasepool(|| {
             let dst_new = match dst_cubish {
                 Some(ref tex) => tex.as_ref(),
@@ -3168,7 +3240,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             };
 
             for ((aspects, level), list) in vertices.drain() {
-                let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                let descriptor = pool_shared.render_pass_descriptors.lock().alloc(shared);
                 if layered_rendering {
                     descriptor.set_render_target_array_length(dst_layers as _);
                 }
@@ -3223,9 +3295,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
                 let commands = prelude.iter().chain(&com_ds).chain(&extra).cloned();
 
-                sink.as_mut()
-                    .unwrap()
-                    .quick_render("blit_image", descriptor, commands);
+                sink.as_mut().unwrap().quick_render(
+                    "blit_image",
+                    descriptor,
+                    pool_shared,
+                    commands,
+                );
             }
         });
 
@@ -3387,14 +3462,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         self.state.pending_subpasses.clear();
         self.state.target_extent = framebuffer.extent;
 
-        //TODO: cache produced `RenderPassDescriptor` objects
-        // we stack the subpasses in the opposite order
+        //Note: we stack the subpasses in the opposite order
         for subpass in render_pass.subpasses.iter().rev() {
             let mut combined_aspects = Aspects::empty();
             let mut sample_count = 0;
             let descriptor = autoreleasepool(|| {
-                let descriptor = metal::RenderPassDescriptor::new().to_owned();
-                descriptor.set_visibility_result_buffer(Some(&self.shared.visibility.buffer));
+                let descriptor = self
+                    .pool_shared
+                    .render_pass_descriptors
+                    .lock()
+                    .alloc(&self.shared);
                 if self.shared.private_caps.layered_rendering {
                     descriptor.set_render_target_array_length(framebuffer.extent.depth as _);
                 }
@@ -3517,7 +3594,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.inner
                 .borrow_mut()
                 .sink()
-                .switch_render(sin.descriptor)
+                .switch_render(sin.descriptor, &self.pool_shared)
                 .issue_many(init_commands);
         });
     }

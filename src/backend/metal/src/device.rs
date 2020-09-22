@@ -39,7 +39,6 @@ use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
 use std::{
     borrow::Borrow,
-    cell::RefCell,
     cmp,
     collections::hash_map::Entry,
     collections::BTreeMap,
@@ -2844,18 +2843,18 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn destroy_image_view(&self, _view: n::ImageView) {}
 
     fn create_fence(&self, signaled: bool) -> Result<n::Fence, OutOfMemory> {
-        let cell = RefCell::new(n::FenceInner::Idle { signaled });
+        let mutex = Mutex::new(n::FenceInner::Idle { signaled });
         debug!(
             "Creating fence ptr {:?} with signal={}",
-            cell.as_ptr(),
+            unsafe { mutex.raw() } as *const _,
             signaled
         );
-        Ok(n::Fence(cell))
+        Ok(n::Fence(mutex))
     }
 
     unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), OutOfMemory> {
-        debug!("Resetting fence ptr {:?}", fence.0.as_ptr());
-        fence.0.replace(n::FenceInner::Idle { signaled: false });
+        debug!("Resetting fence ptr {:?}", fence.0.raw() as *const _);
+        *fence.0.lock() = n::FenceInner::Idle { signaled: false };
         Ok(())
     }
 
@@ -2869,12 +2868,12 @@ impl hal::device::Device<Backend> for Device {
         }
 
         debug!("wait_for_fence {:?} for {} ms", fence, timeout_ns);
-        match *fence.0.borrow() {
+        match *fence.0.lock() {
             n::FenceInner::Idle { signaled } => {
                 if !signaled {
                     warn!(
                         "Fence ptr {:?} is not pending, waiting not possible",
-                        fence.0.as_ptr()
+                        fence.0.raw() as *const _
                     );
                 }
                 Ok(signaled)
@@ -2900,7 +2899,7 @@ impl hal::device::Device<Backend> for Device {
     }
 
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, DeviceLost> {
-        Ok(match *fence.0.borrow() {
+        Ok(match *fence.0.lock() {
             n::FenceInner::Idle { signaled } => signaled,
             n::FenceInner::PendingSubmission(ref cmd_buf) => match cmd_buf.status() {
                 metal::MTLCommandBufferStatus::Completed => true,
