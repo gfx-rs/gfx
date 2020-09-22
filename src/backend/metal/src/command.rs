@@ -2192,7 +2192,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                     });
                 }
 
-                let reset = match *sink {
+                match *sink {
                     Some(CommandSink::Immediate {
                         ref cmd_buffer,
                         ref token,
@@ -2212,7 +2212,8 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                             }
                             blocker.submit_impl(cmd_buffer);
                         }
-                        true // no reason to keep the sink alive
+                        // destroy the sink with the associated command buffer
+                        inner.sink = None;
                     }
                     Some(CommandSink::Deferred { ref journal, .. }) => {
                         num_deferred += 1;
@@ -2235,7 +2236,6 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                                 blocker.submit_impl(cmd_buffer);
                             }
                         }
-                        false
                     }
                     #[cfg(feature = "dispatch")]
                     Some(CommandSink::Remote {
@@ -2252,13 +2252,8 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                         queue.exec_sync(move || {
                             shared_cb.0.lock().commit();
                         });
-                        false
                     }
                     None => panic!("Command buffer not recorded for submission"),
-                };
-
-                if reset {
-                    inner.sink = None;
                 }
             }
 
@@ -4170,11 +4165,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     ..
                 } = *self.inner.borrow_mut();
 
-                let new_src = if src.mtl_format == dst.mtl_format {
-                    src_raw
+                let new_dst = if src.mtl_format == dst.mtl_format {
+                    dst_raw
                 } else {
                     assert_eq!(src.format_desc.bits, dst.format_desc.bits);
-                    let tex = src_raw.new_texture_view(dst.mtl_format);
+                    let tex = dst_raw.new_texture_view(src.mtl_format);
                     retained_textures.push(tex);
                     retained_textures.last().unwrap()
                 };
@@ -4185,8 +4180,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         None
                     } else {
                         Some(soft::BlitCommand::CopyImage {
-                            src: AsNative::from(new_src.as_ref()),
-                            dst: AsNative::from(dst_raw.as_ref()),
+                            src: AsNative::from(src_raw.as_ref()),
+                            dst: AsNative::from(new_dst.as_ref()),
                             region: r.clone(),
                         })
                     }

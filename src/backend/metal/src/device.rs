@@ -2594,7 +2594,7 @@ impl hal::device::Device<Backend> for Device {
         descriptor.set_depth(extent.depth as u64);
         descriptor.set_mipmap_level_count(mip_levels as u64);
         descriptor.set_pixel_format(mtl_format);
-        descriptor.set_usage(conv::map_texture_usage(usage, tiling));
+        descriptor.set_usage(conv::map_texture_usage(usage, tiling, view_caps));
 
         let base = format.base_format();
         let format_desc = base.0.desc();

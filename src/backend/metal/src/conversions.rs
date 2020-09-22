@@ -1090,10 +1090,22 @@ pub fn resource_options_from_storage_and_cache(
     .unwrap()
 }
 
-pub fn map_texture_usage(usage: image::Usage, tiling: image::Tiling) -> MTLTextureUsage {
+pub fn map_texture_usage(
+    usage: image::Usage,
+    tiling: image::Tiling,
+    view_caps: image::ViewCapabilities,
+) -> MTLTextureUsage {
     use self::hal::image::Usage as U;
 
-    let mut texture_usage = MTLTextureUsage::PixelFormatView;
+    let mut texture_usage = MTLTextureUsage::Unknown;
+    // We have to view the texture with a different format
+    // in `clear_image` and `copy_image` destinations.
+    if view_caps.contains(image::ViewCapabilities::MUTABLE_FORMAT)
+        || usage.contains(U::TRANSFER_DST)
+    {
+        texture_usage |= MTLTextureUsage::PixelFormatView;
+    }
+
     if usage.intersects(U::COLOR_ATTACHMENT | U::DEPTH_STENCIL_ATTACHMENT) {
         texture_usage |= MTLTextureUsage::RenderTarget;
     }
