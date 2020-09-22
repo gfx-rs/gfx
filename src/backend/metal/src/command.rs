@@ -2076,16 +2076,13 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
         Is: IntoIterator<Item = &'a S>,
     {
-        use smallvec::SmallVec;
-
         debug!("submitting with fence {:?}", fence);
         self.wait(wait_semaphores.into_iter().map(|(s, _)| s));
 
-        const BLOCK_BUCKET: usize = 4;
         let system_semaphores = signal_semaphores
             .into_iter()
             .filter_map(|sem| sem.borrow().system.clone())
-            .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+            .collect::<Vec<_>>();
 
         #[allow(unused_mut)]
         let (mut num_immediate, mut num_deferred, mut num_remote) = (0, 0, 0);
@@ -2130,7 +2127,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                     });
                 }
 
-                match *sink {
+                let reset = match *sink {
                     Some(CommandSink::Immediate {
                         ref cmd_buffer,
                         ref token,
@@ -2150,6 +2147,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                             }
                             blocker.submit_impl(cmd_buffer);
                         }
+                        true // no reason to keep the sink alive
                     }
                     Some(CommandSink::Deferred { ref journal, .. }) => {
                         num_deferred += 1;
@@ -2172,6 +2170,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                                 blocker.submit_impl(cmd_buffer);
                             }
                         }
+                        false
                     }
                     #[cfg(feature = "dispatch")]
                     Some(CommandSink::Remote {
@@ -2188,29 +2187,25 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                         queue.exec_sync(move || {
                             shared_cb.0.lock().commit();
                         });
+                        false
                     }
                     None => panic!("Command buffer not recorded for submission"),
+                };
+
+                if reset {
+                    inner.sink = None;
                 }
             }
 
             if do_signal || !event_commands.is_empty() || !self.active_visibility_queries.is_empty()
             {
                 //Note: there is quite a bit copying here
-                let free_buffers = self
-                    .retained_buffers
-                    .drain(..)
-                    .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
-                let free_textures = self
-                    .retained_textures
-                    .drain(..)
-                    .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+                let free_buffers = self.retained_buffers.drain(..).collect::<Vec<_>>();
+                let free_textures = self.retained_textures.drain(..).collect::<Vec<_>>();
                 let visibility = if self.active_visibility_queries.is_empty() {
                     None
                 } else {
-                    let queries = self
-                        .active_visibility_queries
-                        .drain(..)
-                        .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+                    let queries = self.active_visibility_queries.drain(..).collect::<Vec<_>>();
                     Some((Arc::clone(&self.shared), queries))
                 };
 
