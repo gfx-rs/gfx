@@ -429,6 +429,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             | F::SHADER_CLIP_DISTANCE
             | if self.shared.private_caps.msl_version >= metal::MTLLanguageVersion::V2_0 {
                 F::TEXTURE_DESCRIPTOR_ARRAY |
+                    F::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING |
                     F::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING |
                     F::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
             } else {
