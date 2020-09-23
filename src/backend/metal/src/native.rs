@@ -17,11 +17,10 @@ use range_alloc::RangeAllocator;
 use arrayvec::ArrayVec;
 use cocoa_foundation::foundation::NSRange;
 use metal;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use spirv_cross::{msl, spirv};
 
 use std::{
-    cell::RefCell,
     fmt,
     ops::Range,
     os::raw::{c_long, c_void},
@@ -988,7 +987,7 @@ pub enum FenceInner {
 }
 
 #[derive(Debug)]
-pub struct Fence(pub(crate) RefCell<FenceInner>);
+pub struct Fence(pub(crate) Mutex<FenceInner>);
 
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
