@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.6.4 backend-vulkan-0.6.2 backend-metal-0.6.3 (23-09-2020)
+  - fix descriptor indexing features
+
 ### backend-dx11-0.6.4 (07-09-2020)
   - fix memory flush ranges
   - support presentation modes
