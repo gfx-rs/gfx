@@ -727,6 +727,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 _ => unreachable!(),
             })
             .chain(
+                if requested_features.intersects(
+                    Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
+                        | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
+                        | Features::UNSIZED_DESCRIPTOR_ARRAY
+                ) {
+                    Some(*EXT_DESCRIPTOR_INDEXING)
+                } else {
+                    None
+                },
+            )
+            .chain(
                 if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
                     Some(*MESH_SHADER)
                 } else {
