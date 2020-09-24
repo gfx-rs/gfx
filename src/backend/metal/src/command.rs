@@ -304,20 +304,26 @@ struct DescriptorSetInfo {
     compute_resources: Vec<(ResourcePtr, metal::MTLResourceUsage)>,
 }
 
-/// The current state of a command buffer, used for two distinct purposes:
-///   1. inherit resource bindings between passes
-///   2. avoid redundant state settings
-///
-/// ## Spaces
-/// Note that these two usages are distinct and operate in technically different
-/// spaces (1 - Vulkan, 2 - Metal), so be careful not to confuse them.
-/// For example, Vulkan spaces are `pending_subpasses`, `rasterizer_state`, `target_*`.
-/// While Metal spaces are `resources_*`.
+#[derive(Debug, Default)]
+struct TargetState {
+    aspects: Aspects,
+    extent: Extent,
+    formats: native::SubpassFormats,
+    samples: NumSamples,
+}
+
+/// The current state of a command buffer. It's a mixed bag of states coming directly
+/// from gfx-hal and inherited between Metal pases, states existing solely on Metal side,
+/// and stuff that is half way here and there.
 ///
 /// ## Vertex buffers
 /// You may notice that vertex buffers are stored in two separate places: per pipeline, and
 /// here in the state. These can't be merged together easily because at binding time we
 /// want one input vertex buffer to potentially be bound to multiple entry points....
+///
+/// ## Depth-stencil desc
+/// We have one coming from the current graphics pipeline, and one representing the
+/// current Metal state.
 #[derive(Debug)]
 struct State {
     // Note: this could be `MTLViewport` but we have to patch the depth separately.
@@ -340,13 +346,10 @@ struct State {
     rasterizer_state: Option<native::RasterizerState>,
     depth_bias: pso::DepthBias,
     stencil: native::StencilState<pso::StencilValue>,
+    depth_stencil_desc: pso::DepthStencilDesc,
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
-    ///TODO: add a structure to store render target state
-    target_aspects: Aspects,
-    target_extent: Extent,
-    target_formats: native::SubpassFormats,
-    target_samples: NumSamples,
+    target: TargetState,
     visibility_query: (metal::MTLVisibilityResultMode, buffer::Offset),
     pending_subpasses: Vec<SubpassInfo>,
     descriptor_sets: ArrayVec<[DescriptorSetInfo; MAX_BOUND_DESCRIPTOR_SETS]>,
@@ -413,7 +416,7 @@ impl State {
             .map(|&(rect, ref depth)| soft::RenderCommand::SetViewport(rect, depth.clone()));
         let com_scissor = self
             .scissors
-            .map(|sr| soft::RenderCommand::SetScissor(Self::clamp_scissor(sr, self.target_extent)));
+            .map(|sr| soft::RenderCommand::SetScissor(Self::clamp_scissor(sr, self.target.extent)));
         (com_vp, com_scissor)
     }
 
@@ -578,16 +581,16 @@ impl State {
         })
     }
 
-    fn build_depth_stencil(&self) -> Option<pso::DepthStencilDesc> {
+    fn build_depth_stencil(&mut self) -> Option<pso::DepthStencilDesc> {
         let mut desc = match self.render_pso {
-            Some(ref ps) => ps.ds_desc,
+            Some(ref rp) => rp.ds_desc,
             None => return None,
         };
 
-        if !self.target_aspects.contains(Aspects::DEPTH) {
+        if !self.target.aspects.contains(Aspects::DEPTH) {
             desc.depth = None;
         }
-        if !self.target_aspects.contains(Aspects::STENCIL) {
+        if !self.target.aspects.contains(Aspects::STENCIL) {
             desc.stencil = None;
         }
 
@@ -601,7 +604,12 @@ impl State {
             }
         }
 
-        Some(desc)
+        if desc == self.depth_stencil_desc {
+            None
+        } else {
+            self.depth_stencil_desc = desc;
+            Some(desc)
+        }
     }
 
     fn set_depth_bias<'a>(
@@ -669,7 +677,7 @@ impl State {
             height: rect.h as _,
         };
         self.scissors = Some(scissor);
-        let clamped = State::clamp_scissor(scissor, self.target_extent);
+        let clamped = State::clamp_scissor(scissor, self.target.extent);
         soft::RenderCommand::SetScissor(clamped)
     }
 
@@ -2430,12 +2438,10 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
                     read_masks: pso::Sided::new(!0),
                     write_masks: pso::Sided::new(!0),
                 },
+                depth_stencil_desc: pso::DepthStencilDesc::default(),
                 push_constants: Vec::new(),
                 vertex_buffers: Vec::new(),
-                target_aspects: Aspects::empty(),
-                target_extent: Extent::default(),
-                target_formats: native::SubpassFormats::default(),
-                target_samples: 0,
+                target: TargetState::default(),
                 visibility_query: (metal::MTLVisibilityResultMode::Disabled, 0),
                 pending_subpasses: Vec::new(),
                 descriptor_sets: (0..MAX_BOUND_DESCRIPTOR_SETS)
@@ -2474,7 +2480,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
 }
 
 impl CommandBuffer {
-    fn update_depth_stencil(&self) {
+    fn update_depth_stencil(&mut self) {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
         if !pre.is_void() {
@@ -2542,20 +2548,20 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         inner.sink = Some(sink);
 
         if let Some(framebuffer) = info.framebuffer {
-            self.state.target_extent = framebuffer.extent;
+            self.state.target.extent = framebuffer.extent;
         }
         if let Some(sp) = info.subpass {
             let subpass = &sp.main_pass.subpasses[sp.index as usize];
-            self.state.target_formats.copy_from(&subpass.target_formats);
+            self.state.target.formats.copy_from(&subpass.target_formats);
 
-            self.state.target_aspects = Aspects::empty();
+            self.state.target.aspects = Aspects::empty();
             if !subpass.colors.is_empty() {
-                self.state.target_aspects |= Aspects::COLOR;
+                self.state.target.aspects |= Aspects::COLOR;
             }
             if let Some((at_id, _)) = subpass.depth_stencil {
                 let rat = &sp.main_pass.attachments[at_id];
                 let aspects = rat.format.unwrap().surface_desc().aspects;
-                self.state.target_aspects |= aspects;
+                self.state.target.aspects |= aspects;
             }
 
             match inner.sink {
@@ -2836,7 +2842,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         U::Item: Borrow<pso::ClearRect>,
     {
         // gather vertices/polygons
-        let de = self.state.target_extent;
+        let ext = self.state.target.extent;
         let vertices = &mut self.temp.clear_vertices;
         vertices.clear();
 
@@ -2858,8 +2864,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     let d = data[index];
                     vertices.alloc().init(ClearVertex {
                         pos: [
-                            d[0] as f32 / de.width as f32,
-                            d[1] as f32 / de.height as f32,
+                            d[0] as f32 / ext.width as f32,
+                            d[1] as f32 / ext.height as f32,
                             0.0, //TODO: depth Z
                             layer as f32,
                         ],
@@ -2876,20 +2882,21 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         //  issue a PSO+color switch and a draw for each requested clear
         let mut key = ClearKey {
-            framebuffer_aspects: self.state.target_aspects,
+            framebuffer_aspects: self.state.target.aspects,
             color_formats: [metal::MTLPixelFormat::Invalid; MAX_COLOR_ATTACHMENTS],
             depth_stencil_format: self
                 .state
-                .target_formats
+                .target
+                .formats
                 .depth_stencil
                 .unwrap_or(metal::MTLPixelFormat::Invalid),
-            sample_count: self.state.target_samples,
+            sample_count: self.state.target.samples,
             target_index: None,
         };
         for (out, &(mtl_format, _)) in key
             .color_formats
             .iter_mut()
-            .zip(&self.state.target_formats.colors)
+            .zip(&self.state.target.formats.colors)
         {
             *out = mtl_format;
         }
@@ -2901,7 +2908,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
             let (com_clear, target_index) = match *clear.borrow() {
                 com::AttachmentClear::Color { index, value } => {
-                    let channel = self.state.target_formats.colors[index].1;
+                    let channel = self.state.target.formats.colors[index].1;
                     //Note: technically we should be able to derive the Channel from the
                     // `value` variant, but this is blocked by the portability that is
                     // always passing the attachment clears as `ClearColor::Sfloat` atm.
@@ -2962,7 +2969,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 None
             };
 
-            let ext = self.state.target_extent;
             let rect = pso::Rect {
                 x: 0,
                 y: ext.height as _,
@@ -2995,9 +3001,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
 
         // reset all the affected states
-        let (com_viewport, com_scissor) = self.state.make_viewport_and_scissor_commands();
-        let (com_pso, com_rast) = self.state.make_pso_commands();
-
         let device_lock = &self.shared.device;
         let com_ds = match self.state.build_depth_stencil() {
             Some(desc) => {
@@ -3006,6 +3009,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             }
             None => None,
         };
+
+        let (com_viewport, com_scissor) = self.state.make_viewport_and_scissor_commands();
+        let (com_pso, com_rast) = self.state.make_pso_commands();
 
         let com_vs = match (
             self.state.resources_vs.buffers.first(),
@@ -3455,7 +3461,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
 
         self.state.pending_subpasses.clear();
-        self.state.target_extent = framebuffer.extent;
+        self.state.target.extent = framebuffer.extent;
 
         //Note: we stack the subpasses in the opposite order
         for subpass in render_pass.subpasses.iter().rev() {
@@ -3559,9 +3565,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             Some(ref ps) => ps.formats == sin.formats,
             None => false,
         };
-        self.state.target_aspects = sin.combined_aspects;
-        self.state.target_formats.copy_from(&sin.formats);
-        self.state.target_samples = sin.sample_count;
+        self.state.depth_stencil_desc = pso::DepthStencilDesc::default();
+        self.state.target.aspects = sin.combined_aspects;
+        self.state.target.formats.copy_from(&sin.formats);
+        self.state.target.samples = sin.sample_count;
 
         let ds_store = &self.shared.service_pipes.depth_stencil_states;
         let ds_state;
@@ -3616,7 +3623,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
 
         self.state.render_pso_is_compatible =
-            pipeline.attachment_formats == self.state.target_formats;
+            pipeline.attachment_formats == self.state.target.formats;
         let set_pipeline = match self.state.render_pso {
             Some(ref ps) if ps.raw.as_ptr() == pipeline.raw.as_ptr() => false,
             Some(ref mut ps) => {
