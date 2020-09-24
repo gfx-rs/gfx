@@ -326,6 +326,7 @@ struct TargetState {
 /// current Metal state.
 #[derive(Debug)]
 struct State {
+    // --------  Hal states --------- //
     // Note: this could be `MTLViewport` but we have to patch the depth separately.
     viewport: Option<(pso::Rect, Range<f32>)>,
     scissors: Option<MTLScissorRect>,
@@ -338,36 +339,50 @@ struct State {
     compute_pso: Option<metal::ComputePipelineState>,
     work_group_size: MTLSize,
     primitive_type: MTLPrimitiveType,
-    //TODO: move Metal-side state into a separate struct
-    resources_vs: StageResources,
-    resources_ps: StageResources,
-    resources_cs: StageResources,
-    index_buffer: Option<IndexBuffer<BufferPtr>>,
     rasterizer_state: Option<native::RasterizerState>,
     depth_bias: pso::DepthBias,
     stencil: native::StencilState<pso::StencilValue>,
-    depth_stencil_desc: pso::DepthStencilDesc,
     push_constants: Vec<u32>,
-    vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
-    target: TargetState,
     visibility_query: (metal::MTLVisibilityResultMode, buffer::Offset),
+    target: TargetState,
     pending_subpasses: Vec<SubpassInfo>,
+
+    // --------  Metal states --------- //
+    resources_vs: StageResources,
+    resources_ps: StageResources,
+    resources_cs: StageResources,
     descriptor_sets: ArrayVec<[DescriptorSetInfo; MAX_BOUND_DESCRIPTOR_SETS]>,
+    index_buffer: Option<IndexBuffer<BufferPtr>>,
+    vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
+    active_depth_stencil_desc: pso::DepthStencilDesc,
+    active_scissor: MTLScissorRect,
 }
 
 impl State {
-    /// Resets the current Metal side of the state tracking.
-    fn reset_resources(&mut self) {
+    fn reset(&mut self) {
+        self.viewport = None;
+        self.scissors = None;
+        self.blend_color = None;
+        self.render_pso = None;
+        self.compute_pso = None;
+        self.rasterizer_state = None;
+        self.depth_bias = pso::DepthBias::default();
+        self.stencil = native::StencilState {
+            reference_values: pso::Sided::new(0),
+            read_masks: pso::Sided::new(!0),
+            write_masks: pso::Sided::new(!0),
+        };
+        self.push_constants.clear();
+        self.pending_subpasses.clear();
         self.resources_vs.clear();
         self.resources_ps.clear();
         self.resources_cs.clear();
-        self.push_constants.clear();
-        self.vertex_buffers.clear();
-        self.pending_subpasses.clear();
         for ds in self.descriptor_sets.iter_mut() {
             ds.graphics_resources.clear();
             ds.compute_resources.clear();
         }
+        self.index_buffer = None;
+        self.vertex_buffers.clear();
     }
 
     fn clamp_scissor(sr: MTLScissorRect, extent: Extent) -> MTLScissorRect {
@@ -404,20 +419,10 @@ impl State {
         }
     }
 
-    fn make_viewport_and_scissor_commands(
-        &self,
-    ) -> (
-        Option<soft::RenderCommand<&soft::Ref>>,
-        Option<soft::RenderCommand<&soft::Ref>>,
-    ) {
-        let com_vp = self
-            .viewport
+    fn make_viewport_command(&self) -> Option<soft::RenderCommand<&soft::Ref>> {
+        self.viewport
             .as_ref()
-            .map(|&(rect, ref depth)| soft::RenderCommand::SetViewport(rect, depth.clone()));
-        let com_scissor = self
-            .scissors
-            .map(|sr| soft::RenderCommand::SetScissor(Self::clamp_scissor(sr, self.target.extent)));
-        (com_vp, com_scissor)
+            .map(|&(rect, ref depth)| soft::RenderCommand::SetViewport(rect, depth.clone()))
     }
 
     fn make_render_commands(
@@ -444,7 +449,7 @@ impl State {
         } else {
             None
         };
-        let (com_vp, com_scissor) = self.make_viewport_and_scissor_commands();
+        let com_vp = self.make_viewport_command();
         let (com_pso, com_rast) = self.make_pso_commands();
 
         let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_ps));
@@ -489,12 +494,12 @@ impl State {
 
         com_vp
             .into_iter()
-            .chain(com_scissor)
             .chain(com_blend)
             .chain(com_depth_bias)
             .chain(com_visibility)
             .chain(com_pso)
             .chain(com_rast)
+            //.chain(com_scissor) // done outside
             //.chain(com_ds) // done outside
             .chain(com_resources)
             .chain(com_used_resources)
@@ -604,10 +609,10 @@ impl State {
             }
         }
 
-        if desc == self.depth_stencil_desc {
+        if desc == self.active_depth_stencil_desc {
             None
         } else {
-            self.depth_stencil_desc = desc;
+            self.active_depth_stencil_desc = desc;
             Some(desc)
         }
     }
@@ -669,7 +674,27 @@ impl State {
         soft::RenderCommand::SetViewport(vp.rect, depth)
     }
 
-    fn set_scissor<'a>(&mut self, rect: pso::Rect) -> soft::RenderCommand<&'a soft::Ref> {
+    fn set_scissor<'a>(
+        &mut self,
+        rect: MTLScissorRect,
+    ) -> Option<soft::RenderCommand<&'a soft::Ref>> {
+        //TODO: https://github.com/gfx-rs/metal-rs/issues/183
+        if self.active_scissor.x == rect.x
+            && self.active_scissor.y == rect.y
+            && self.active_scissor.width == rect.width
+            && self.active_scissor.height == rect.height
+        {
+            None
+        } else {
+            self.active_scissor = rect;
+            Some(soft::RenderCommand::SetScissor(rect))
+        }
+    }
+
+    fn set_hal_scissor<'a>(
+        &mut self,
+        rect: pso::Rect,
+    ) -> Option<soft::RenderCommand<&'a soft::Ref>> {
         let scissor = MTLScissorRect {
             x: rect.x as _,
             y: rect.y as _,
@@ -678,7 +703,11 @@ impl State {
         };
         self.scissors = Some(scissor);
         let clamped = State::clamp_scissor(scissor, self.target.extent);
-        soft::RenderCommand::SetScissor(clamped)
+        self.set_scissor(clamped)
+    }
+
+    fn reset_scissor<'a>(&mut self) -> Option<soft::RenderCommand<&'a soft::Ref>> {
+        self.scissors.and_then(|sr| self.set_scissor(sr))
     }
 
     fn set_blend_color<'a>(
@@ -2438,7 +2467,6 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
                     read_masks: pso::Sided::new(!0),
                     write_masks: pso::Sided::new(!0),
                 },
-                depth_stencil_desc: pso::DepthStencilDesc::default(),
                 push_constants: Vec::new(),
                 vertex_buffers: Vec::new(),
                 target: TargetState::default(),
@@ -2447,6 +2475,13 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
                 descriptor_sets: (0..MAX_BOUND_DESCRIPTOR_SETS)
                     .map(|_| DescriptorSetInfo::default())
                     .collect(),
+                active_depth_stencil_desc: pso::DepthStencilDesc::default(),
+                active_scissor: MTLScissorRect {
+                    x: 0,
+                    y: 0,
+                    width: 0,
+                    height: 0,
+                },
             },
             temp: Temp {
                 clear_vertices: Vec::new(),
@@ -2595,7 +2630,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn reset(&mut self, release_resources: bool) {
-        self.state.reset_resources();
+        self.state.reset();
         self.inner
             .borrow_mut()
             .reset(&self.shared, &self.pool_shared, release_resources);
@@ -2976,12 +3011,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 h: -(ext.height as i16),
             };
             let com_viewport = iter::once(soft::RenderCommand::SetViewport(rect, 0.0..1.0));
-            let com_scissor = iter::once(soft::RenderCommand::SetScissor(MTLScissorRect {
+            let com_scissor = self.state.set_scissor(MTLScissorRect {
                 x: 0,
                 y: 0,
                 width: ext.width as _,
                 height: ext.height as _,
-            }));
+            });
 
             let com_draw = iter::once(soft::RenderCommand::Draw {
                 primitive_type: MTLPrimitiveType::Triangle,
@@ -3010,7 +3045,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             None => None,
         };
 
-        let (com_viewport, com_scissor) = self.state.make_viewport_and_scissor_commands();
+        let com_scissor = self.state.reset_scissor();
+        let com_viewport = self.state.make_viewport_command();
         let (com_pso, com_rast) = self.state.make_pso_commands();
 
         let com_vs = match (
@@ -3392,8 +3428,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             panic!("More than one scissor set; Metal supports only one viewport");
         }
 
-        let com = self.state.set_scissor(*rect);
-        self.inner.borrow_mut().sink().pre_render().issue(com);
+        if let Some(com) = self.state.set_hal_scissor(*rect) {
+            self.inner.borrow_mut().sink().pre_render().issue(com);
+        }
     }
 
     unsafe fn set_blend_constants(&mut self, color: pso::ColorValue) {
@@ -3565,10 +3602,18 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             Some(ref ps) => ps.formats == sin.formats,
             None => false,
         };
-        self.state.depth_stencil_desc = pso::DepthStencilDesc::default();
+        self.state.active_depth_stencil_desc = pso::DepthStencilDesc::default();
+        self.state.active_scissor = MTLScissorRect {
+            x: 0,
+            y: 0,
+            width: self.state.target.extent.width as u64,
+            height: self.state.target.extent.height as u64,
+        };
         self.state.target.aspects = sin.combined_aspects;
         self.state.target.formats.copy_from(&sin.formats);
         self.state.target.samples = sin.sample_count;
+
+        let com_scissor = self.state.reset_scissor();
 
         let ds_store = &self.shared.service_pipes.depth_stencil_states;
         let ds_state;
@@ -3590,6 +3635,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let init_commands = self
             .state
             .make_render_commands(sin.combined_aspects)
+            .chain(com_scissor)
             .chain(com_ds);
 
         autoreleasepool(|| {
@@ -3704,7 +3750,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             pre.issue(self.state.set_viewport(vp, self.shared.disabilities));
         }
         if let Some(rect) = pipeline.baked_states.scissor {
-            pre.issue(self.state.set_scissor(rect));
+            if let Some(com) = self.state.set_hal_scissor(rect) {
+                pre.issue(com);
+            }
         }
         if let Some(ref color) = pipeline.baked_states.blend_color {
             pre.issue(self.state.set_blend_color(color));
