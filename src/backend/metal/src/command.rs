@@ -10,8 +10,7 @@ use hal::{
     buffer, command as com,
     device::OutOfMemory,
     format::{Aspects, FormatDesc},
-    image::{Extent, Filter, Layout, Level, NumSamples, SubresourceRange},
-    memory,
+    image as i, memory,
     pass::AttachmentLoadOp,
     pso, query,
     window::{PresentError, Suboptimal},
@@ -276,7 +275,7 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 struct Temp {
     clear_vertices: Vec<ClearVertex>,
-    blit_vertices: FastHashMap<(Aspects, Level), Vec<BlitVertex>>,
+    blit_vertices: FastHashMap<(Aspects, i::Level), Vec<BlitVertex>>,
     clear_values: Vec<Option<com::ClearValue>>,
 }
 
@@ -296,7 +295,7 @@ struct SubpassInfo {
     combined_aspects: Aspects,
     formats: native::SubpassFormats,
     operations: native::SubpassData<native::AttachmentOps>,
-    sample_count: NumSamples,
+    sample_count: i::NumSamples,
 }
 
 #[derive(Debug, Default)]
@@ -308,9 +307,9 @@ struct DescriptorSetInfo {
 #[derive(Debug, Default)]
 struct TargetState {
     aspects: Aspects,
-    extent: Extent,
+    extent: i::Extent,
     formats: native::SubpassFormats,
-    samples: NumSamples,
+    samples: i::NumSamples,
 }
 
 /// The current state of a command buffer. It's a mixed bag of states coming directly
@@ -386,7 +385,7 @@ impl State {
         self.vertex_buffers.clear();
     }
 
-    fn clamp_scissor(sr: MTLScissorRect, extent: Extent) -> MTLScissorRect {
+    fn clamp_scissor(sr: MTLScissorRect, extent: i::Extent) -> MTLScissorRect {
         // sometimes there is not even an active render pass at this point
         let x = sr.x.min(extent.width.max(1) as u64 - 1);
         let y = sr.y.min(extent.height.max(1) as u64 - 1);
@@ -2740,12 +2739,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn clear_image<T>(
         &mut self,
         image: &native::Image,
-        _layout: Layout,
+        _layout: i::Layout,
         value: com::ClearValue,
         subresource_ranges: T,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<SubresourceRange>,
+        T::Item: Borrow<i::SubresourceRange>,
     {
         let CommandBufferInner {
             ref mut retained_textures,
@@ -3091,9 +3090,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn resolve_image<T>(
         &mut self,
         _src: &native::Image,
-        _src_layout: Layout,
+        _src_layout: i::Layout,
         _dst: &native::Image,
-        _dst_layout: Layout,
+        _dst_layout: i::Layout,
         _regions: T,
     ) where
         T: IntoIterator,
@@ -3105,10 +3104,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn blit_image<T>(
         &mut self,
         src: &native::Image,
-        _src_layout: Layout,
+        _src_layout: i::Layout,
         dst: &native::Image,
-        _dst_layout: Layout,
-        filter: Filter,
+        _dst_layout: i::Layout,
+        filter: i::Filter,
         regions: T,
     ) where
         T: IntoIterator,
@@ -4197,9 +4196,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn copy_image<T>(
         &mut self,
         src: &native::Image,
-        src_layout: Layout,
+        src_layout: i::Layout,
         dst: &native::Image,
-        dst_layout: Layout,
+        dst_layout: i::Layout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -4304,7 +4303,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         &mut self,
         src: &native::Buffer,
         dst: &native::Image,
-        _dst_layout: Layout,
+        _dst_layout: i::Layout,
         regions: T,
     ) where
         T: IntoIterator,
@@ -4353,7 +4352,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn copy_image_to_buffer<T>(
         &mut self,
         src: &native::Image,
-        _src_layout: Layout,
+        _src_layout: i::Layout,
         dst: &native::Buffer,
         regions: T,
     ) where
