@@ -56,8 +56,8 @@ unsafe impl Sync for ShaderModule {}
 bitflags! {
     /// Subpass attachment operations.
     pub struct AttachmentOps: u8 {
-        const LOAD = 0x0;
-        const STORE = 0x1;
+        const LOAD = 0x1;
+        const STORE = 0x2;
     }
 }
 
