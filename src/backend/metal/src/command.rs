@@ -295,6 +295,7 @@ struct SubpassInfo {
     descriptor: metal::RenderPassDescriptor,
     combined_aspects: Aspects,
     formats: native::SubpassFormats,
+    operations: native::SubpassData<native::AttachmentOps>,
     sample_count: NumSamples,
 }
 
@@ -2587,14 +2588,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
         if let Some(sp) = info.subpass {
             let subpass = &sp.main_pass.subpasses[sp.index as usize];
-            self.state.target.formats.copy_from(&subpass.target_formats);
-
+            self.state.target.formats = subpass.attachments.map(|at| (at.format, at.channel));
             self.state.target.aspects = Aspects::empty();
-            if !subpass.colors.is_empty() {
+            if !subpass.attachments.colors.is_empty() {
                 self.state.target.aspects |= Aspects::COLOR;
             }
-            if let Some((at_id, _)) = subpass.depth_stencil {
-                let rat = &sp.main_pass.attachments[at_id];
+            if let Some(ref at) = subpass.attachments.depth_stencil {
+                let rat = &sp.main_pass.attachments[at.id];
                 let aspects = rat.format.unwrap().surface_desc().aspects;
                 self.state.target.aspects |= aspects;
             }
@@ -2924,7 +2924,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 .target
                 .formats
                 .depth_stencil
-                .unwrap_or(metal::MTLPixelFormat::Invalid),
+                .map_or(metal::MTLPixelFormat::Invalid, |(format, _)| format),
             sample_count: self.state.target.samples,
             target_index: None,
         };
@@ -3514,36 +3514,35 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     descriptor.set_render_target_array_length(framebuffer.extent.depth as _);
                 }
 
-                for (i, &(at_id, op_flags, resolve_id)) in subpass.colors.iter().enumerate() {
-                    let rat = &render_pass.attachments[at_id];
-                    let texture = framebuffer.attachments[at_id].as_ref();
+                for (i, at) in subpass.attachments.colors.iter().enumerate() {
+                    let rat = &render_pass.attachments[at.id];
+                    let texture = framebuffer.attachments[at.id].as_ref();
                     let desc = descriptor.color_attachments().object_at(i as _).unwrap();
 
                     combined_aspects |= Aspects::COLOR;
                     sample_count = sample_count.max(rat.samples);
                     desc.set_texture(Some(texture));
 
-                    if op_flags.contains(native::SubpassOps::LOAD) {
+                    if at.ops.contains(native::AttachmentOps::LOAD) {
                         desc.set_load_action(conv::map_load_operation(rat.ops.load));
                         if rat.ops.load == AttachmentLoadOp::Clear {
-                            let channel = subpass.target_formats.colors[i].1;
-                            let raw = self.temp.clear_values[at_id].unwrap().color;
-                            desc.set_clear_color(channel.interpret(raw));
+                            let raw = self.temp.clear_values[at.id].unwrap().color;
+                            desc.set_clear_color(at.channel.interpret(raw));
                         }
                     }
-                    if let Some(id) = resolve_id {
+                    if let Some(id) = at.resolve_id {
                         let resolve = &framebuffer.attachments[id];
                         //Note: the selection of levels and slices is already handled by `ImageView`
                         desc.set_resolve_texture(Some(resolve));
                         desc.set_store_action(conv::map_resolved_store_operation(rat.ops.store));
-                    } else if op_flags.contains(native::SubpassOps::STORE) {
+                    } else if at.ops.contains(native::AttachmentOps::STORE) {
                         desc.set_store_action(conv::map_store_operation(rat.ops.store));
                     }
                 }
 
-                if let Some((at_id, op_flags)) = subpass.depth_stencil {
-                    let rat = &render_pass.attachments[at_id];
-                    let texture = framebuffer.attachments[at_id].as_ref();
+                if let Some(ref at) = subpass.attachments.depth_stencil {
+                    let rat = &render_pass.attachments[at.id];
+                    let texture = framebuffer.attachments[at.id].as_ref();
                     let aspects = rat.format.unwrap().surface_desc().aspects;
                     sample_count = sample_count.max(rat.samples);
                     combined_aspects |= aspects;
@@ -3552,14 +3551,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         let desc = descriptor.depth_attachment().unwrap();
                         desc.set_texture(Some(texture));
 
-                        if op_flags.contains(native::SubpassOps::LOAD) {
+                        if at.ops.contains(native::AttachmentOps::LOAD) {
                             desc.set_load_action(conv::map_load_operation(rat.ops.load));
                             if rat.ops.load == AttachmentLoadOp::Clear {
-                                let raw = self.temp.clear_values[at_id].unwrap().depth_stencil;
+                                let raw = self.temp.clear_values[at.id].unwrap().depth_stencil;
                                 desc.set_clear_depth(raw.depth as f64);
                             }
                         }
-                        if op_flags.contains(native::SubpassOps::STORE) {
+                        if at.ops.contains(native::AttachmentOps::STORE) {
                             desc.set_store_action(conv::map_store_operation(rat.ops.store));
                         }
                     }
@@ -3567,14 +3566,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         let desc = descriptor.stencil_attachment().unwrap();
                         desc.set_texture(Some(texture));
 
-                        if op_flags.contains(native::SubpassOps::LOAD) {
+                        if at.ops.contains(native::AttachmentOps::LOAD) {
                             desc.set_load_action(conv::map_load_operation(rat.stencil_ops.load));
                             if rat.stencil_ops.load == AttachmentLoadOp::Clear {
-                                let raw = self.temp.clear_values[at_id].unwrap().depth_stencil;
+                                let raw = self.temp.clear_values[at.id].unwrap().depth_stencil;
                                 desc.set_clear_stencil(raw.stencil);
                             }
                         }
-                        if op_flags.contains(native::SubpassOps::STORE) {
+                        if at.ops.contains(native::AttachmentOps::STORE) {
                             desc.set_store_action(conv::map_store_operation(rat.stencil_ops.store));
                         }
                     }
@@ -3586,7 +3585,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.state.pending_subpasses.alloc().init(SubpassInfo {
                 descriptor,
                 combined_aspects,
-                formats: subpass.target_formats.clone(),
+                formats: subpass.attachments.map(|at| (at.format, at.channel)),
+                operations: subpass.attachments.map(|at| at.ops),
                 sample_count,
             });
         }
@@ -3610,7 +3610,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             height: self.state.target.extent.height as u64,
         };
         self.state.target.aspects = sin.combined_aspects;
-        self.state.target.formats.copy_from(&sin.formats);
+        self.state.target.formats = sin.formats.clone();
         self.state.target.samples = sin.sample_count;
 
         let com_scissor = self.state.reset_scissor();
@@ -3678,7 +3678,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 ps.vertex_buffers
                     .extend(pipeline.vertex_buffers.iter().cloned().map(Some));
                 ps.ds_desc = pipeline.depth_stencil_desc;
-                ps.formats.copy_from(&pipeline.attachment_formats);
+                ps.formats = pipeline.attachment_formats.clone();
                 true
             }
             None => {

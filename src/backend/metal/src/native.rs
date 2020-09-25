@@ -55,32 +55,51 @@ unsafe impl Sync for ShaderModule {}
 
 bitflags! {
     /// Subpass attachment operations.
-    pub struct SubpassOps: u8 {
+    pub struct AttachmentOps: u8 {
         const LOAD = 0x0;
         const STORE = 0x1;
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SubpassFormats {
-    pub colors: ArrayVec<[(metal::MTLPixelFormat, Channel); MAX_COLOR_ATTACHMENTS]>,
-    pub depth_stencil: Option<metal::MTLPixelFormat>,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SubpassData<T> {
+    pub colors: ArrayVec<[T; MAX_COLOR_ATTACHMENTS]>,
+    pub depth_stencil: Option<T>,
 }
 
-impl SubpassFormats {
-    pub fn copy_from(&mut self, other: &Self) {
-        self.colors.clear();
-        self.colors.extend(other.colors.iter().cloned());
-        self.depth_stencil = other.depth_stencil;
+impl<T> Default for SubpassData<T> {
+    fn default() -> Self {
+        SubpassData {
+            colors: ArrayVec::new(),
+            depth_stencil: None,
+        }
     }
+}
+
+impl<T> SubpassData<T> {
+    pub fn map<V, F: Fn(&T) -> V>(&self, fun: F) -> SubpassData<V> {
+        SubpassData {
+            colors: self.colors.iter().map(&fun).collect(),
+            depth_stencil: self.depth_stencil.as_ref().map(fun),
+        }
+    }
+}
+
+pub type SubpassFormats = SubpassData<(metal::MTLPixelFormat, Channel)>;
+
+#[derive(Debug)]
+pub struct AttachmentInfo {
+    pub id: AttachmentId,
+    pub resolve_id: Option<AttachmentId>,
+    pub ops: AttachmentOps,
+    pub format: metal::MTLPixelFormat,
+    pub channel: Channel,
 }
 
 #[derive(Debug)]
 pub struct Subpass {
-    pub colors: ArrayVec<[(AttachmentId, SubpassOps, Option<AttachmentId>); MAX_COLOR_ATTACHMENTS]>,
-    pub depth_stencil: Option<(AttachmentId, SubpassOps)>,
+    pub attachments: SubpassData<AttachmentInfo>,
     pub inputs: Vec<AttachmentId>,
-    pub target_formats: SubpassFormats,
 }
 
 #[derive(Debug)]
@@ -133,19 +152,7 @@ impl ResourceData<PoolResourceIndex> {
             samplers: 0,
         }
     }
-}
-/*
-impl ResourceData<ResourceIndex> {
-    pub fn new() -> Self {
-        ResourceCounters {
-            buffers: 0,
-            textures: 0,
-            samplers: 0,
-        }
-    }
-}
-*/
-impl ResourceData<PoolResourceIndex> {
+
     #[inline]
     pub fn add_many(&mut self, content: DescriptorContent, count: PoolResourceIndex) {
         if content.contains(DescriptorContent::BUFFER) {
