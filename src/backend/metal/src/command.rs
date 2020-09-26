@@ -2193,9 +2193,10 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
 
         autoreleasepool(|| {
             // for command buffers
-            let cmd_queue = self.shared.queue.lock();
+            let mut cmd_queue = self.shared.queue.lock();
             let mut blocker = self.shared.queue_blocker.lock();
             let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
+            let mut release_sinks = Vec::new();
 
             for cmd_buffer in command_buffers {
                 let mut inner = cmd_buffer.borrow().inner.borrow_mut();
@@ -2250,7 +2251,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                             blocker.submit_impl(cmd_buffer);
                         }
                         // destroy the sink with the associated command buffer
-                        inner.sink = None;
+                        release_sinks.extend(inner.sink.take());
                     }
                     Some(CommandSink::Deferred { ref journal, .. }) => {
                         num_deferred += 1;
@@ -2354,6 +2355,12 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                 }
             } else if let Some(cmd_buffer) = deferred_cmd_buffer {
                 blocker.submit_impl(cmd_buffer);
+            }
+
+            for sink in release_sinks {
+                if let CommandSink::Immediate { token, .. } = sink {
+                    cmd_queue.release(token);
+                }
             }
         });
 
