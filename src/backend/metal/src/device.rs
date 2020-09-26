@@ -3135,18 +3135,22 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn set_compute_pipeline_name(
         &self,
-        _compute_pipeline: &mut n::ComputePipeline,
-        _name: &str,
+        compute_pipeline: &mut n::ComputePipeline,
+        name: &str,
     ) {
-        // TODO
+        if self.shared.private_caps.supports_debug_markers {
+            compute_pipeline.raw.set_label(name);
+        }
     }
 
     unsafe fn set_graphics_pipeline_name(
         &self,
-        _graphics_pipeline: &mut n::GraphicsPipeline,
-        _name: &str,
+        graphics_pipeline: &mut n::GraphicsPipeline,
+        name: &str,
     ) {
-        // TODO
+        if self.shared.private_caps.supports_debug_markers {
+            graphics_pipeline.raw.set_label(name);
+        }
     }
 }
 
