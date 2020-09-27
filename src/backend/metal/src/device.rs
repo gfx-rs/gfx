@@ -1148,8 +1148,12 @@ impl hal::device::Device<Backend> for Device {
                 cs: stage_infos[2].2.clone(),
             };
             match *set_layout.borrow() {
-                n::DescriptorSetLayout::Emulated(ref desc_layouts, ref samplers) => {
-                    for &(binding, ref data) in samplers {
+                n::DescriptorSetLayout::Emulated {
+                    layouts: ref desc_layouts,
+                    ref immutable_samplers,
+                    total: _,
+                } => {
+                    for (&binding, data) in immutable_samplers.iter() {
                         //TODO: array support?
                         const_samplers.insert(
                             msl::SamplerLocation {
@@ -1189,8 +1193,7 @@ impl hal::device::Device<Backend> for Device {
                             let res = msl::ResourceBinding {
                                 buffer_id: if layout.content.contains(n::DescriptorContent::BUFFER)
                                 {
-                                    counters.buffers += 1;
-                                    (counters.buffers - 1) as _
+                                    counters.buffers as _
                                 } else {
                                     !0
                                 },
@@ -1198,8 +1201,7 @@ impl hal::device::Device<Backend> for Device {
                                     .content
                                     .contains(n::DescriptorContent::TEXTURE)
                                 {
-                                    counters.textures += 1;
-                                    (counters.textures - 1) as _
+                                    counters.textures as _
                                 } else {
                                     !0
                                 },
@@ -1207,12 +1209,12 @@ impl hal::device::Device<Backend> for Device {
                                     .content
                                     .contains(n::DescriptorContent::SAMPLER)
                                 {
-                                    counters.samplers += 1;
-                                    (counters.samplers - 1) as _
+                                    counters.samplers as _
                                 } else {
                                     !0
                                 },
                             };
+                            counters.add(layout.content);
                             if layout.array_index == 0 {
                                 let location = msl::ResourceBindingLocation {
                                     stage,
@@ -2052,10 +2054,12 @@ impl hal::device::Device<Backend> for Device {
             let mut immutable_sampler_iter = immutable_samplers.into_iter();
             let mut tmp_samplers = Vec::new();
             let mut desc_layouts = Vec::new();
+            let mut total = n::ResourceData::new();
 
             for set_layout_binding in binding_iter {
                 let slb = set_layout_binding.borrow();
                 let mut content = n::DescriptorContent::from(slb.ty);
+                total.add(content);
 
                 if slb.immutable_samplers {
                     tmp_samplers.extend(
@@ -2095,13 +2099,14 @@ impl hal::device::Device<Backend> for Device {
                 }
             });
 
-            Ok(n::DescriptorSetLayout::Emulated(
-                Arc::new(desc_layouts),
-                tmp_samplers
+            Ok(n::DescriptorSetLayout::Emulated {
+                layouts: Arc::new(desc_layouts),
+                total,
+                immutable_samplers: tmp_samplers
                     .into_iter()
                     .map(|ts| (ts.binding, ts.data))
                     .collect(),
-            ))
+            })
         }
     }
 
@@ -2141,37 +2146,51 @@ impl hal::device::Device<Backend> for Device {
                                 debug_assert!(!layout
                                     .content
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
-                                data.samplers[counters.samplers as usize] =
-                                    Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref()));
+                                data.samplers[counters.samplers as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref())),
+                                );
                             }
                             pso::Descriptor::Image(view, il) => {
-                                data.textures[counters.textures as usize] =
-                                    Some((AsNative::from(view.texture.as_ref()), il));
+                                data.textures[counters.textures as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(view.texture.as_ref())),
+                                    il,
+                                );
                             }
                             pso::Descriptor::CombinedImageSampler(view, il, sam) => {
                                 if !layout
                                     .content
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
                                 {
-                                    data.samplers[counters.samplers as usize] =
-                                        Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref()));
+                                    data.samplers[counters.samplers as usize] = (
+                                        layout.stages,
+                                        Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref())),
+                                    );
                                 }
-                                data.textures[counters.textures as usize] =
-                                    Some((AsNative::from(view.texture.as_ref()), il));
+                                data.textures[counters.textures as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(view.texture.as_ref())),
+                                    il,
+                                );
                             }
                             pso::Descriptor::TexelBuffer(view) => {
-                                data.textures[counters.textures as usize] = Some((
-                                    AsNative::from(view.raw.as_ref()),
+                                data.textures[counters.textures as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(view.raw.as_ref())),
                                     image::Layout::General,
-                                ));
+                                );
                             }
                             pso::Descriptor::Buffer(buf, ref sub) => {
                                 let (raw, range) = buf.as_bound();
                                 debug_assert!(
                                     range.start + sub.offset + sub.size.unwrap_or(0) <= range.end
                                 );
-                                let pair = (AsNative::from(raw), range.start + sub.offset);
-                                data.buffers[counters.buffers as usize] = Some(pair);
+                                data.buffers[counters.buffers as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(raw)),
+                                    range.start + sub.offset,
+                                );
                             }
                         }
                         counters.add(layout.content);

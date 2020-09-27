@@ -707,7 +707,10 @@ impl State {
     }
 
     fn reset_scissor<'a>(&mut self) -> Option<soft::RenderCommand<&'a soft::Ref>> {
-        self.scissors.and_then(|sr| self.set_scissor(sr))
+        self.scissors.and_then(|sr| {
+            let clamped = State::clamp_scissor(sr, self.target.extent);
+            self.set_scissor(clamped)
+        })
     }
 
     fn set_blend_color<'a>(
@@ -735,6 +738,71 @@ impl State {
     ) -> soft::RenderCommand<&soft::Ref> {
         self.visibility_query = (mode, offset);
         soft::RenderCommand::SetVisibilityResult(mode, offset)
+    }
+
+    fn bind_set(
+        &mut self,
+        stage_filter: pso::ShaderStageFlags,
+        data: &native::DescriptorEmulatedPoolInner,
+        base_res_offsets: &native::MultiStageResourceCounters,
+        pool_range: &native::ResourceData<Range<native::PoolResourceIndex>>,
+    ) -> native::MultiStageResourceCounters {
+        let mut offsets = base_res_offsets.clone();
+        let pool_range = pool_range.map(|r| r.start as usize..r.end as usize);
+
+        for &(mut stages, value, offset) in &data.buffers[pool_range.buffers] {
+            stages &= stage_filter;
+            if stages.contains(pso::ShaderStageFlags::VERTEX) {
+                let reg = offsets.vs.buffers as usize;
+                self.resources_vs.buffers[reg] = value;
+                self.resources_vs.buffer_offsets[reg] = offset;
+                offsets.vs.buffers += 1;
+            }
+            if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                let reg = offsets.ps.buffers as usize;
+                self.resources_ps.buffers[reg] = value;
+                self.resources_ps.buffer_offsets[reg] = offset;
+                offsets.ps.buffers += 1;
+            }
+            if stages.contains(pso::ShaderStageFlags::COMPUTE) {
+                let reg = offsets.cs.buffers as usize;
+                self.resources_cs.buffers[reg] = value;
+                self.resources_cs.buffer_offsets[reg] = offset;
+                offsets.cs.buffers += 1;
+            }
+        }
+        for &(mut stages, value, _layout) in &data.textures[pool_range.textures] {
+            stages &= stage_filter;
+            if stages.contains(pso::ShaderStageFlags::VERTEX) {
+                self.resources_vs.textures[offsets.vs.textures as usize] = value;
+                offsets.vs.textures += 1;
+            }
+            if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                self.resources_ps.textures[offsets.ps.textures as usize] = value;
+                offsets.ps.textures += 1;
+            }
+            if stages.contains(pso::ShaderStageFlags::COMPUTE) {
+                self.resources_cs.textures[offsets.cs.textures as usize] = value;
+                offsets.cs.textures += 1;
+            }
+        }
+        for &(mut stages, value) in &data.samplers[pool_range.samplers] {
+            stages &= stage_filter;
+            if stages.contains(pso::ShaderStageFlags::VERTEX) {
+                self.resources_vs.samplers[offsets.vs.samplers as usize] = value;
+                offsets.vs.samplers += 1;
+            }
+            if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                self.resources_ps.samplers[offsets.ps.samplers as usize] = value;
+                offsets.ps.samplers += 1;
+            }
+            if stages.contains(pso::ShaderStageFlags::COMPUTE) {
+                self.resources_cs.samplers[offsets.cs.samplers as usize] = value;
+                offsets.cs.samplers += 1;
+            }
+        }
+
+        offsets
     }
 }
 
@@ -773,6 +841,7 @@ impl StageResources {
             self.buffer_offsets.resize(count, 0);
         }
     }
+
     fn pre_allocate(&mut self, counters: &native::ResourceData<ResourceIndex>) {
         if self.textures.len() < counters.textures as usize {
             self.textures.resize(counters.textures as usize, None);
@@ -781,46 +850,6 @@ impl StageResources {
             self.samplers.resize(counters.samplers as usize, None);
         }
         self.pre_allocate_buffers(counters.buffers as usize);
-    }
-
-    fn bind_set(
-        &mut self,
-        stage: pso::ShaderStageFlags,
-        data: &native::DescriptorEmulatedPoolInner,
-        mut res_offset: native::ResourceData<ResourceIndex>,
-        layouts: &[native::DescriptorLayout],
-        pool_range: &native::ResourceData<Range<native::PoolResourceIndex>>,
-    ) -> native::ResourceData<ResourceIndex> {
-        let mut pool_offsets = pool_range.map(|r| r.start);
-        for layout in layouts {
-            if layout.stages.contains(stage) {
-                if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                    self.samplers[res_offset.samplers as usize] =
-                        data.samplers[pool_offsets.samplers as usize];
-                    res_offset.samplers += 1;
-                    pool_offsets.samplers += 1;
-                }
-                if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                    self.textures[res_offset.textures as usize] =
-                        data.textures[pool_offsets.textures as usize].map(|(t, _)| t);
-                    res_offset.textures += 1;
-                    pool_offsets.textures += 1;
-                }
-                if layout.content.contains(native::DescriptorContent::BUFFER) {
-                    let (buffer, offset) = match data.buffers[pool_offsets.buffers as usize] {
-                        Some((buffer, offset)) => (Some(buffer), offset),
-                        None => (None, 0),
-                    };
-                    self.buffers[res_offset.buffers as usize] = buffer;
-                    self.buffer_offsets[res_offset.buffers as usize] = offset;
-                    res_offset.buffers += 1;
-                    pool_offsets.buffers += 1;
-                }
-            } else {
-                pool_offsets.add(layout.content);
-            }
-        }
-        res_offset
     }
 }
 
@@ -3801,35 +3830,23 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 cs: first.cs.map(|&i| i..i),
             }
         };
-        for ((info, desc_set), cached_ds) in pipe_layout.infos[first_set..]
-            .iter()
-            .zip(sets)
-            .zip(self.state.descriptor_sets[first_set..].iter_mut())
+        for (set_offset, (info, desc_set)) in
+            pipe_layout.infos[first_set..].iter().zip(sets).enumerate()
         {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated {
                     ref pool,
-                    ref layouts,
+                    layouts: _,
                     ref resources,
                 } => {
-                    let data = pool.read();
-
-                    let end_vs_offsets = self.state.resources_vs.bind_set(
-                        pso::ShaderStageFlags::VERTEX,
-                        &*data,
-                        info.offsets.vs.clone(),
-                        layouts,
+                    let end_offsets = self.state.bind_set(
+                        pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT,
+                        &*pool.read(),
+                        &info.offsets,
                         resources,
                     );
-                    bind_range.vs.expand(end_vs_offsets);
-                    let end_ps_offsets = self.state.resources_ps.bind_set(
-                        pso::ShaderStageFlags::FRAGMENT,
-                        &*data,
-                        info.offsets.ps.clone(),
-                        layouts,
-                        resources,
-                    );
-                    bind_range.ps.expand(end_ps_offsets);
+                    bind_range.vs.expand(end_offsets.vs);
+                    bind_range.ps.expand(end_offsets.ps);
 
                     for (dyn_data, offset) in info
                         .dynamic_buffers
@@ -3882,20 +3899,20 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     if stage_flags
                         .intersects(pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT)
                     {
-                        cached_ds.graphics_resources.clear();
-                        cached_ds.graphics_resources.extend(
+                        let graphics_resources = &mut self.state.descriptor_sets
+                            [first_set + set_offset]
+                            .graphics_resources;
+                        graphics_resources.clear();
+                        graphics_resources.extend(
                             pool.read().resources[range.start as usize..range.end as usize]
                                 .iter()
                                 .filter_map(|ur| {
                                     ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
                                 }),
                         );
-                        pre.issue_many(cached_ds.graphics_resources.iter().map(
-                            |&(resource, usage)| soft::RenderCommand::UseResource {
-                                resource,
-                                usage,
-                            },
-                        ));
+                        pre.issue_many(graphics_resources.iter().map(|&(resource, usage)| {
+                            soft::RenderCommand::UseResource { resource, usage }
+                        }));
                     }
                 }
             }
@@ -3975,31 +3992,25 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let mut dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
-        let cache = &mut self.state.resources_cs;
         let mut bind_range = pipe_layout.infos[first_set].offsets.cs.map(|&i| i..i);
 
-        for ((info, desc_set), cached_ds) in pipe_layout.infos[first_set..]
-            .iter()
-            .zip(sets)
-            .zip(self.state.descriptor_sets[first_set..].iter_mut())
+        for (set_offset, (info, desc_set)) in
+            pipe_layout.infos[first_set..].iter().zip(sets).enumerate()
         {
             let res_offset = &info.offsets.cs;
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated {
                     ref pool,
-                    ref layouts,
+                    layouts: _,
                     ref resources,
                 } => {
-                    let data = pool.read();
-
-                    let end_offsets = cache.bind_set(
+                    let end_offsets = self.state.bind_set(
                         pso::ShaderStageFlags::COMPUTE,
-                        &*data,
-                        res_offset.clone(),
-                        layouts,
+                        &*pool.read(),
+                        &info.offsets,
                         resources,
                     );
-                    bind_range.expand(end_offsets);
+                    bind_range.expand(end_offsets.cs);
 
                     for (dyn_data, offset) in info
                         .dynamic_buffers
@@ -4007,7 +4018,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         .zip(dynamic_offset_iter.by_ref())
                     {
                         if dyn_data.cs != !0 {
-                            cache.buffer_offsets[dyn_data.cs as usize] +=
+                            self.state.resources_cs.buffer_offsets[dyn_data.cs as usize] +=
                                 *offset.borrow() as buffer::Offset;
                         }
                     }
@@ -4022,34 +4033,36 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
                         let index = res_offset.buffers;
-                        cache.buffers[index as usize] = Some(AsNative::from(raw.as_ref()));
-                        cache.buffer_offsets[index as usize] = raw_offset;
+                        self.state.resources_cs.buffers[index as usize] =
+                            Some(AsNative::from(raw.as_ref()));
+                        self.state.resources_cs.buffer_offsets[index as usize] = raw_offset;
                         pre.issue(soft::ComputeCommand::BindBuffer {
                             index,
                             buffer: AsNative::from(raw.as_ref()),
                             offset: raw_offset,
                         });
 
-                        cached_ds.compute_resources.clear();
-                        cached_ds.compute_resources.extend(
+                        let compute_resources = &mut self.state.descriptor_sets
+                            [first_set + set_offset]
+                            .compute_resources;
+                        compute_resources.clear();
+                        compute_resources.extend(
                             pool.read().resources[range.start as usize..range.end as usize]
                                 .iter()
                                 .filter_map(|ur| {
                                     ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
                                 }),
                         );
-                        pre.issue_many(cached_ds.compute_resources.iter().map(
-                            |&(resource, usage)| soft::ComputeCommand::UseResource {
-                                resource,
-                                usage,
-                            },
-                        ));
+                        pre.issue_many(compute_resources.iter().map(|&(resource, usage)| {
+                            soft::ComputeCommand::UseResource { resource, usage }
+                        }));
                     }
                 }
             }
         }
 
         // now bind all the affected resources
+        let cache = &mut self.state.resources_cs;
         if bind_range.textures.start != bind_range.textures.end {
             pre.issue(soft::ComputeCommand::BindTextures {
                 index: bind_range.textures.start,
