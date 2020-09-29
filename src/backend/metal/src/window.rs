@@ -217,10 +217,10 @@ impl w::Surface<Backend> for Surface {
                 height: 4096,
             },
             max_image_layers: 1,
-            usage: image::Usage::COLOR_ATTACHMENT
-                | image::Usage::SAMPLED
-                | image::Usage::TRANSFER_SRC
-                | image::Usage::TRANSFER_DST,
+            usage: image::Usage::COLOR_ATTACHMENT,
+            //| image::Usage::SAMPLED
+            //| image::Usage::TRANSFER_SRC
+            //| image::Usage::TRANSFER_DST,
         }
     }
 

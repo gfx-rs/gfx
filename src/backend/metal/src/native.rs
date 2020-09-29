@@ -90,6 +90,7 @@ pub struct AttachmentInfo {
 pub struct Subpass {
     pub attachments: SubpassData<AttachmentInfo>,
     pub inputs: Vec<AttachmentId>,
+    pub samples: image::NumSamples,
 }
 
 #[derive(Debug)]

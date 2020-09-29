@@ -633,7 +633,6 @@ impl Device {
 
         // done
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
-
         let options = metal::CompileOptions::new();
         options.set_language_version(msl_version);
 
@@ -1022,12 +1021,20 @@ impl hal::device::Device<Backend> for Device {
                     }
                 });
 
+                let samples = colors
+                    .iter()
+                    .chain(depth_stencil.as_ref())
+                    .map(|at_info| attachments[at_info.id].samples)
+                    .max()
+                    .unwrap_or(1);
+
                 n::Subpass {
                     attachments: n::SubpassData {
                         colors,
                         depth_stencil,
                     },
                     inputs: sub.inputs.iter().map(|&(id, _)| id).collect(),
+                    samples,
                 }
             })
             .collect();
