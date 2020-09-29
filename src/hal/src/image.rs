@@ -607,6 +607,12 @@ pub enum Layout {
     Present,
 }
 
+impl Default for Layout {
+    fn default() -> Self {
+        Self::General
+    }
+}
+
 bitflags!(
     /// Bitflags to describe how memory in an image or buffer can be accessed.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

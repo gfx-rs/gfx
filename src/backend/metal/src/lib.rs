@@ -194,6 +194,7 @@ unsafe impl Sync for Shared {}
 impl Shared {
     fn new(device: metal::Device, experiments: &Experiments) -> Self {
         let private_caps = PrivateCapabilities::new(&device, experiments);
+        debug!("{:#?}", private_caps);
 
         let visibility = VisibilityShared {
             buffer: device.new_buffer(

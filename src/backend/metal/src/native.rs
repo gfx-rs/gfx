@@ -55,32 +55,51 @@ unsafe impl Sync for ShaderModule {}
 
 bitflags! {
     /// Subpass attachment operations.
-    pub struct SubpassOps: u8 {
-        const LOAD = 0x0;
-        const STORE = 0x1;
+    pub struct AttachmentOps: u8 {
+        const LOAD = 0x1;
+        const STORE = 0x2;
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SubpassFormats {
-    pub colors: ArrayVec<[(metal::MTLPixelFormat, Channel); MAX_COLOR_ATTACHMENTS]>,
-    pub depth_stencil: Option<metal::MTLPixelFormat>,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SubpassData<T> {
+    pub colors: ArrayVec<[T; MAX_COLOR_ATTACHMENTS]>,
+    pub depth_stencil: Option<T>,
 }
 
-impl SubpassFormats {
-    pub fn copy_from(&mut self, other: &Self) {
-        self.colors.clear();
-        self.colors.extend(other.colors.iter().cloned());
-        self.depth_stencil = other.depth_stencil;
+impl<T> Default for SubpassData<T> {
+    fn default() -> Self {
+        SubpassData {
+            colors: ArrayVec::new(),
+            depth_stencil: None,
+        }
     }
+}
+
+impl<T> SubpassData<T> {
+    pub fn map<V, F: Fn(&T) -> V>(&self, fun: F) -> SubpassData<V> {
+        SubpassData {
+            colors: self.colors.iter().map(&fun).collect(),
+            depth_stencil: self.depth_stencil.as_ref().map(fun),
+        }
+    }
+}
+
+pub type SubpassFormats = SubpassData<(metal::MTLPixelFormat, Channel)>;
+
+#[derive(Debug)]
+pub struct AttachmentInfo {
+    pub id: AttachmentId,
+    pub resolve_id: Option<AttachmentId>,
+    pub ops: AttachmentOps,
+    pub format: metal::MTLPixelFormat,
+    pub channel: Channel,
 }
 
 #[derive(Debug)]
 pub struct Subpass {
-    pub colors: ArrayVec<[(AttachmentId, SubpassOps, Option<AttachmentId>); MAX_COLOR_ATTACHMENTS]>,
-    pub depth_stencil: Option<(AttachmentId, SubpassOps)>,
+    pub attachments: SubpassData<AttachmentInfo>,
     pub inputs: Vec<AttachmentId>,
-    pub target_formats: SubpassFormats,
 }
 
 #[derive(Debug)]
@@ -133,19 +152,7 @@ impl ResourceData<PoolResourceIndex> {
             samplers: 0,
         }
     }
-}
-/*
-impl ResourceData<ResourceIndex> {
-    pub fn new() -> Self {
-        ResourceCounters {
-            buffers: 0,
-            textures: 0,
-            samplers: 0,
-        }
-    }
-}
-*/
-impl ResourceData<PoolResourceIndex> {
+
     #[inline]
     pub fn add_many(&mut self, content: DescriptorContent, count: PoolResourceIndex) {
         if content.contains(DescriptorContent::BUFFER) {
@@ -164,7 +171,7 @@ impl ResourceData<PoolResourceIndex> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MultiStageData<T> {
     pub vs: T,
     pub ps: T,
@@ -431,9 +438,9 @@ impl Buffer {
 
 #[derive(Debug)]
 pub struct DescriptorEmulatedPoolInner {
-    pub(crate) samplers: Vec<Option<SamplerPtr>>,
-    pub(crate) textures: Vec<Option<(TexturePtr, image::Layout)>>,
-    pub(crate) buffers: Vec<Option<(BufferPtr, buffer::Offset)>>,
+    pub(crate) samplers: Vec<(pso::ShaderStageFlags, Option<SamplerPtr>)>,
+    pub(crate) textures: Vec<(pso::ShaderStageFlags, Option<TexturePtr>, image::Layout)>,
+    pub(crate) buffers: Vec<(pso::ShaderStageFlags, Option<BufferPtr>, buffer::Offset)>,
 }
 
 #[derive(Debug)]
@@ -462,9 +469,9 @@ unsafe impl Sync for DescriptorPool {}
 impl DescriptorPool {
     pub(crate) fn new_emulated(counters: ResourceData<PoolResourceIndex>) -> Self {
         let inner = DescriptorEmulatedPoolInner {
-            samplers: vec![None; counters.samplers as usize],
-            textures: vec![None; counters.textures as usize],
-            buffers: vec![None; counters.buffers as usize],
+            samplers: vec![Default::default(); counters.samplers as usize],
+            textures: vec![Default::default(); counters.textures as usize],
+            buffers: vec![Default::default(); counters.buffers as usize],
         };
         DescriptorPool::Emulated {
             inner: Arc::new(RwLock::new(inner)),
@@ -534,22 +541,32 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                 ref mut allocators,
             } => {
                 debug!("pool: allocate_set");
-                let layouts = match *set_layout {
-                    DescriptorSetLayout::Emulated(ref layouts, _) => layouts,
+                let (layouts, total, immutable_samplers) = match *set_layout {
+                    DescriptorSetLayout::Emulated {
+                        ref layouts,
+                        ref total,
+                        ref immutable_samplers,
+                    } => (layouts, total, immutable_samplers),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
 
-                // step[1]: count the total number of descriptors needed
-                let mut total = ResourceData::new();
-                for layout in layouts.iter() {
-                    total.add(layout.content);
-                }
-                debug!("\ttotal {:?}", total);
-
-                // step[2]: try to allocate the ranges from the pool
+                // try to allocate the ranges from the pool
                 let sampler_range = if total.samplers != 0 {
                     match allocators.samplers.allocate_range(total.samplers as _) {
-                        Ok(range) => range,
+                        Ok(range) => {
+                            // fill out the stages for immutable samplers
+                            let mut data = inner.write();
+                            let mut offset = range.start as usize;
+                            for layout in layouts.iter() {
+                                if layout.content.contains(DescriptorContent::SAMPLER) {
+                                    if immutable_samplers.contains_key(&layout.binding) {
+                                        data.samplers[offset] = (layout.stages, None);
+                                    }
+                                    offset += 1;
+                                }
+                            }
+                            range
+                        }
                         Err(e) => {
                             return Err(if e.fragmented_free_length >= total.samplers {
                                 pso::AllocationError::FragmentedPool
@@ -678,7 +695,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                             for sampler in &mut data.samplers
                                 [resources.samplers.start as usize..resources.samplers.end as usize]
                             {
-                                *sampler = None;
+                                sampler.1 = None;
                             }
                             if resources.samplers.start != resources.samplers.end {
                                 allocators.samplers.free_range(resources.samplers);
@@ -686,7 +703,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                             for image in &mut data.textures
                                 [resources.textures.start as usize..resources.textures.end as usize]
                             {
-                                *image = None;
+                                image.1 = None;
                             }
                             if resources.textures.start != resources.textures.end {
                                 allocators.textures.free_range(resources.textures);
@@ -694,7 +711,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                             for buffer in &mut data.buffers
                                 [resources.buffers.start as usize..resources.buffers.end as usize]
                             {
-                                *buffer = None;
+                                buffer.1 = None;
                             }
                             if resources.buffers.start != resources.buffers.end {
                                 allocators.buffers.free_range(resources.buffers);
@@ -759,17 +776,17 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 
                 for range in allocators.samplers.allocated_ranges() {
                     for sampler in &mut data.samplers[range.start as usize..range.end as usize] {
-                        *sampler = None;
+                        sampler.1 = None;
                     }
                 }
                 for range in allocators.textures.allocated_ranges() {
                     for texture in &mut data.textures[range.start as usize..range.end as usize] {
-                        *texture = None;
+                        texture.1 = None;
                     }
                 }
                 for range in allocators.buffers.allocated_ranges() {
                     for buffer in &mut data.buffers[range.start as usize..range.end as usize] {
-                        *buffer = None;
+                        buffer.1 = None;
                     }
                 }
 
@@ -844,10 +861,11 @@ pub struct ArgumentLayout {
 
 #[derive(Debug)]
 pub enum DescriptorSetLayout {
-    Emulated(
-        Arc<Vec<DescriptorLayout>>,
-        Vec<(pso::DescriptorBinding, msl::SamplerData)>,
-    ),
+    Emulated {
+        layouts: Arc<Vec<DescriptorLayout>>,
+        total: ResourceData<PoolResourceIndex>,
+        immutable_samplers: FastHashMap<pso::DescriptorBinding, msl::SamplerData>,
+    },
     ArgumentBuffer {
         encoder: metal::ArgumentEncoder,
         stage_flags: pso::ShaderStageFlags,

@@ -971,46 +971,47 @@ impl hal::device::Device<Backend> for Device {
                 let mut colors: ArrayVec<[_; MAX_COLOR_ATTACHMENTS]> = sub
                     .colors
                     .iter()
-                    .map(|&(id, _)| (id, n::SubpassOps::empty(), None))
+                    .map(|&(id, _)| {
+                        let hal_format = attachments[id].format.expect("No format!");
+                        n::AttachmentInfo {
+                            id,
+                            resolve_id: None,
+                            ops: n::AttachmentOps::empty(),
+                            format: self
+                                .shared
+                                .private_caps
+                                .map_format(hal_format)
+                                .expect("Unable to map color format!"),
+                            channel: Channel::from(hal_format.base_format().1),
+                        }
+                    })
                     .collect();
                 for (color, &(resolve_id, _)) in colors.iter_mut().zip(sub.resolves.iter()) {
                     if resolve_id != pass::ATTACHMENT_UNUSED {
-                        color.2 = Some(resolve_id);
+                        color.resolve_id = Some(resolve_id);
                     }
                 }
+                let depth_stencil = sub.depth_stencil.map(|&(id, _)| {
+                    let hal_format = attachments[id].format.expect("No format!");
+                    n::AttachmentInfo {
+                        id,
+                        resolve_id: None,
+                        ops: n::AttachmentOps::empty(),
+                        format: self
+                            .shared
+                            .private_caps
+                            .map_format(hal_format)
+                            .expect("Unable to map depth-stencil format!"),
+                        channel: Channel::Float,
+                    }
+                });
 
                 n::Subpass {
-                    colors,
-                    depth_stencil: sub
-                        .depth_stencil
-                        .map(|&(id, _)| (id, n::SubpassOps::empty())),
-                    inputs: sub.inputs.iter().map(|&(id, _)| id).collect(),
-                    target_formats: n::SubpassFormats {
-                        colors: sub
-                            .colors
-                            .iter()
-                            .map(|&(id, _)| {
-                                let format =
-                                    attachments[id].format.expect("No color format provided");
-                                let mtl_format = self
-                                    .shared
-                                    .private_caps
-                                    .map_format(format)
-                                    .expect("Unable to map color format!");
-                                (mtl_format, Channel::from(format.base_format().1))
-                            })
-                            .collect(),
-                        depth_stencil: sub.depth_stencil.map(|&(id, _)| {
-                            self.shared
-                                .private_caps
-                                .map_format(
-                                    attachments[id]
-                                        .format
-                                        .expect("No depth-stencil format provided"),
-                                )
-                                .expect("Unable to map depth-stencil format!")
-                        }),
+                    attachments: n::SubpassData {
+                        colors,
+                        depth_stencil,
                     },
+                    inputs: sub.inputs.iter().map(|&(id, _)| id).collect(),
                 }
             })
             .collect();
@@ -1019,32 +1020,32 @@ impl hal::device::Device<Backend> for Device {
         // an attachment receives LOAD flag on a subpass if it's the first sub-pass that uses it
         let mut use_mask = 0u64;
         for sub in subpasses.iter_mut() {
-            for &mut (id, ref mut ops, _) in sub.colors.iter_mut() {
-                if use_mask & 1 << id == 0 {
-                    *ops |= n::SubpassOps::LOAD;
-                    use_mask ^= 1 << id;
+            for at in sub.attachments.colors.iter_mut() {
+                if use_mask & 1 << at.id == 0 {
+                    at.ops |= n::AttachmentOps::LOAD;
+                    use_mask ^= 1 << at.id;
                 }
             }
-            if let Some((id, ref mut ops)) = sub.depth_stencil {
-                if use_mask & 1 << id == 0 {
-                    *ops |= n::SubpassOps::LOAD;
-                    use_mask ^= 1 << id;
+            if let Some(ref mut at) = sub.attachments.depth_stencil {
+                if use_mask & 1 << at.id == 0 {
+                    at.ops |= n::AttachmentOps::LOAD;
+                    use_mask ^= 1 << at.id;
                 }
             }
         }
         // sprinkle store operations
         // an attachment receives STORE flag on a subpass if it's the last sub-pass that uses it
         for sub in subpasses.iter_mut().rev() {
-            for &mut (id, ref mut ops, _) in sub.colors.iter_mut() {
-                if use_mask & 1 << id != 0 {
-                    *ops |= n::SubpassOps::STORE;
-                    use_mask ^= 1 << id;
+            for at in sub.attachments.colors.iter_mut() {
+                if use_mask & 1 << at.id != 0 {
+                    at.ops |= n::AttachmentOps::STORE;
+                    use_mask ^= 1 << at.id;
                 }
             }
-            if let Some((id, ref mut ops)) = sub.depth_stencil {
-                if use_mask & 1 << id != 0 {
-                    *ops |= n::SubpassOps::STORE;
-                    use_mask ^= 1 << id;
+            if let Some(ref mut at) = sub.attachments.depth_stencil {
+                if use_mask & 1 << at.id != 0 {
+                    at.ops |= n::AttachmentOps::STORE;
+                    use_mask ^= 1 << at.id;
                 }
             }
         }
@@ -1147,8 +1148,12 @@ impl hal::device::Device<Backend> for Device {
                 cs: stage_infos[2].2.clone(),
             };
             match *set_layout.borrow() {
-                n::DescriptorSetLayout::Emulated(ref desc_layouts, ref samplers) => {
-                    for &(binding, ref data) in samplers {
+                n::DescriptorSetLayout::Emulated {
+                    layouts: ref desc_layouts,
+                    ref immutable_samplers,
+                    total: _,
+                } => {
+                    for (&binding, data) in immutable_samplers.iter() {
                         //TODO: array support?
                         const_samplers.insert(
                             msl::SamplerLocation {
@@ -1188,8 +1193,7 @@ impl hal::device::Device<Backend> for Device {
                             let res = msl::ResourceBinding {
                                 buffer_id: if layout.content.contains(n::DescriptorContent::BUFFER)
                                 {
-                                    counters.buffers += 1;
-                                    (counters.buffers - 1) as _
+                                    counters.buffers as _
                                 } else {
                                     !0
                                 },
@@ -1197,8 +1201,7 @@ impl hal::device::Device<Backend> for Device {
                                     .content
                                     .contains(n::DescriptorContent::TEXTURE)
                                 {
-                                    counters.textures += 1;
-                                    (counters.textures - 1) as _
+                                    counters.textures as _
                                 } else {
                                     !0
                                 },
@@ -1206,12 +1209,12 @@ impl hal::device::Device<Backend> for Device {
                                     .content
                                     .contains(n::DescriptorContent::SAMPLER)
                                 {
-                                    counters.samplers += 1;
-                                    (counters.samplers - 1) as _
+                                    counters.samplers as _
                                 } else {
                                     !0
                                 },
                             };
+                            counters.add(layout.content);
                             if layout.array_index == 0 {
                                 let location = msl::ResourceBindingLocation {
                                     stage,
@@ -1466,7 +1469,9 @@ impl hal::device::Device<Backend> for Device {
             None => {
                 // TODO: This is a workaround for what appears to be a Metal validation bug
                 // A pixel format is required even though no attachments are provided
-                if subpass.colors.is_empty() && subpass.depth_stencil.is_none() {
+                if subpass.attachments.colors.is_empty()
+                    && subpass.attachments.depth_stencil.is_none()
+                {
                     pipeline.set_depth_attachment_pixel_format(metal::MTLPixelFormat::Depth32Float);
                 }
                 None
@@ -1498,8 +1503,8 @@ impl hal::device::Device<Backend> for Device {
             .targets
             .iter()
             .chain(iter::repeat(&pso::ColorBlendDesc::EMPTY));
-        for (i, (&(mtl_format, _), color_desc)) in subpass
-            .target_formats
+        for (i, (at, color_desc)) in subpass
+            .attachments
             .colors
             .iter()
             .zip(blend_targets)
@@ -1510,7 +1515,7 @@ impl hal::device::Device<Backend> for Device {
                 .object_at(i as u64)
                 .expect("too many color attachments");
 
-            desc.set_pixel_format(mtl_format);
+            desc.set_pixel_format(at.format);
             desc.set_write_mask(conv::map_write_mask(color_desc.mask));
 
             if let Some(ref blend) = color_desc.blend {
@@ -1527,15 +1532,13 @@ impl hal::device::Device<Backend> for Device {
                 desc.set_destination_alpha_blend_factor(alpha_dst);
             }
         }
-        if let Some(mtl_format) = subpass.target_formats.depth_stencil {
-            let orig_format = rp_attachments[subpass.depth_stencil.unwrap().0]
-                .format
-                .unwrap();
+        if let Some(ref at) = subpass.attachments.depth_stencil {
+            let orig_format = rp_attachments[at.id].format.unwrap();
             if orig_format.is_depth() {
-                pipeline.set_depth_attachment_pixel_format(mtl_format);
+                pipeline.set_depth_attachment_pixel_format(at.format);
             }
             if orig_format.is_stencil() {
-                pipeline.set_stencil_attachment_pixel_format(mtl_format);
+                pipeline.set_stencil_attachment_pixel_format(at.format);
             }
         }
 
@@ -1692,7 +1695,7 @@ impl hal::device::Device<Backend> for Device {
                 depth_stencil_desc: pipeline_desc.depth_stencil.clone(),
                 baked_states: pipeline_desc.baked_states.clone(),
                 vertex_buffers,
-                attachment_formats: subpass.target_formats.clone(),
+                attachment_formats: subpass.attachments.map(|at| (at.format, at.channel)),
             })
             .map_err(|err| {
                 error!("PSO creation failed: {}", err);
@@ -2051,10 +2054,12 @@ impl hal::device::Device<Backend> for Device {
             let mut immutable_sampler_iter = immutable_samplers.into_iter();
             let mut tmp_samplers = Vec::new();
             let mut desc_layouts = Vec::new();
+            let mut total = n::ResourceData::new();
 
             for set_layout_binding in binding_iter {
                 let slb = set_layout_binding.borrow();
                 let mut content = n::DescriptorContent::from(slb.ty);
+                total.add(content);
 
                 if slb.immutable_samplers {
                     tmp_samplers.extend(
@@ -2094,13 +2099,14 @@ impl hal::device::Device<Backend> for Device {
                 }
             });
 
-            Ok(n::DescriptorSetLayout::Emulated(
-                Arc::new(desc_layouts),
-                tmp_samplers
+            Ok(n::DescriptorSetLayout::Emulated {
+                layouts: Arc::new(desc_layouts),
+                total,
+                immutable_samplers: tmp_samplers
                     .into_iter()
                     .map(|ts| (ts.binding, ts.data))
                     .collect(),
-            ))
+            })
         }
     }
 
@@ -2140,37 +2146,51 @@ impl hal::device::Device<Backend> for Device {
                                 debug_assert!(!layout
                                     .content
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
-                                data.samplers[counters.samplers as usize] =
-                                    Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref()));
+                                data.samplers[counters.samplers as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref())),
+                                );
                             }
                             pso::Descriptor::Image(view, il) => {
-                                data.textures[counters.textures as usize] =
-                                    Some((AsNative::from(view.texture.as_ref()), il));
+                                data.textures[counters.textures as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(view.texture.as_ref())),
+                                    il,
+                                );
                             }
                             pso::Descriptor::CombinedImageSampler(view, il, sam) => {
                                 if !layout
                                     .content
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
                                 {
-                                    data.samplers[counters.samplers as usize] =
-                                        Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref()));
+                                    data.samplers[counters.samplers as usize] = (
+                                        layout.stages,
+                                        Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref())),
+                                    );
                                 }
-                                data.textures[counters.textures as usize] =
-                                    Some((AsNative::from(view.texture.as_ref()), il));
+                                data.textures[counters.textures as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(view.texture.as_ref())),
+                                    il,
+                                );
                             }
                             pso::Descriptor::TexelBuffer(view) => {
-                                data.textures[counters.textures as usize] = Some((
-                                    AsNative::from(view.raw.as_ref()),
+                                data.textures[counters.textures as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(view.raw.as_ref())),
                                     image::Layout::General,
-                                ));
+                                );
                             }
                             pso::Descriptor::Buffer(buf, ref sub) => {
                                 let (raw, range) = buf.as_bound();
                                 debug_assert!(
                                     range.start + sub.offset + sub.size.unwrap_or(0) <= range.end
                                 );
-                                let pair = (AsNative::from(raw), range.start + sub.offset);
-                                data.buffers[counters.buffers as usize] = Some(pair);
+                                data.buffers[counters.buffers as usize] = (
+                                    layout.stages,
+                                    Some(AsNative::from(raw)),
+                                    range.start + sub.offset,
+                                );
                             }
                         }
                         counters.add(layout.content);
@@ -3134,18 +3154,22 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn set_compute_pipeline_name(
         &self,
-        _compute_pipeline: &mut n::ComputePipeline,
-        _name: &str,
+        compute_pipeline: &mut n::ComputePipeline,
+        name: &str,
     ) {
-        // TODO
+        if self.shared.private_caps.supports_debug_markers {
+            compute_pipeline.raw.set_label(name);
+        }
     }
 
     unsafe fn set_graphics_pipeline_name(
         &self,
-        _graphics_pipeline: &mut n::GraphicsPipeline,
-        _name: &str,
+        graphics_pipeline: &mut n::GraphicsPipeline,
+        name: &str,
     ) {
-        // TODO
+        if self.shared.private_caps.supports_debug_markers {
+            graphics_pipeline.raw.set_label(name);
+        }
     }
 }
 
