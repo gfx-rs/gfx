@@ -85,6 +85,8 @@ lazy_static! {
         CStr::from_bytes_with_nul(b"VK_AMD_negative_viewport_height\0").unwrap();
     static ref KHR_MAINTENANCE1: &'static CStr =
         CStr::from_bytes_with_nul(b"VK_KHR_maintenance1\0").unwrap();
+    static ref KHR_MAINTENANCE3: &'static CStr =
+        CStr::from_bytes_with_nul(b"VK_KHR_maintenance3\0").unwrap();
     static ref KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE : &'static CStr =
         CStr::from_bytes_with_nul(b"VK_KHR_sampler_mirror_clamp_to_edge\0").unwrap();
     static ref KHR_GET_PHYSICAL_DEVICE_PROPERTIES2: &'static CStr =
@@ -732,9 +734,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
                         | Features::UNSIZED_DESCRIPTOR_ARRAY
                 ) {
-                    Some(*EXT_DESCRIPTOR_INDEXING)
+                    vec![*KHR_MAINTENANCE3, *EXT_DESCRIPTOR_INDEXING]
                 } else {
-                    None
+                    vec![]
                 },
             )
             .chain(
