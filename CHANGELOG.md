@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-vulkan-0.6.3 (30-09-2020)
+  - enable VK_KHR_maintenance3 when VK_EXT_descriptor_indexing is enabled
+
 ### backend-dx12-0.6.4 backend-vulkan-0.6.2 backend-metal-0.6.3 (23-09-2020)
   - fix descriptor indexing features
 
