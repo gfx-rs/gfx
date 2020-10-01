@@ -2748,7 +2748,9 @@ impl d::Device<B> for Device {
         &self,
         info: &image::SamplerDesc,
     ) -> Result<r::Sampler, d::AllocationError> {
-        assert!(info.normalized);
+        if !info.normalized {
+            warn!("Sampler with unnormalized coordinates is not supported!");
+        }
         let handle = self.sampler_pool.lock().alloc_handle();
 
         let op = match info.comparison {
@@ -2847,13 +2849,25 @@ impl d::Device<B> for Device {
         let heap_sampler = {
             let mut heap_sampler = self.heap_sampler.lock();
 
-            let range = match num_samplers {
-                0 => 0..0,
-                _ => heap_sampler
+            let mut range = 0..0;
+            while num_samplers != 0 {
+                match heap_sampler
                     .range_allocator
                     .allocate_range(num_samplers as _)
-                    .unwrap(), // TODO: error/resize
-            };
+                {
+                    Ok(r) => {
+                        range = r;
+                        break;
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Unable to allocate {} samplers ({:?}), downsizing",
+                            num_samplers, e
+                        );
+                        num_samplers >>= 1;
+                    }
+                }
+            }
 
             r::DescriptorHeapSlice {
                 heap: heap_sampler.raw.clone(),
