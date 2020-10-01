@@ -17,6 +17,7 @@ use hal::{
     adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Hints, Limits,
 };
 
+use parking_lot::Mutex;
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, minwindef::TRUE, winerror},
     um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase},
@@ -30,7 +31,7 @@ use std::{
     mem,
     os::windows::ffi::OsStringExt,
     //TODO: use parking_lot
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use self::descriptors_cpu::DescriptorCpuPool;
@@ -205,10 +206,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         families: &[(&QueueFamily, &[q::QueuePriority])],
         requested_features: Features,
     ) -> Result<adapter::Gpu<Backend>, hal::device::CreationError> {
-        let lock = self.is_open.try_lock();
-        let mut open_guard = match lock {
-            Ok(inner) => inner,
-            Err(_) => return Err(hal::device::CreationError::TooManyObjects),
+        let mut open_guard = match self.is_open.try_lock() {
+            Some(inner) => inner,
+            None => return Err(hal::device::CreationError::TooManyObjects),
         };
 
         if !self.features().contains(requested_features) {
@@ -658,7 +658,7 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        *self.open.lock().unwrap() = false;
+        *self.open.lock() = false;
 
         unsafe {
             for queue in &mut self.queues {
@@ -666,14 +666,14 @@ impl Drop for Device {
             }
 
             self.shared.destroy();
-            self.heap_srv_cbv_uav.lock().unwrap().destroy();
-            self.heap_sampler.lock().unwrap().destroy();
-            self.rtv_pool.lock().unwrap().destroy();
-            self.dsv_pool.lock().unwrap().destroy();
-            self.srv_uav_pool.lock().unwrap().destroy();
-            self.sampler_pool.lock().unwrap().destroy();
+            self.heap_srv_cbv_uav.lock().destroy();
+            self.heap_sampler.lock().destroy();
+            self.rtv_pool.lock().destroy();
+            self.dsv_pool.lock().destroy();
+            self.srv_uav_pool.lock().destroy();
+            self.sampler_pool.lock().destroy();
 
-            for pool in &*self.descriptor_update_pools.lock().unwrap() {
+            for pool in &*self.descriptor_update_pools.lock() {
                 pool.destroy();
             }
 
@@ -1256,7 +1256,7 @@ impl FormatProperties {
     }
 
     fn get(&self, idx: usize) -> FormatInfo {
-        let mut guard = self.info[idx].lock().unwrap();
+        let mut guard = self.info[idx].lock();
         if let Some(info) = *guard {
             return info;
         }

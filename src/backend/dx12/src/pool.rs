@@ -1,22 +1,23 @@
 use std::{fmt, sync::Arc};
 
-use winapi::shared::winerror::SUCCEEDED;
+use winapi::shared::winerror;
 
 use crate::{command::CommandBuffer, Backend, Shared};
 use hal::{command, pool};
 
 #[derive(Debug)]
-pub enum CommandPoolAllocator {
+enum CommandPoolAllocator {
     Shared(native::CommandAllocator),
     Individual(Vec<native::CommandAllocator>),
 }
 
 pub struct CommandPool {
-    pub(crate) allocator: CommandPoolAllocator,
-    pub(crate) device: native::Device,
-    pub(crate) list_type: native::CmdListType,
-    pub(crate) shared: Arc<Shared>,
-    pub(crate) create_flags: pool::CommandPoolCreateFlags,
+    shared: Arc<Shared>,
+    device: native::Device,
+    list_type: native::CmdListType,
+    create_flags: pool::CommandPoolCreateFlags,
+    allocator: CommandPoolAllocator,
+    //lists: Vec<native::CommandList>,
 }
 
 impl fmt::Debug for CommandPool {
@@ -26,19 +27,52 @@ impl fmt::Debug for CommandPool {
 }
 
 impl CommandPool {
+    pub(crate) fn new(
+        device: native::Device,
+        list_type: native::CmdListType,
+        shared: &Arc<Shared>,
+        create_flags: pool::CommandPoolCreateFlags,
+    ) -> Self {
+        let allocator = if create_flags.contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL) {
+            // Allocators are created per individual `ID3D12GraphicsCommandList`
+            CommandPoolAllocator::Individual(Vec::new())
+        } else {
+            let (command_allocator, hr) = device.create_command_allocator(list_type);
+            assert_eq!(
+                hr,
+                winerror::S_OK,
+                "error on command allocator creation: {:x}",
+                hr
+            );
+            CommandPoolAllocator::Shared(command_allocator)
+        };
+        CommandPool {
+            shared: Arc::clone(shared),
+            device,
+            list_type,
+            allocator,
+            create_flags,
+            //lists: Vec::new(),
+        }
+    }
+
     fn create_command_list(&mut self) -> (native::GraphicsCommandList, native::CommandAllocator) {
         let command_allocator = match self.allocator {
             CommandPoolAllocator::Shared(ref allocator) => allocator.clone(),
             CommandPoolAllocator::Individual(ref mut allocators) => {
-                let (command_allocator, hr) = self.device.create_command_allocator(self.list_type);
-
-                // TODO: error handling
-                if !SUCCEEDED(hr) {
-                    error!("error on command allocator creation: {:x}", hr);
+                if let Some(command_allocator) = allocators.pop() {
+                    command_allocator
+                } else {
+                    let (command_allocator, hr) =
+                        self.device.create_command_allocator(self.list_type);
+                    assert_eq!(
+                        winerror::S_OK,
+                        hr,
+                        "error on command allocator creation: {:x}",
+                        hr
+                    );
+                    command_allocator
                 }
-
-                allocators.push(command_allocator);
-                command_allocator
             }
         };
 
@@ -50,9 +84,12 @@ impl CommandPool {
             0,
         );
 
-        if !SUCCEEDED(hr) {
-            error!("error on command list creation: {:x}", hr);
-        }
+        assert_eq!(
+            hr,
+            winerror::S_OK,
+            "error on command list creation: {:x}",
+            hr
+        );
 
         // Close command list as they are initiated as recording.
         // But only one command list can be recording for each allocator
@@ -110,8 +147,15 @@ impl pool::CommandPool<Backend> for CommandPool {
     where
         I: IntoIterator<Item = CommandBuffer>,
     {
-        for mut cbuf in cbufs {
-            cbuf.destroy();
+        for cbuf in cbufs {
+            let allocator = cbuf.destroy();
+            match self.allocator {
+                CommandPoolAllocator::Shared(_) => {}
+                CommandPoolAllocator::Individual(ref mut allocators) => {
+                    allocator.Reset();
+                    allocators.push(allocator);
+                }
+            }
         }
     }
 }

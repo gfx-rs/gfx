@@ -37,12 +37,9 @@ use hal::{
 };
 
 use crate::{
-    command as cmd, conv, descriptors_cpu,
-    pool::{CommandPool, CommandPoolAllocator},
-    resource as r, root_constants,
-    root_constants::RootConstant,
-    window::Swapchain,
-    Backend as B, Device, MemoryGroup, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES, QUEUE_FAMILIES,
+    command as cmd, conv, descriptors_cpu, pool::CommandPool, resource as r, root_constants,
+    root_constants::RootConstant, window::Swapchain, Backend as B, Device, MemoryGroup,
+    MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES, QUEUE_FAMILIES,
 };
 use native::{PipelineStateSubobject, Subobject};
 
@@ -676,7 +673,7 @@ impl Device {
         &self,
         info: &ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
-        let handle = self.rtv_pool.lock().unwrap().alloc_handle();
+        let handle = self.rtv_pool.lock().alloc_handle();
         Self::view_image_as_render_target_impl(self.raw, handle, info).map(|_| handle)
     }
 
@@ -764,7 +761,7 @@ impl Device {
         &self,
         info: &ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
-        let handle = self.dsv_pool.lock().unwrap().alloc_handle();
+        let handle = self.dsv_pool.lock().alloc_handle();
         Self::view_image_as_depth_stencil_impl(self.raw, handle, info).map(|_| handle)
     }
 
@@ -893,7 +890,7 @@ impl Device {
         info: &ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
         let desc = Self::build_image_as_shader_resource_desc(&info)?;
-        let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
+        let handle = self.srv_uav_pool.lock().alloc_handle();
         unsafe {
             self.raw
                 .CreateShaderResourceView(info.resource.as_mut_ptr(), &desc, handle);
@@ -975,7 +972,7 @@ impl Device {
             }
         }
 
-        let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
+        let handle = self.srv_uav_pool.lock().alloc_handle();
         unsafe {
             self.raw.CreateUnorderedAccessView(
                 info.resource.as_mut_ptr(),
@@ -1206,28 +1203,12 @@ impl d::Device<B> for Device {
         create_flags: CommandPoolCreateFlags,
     ) -> Result<CommandPool, d::OutOfMemory> {
         let list_type = QUEUE_FAMILIES[family.0].native_type();
-
-        let allocator = if create_flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
-            // Allocators are created per individual ID3D12GraphicsCommandList
-            CommandPoolAllocator::Individual(Vec::new())
-        } else {
-            let (command_allocator, hr) = self.raw.create_command_allocator(list_type);
-
-            // TODO: error handling
-            if !winerror::SUCCEEDED(hr) {
-                error!("error on command allocator creation: {:x}", hr);
-            }
-
-            CommandPoolAllocator::Shared(command_allocator)
-        };
-
-        Ok(CommandPool {
-            allocator,
-            device: self.raw,
+        Ok(CommandPool::new(
+            self.raw,
             list_type,
-            shared: self.shared.clone(),
+            &self.shared,
             create_flags,
-        })
+        ))
     }
 
     unsafe fn destroy_command_pool(&self, pool: CommandPool) {
@@ -1692,9 +1673,18 @@ impl d::Device<B> for Device {
                             parameters
                                 .push(native::RootParameter::cbv_descriptor(visibility, binding));
                             root_offset += 2; // root CBV costs 2 words
-                        } else {
-                            // SRV and UAV not implemented so far
-                            unimplemented!()
+                        }
+                        if content.contains(r::DescriptorContent::SRV) {
+                            parameter_offsets.push(root_offset);
+                            parameters
+                                .push(native::RootParameter::srv_descriptor(visibility, binding));
+                            root_offset += 2; // root SRV costs 2 words
+                        }
+                        if content.contains(r::DescriptorContent::UAV) {
+                            parameter_offsets.push(root_offset);
+                            parameters
+                                .push(native::RootParameter::uav_descriptor(visibility, binding));
+                            root_offset += 2; // root UAV costs 2 words
                         }
                     }
                 }
@@ -2254,7 +2244,7 @@ impl d::Device<B> for Device {
         }
 
         let clear_uav = if buffer_unbound.usage.contains(buffer::Usage::TRANSFER_DST) {
-            let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
+            let handle = self.srv_uav_pool.lock().alloc_handle();
             let mut view_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                 Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                 ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
@@ -2329,7 +2319,7 @@ impl d::Device<B> for Device {
                 Flags: d3d12::D3D12_BUFFER_SRV_FLAG_NONE,
             };
 
-            let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
+            let handle = self.srv_uav_pool.lock().alloc_handle();
             self.raw
                 .clone()
                 .CreateShaderResourceView(buffer.resource.as_mut_ptr(), &desc, handle);
@@ -2355,7 +2345,7 @@ impl d::Device<B> for Device {
                 CounterOffsetInBytes: 0,
             };
 
-            let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
+            let handle = self.srv_uav_pool.lock().alloc_handle();
             self.raw.clone().CreateUnorderedAccessView(
                 buffer.resource.as_mut_ptr(),
                 ptr::null_mut(),
@@ -2759,7 +2749,7 @@ impl d::Device<B> for Device {
         info: &image::SamplerDesc,
     ) -> Result<r::Sampler, d::AllocationError> {
         assert!(info.normalized);
-        let handle = self.sampler_pool.lock().unwrap().alloc_handle();
+        let handle = self.sampler_pool.lock().alloc_handle();
 
         let op = match info.comparison {
             Some(_) => d3d12::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
@@ -2836,7 +2826,7 @@ impl d::Device<B> for Device {
 
         // Allocate slices of the global GPU descriptor heaps.
         let heap_srv_cbv_uav = {
-            let mut heap_srv_cbv_uav = self.heap_srv_cbv_uav.lock().unwrap();
+            let mut heap_srv_cbv_uav = self.heap_srv_cbv_uav.lock();
 
             let range = match num_srv_cbv_uav {
                 0 => 0..0,
@@ -2855,7 +2845,7 @@ impl d::Device<B> for Device {
         };
 
         let heap_sampler = {
-            let mut heap_sampler = self.heap_sampler.lock().unwrap();
+            let mut heap_sampler = self.heap_sampler.lock();
 
             let range = match num_samplers {
                 0 => 0..0,
@@ -2903,7 +2893,7 @@ impl d::Device<B> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        let mut descriptor_update_pools = self.descriptor_update_pools.lock().unwrap();
+        let mut descriptor_update_pools = self.descriptor_update_pools.lock();
         let mut update_pool_index = 0;
 
         //TODO: combine destination ranges
@@ -3329,7 +3319,7 @@ impl d::Device<B> for Device {
         I::Item: Borrow<r::Fence>,
     {
         let fences = fences.into_iter().collect::<Vec<_>>();
-        let mut events = self.events.lock().unwrap();
+        let mut events = self.events.lock();
         for _ in events.len()..fences.len() {
             events.push(native::Event::create(false, false));
         }
@@ -3505,7 +3495,6 @@ impl d::Device<B> for Device {
         if view_range.start < view_range.end {
             self.heap_srv_cbv_uav
                 .lock()
-                .unwrap()
                 .range_allocator
                 .free_range(view_range.clone());
         }
@@ -3513,7 +3502,6 @@ impl d::Device<B> for Device {
         if sampler_range.start < sampler_range.end {
             self.heap_sampler
                 .lock()
-                .unwrap()
                 .range_allocator
                 .free_range(sampler_range.clone());
         }

@@ -496,7 +496,7 @@ impl CommandBuffer {
         }
     }
 
-    pub(crate) unsafe fn destroy(&mut self) {
+    pub(crate) unsafe fn destroy(self) -> native::CommandAllocator {
         self.raw.destroy();
         for heap in &self.rtv_pools {
             heap.destroy();
@@ -507,6 +507,7 @@ impl CommandBuffer {
         for resource in &self.retained_resources {
             resource.destroy();
         }
+        self.allocator
     }
 
     pub(crate) unsafe fn as_raw_list(&self) -> *mut d3d12::ID3D12CommandList {
