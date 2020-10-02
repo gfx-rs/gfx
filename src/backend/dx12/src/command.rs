@@ -1,19 +1,14 @@
 use auxil::FastHashMap;
 use hal::{
-    buffer, command as com, format, format::Aspects, image, memory, pass, pool, pso, query,
-    DrawCount, IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset,
-    WorkGroupCount,
+    buffer, command as com, format, format::Aspects, image, memory, pass, pso, query, DrawCount,
+    IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
 };
 
-use std::{borrow::Borrow, cmp, fmt, iter, mem, ops::Range, ptr, sync::Arc};
+use std::{borrow::Borrow, cell::Cell, cmp, fmt, iter, mem, ops::Range, ptr, sync::Arc};
 
 use winapi::{
     ctypes,
-    shared::{
-        dxgiformat,
-        minwindef::{FALSE, TRUE, UINT},
-        winerror,
-    },
+    shared::{dxgiformat, minwindef, winerror},
     um::{d3d12, d3dcommon},
     Interface,
 };
@@ -22,8 +17,8 @@ use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 
 use crate::{
-    conv, descriptors_cpu, device, internal, resource as r, validate_line_width, Backend, Device,
-    Shared, MAX_DESCRIPTOR_SETS, MAX_VERTEX_BUFFERS,
+    conv, descriptors_cpu, device, internal, pool::PoolShared, resource as r, validate_line_width,
+    Backend, Device, Shared, MAX_DESCRIPTOR_SETS, MAX_VERTEX_BUFFERS,
 };
 
 // Fixed size of the root signature.
@@ -76,8 +71,8 @@ impl fmt::Debug for RenderPassCache {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum OcclusionQuery {
-    Binary(UINT),
-    Precise(UINT),
+    Binary(minwindef::UINT),
+    Precise(minwindef::UINT),
 }
 
 /// Strongly-typed root signature element
@@ -376,11 +371,23 @@ struct Copy {
     copy_extent: image::Extent,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Phase {
+    Initial,
+    Recording,
+    Executable,
+    Pending,
+}
+
 pub struct CommandBuffer {
+    //Note: this is going to be NULL instead of `Option` to avoid
+    // `unwrap()` on every operation. This is not idiomatic.
     pub(crate) raw: native::GraphicsCommandList,
-    allocator: native::CommandAllocator,
+    allocator: Option<native::CommandAllocator>,
+    phase: Cell<Phase>,
     shared: Arc<Shared>,
-    is_active: bool,
+    pool_shared: Arc<PoolShared>,
+    begin_flags: com::CommandBufferFlags,
 
     // Cache renderpasses for graphics operations
     pass_cache: Option<RenderPassCache>,
@@ -407,7 +414,7 @@ pub struct CommandBuffer {
     // Therefore, only one query per query type can be active at the same time. Binary and precise
     // occlusion queries share one queue type in Vulkan.
     occlusion_query: Option<OcclusionQuery>,
-    pipeline_stats_query: Option<UINT>,
+    pipeline_stats_query: Option<minwindef::UINT>,
 
     // Cached vertex buffer views to bind.
     // `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
@@ -436,10 +443,6 @@ pub struct CommandBuffer {
     temporary_gpu_heaps: Vec<native::DescriptorHeap>,
     // Resources that need to be alive till the end of the GPU execution.
     retained_resources: Vec<native::Resource>,
-    // Parenting command pool create flags.
-    //
-    // Required for reset behavior.
-    pool_create_flags: pool::CommandPoolCreateFlags,
 
     // Temporary wide string for the marker
     temp_marker: Vec<u16>,
@@ -463,17 +466,14 @@ enum BarrierPoint {
 }
 
 impl CommandBuffer {
-    pub(crate) fn new(
-        raw: native::GraphicsCommandList,
-        allocator: native::CommandAllocator,
-        shared: Arc<Shared>,
-        pool_create_flags: pool::CommandPoolCreateFlags,
-    ) -> Self {
+    pub(crate) fn new(shared: &Arc<Shared>, pool_shared: &Arc<PoolShared>) -> Self {
         CommandBuffer {
-            raw,
-            allocator,
-            shared,
-            is_active: false,
+            raw: native::GraphicsCommandList::null(),
+            allocator: None,
+            shared: Arc::clone(shared),
+            pool_shared: Arc::clone(pool_shared),
+            phase: Cell::new(Phase::Initial),
+            begin_flags: com::CommandBufferFlags::empty(),
             pass_cache: None,
             cur_subpass: !0,
             gr_pipeline: PipelineCache::default(),
@@ -491,13 +491,24 @@ impl CommandBuffer {
             rtv_pools: Vec::new(),
             temporary_gpu_heaps: Vec::new(),
             retained_resources: Vec::new(),
-            pool_create_flags,
             temp_marker: Vec::new(),
         }
     }
 
-    pub(crate) unsafe fn destroy(self) -> native::CommandAllocator {
-        self.raw.destroy();
+    pub(crate) unsafe fn destroy(
+        self,
+    ) -> (
+        Option<native::CommandAllocator>,
+        Option<native::GraphicsCommandList>,
+    ) {
+        let list = match self.phase.get() {
+            Phase::Recording => {
+                self.raw.close();
+                Some(self.raw)
+            }
+            Phase::Executable => Some(self.raw),
+            Phase::Initial | Phase::Pending => None,
+        };
         for heap in &self.rtv_pools {
             heap.destroy();
         }
@@ -507,53 +518,24 @@ impl CommandBuffer {
         for resource in &self.retained_resources {
             resource.destroy();
         }
-        self.allocator
+        (self.allocator, list)
     }
 
     pub(crate) unsafe fn as_raw_list(&self) -> *mut d3d12::ID3D12CommandList {
+        match self.phase.get() {
+            Phase::Executable => (),
+            other => error!("Submitting a command buffer in {:?} state", other),
+        }
         self.raw.as_mut_ptr() as *mut _
     }
 
-    fn reset(&mut self) {
+    pub(crate) fn after_submit(&self) {
         if self
-            .pool_create_flags
-            .contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL)
+            .begin_flags
+            .contains(com::CommandBufferFlags::ONE_TIME_SUBMIT)
         {
-            // Command buffer has reset semantics now and doesn't require to be in `Initial` state.
-            if self.is_active {
-                self.raw.close();
-            }
-            unsafe { self.allocator.Reset() };
-        }
-        self.raw
-            .reset(self.allocator, native::PipelineState::null());
-        self.is_active = true;
-
-        self.pass_cache = None;
-        self.cur_subpass = !0;
-        self.gr_pipeline = PipelineCache::default();
-        self.primitive_topology = d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
-        self.comp_pipeline = PipelineCache::default();
-        self.active_bindpoint = BindPoint::Graphics { internal: false };
-        self.active_descriptor_heaps = [native::DescriptorHeap::null(); 2];
-        self.occlusion_query = None;
-        self.pipeline_stats_query = None;
-        self.vertex_bindings_remap = [None; MAX_VERTEX_BUFFERS];
-        self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
-        for heap in self.rtv_pools.drain(..) {
-            unsafe {
-                heap.destroy();
-            }
-        }
-        for heap in self.temporary_gpu_heaps.drain(..) {
-            unsafe {
-                heap.destroy();
-            }
-        }
-        for resource in self.retained_resources.drain(..) {
-            unsafe {
-                resource.destroy();
-            }
+            self.pool_shared.release_list(self.raw);
+            self.phase.set(Phase::Pending);
         }
     }
 
@@ -649,9 +631,9 @@ impl CommandBuffer {
         // set render targets
         unsafe {
             self.raw.OMSetRenderTargets(
-                color_views.len() as UINT,
+                color_views.len() as _,
                 color_views.as_ptr(),
-                FALSE,
+                minwindef::FALSE,
                 ds_view,
             );
         }
@@ -1166,20 +1148,66 @@ impl CommandBuffer {
 impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
-        _flags: com::CommandBufferFlags,
+        flags: com::CommandBufferFlags,
         _info: com::CommandBufferInheritanceInfo<Backend>,
     ) {
         // TODO: Implement flags and secondary command buffers (bundles).
-        self.reset();
+        // Note: we need to be ready for a situation where the whole
+        // command pool was reset.
+        self.reset(false);
+        self.phase.set(Phase::Recording);
+        self.begin_flags = flags;
+        let (allocator, list) = self.pool_shared.acquire();
+        self.allocator = Some(allocator);
+        self.raw = list;
     }
 
     unsafe fn finish(&mut self) {
         self.raw.close();
-        self.is_active = false;
+        assert_eq!(self.phase.get(), Phase::Recording);
+        self.phase.set(Phase::Executable);
+        self.pool_shared
+            .release_allocator(self.allocator.take().unwrap());
     }
 
-    unsafe fn reset(&mut self, _release_resources: bool) {
-        self.reset();
+    unsafe fn reset(&mut self, release_resources: bool) {
+        if self.phase.get() == Phase::Recording {
+            self.raw.close();
+        }
+        match self.phase.get() {
+            Phase::Recording | Phase::Executable => {
+                self.pool_shared.release_list(self.raw);
+                self.raw = native::GraphicsCommandList::null();
+            }
+            Phase::Initial | Phase::Pending => {}
+        }
+        if release_resources {
+            if let Some(allocator) = self.allocator.take() {
+                self.pool_shared.release_allocator(allocator);
+            }
+        }
+        self.phase.set(Phase::Initial);
+
+        self.pass_cache = None;
+        self.cur_subpass = !0;
+        self.gr_pipeline = PipelineCache::default();
+        self.primitive_topology = d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+        self.comp_pipeline = PipelineCache::default();
+        self.active_bindpoint = BindPoint::Graphics { internal: false };
+        self.active_descriptor_heaps = [native::DescriptorHeap::null(); 2];
+        self.occlusion_query = None;
+        self.pipeline_stats_query = None;
+        self.vertex_bindings_remap = [None; MAX_VERTEX_BUFFERS];
+        self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
+        for heap in self.rtv_pools.drain(..) {
+            heap.destroy();
+        }
+        for heap in self.temporary_gpu_heaps.drain(..) {
+            heap.destroy();
+        }
+        for resource in self.retained_resources.drain(..) {
+            resource.destroy();
+        }
     }
 
     unsafe fn begin_render_pass<T>(
@@ -1586,18 +1614,18 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let r = region.borrow();
-            for layer in 0..r.extent.depth as UINT {
+            for layer in 0..r.extent.depth as u32 {
                 self.raw.ResolveSubresource(
                     src.resource.as_mut_ptr(),
                     src.calc_subresource(
-                        r.src_subresource.level as UINT,
-                        r.src_subresource.layers.start as UINT + layer,
+                        r.src_subresource.level as _,
+                        r.src_subresource.layers.start as u32 + layer,
                         0,
                     ),
                     dst.resource.as_mut_ptr(),
                     dst.calc_subresource(
-                        r.dst_subresource.level as UINT,
-                        r.dst_subresource.layers.start as UINT + layer,
+                        r.dst_subresource.level as _,
+                        r.dst_subresource.layers.start as u32 + layer,
                         0,
                     ),
                     src.descriptor.Format,
@@ -1823,7 +1851,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     &inst.data as *const _ as *const _,
                     0,
                 );
-                self.raw.OMSetRenderTargets(1, &inst.rtv, TRUE, ptr::null());
+                self.raw
+                    .OMSetRenderTargets(1, &inst.rtv, minwindef::TRUE, ptr::null());
                 self.raw.draw(3, 1, 0, 0);
             }
         }

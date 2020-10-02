@@ -1211,9 +1211,7 @@ impl d::Device<B> for Device {
         ))
     }
 
-    unsafe fn destroy_command_pool(&self, pool: CommandPool) {
-        pool.destroy();
-    }
+    unsafe fn destroy_command_pool(&self, _pool: CommandPool) {}
 
     unsafe fn create_render_pass<'a, IA, IS, ID>(
         &self,

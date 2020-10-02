@@ -18,6 +18,7 @@ use hal::{
 };
 
 use parking_lot::Mutex;
+use smallvec::SmallVec;
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, minwindef::TRUE, winerror},
     um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase},
@@ -461,13 +462,20 @@ impl q::CommandQueue<Backend> for CommandQueue {
         synchapi::ResetEvent(self.idle_event.0);
 
         // TODO: semaphores
-        let mut lists = submission
+        let command_buffers = submission
             .command_buffers
             .into_iter()
-            .map(|buf| buf.borrow().as_raw_list())
-            .collect::<Vec<_>>();
+            .map(|buf| buf.borrow())
+            .collect::<SmallVec<[_; 4]>>();
+        let lists = command_buffers
+            .iter()
+            .map(|buf| buf.as_raw_list())
+            .collect::<SmallVec<[_; 4]>>();
         self.raw
-            .ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
+            .ExecuteCommandLists(lists.len() as _, lists.as_ptr());
+        for command_buffer in command_buffers {
+            command_buffer.after_submit();
+        }
 
         if let Some(fence) = fence {
             assert_eq!(winerror::S_OK, self.raw.Signal(fence.raw.as_mut_ptr(), 1));
