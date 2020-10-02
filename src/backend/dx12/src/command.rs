@@ -1979,11 +1979,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_stencil_read_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
-        unimplemented!();
+        //TODO:
+        // unimplemented!();
     }
 
     unsafe fn set_stencil_write_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
-        unimplemented!();
+        //TODO:
+        //unimplemented!();
     }
 
     unsafe fn set_depth_bounds(&mut self, bounds: Range<f32>) {
@@ -2001,7 +2003,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_depth_bias(&mut self, _depth_bias: pso::DepthBias) {
-        unimplemented!()
+        //TODO:
+        // unimplemented!()
     }
 
     unsafe fn bind_graphics_pipeline(&mut self, pipeline: &r::GraphicsPipeline) {

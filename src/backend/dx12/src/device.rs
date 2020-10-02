@@ -2376,6 +2376,7 @@ impl d::Device<B> for Device {
         let format_desc = base_format.0.desc();
         let bytes_per_block = (format_desc.bits / 8) as _;
         let block_dim = format_desc.dim;
+        let view_format = conv::map_format(format);
         let extent = kind.extent();
 
         let format_info = self.format_properties.get(format as usize);
@@ -2408,9 +2409,13 @@ impl d::Device<B> for Device {
                 kind.num_layers() as _
             },
             MipLevels: mip_levels as _,
-            Format: match conv::map_surface_type(base_format.0) {
-                Some(format) => format,
-                None => return Err(image::CreationError::Format(format)),
+            Format: if format_desc.is_compressed() {
+                view_format.unwrap()
+            } else {
+                match conv::map_surface_type(base_format.0) {
+                    Some(format) => format,
+                    None => return Err(image::CreationError::Format(format)),
+                }
             },
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: kind.num_samples() as _,
@@ -2434,7 +2439,7 @@ impl d::Device<B> for Device {
         };
 
         Ok(r::Image::Unbound(r::ImageUnbound {
-            view_format: conv::map_format(format),
+            view_format,
             dsv_format: conv::map_format_dsv(base_format.0),
             desc,
             requirements: memory::Requirements {
