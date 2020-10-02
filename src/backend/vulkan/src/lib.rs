@@ -586,7 +586,6 @@ impl hal::Instance<Backend> for Instance {
                 Ok(self.create_surface_from_wayland(handle.display, handle.surface))
             }
             #[cfg(all(
-                feature = "x11",
                 unix,
                 not(target_os = "android"),
                 not(target_os = "macos"),
@@ -600,7 +599,6 @@ impl hal::Instance<Backend> for Instance {
                 Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
             }
             #[cfg(all(
-                feature = "xcb",
                 unix,
                 not(target_os = "android"),
                 not(target_os = "macos"),

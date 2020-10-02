@@ -54,7 +54,6 @@ features = [ "console", "Document", "Element", "HtmlElement", "Node", "Window" ]
 [dependencies.gfx-backend-vulkan]
 path = "../src/backend/vulkan"
 version = "0.6"
-features = ["x11"]
 optional = true
 
 [target.'cfg(unix)'.dependencies.gfx-backend-gl]

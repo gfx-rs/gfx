@@ -15,8 +15,6 @@ edition = "2018"
 [features]
 default = []
 use-rtld-next = ["shared_library"]
-xcb = []
-x11 = []
 
 [lib]
 name = "gfx_backend_vulkan"

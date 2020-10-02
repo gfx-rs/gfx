@@ -89,7 +89,6 @@ pub struct RawSurface {
 
 impl Instance {
     #[cfg(all(
-        feature = "x11",
         unix,
         not(target_os = "android"),
         not(target_os = "macos")
@@ -121,7 +120,6 @@ impl Instance {
     }
 
     #[cfg(all(
-        feature = "xcb",
         unix,
         not(target_os = "android"),
         not(target_os = "macos")
