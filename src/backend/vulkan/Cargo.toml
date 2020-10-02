@@ -37,6 +37,3 @@ winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
 objc = "0.2.5"
 core-graphics-types = "0.1"
 
-[target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
-x11 = { version = "2.15", features = ["xlib"], optional = true }
-xcb = { version = "0.9", optional = true }
