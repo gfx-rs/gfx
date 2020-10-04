@@ -730,7 +730,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 if requested_features.intersects(
                     Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
                         | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
-                        | Features::UNSIZED_DESCRIPTOR_ARRAY
+                        | Features::UNSIZED_DESCRIPTOR_ARRAY,
                 ) {
                     vec![*KHR_MAINTENANCE3, *EXT_DESCRIPTOR_INDEXING]
                 } else {

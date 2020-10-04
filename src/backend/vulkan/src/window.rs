@@ -88,11 +88,7 @@ pub struct RawSurface {
 }
 
 impl Instance {
-    #[cfg(all(
-        unix,
-        not(target_os = "android"),
-        not(target_os = "macos")
-    ))]
+    #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
     pub fn create_surface_from_xlib(&self, dpy: *mut vk::Display, window: vk::Window) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -119,11 +115,7 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface)
     }
 
-    #[cfg(all(
-        unix,
-        not(target_os = "android"),
-        not(target_os = "macos")
-    ))]
+    #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
     pub fn create_surface_from_xcb(
         &self,
         connection: *mut vk::xcb_connection_t,
