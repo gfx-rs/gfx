@@ -44,6 +44,7 @@ pub(crate) struct HeapProperties {
 // https://msdn.microsoft.com/de-de/library/windows/desktop/dn770377(v=vs.85).aspx
 // Only 16 input slots allowed.
 const MAX_VERTEX_BUFFERS: usize = 16;
+const MAX_DESCRIPTOR_SETS: usize = 8;
 
 const NUM_HEAP_PROPERTIES: usize = 3;
 
@@ -1075,8 +1076,9 @@ impl hal::Instance<Backend> for Instance {
                     Features::DRAW_INDIRECT_COUNT,
                 hints:
                     Hints::BASE_VERTEX_INSTANCE_DRAWING,
-                limits: Limits { // TODO
-                    max_bound_descriptor_sets: 8, //TODO: verify all of these not linked to constants
+                limits: Limits {
+                    //TODO: verify all of these not linked to constants
+                    max_bound_descriptor_sets: MAX_DESCRIPTOR_SETS as u16,
                     max_descriptor_set_uniform_buffers_dynamic: 8,
                     max_descriptor_set_storage_buffers_dynamic: 4,
                     max_per_stage_descriptor_sampled_images: d3d12::D3D12_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,

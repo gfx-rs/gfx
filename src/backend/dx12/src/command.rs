@@ -8,6 +8,7 @@ use hal::{
 use std::{borrow::Borrow, cmp, fmt, iter, mem, ops::Range, ptr, sync::Arc};
 
 use winapi::{
+    ctypes,
     shared::{
         dxgiformat,
         minwindef::{FALSE, TRUE, UINT},
@@ -17,11 +18,12 @@ use winapi::{
     Interface,
 };
 
+use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 
 use crate::{
     conv, descriptors_cpu, device, internal, resource as r, validate_line_width, Backend, Device,
-    Shared, MAX_VERTEX_BUFFERS,
+    Shared, MAX_DESCRIPTOR_SETS, MAX_VERTEX_BUFFERS,
 };
 
 // Fixed size of the root signature.
@@ -63,6 +65,7 @@ pub struct RenderPassCache {
     framebuffer: r::Framebuffer,
     target_rect: d3d12::D3D12_RECT,
     attachment_clears: Vec<AttachmentClear>,
+    has_name: bool,
 }
 
 impl fmt::Debug for RenderPassCache {
@@ -198,31 +201,30 @@ struct PipelineCache {
 }
 
 impl PipelineCache {
-    fn bind_descriptor_sets<'a, I, J>(
+    fn bind_descriptor_sets<'a, S, J>(
         &mut self,
         layout: &r::PipelineLayout,
         first_set: usize,
-        sets: I,
+        sets: &[S],
         offsets: J,
     ) -> [native::DescriptorHeap; 2]
     where
-        I: IntoIterator,
-        I::Item: Borrow<r::DescriptorSet>,
+        S: Borrow<r::DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        let mut sets = sets.into_iter().peekable();
         let mut offsets = offsets.into_iter().map(|offset| *offset.borrow() as u64);
 
         // 'Global' GPU descriptor heaps.
         // All descriptors live in the same heaps.
         let (srv_cbv_uav_start, sampler_start, heap_srv_cbv_uav, heap_sampler) =
-            if let Some(set_0) = sets.peek().map(Borrow::borrow) {
+            if let Some(set_0) = sets.first() {
+                let set = set_0.borrow();
                 (
-                    set_0.srv_cbv_uav_gpu_start().ptr,
-                    set_0.sampler_gpu_start().ptr,
-                    set_0.heap_srv_cbv_uav,
-                    set_0.heap_samplers,
+                    set.srv_cbv_uav_gpu_start().ptr,
+                    set.sampler_gpu_start().ptr,
+                    set.heap_srv_cbv_uav,
+                    set.heap_samplers,
                 )
             } else {
                 return [native::DescriptorHeap::null(); 2];
@@ -231,7 +233,7 @@ impl PipelineCache {
         self.srv_cbv_uav_start = srv_cbv_uav_start;
         self.sampler_start = sampler_start;
 
-        for (set, element) in sets.zip(layout.elements[first_set..].iter()) {
+        for (set, element) in sets.iter().zip(layout.elements[first_set..].iter()) {
             let set = set.borrow();
             let mut root_offset = element.table.offset;
 
@@ -438,6 +440,9 @@ pub struct CommandBuffer {
     //
     // Required for reset behavior.
     pool_create_flags: pool::CommandPoolCreateFlags,
+
+    // Temporary wide string for the marker
+    temp_marker: Vec<u16>,
 }
 
 impl fmt::Debug for CommandBuffer {
@@ -487,6 +492,7 @@ impl CommandBuffer {
             temporary_gpu_heaps: Vec::new(),
             retained_resources: Vec::new(),
             pool_create_flags,
+            temp_marker: Vec::new(),
         }
     }
 
@@ -560,6 +566,24 @@ impl CommandBuffer {
 
     fn bind_descriptor_heaps(&mut self) {
         self.raw.set_descriptor_heaps(&self.active_descriptor_heaps);
+    }
+
+    fn mark_bound_descriptor(&mut self, index: usize, set: &r::DescriptorSet) {
+        if !set.raw_name.is_empty() {
+            self.temp_marker.clear();
+            self.temp_marker.push(0x20); // ' '
+            self.temp_marker.push(0x30 + index as u16); // '1..9'
+            self.temp_marker.push(0x3A); // ':'
+            self.temp_marker.push(0x20); // ' '
+            self.temp_marker.extend_from_slice(&set.raw_name);
+            unsafe {
+                self.raw.SetMarker(
+                    0,
+                    self.temp_marker.as_ptr() as *const _,
+                    self.temp_marker.len() as u32 * 2,
+                )
+            };
+        }
     }
 
     fn insert_subpass_barriers(&self, insertion: BarrierPoint) {
@@ -1126,6 +1150,16 @@ impl CommandBuffer {
             }
         }
     }
+
+    fn fill_marker(&mut self, name: &str) -> (*const ctypes::c_void, u32) {
+        self.temp_marker.clear();
+        self.temp_marker.extend(name.encode_utf16());
+        self.temp_marker.push(0);
+        (
+            self.temp_marker.as_ptr() as *const _,
+            self.temp_marker.len() as u32 * 2,
+        )
+    }
 }
 
 impl com::CommandBuffer<Backend> for CommandBuffer {
@@ -1170,6 +1204,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .chain(sp.input_attachments.iter())
             .any(|aref| aref.1 == image::Layout::Present)));
 
+        if !render_pass.raw_name.is_empty() {
+            let n = &render_pass.raw_name;
+            self.raw
+                .BeginEvent(0, n.as_ptr() as *const _, n.len() as u32 * 2);
+        }
+
         let mut clear_iter = clear_values.into_iter();
         let attachment_clears = render_pass
             .attachments
@@ -1208,6 +1248,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             framebuffer: framebuffer.clone(),
             target_rect: get_rect(&target_rect),
             attachment_clears,
+            has_name: !render_pass.raw_name.is_empty(),
         });
         self.cur_subpass = 0;
         self.insert_subpass_barriers(BarrierPoint::Pre);
@@ -1229,7 +1270,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         self.cur_subpass = !0;
         self.insert_subpass_barriers(BarrierPoint::Pre);
-        self.pass_cache = None;
+        let pc = self.pass_cache.take().unwrap();
+        if pc.has_name {
+            self.raw.EndEvent();
+        }
     }
 
     unsafe fn pipeline_barrier<'a, T>(
@@ -1978,10 +2022,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
+        let set_array = sets
+            .into_iter()
+            .collect::<ArrayVec<[_; MAX_DESCRIPTOR_SETS]>>();
         self.active_descriptor_heaps = self
             .gr_pipeline
-            .bind_descriptor_sets(layout, first_set, sets, offsets);
+            .bind_descriptor_sets(layout, first_set, &set_array, offsets);
         self.bind_descriptor_heaps();
+
+        for (i, set) in set_array.into_iter().enumerate() {
+            self.mark_bound_descriptor(first_set + i, set.borrow());
+        }
     }
 
     unsafe fn bind_compute_pipeline(&mut self, pipeline: &r::ComputePipeline) {
@@ -2014,10 +2065,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
+        let set_array = sets
+            .into_iter()
+            .collect::<ArrayVec<[_; MAX_DESCRIPTOR_SETS]>>();
         self.active_descriptor_heaps = self
             .comp_pipeline
-            .bind_descriptor_sets(layout, first_set, sets, offsets);
+            .bind_descriptor_sets(layout, first_set, &set_array, offsets);
         self.bind_descriptor_heaps();
+
+        for (i, set) in set_array.into_iter().enumerate() {
+            self.mark_bound_descriptor(first_set + i, set.borrow());
+        }
     }
 
     unsafe fn dispatch(&mut self, count: WorkGroupCount) {
@@ -2647,13 +2705,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn insert_debug_marker(&mut self, _name: &str, _color: u32) {
-        //TODO
+    unsafe fn insert_debug_marker(&mut self, name: &str, _color: u32) {
+        let (ptr, size) = self.fill_marker(name);
+        self.raw.SetMarker(0, ptr, size);
     }
-    unsafe fn begin_debug_marker(&mut self, _name: &str, _color: u32) {
-        //TODO
+    unsafe fn begin_debug_marker(&mut self, name: &str, _color: u32) {
+        let (ptr, size) = self.fill_marker(name);
+        self.raw.BeginEvent(0, ptr, size);
     }
     unsafe fn end_debug_marker(&mut self) {
-        //TODO
+        self.raw.EndEvent();
     }
 }

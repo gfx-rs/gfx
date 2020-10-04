@@ -1,5 +1,9 @@
 # Change Log
 
+### backend-dx12-0.6.5 (04-10-2020)
+  - implement command buffer markers
+  - debug names for render passes and descriptor sets
+
 ### backend-vulkan-0.6.3 (30-09-2020)
   - enable VK_KHR_maintenance3 when VK_EXT_descriptor_indexing is enabled
 

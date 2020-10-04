@@ -1376,6 +1376,7 @@ impl d::Device<B> for Device {
             attachments: attachments.iter().cloned().collect(),
             subpasses: Vec::new(),
             post_barriers: Vec::new(),
+            raw_name: Vec::new(),
         };
 
         while let Some(sid) = sub_infos
@@ -3582,12 +3583,12 @@ impl d::Device<B> for Device {
         // ignored
     }
 
-    unsafe fn set_render_pass_name(&self, _render_pass: &mut r::RenderPass, _name: &str) {
-        // ignored
+    unsafe fn set_render_pass_name(&self, render_pass: &mut r::RenderPass, name: &str) {
+        render_pass.raw_name = wide_cstr(name);
     }
 
-    unsafe fn set_descriptor_set_name(&self, _descriptor_set: &mut r::DescriptorSet, _name: &str) {
-        // ignored
+    unsafe fn set_descriptor_set_name(&self, descriptor_set: &mut r::DescriptorSet, name: &str) {
+        descriptor_set.raw_name = wide_cstr(name);
     }
 
     unsafe fn set_descriptor_set_layout_name(

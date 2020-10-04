@@ -214,8 +214,16 @@ impl<B: Backend> RendererState<B> {
             )
             .ok();
 
-        let image_desc = image_desc.create_desc_set(img_desc_pool.as_mut().unwrap());
-        let uniform_desc = uniform_desc.create_desc_set(uniform_desc_pool.as_mut().unwrap());
+        let image_desc = image_desc.create_desc_set(
+            img_desc_pool.as_mut().unwrap(),
+            "image",
+            Rc::clone(&device),
+        );
+        let uniform_desc = uniform_desc.create_desc_set(
+            uniform_desc_pool.as_mut().unwrap(),
+            "uniform",
+            Rc::clone(&device),
+        );
 
         println!("Memory types: {:?}", backend.adapter.memory_types);
 
@@ -361,7 +369,7 @@ impl<B: Backend> RendererState<B> {
                 None => command_pool.allocate_one(command::Level::Primary),
             };
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
-
+            cmd_buffer.begin_debug_marker("setup", 0);
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
             cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
@@ -378,6 +386,7 @@ impl<B: Backend> RendererState<B> {
                 ],
                 &[],
             ); //TODO
+            cmd_buffer.end_debug_marker();
 
             cmd_buffer.begin_render_pass(
                 self.render_pass.render_pass.as_ref().unwrap(),
@@ -392,6 +401,7 @@ impl<B: Backend> RendererState<B> {
             );
             cmd_buffer.draw(0..6, 0..1);
             cmd_buffer.end_render_pass();
+            cmd_buffer.insert_debug_marker("done", 0);
             cmd_buffer.finish();
 
             let submission = Submission {
@@ -614,7 +624,7 @@ struct RenderPassState<B: Backend> {
 
 impl<B: Backend> RenderPassState<B> {
     unsafe fn new(swapchain: &SwapchainState, device: Rc<RefCell<DeviceState<B>>>) -> Self {
-        let render_pass = {
+        let mut render_pass = {
             let attachment = pass::Attachment {
                 format: Some(swapchain.format.clone()),
                 samples: 1,
@@ -640,6 +650,9 @@ impl<B: Backend> RenderPassState<B> {
                 .create_render_pass(&[attachment], &[subpass], &[])
                 .ok()
         };
+        if let Some(ref mut rp) = render_pass {
+            device.borrow().device.set_render_pass_name(rp, "main pass");
+        }
 
         RenderPassState {
             render_pass,
@@ -894,10 +907,19 @@ impl<B: Backend> DescSetLayout<B> {
         }
     }
 
-    unsafe fn create_desc_set(self, desc_pool: &mut B::DescriptorPool) -> DescSet<B> {
-        let desc_set = desc_pool
+    unsafe fn create_desc_set(
+        self,
+        desc_pool: &mut B::DescriptorPool,
+        name: &str,
+        device: Rc<RefCell<DeviceState<B>>>,
+    ) -> DescSet<B> {
+        let mut desc_set = desc_pool
             .allocate_set(self.layout.as_ref().unwrap())
             .unwrap();
+        device
+            .borrow()
+            .device
+            .set_descriptor_set_name(&mut desc_set, name);
         DescSet {
             layout: self,
             set: Some(desc_set),
