@@ -79,6 +79,7 @@ pub struct RenderPass {
     pub(crate) attachments: Vec<pass::Attachment>,
     pub(crate) subpasses: Vec<SubpassDesc>,
     pub(crate) post_barriers: Vec<BarrierDesc>,
+    pub(crate) raw_name: Vec<u16>,
 }
 
 // Indirection layer attribute -> remap -> binding.
@@ -538,6 +539,7 @@ pub struct DescriptorSet {
     pub(crate) binding_infos: Vec<DescriptorBindingInfo>,
     pub(crate) first_gpu_sampler: Option<native::GpuDescriptor>,
     pub(crate) first_gpu_view: Option<native::GpuDescriptor>,
+    pub(crate) raw_name: Vec<u16>,
 }
 
 impl fmt::Debug for DescriptorSet {
@@ -746,6 +748,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
             binding_infos,
             first_gpu_sampler,
             first_gpu_view,
+            raw_name: Vec::new(),
         })
     }
 
