@@ -301,14 +301,18 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer, multisample: bool) -> D3D12_
     }
 }
 
-fn map_factor(factor: pso::Factor) -> D3D12_BLEND {
+fn map_factor(factor: pso::Factor, is_alpha: bool) -> D3D12_BLEND {
     use hal::pso::Factor::*;
     match factor {
         Zero => D3D12_BLEND_ZERO,
         One => D3D12_BLEND_ONE,
+        SrcColor if is_alpha => D3D12_BLEND_SRC_ALPHA,
         SrcColor => D3D12_BLEND_SRC_COLOR,
+        OneMinusSrcColor if is_alpha => D3D12_BLEND_INV_SRC_ALPHA,
         OneMinusSrcColor => D3D12_BLEND_INV_SRC_COLOR,
+        DstColor if is_alpha => D3D12_BLEND_DEST_ALPHA,
         DstColor => D3D12_BLEND_DEST_COLOR,
+        OneMinusDstColor if is_alpha => D3D12_BLEND_INV_DEST_ALPHA,
         OneMinusDstColor => D3D12_BLEND_INV_DEST_COLOR,
         SrcAlpha => D3D12_BLEND_SRC_ALPHA,
         OneMinusSrcAlpha => D3D12_BLEND_INV_SRC_ALPHA,
@@ -317,22 +321,35 @@ fn map_factor(factor: pso::Factor) -> D3D12_BLEND {
         ConstColor | ConstAlpha => D3D12_BLEND_BLEND_FACTOR,
         OneMinusConstColor | OneMinusConstAlpha => D3D12_BLEND_INV_BLEND_FACTOR,
         SrcAlphaSaturate => D3D12_BLEND_SRC_ALPHA_SAT,
+        Src1Color if is_alpha => D3D12_BLEND_SRC1_ALPHA,
         Src1Color => D3D12_BLEND_SRC1_COLOR,
+        OneMinusSrc1Color if is_alpha => D3D12_BLEND_INV_SRC1_ALPHA,
         OneMinusSrc1Color => D3D12_BLEND_INV_SRC1_COLOR,
         Src1Alpha => D3D12_BLEND_SRC1_ALPHA,
         OneMinusSrc1Alpha => D3D12_BLEND_INV_SRC1_ALPHA,
     }
 }
 
-fn map_blend_op(operation: pso::BlendOp) -> (D3D12_BLEND_OP, D3D12_BLEND, D3D12_BLEND) {
+fn map_blend_op(
+    operation: pso::BlendOp,
+    is_alpha: bool,
+) -> (D3D12_BLEND_OP, D3D12_BLEND, D3D12_BLEND) {
     use hal::pso::BlendOp::*;
     match operation {
-        Add { src, dst } => (D3D12_BLEND_OP_ADD, map_factor(src), map_factor(dst)),
-        Sub { src, dst } => (D3D12_BLEND_OP_SUBTRACT, map_factor(src), map_factor(dst)),
+        Add { src, dst } => (
+            D3D12_BLEND_OP_ADD,
+            map_factor(src, is_alpha),
+            map_factor(dst, is_alpha),
+        ),
+        Sub { src, dst } => (
+            D3D12_BLEND_OP_SUBTRACT,
+            map_factor(src, is_alpha),
+            map_factor(dst, is_alpha),
+        ),
         RevSub { src, dst } => (
             D3D12_BLEND_OP_REV_SUBTRACT,
-            map_factor(src),
-            map_factor(dst),
+            map_factor(src, is_alpha),
+            map_factor(dst, is_alpha),
         ),
         Min => (D3D12_BLEND_OP_MIN, D3D12_BLEND_ZERO, D3D12_BLEND_ZERO),
         Max => (D3D12_BLEND_OP_MAX, D3D12_BLEND_ZERO, D3D12_BLEND_ZERO),
@@ -341,7 +358,7 @@ fn map_blend_op(operation: pso::BlendOp) -> (D3D12_BLEND_OP, D3D12_BLEND, D3D12_
 
 pub fn map_render_targets(
     color_targets: &[pso::ColorBlendDesc],
-) -> [D3D12_RENDER_TARGET_BLEND_DESC; 8] {
+) -> [D3D12_RENDER_TARGET_BLEND_DESC; D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize] {
     let dummy_target = D3D12_RENDER_TARGET_BLEND_DESC {
         BlendEnable: FALSE,
         LogicOpEnable: FALSE,
@@ -354,13 +371,13 @@ pub fn map_render_targets(
         LogicOp: D3D12_LOGIC_OP_CLEAR,
         RenderTargetWriteMask: 0,
     };
-    let mut targets = [dummy_target; 8];
+    let mut targets = [dummy_target; D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
 
     for (target, color_desc) in targets.iter_mut().zip(color_targets.iter()) {
         target.RenderTargetWriteMask = color_desc.mask.bits() as UINT8;
         if let Some(ref blend) = color_desc.blend {
-            let (color_op, color_src, color_dst) = map_blend_op(blend.color);
-            let (alpha_op, alpha_src, alpha_dst) = map_blend_op(blend.alpha);
+            let (color_op, color_src, color_dst) = map_blend_op(blend.color, false);
+            let (alpha_op, alpha_src, alpha_dst) = map_blend_op(blend.alpha, true);
             target.BlendEnable = TRUE;
             target.BlendOp = color_op;
             target.SrcBlend = color_src;

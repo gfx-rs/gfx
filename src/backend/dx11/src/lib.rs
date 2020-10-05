@@ -32,9 +32,7 @@ use range_alloc::RangeAllocator;
 
 use winapi::{
     shared::{
-        dxgi::{
-            IDXGIAdapter, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT_ALLOW_TEARING,
-        },
+        dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT_ALLOW_TEARING},
         dxgiformat,
         minwindef::{FALSE, HMODULE, UINT},
         windef::{HWND, RECT},
@@ -991,8 +989,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
             window::PresentMode::IMMEDIATE => (0, DXGI_PRESENT_ALLOW_TEARING),
             //Note: this ends up not presenting anything for some reason
             //window::PresentMode::MAILBOX if !presentation.is_init => (1, DXGI_PRESENT_DO_NOT_SEQUENCE),
-            window::PresentMode::MAILBOX |
-            window::PresentMode::FIFO => (1, 0),
+            window::PresentMode::MAILBOX | window::PresentMode::FIFO => (1, 0),
             _ => (0, 0),
         };
         presentation.is_init = false;
