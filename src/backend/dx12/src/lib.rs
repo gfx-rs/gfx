@@ -683,6 +683,7 @@ impl Drop for Device {
 
         unsafe {
             for queue in &mut self.queues {
+                let _ = q::CommandQueue::wait_idle(queue);
                 queue.destroy();
             }
 
