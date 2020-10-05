@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.6.6 (05-10-2020)
+  - allow color blend factors to be used on alpha channel
+
 ### backend-dx12-0.6.5 (04-10-2020)
   - implement command buffer markers
   - debug names for render passes and descriptor sets
