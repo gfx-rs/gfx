@@ -1,6 +1,6 @@
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, VecDeque},
+    collections::{hash_map::Entry, BTreeMap, VecDeque},
     ffi, iter, mem,
     ops::Range,
     ptr, slice,
@@ -555,8 +555,6 @@ impl Device {
         let cpu_handle = heap.start_cpu_descriptor();
         let gpu_handle = heap.start_gpu_descriptor();
 
-        let range_allocator = RangeAllocator::new(0..(capacity as u64));
-
         r::DescriptorHeap {
             raw: heap,
             handle_size: descriptor_size as _,
@@ -566,7 +564,6 @@ impl Device {
                 gpu: gpu_handle,
                 size: 0,
             },
-            range_allocator,
         }
     }
 
@@ -2754,34 +2751,40 @@ impl d::Device<B> for Device {
         if !info.normalized {
             warn!("Sampler with unnormalized coordinates is not supported!");
         }
-        let handle = self.sampler_pool.lock().alloc_handle();
-
-        let op = match info.comparison {
-            Some(_) => d3d12::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
-            None => d3d12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
+        let index = match self.samplers.lock().entry(info.clone()) {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                let index = self.heap_sampler.1.write().alloc();
+                let handle = self.heap_sampler.0.cpu_descriptor_at(index);
+                let info = e.key();
+                let op = match info.comparison {
+                    Some(_) => d3d12::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
+                    None => d3d12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
+                };
+                self.raw.create_sampler(
+                    handle,
+                    conv::map_filter(
+                        info.mag_filter,
+                        info.min_filter,
+                        info.mip_filter,
+                        op,
+                        info.anisotropy_clamp,
+                    ),
+                    [
+                        conv::map_wrap(info.wrap_mode.0),
+                        conv::map_wrap(info.wrap_mode.1),
+                        conv::map_wrap(info.wrap_mode.2),
+                    ],
+                    info.lod_bias.0,
+                    info.anisotropy_clamp.map_or(0, |aniso| aniso as u32),
+                    conv::map_comparison(info.comparison.unwrap_or(pso::Comparison::Always)),
+                    info.border.into(),
+                    info.lod_range.start.0..info.lod_range.end.0,
+                );
+                *e.insert(index)
+            }
         };
-        self.raw.create_sampler(
-            handle,
-            conv::map_filter(
-                info.mag_filter,
-                info.min_filter,
-                info.mip_filter,
-                op,
-                info.anisotropy_clamp,
-            ),
-            [
-                conv::map_wrap(info.wrap_mode.0),
-                conv::map_wrap(info.wrap_mode.1),
-                conv::map_wrap(info.wrap_mode.2),
-            ],
-            info.lod_bias.0,
-            info.anisotropy_clamp.map_or(0, |aniso| aniso as u32),
-            conv::map_comparison(info.comparison.unwrap_or(pso::Comparison::Always)),
-            info.border.into(),
-            info.lod_range.start.0..info.lod_range.end.0,
-        );
-
-        Ok(r::Sampler { handle })
+        Ok(r::Sampler { index })
     }
 
     unsafe fn create_descriptor_pool<I>(
@@ -2831,58 +2834,32 @@ impl d::Device<B> for Device {
 
         // Allocate slices of the global GPU descriptor heaps.
         let heap_srv_cbv_uav = {
-            let mut heap_srv_cbv_uav = self.heap_srv_cbv_uav.lock();
+            let view_heap = &self.heap_srv_cbv_uav.0;
 
             let range = match num_srv_cbv_uav {
                 0 => 0..0,
-                _ => heap_srv_cbv_uav
-                    .range_allocator
+                _ => self
+                    .heap_srv_cbv_uav
+                    .1
+                    .lock()
                     .allocate_range(num_srv_cbv_uav as _)
-                    .unwrap(), // TODO: error/resize
+                    .map_err(|e| {
+                        warn!("View pool allocation error: {:?}", e);
+                        d::OutOfMemory::Host
+                    })?,
             };
 
             r::DescriptorHeapSlice {
-                heap: heap_srv_cbv_uav.raw.clone(),
-                handle_size: heap_srv_cbv_uav.handle_size as _,
+                heap: view_heap.raw.clone(),
+                handle_size: view_heap.handle_size as _,
                 range_allocator: RangeAllocator::new(range),
-                start: heap_srv_cbv_uav.start,
-            }
-        };
-
-        let heap_sampler = {
-            let mut heap_sampler = self.heap_sampler.lock();
-
-            let mut range = 0..0;
-            while num_samplers != 0 {
-                match heap_sampler
-                    .range_allocator
-                    .allocate_range(num_samplers as _)
-                {
-                    Ok(r) => {
-                        range = r;
-                        break;
-                    }
-                    Err(e) => {
-                        warn!(
-                            "Unable to allocate {} samplers ({:?}), downsizing",
-                            num_samplers, e
-                        );
-                        num_samplers >>= 1;
-                    }
-                }
-            }
-
-            r::DescriptorHeapSlice {
-                heap: heap_sampler.raw.clone(),
-                handle_size: heap_sampler.handle_size as _,
-                range_allocator: RangeAllocator::new(range),
-                start: heap_sampler.start,
+                start: view_heap.start,
             }
         };
 
         Ok(r::DescriptorPool {
             heap_srv_cbv_uav,
-            heap_sampler,
+            heap_raw_sampler: self.heap_sampler.0.raw,
             pools: descriptor_pools,
             max_size: max_sets as _,
         })
@@ -2930,6 +2907,11 @@ impl d::Device<B> for Device {
                 "\t{:?} binding {} array offset {}",
                 bind_info, target_binding, offset
             );
+            let base_sampler_offset = write.set.sampler_offset(write.binding, write.array_offset);
+            trace!("\tsampler offset {}", base_sampler_offset);
+            let mut sampler_offset = base_sampler_offset;
+            let mut desc_samplers = write.set.sampler_indices.borrow_mut();
+
             for descriptor in write.descriptors {
                 // spill over the writes onto the next binding
                 while offset >= bind_info.count {
@@ -2941,7 +2923,6 @@ impl d::Device<B> for Device {
                 let mut src_cbv = None;
                 let mut src_srv = None;
                 let mut src_uav = None;
-                let mut src_sampler = None;
 
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref sub) => {
@@ -3060,10 +3041,12 @@ impl d::Device<B> for Device {
                     }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
                         src_srv = image.handle_srv;
-                        src_sampler = Some(sampler.handle);
+                        desc_samplers[sampler_offset] = sampler.index;
+                        sampler_offset += 1;
                     }
                     pso::Descriptor::Sampler(sampler) => {
-                        src_sampler = Some(sampler.handle);
+                        desc_samplers[sampler_offset] = sampler.index;
+                        sampler_offset += 1;
                     }
                     pso::Descriptor::TexelBuffer(buffer_view) => {
                         if bind_info.content.contains(r::DescriptorContent::SRV) {
@@ -3106,14 +3089,19 @@ impl d::Device<B> for Device {
                     dst_views.push(bind_info.view_range.as_ref().unwrap().at(uav_offset));
                     num_views.push(1);
                 }
-                if let Some(handle) = src_sampler {
-                    trace!("\tsampler offset {}", offset);
-                    src_samplers.push(handle);
-                    dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
-                    num_samplers.push(1);
-                }
 
                 offset += 1;
+            }
+
+            if sampler_offset != base_sampler_offset {
+                drop(desc_samplers);
+                write.set.update_samplers(
+                    &self.heap_sampler.0,
+                    &self.heap_sampler.1,
+                    &mut src_samplers,
+                    &mut dst_samplers,
+                    &mut num_samplers,
+                );
             }
         }
 
@@ -3151,17 +3139,18 @@ impl d::Device<B> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
     {
-        let mut dst_samplers = Vec::new();
         let mut dst_views = Vec::new();
-        let mut src_samplers = Vec::new();
+        let mut dst_samplers = Vec::new();
         let mut src_views = Vec::new();
-        let mut num_samplers = Vec::new();
+        let mut src_samplers = Vec::new();
         let mut num_views = Vec::new();
+        let mut num_samplers = Vec::new();
 
         for copy_wrap in copy_iter {
             let copy = copy_wrap.borrow();
             let src_info = &copy.src_set.binding_infos[copy.src_binding as usize];
             let dst_info = &copy.dst_set.binding_infos[copy.dst_binding as usize];
+
             if let (Some(src_range), Some(dst_range)) =
                 (src_info.view_range.as_ref(), dst_info.view_range.as_ref())
             {
@@ -3187,15 +3176,15 @@ impl d::Device<B> for Device {
                     num_views.push(copy.count as u32);
                 }
             }
-            if let (Some(src_range), Some(dst_range)) = (
-                src_info.sampler_range.as_ref(),
-                dst_info.sampler_range.as_ref(),
-            ) {
-                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
-                src_samplers.push(src_range.at(copy.src_array_offset as _));
-                dst_samplers.push(dst_range.at(copy.dst_array_offset as _));
-                num_samplers.push(copy.count as u32);
+
+            if dst_info.content.contains(r::DescriptorContent::SAMPLER) {
+                copy.dst_set.update_samplers(
+                    &self.heap_sampler.0,
+                    &self.heap_sampler.1,
+                    &mut src_samplers,
+                    &mut dst_samplers,
+                    &mut num_samplers,
+                );
             }
         }
 
@@ -3511,16 +3500,9 @@ impl d::Device<B> for Device {
         let view_range = pool.heap_srv_cbv_uav.range_allocator.initial_range();
         if view_range.start < view_range.end {
             self.heap_srv_cbv_uav
+                .1
                 .lock()
-                .range_allocator
                 .free_range(view_range.clone());
-        }
-        let sampler_range = pool.heap_sampler.range_allocator.initial_range();
-        if sampler_range.start < sampler_range.end {
-            self.heap_sampler
-                .lock()
-                .range_allocator
-                .free_range(sampler_range.clone());
         }
     }
 

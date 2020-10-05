@@ -4,8 +4,8 @@ use hal::{
     IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
 };
 
-use std::{borrow::Borrow, cell::Cell, cmp, fmt, iter, mem, ops::Range, ptr, sync::Arc};
-
+use arrayvec::ArrayVec;
+use smallvec::SmallVec;
 use winapi::{
     ctypes,
     shared::{dxgiformat, minwindef, winerror},
@@ -13,8 +13,7 @@ use winapi::{
     Interface,
 };
 
-use arrayvec::ArrayVec;
-use smallvec::SmallVec;
+use std::{borrow::Borrow, cell::Cell, cmp, fmt, iter, mem, ops::Range, ptr, sync::Arc};
 
 use crate::{
     conv, descriptors_cpu, device, internal, pool::PoolShared, resource as r, validate_line_width,
@@ -244,7 +243,7 @@ impl PipelineCache {
             }
 
             // Bind Sampler descriptor tables.
-            if let Some(gpu) = set.first_gpu_sampler {
+            if let Some(gpu) = set.first_gpu_sampler.get() {
                 assert!(element.table.ty.contains(r::SAMPLERS));
 
                 // Cast is safe as offset **must** be in u32 range. Unable to

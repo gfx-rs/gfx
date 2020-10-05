@@ -1,14 +1,21 @@
+use hal::{buffer, format, image, memory, pass, pso};
+use range_alloc::RangeAllocator;
+
+use parking_lot::RwLock;
 use winapi::{
     shared::{dxgiformat::DXGI_FORMAT, minwindef::UINT},
     um::d3d12,
 };
 
-use hal::{buffer, format, image, memory, pass, pso};
-use range_alloc::RangeAllocator;
+use std::{
+    cell::{Cell, RefCell, UnsafeCell},
+    collections::BTreeMap,
+    fmt,
+    ops::Range,
+    sync::Arc,
+};
 
-use crate::{root_constants::RootConstant, Backend, MAX_VERTEX_BUFFERS};
-
-use std::{cell::UnsafeCell, collections::BTreeMap, fmt, ops::Range, sync::Arc};
+use crate::{root_constants::RootConstant, Backend, DescriptorIndex, MAX_VERTEX_BUFFERS};
 
 // ShaderModule is either a precompiled if the source comes from HLSL or
 // the SPIR-V module doesn't contain specialization constants or push constants
@@ -382,14 +389,9 @@ impl ImageView {
     }
 }
 
+#[derive(Debug)]
 pub struct Sampler {
-    pub(crate) handle: native::CpuDescriptor,
-}
-
-impl fmt::Debug for Sampler {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str("Sampler")
-    }
+    pub(crate) index: DescriptorIndex,
 }
 
 #[derive(Debug)]
@@ -510,7 +512,7 @@ pub struct DescriptorRange {
 }
 
 impl DescriptorRange {
-    pub(crate) fn at(&self, index: u64) -> native::CpuDescriptor {
+    pub(crate) fn at(&self, index: DescriptorIndex) -> native::CpuDescriptor {
         assert!(index < self.count);
         let ptr = self.handle.cpu.ptr + (self.handle_size * index) as usize;
         native::CpuDescriptor { ptr }
@@ -527,17 +529,49 @@ pub(crate) struct DynamicDescriptor {
 pub struct DescriptorBindingInfo {
     pub(crate) count: u64,
     pub(crate) view_range: Option<DescriptorRange>,
-    pub(crate) sampler_range: Option<DescriptorRange>,
     pub(crate) dynamic_descriptors: UnsafeCell<Vec<DynamicDescriptor>>,
     pub(crate) content: DescriptorContent,
+}
+
+#[derive(Default)]
+pub struct DescriptorOrigins {
+    // For each index on the heap, this array stores the earlier index,
+    // where the relevant element has been created, and then copied.
+    origins: Vec<DescriptorIndex>,
+}
+
+impl DescriptorOrigins {
+    fn find(&self, other: &[DescriptorIndex]) -> Option<DescriptorIndex> {
+        //TODO: need a smarter algorithm here!
+        for i in other.len()..=self.origins.len() {
+            let base = i - other.len();
+            if &self.origins[base..i] == other {
+                return Some(base as DescriptorIndex);
+            }
+        }
+        None
+    }
+
+    pub fn alloc(&mut self) -> DescriptorIndex {
+        let index = self.origins.len() as DescriptorIndex;
+        self.origins.push(index);
+        index
+    }
+
+    fn grow(&mut self, other: &[DescriptorIndex]) -> DescriptorIndex {
+        let base = self.origins.len() as DescriptorIndex;
+        self.origins.extend_from_slice(other);
+        base
+    }
 }
 
 pub struct DescriptorSet {
     // Required for binding at command buffer
     pub(crate) heap_srv_cbv_uav: native::DescriptorHeap,
     pub(crate) heap_samplers: native::DescriptorHeap,
+    pub(crate) sampler_indices: RefCell<Box<[DescriptorIndex]>>,
     pub(crate) binding_infos: Vec<DescriptorBindingInfo>,
-    pub(crate) first_gpu_sampler: Option<native::GpuDescriptor>,
+    pub(crate) first_gpu_sampler: Cell<Option<native::GpuDescriptor>>,
     pub(crate) first_gpu_view: Option<native::GpuDescriptor>,
     pub(crate) raw_name: Vec<u16>,
 }
@@ -560,6 +594,55 @@ impl DescriptorSet {
     pub fn sampler_gpu_start(&self) -> native::GpuDescriptor {
         self.heap_samplers.start_gpu_descriptor()
     }
+
+    pub fn sampler_offset(&self, binding: u32, last_offset: usize) -> usize {
+        let mut offset = 0;
+        for bi in &self.binding_infos[..binding as usize] {
+            if bi.content.contains(DescriptorContent::SAMPLER) {
+                offset += bi.count as usize;
+            }
+        }
+        if self.binding_infos[binding as usize]
+            .content
+            .contains(DescriptorContent::SAMPLER)
+        {
+            offset += last_offset;
+        }
+        offset
+    }
+
+    pub fn update_samplers(
+        &self,
+        heap: &DescriptorHeap,
+        origins: &RwLock<DescriptorOrigins>,
+        src_descriptors: &mut Vec<native::CpuDescriptor>,
+        dst_descriptors: &mut Vec<native::CpuDescriptor>,
+        counts: &mut Vec<u32>,
+    ) {
+        let set_indices = self.sampler_indices.borrow();
+        let start_index = if let Some(index) = {
+            // explicit variable allows to limit the lifetime of that borrow
+            let borrow = origins.read();
+            borrow.find(&*set_indices)
+        } {
+            Some(index)
+        } else if set_indices.contains(&!0) {
+            // set is incomplete, don't try to build it
+            None
+        } else {
+            let base = origins.write().grow(&*set_indices);
+            // copy the descriptors from their origins into the new location
+            for (index, &origin) in set_indices.iter().enumerate() {
+                src_descriptors.push(heap.cpu_descriptor_at(origin));
+                dst_descriptors.push(heap.cpu_descriptor_at(base + index as DescriptorIndex));
+                counts.push(1);
+            }
+            Some(base)
+        };
+
+        self.first_gpu_sampler
+            .set(start_index.map(|index| heap.gpu_descriptor_at(index)));
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -581,7 +664,6 @@ pub struct DescriptorHeap {
     pub(crate) handle_size: u64,
     pub(crate) total_handles: u64,
     pub(crate) start: DualHandle,
-    pub(crate) range_allocator: RangeAllocator<u64>,
 }
 
 impl fmt::Debug for DescriptorHeap {
@@ -591,16 +673,24 @@ impl fmt::Debug for DescriptorHeap {
 }
 
 impl DescriptorHeap {
-    pub(crate) fn at(&self, index: u64, size: u64) -> DualHandle {
+    pub(crate) fn at(&self, index: DescriptorIndex, size: u64) -> DualHandle {
         assert!(index < self.total_handles);
         DualHandle {
-            cpu: native::CpuDescriptor {
-                ptr: self.start.cpu.ptr + (self.handle_size * index) as usize,
-            },
-            gpu: native::GpuDescriptor {
-                ptr: self.start.gpu.ptr + self.handle_size * index,
-            },
+            cpu: self.cpu_descriptor_at(index),
+            gpu: self.gpu_descriptor_at(index),
             size,
+        }
+    }
+
+    pub(crate) fn cpu_descriptor_at(&self, index: u64) -> native::CpuDescriptor {
+        native::CpuDescriptor {
+            ptr: self.start.cpu.ptr + (self.handle_size * index) as usize,
+        }
+    }
+
+    pub(crate) fn gpu_descriptor_at(&self, index: u64) -> native::GpuDescriptor {
+        native::GpuDescriptor {
+            ptr: self.start.gpu.ptr + self.handle_size * index,
         }
     }
 
@@ -651,8 +741,8 @@ impl DescriptorHeapSlice {
 
 #[derive(Debug)]
 pub struct DescriptorPool {
+    pub(crate) heap_raw_sampler: native::DescriptorHeap,
     pub(crate) heap_srv_cbv_uav: DescriptorHeapSlice,
-    pub(crate) heap_sampler: DescriptorHeapSlice,
     pub(crate) pools: Vec<pso::DescriptorRangeDesc>,
     pub(crate) max_size: u64,
 }
@@ -665,8 +755,8 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         layout: &DescriptorSetLayout,
     ) -> Result<DescriptorSet, pso::AllocationError> {
         let mut binding_infos = Vec::new();
-        let mut first_gpu_sampler = None;
         let mut first_gpu_view = None;
+        let mut num_samplers = 0;
 
         info!("allocate_set");
         for binding in &layout.bindings {
@@ -677,13 +767,17 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
             let content = DescriptorContent::from(binding.ty);
             debug!("\tbinding {:?} with content {:?}", binding, content);
 
-            let (view_range, sampler_range, dynamic_descriptors) = if content.is_dynamic() {
+            let (view_range, dynamic_descriptors) = if content.is_dynamic() {
                 let descriptor = DynamicDescriptor {
                     content: content ^ DescriptorContent::DYNAMIC,
                     gpu_buffer_location: 0,
                 };
-                (None, None, vec![descriptor; binding.count])
+                (None, vec![descriptor; binding.count])
             } else {
+                if content.contains(DescriptorContent::SAMPLER) {
+                    num_samplers += binding.count;
+                }
+
                 let view_range = if content.intersects(DescriptorContent::VIEW) {
                     let count = if content.contains(DescriptorContent::SRV | DescriptorContent::UAV)
                     {
@@ -709,44 +803,23 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                     None
                 };
 
-                let sampler_range =
-                    if content.intersects(DescriptorContent::SAMPLER) && !content.is_dynamic() {
-                        let count = binding.count as u64;
-                        debug!("\tsampler handles: {}", count);
-                        let handle = self
-                            .heap_sampler
-                            .alloc_handles(count)
-                            .ok_or(pso::AllocationError::OutOfPoolMemory)?;
-                        if first_gpu_sampler.is_none() {
-                            first_gpu_sampler = Some(handle.gpu);
-                        }
-                        Some(DescriptorRange {
-                            handle,
-                            ty: binding.ty,
-                            count,
-                            handle_size: self.heap_sampler.handle_size,
-                        })
-                    } else {
-                        None
-                    };
-
-                (view_range, sampler_range, Vec::new())
+                (view_range, Vec::new())
             };
 
             binding_infos[binding.binding as usize] = DescriptorBindingInfo {
                 count: binding.count as _,
                 view_range,
-                sampler_range,
                 dynamic_descriptors: UnsafeCell::new(dynamic_descriptors),
                 content,
             };
         }
 
         Ok(DescriptorSet {
-            heap_srv_cbv_uav: self.heap_srv_cbv_uav.heap.clone(),
-            heap_samplers: self.heap_sampler.heap.clone(),
+            heap_srv_cbv_uav: self.heap_srv_cbv_uav.heap,
+            heap_samplers: self.heap_raw_sampler,
+            sampler_indices: RefCell::new(vec![!0; num_samplers].into_boxed_slice()),
             binding_infos,
-            first_gpu_sampler,
+            first_gpu_sampler: Cell::new(None),
             first_gpu_view,
             raw_name: Vec::new(),
         })
@@ -763,18 +836,12 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                         self.heap_srv_cbv_uav.free_handles(view_range.handle);
                     }
                 }
-                if let Some(ref sampler_range) = binding_info.sampler_range {
-                    if binding_info.content.intersects(DescriptorContent::SAMPLER) {
-                        self.heap_sampler.free_handles(sampler_range.handle);
-                    }
-                }
             }
         }
     }
 
     unsafe fn reset(&mut self) {
         self.heap_srv_cbv_uav.clear();
-        self.heap_sampler.clear();
     }
 }
 
