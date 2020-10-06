@@ -96,8 +96,8 @@ lazy_static! {
     static ref EXT_DESCRIPTOR_INDEXING: &'static CStr =
         CStr::from_bytes_with_nul(b"VK_EXT_descriptor_indexing\0").unwrap();
     static ref MESH_SHADER: &'static CStr = MeshShader::name();
-    static ref KHR_BUFFER_DEVICE_ADDRESS: &'static CStr =
-        CStr::from_bytes_with_nul(b"VK_KHR_buffer_device_address\0").unwrap();
+    static ref EXT_BUFFER_DEVICE_ADDRESS: &'static CStr =
+        CStr::from_bytes_with_nul(b"VK_EXT_buffer_device_address\0").unwrap();
 }
 
 #[cfg(not(feature = "use-rtld-next"))]
@@ -1066,7 +1066,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         if self.supports_extension(*KHR_DRAW_INDIRECT_COUNT) {
             bits |= Features::DRAW_INDIRECT_COUNT
         }
-        if self.supports_extension(*KHR_BUFFER_DEVICE_ADDRESS) {
+        if self.supports_extension(*EXT_BUFFER_DEVICE_ADDRESS) {
             bits |= Features::BUFFER_DEVICE_ADDRESS;
         }
         // This will only be some if the extension exists
