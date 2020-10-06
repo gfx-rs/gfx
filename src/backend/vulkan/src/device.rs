@@ -15,11 +15,11 @@ use hal::{
 
 use std::borrow::Borrow;
 use std::ffi::CString;
+use std::num::NonZeroU64;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::{mem, ptr};
-use std::num::NonZeroU64;
 
 use crate::pool::RawCommandPool;
 use crate::{command as cmd, conv, native as n, window as w};
@@ -2264,16 +2264,13 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn get_buffer_device_address(&self, buf: &n::Buffer) -> NonZeroU64 {
-        let get_buffer_device_address = self
-            .shared
-            .extension_fns
-            .get_buffer_device_address
-            .expect("Feature BUFFER_DEVICE_ADDRESS must be enabled to call get_buffer_device_address");
-        
+        let get_buffer_device_address = self.shared.extension_fns.get_buffer_device_address.expect(
+            "Feature BUFFER_DEVICE_ADDRESS must be enabled to call get_buffer_device_address",
+        );
+
         let address = get_buffer_device_address(
             &self.shared.raw,
-            &vk::BufferDeviceAddressInfo::builder()
-                .buffer(buf.raw),
+            &vk::BufferDeviceAddressInfo::builder().buffer(buf.raw),
         );
 
         NonZeroU64::new(address).expect("`get_buffer_device_address` returned a null value!")

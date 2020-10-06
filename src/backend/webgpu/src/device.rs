@@ -586,7 +586,10 @@ impl hal::device::Device<Backend> for Device {
         // TODO
     }
 
-    unsafe fn get_buffer_device_address(&self, _buf: &<Backend as hal::Backend>::Buffer) -> std::num::NonZeroU64 {
+    unsafe fn get_buffer_device_address(
+        &self,
+        _buf: &<Backend as hal::Backend>::Buffer,
+    ) -> std::num::NonZeroU64 {
         unimplemented!()
     }
 }

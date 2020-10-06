@@ -15,7 +15,7 @@ use ash::extensions::{
     khr::DrawIndirectCount,
 };
 use ash::extensions::{khr::Swapchain, nv::MeshShader};
-use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, DeviceV1_2};
+use ash::version::{DeviceV1_0, DeviceV1_2, EntryV1_0, InstanceV1_0};
 use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
@@ -734,7 +734,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 if requested_features.intersects(
                     Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
                         | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
-                        | Features::UNSIZED_DESCRIPTOR_ARRAY
+                        | Features::UNSIZED_DESCRIPTOR_ARRAY,
                 ) {
                     vec![*KHR_MAINTENANCE3, *EXT_DESCRIPTOR_INDEXING]
                 } else {
@@ -833,11 +833,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             None
         };
 
-        let buffer_device_address_fn = if requested_features.contains(Features::BUFFER_DEVICE_ADDRESS) {
-            Some(ash::Device::get_buffer_device_address as _)
-        } else {
-            None
-        };
+        let buffer_device_address_fn =
+            if requested_features.contains(Features::BUFFER_DEVICE_ADDRESS) {
+                Some(ash::Device::get_buffer_device_address as _)
+            } else {
+                None
+            };
 
         let device = Device {
             shared: Arc::new(RawDevice {
@@ -1436,7 +1437,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 struct DeviceExtensionFunctions {
     mesh_shaders: Option<MeshShader>,
     draw_indirect_count: Option<DrawIndirectCount>,
-    get_buffer_device_address: Option<unsafe fn(&ash::Device, &vk::BufferDeviceAddressInfo) -> vk::DeviceAddress>,
+    get_buffer_device_address:
+        Option<unsafe fn(&ash::Device, &vk::BufferDeviceAddressInfo) -> vk::DeviceAddress>,
 }
 
 #[doc(hidden)]

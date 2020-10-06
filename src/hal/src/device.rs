@@ -13,9 +13,9 @@
 
 use std::any::Any;
 use std::borrow::Borrow;
+use std::num::NonZeroU64;
 use std::ops::Range;
 use std::{fmt, iter};
-use std::num::NonZeroU64;
 
 use crate::{
     buffer, format, image,
@@ -996,8 +996,5 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         name: &str,
     );
     /// Query a 64-bit buffer device address value through which buffer memory can be accessed in a shader.
-    unsafe fn get_buffer_device_address(
-        &self,
-        buf: &B::Buffer,
-    ) -> NonZeroU64;
+    unsafe fn get_buffer_device_address(&self, buf: &B::Buffer) -> NonZeroU64;
 }
