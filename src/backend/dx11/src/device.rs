@@ -2178,4 +2178,8 @@ impl device::Device<Backend> for Device {
     ) {
         // TODO
     }
+
+    unsafe fn get_buffer_device_address(&self, _buf: &Buffer) -> NonZeroU64 {
+        unimplemented!()
+    }
 }

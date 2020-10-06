@@ -596,6 +596,10 @@ impl device::Device<Backend> for Device {
     unsafe fn wait_for_fence(&self, _: &(), _: u64) -> Result<bool, device::OomOrDeviceLost> {
         Ok(true)
     }
+
+    unsafe fn get_buffer_device_address(&self, _buf: &Buffer) -> std::num::NonZeroU64 {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
 }
 
 #[derive(Debug)]

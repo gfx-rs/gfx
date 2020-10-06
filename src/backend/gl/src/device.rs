@@ -1967,4 +1967,8 @@ impl d::Device<B> for Device {
     ) {
         // TODO
     }
+
+    unsafe fn get_buffer_device_address(&self, _buf: &n::Buffer) -> std::num::NonZeroU64 {
+        unimplemented!()
+    }
 }

@@ -15,7 +15,7 @@ use ash::extensions::{
     khr::DrawIndirectCount,
 };
 use ash::extensions::{khr::Swapchain, nv::MeshShader};
-use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
+use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, DeviceV1_2};
 use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
@@ -96,6 +96,8 @@ lazy_static! {
     static ref EXT_DESCRIPTOR_INDEXING: &'static CStr =
         CStr::from_bytes_with_nul(b"VK_EXT_descriptor_indexing\0").unwrap();
     static ref MESH_SHADER: &'static CStr = MeshShader::name();
+    static ref KHR_BUFFER_DEVICE_ADDRESS: &'static CStr =
+        CStr::from_bytes_with_nul(b"VK_KHR_buffer_device_address\0").unwrap();
 }
 
 #[cfg(not(feature = "use-rtld-next"))]
@@ -831,6 +833,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             None
         };
 
+        let buffer_device_address_fn = if requested_features.contains(Features::BUFFER_DEVICE_ADDRESS) {
+            Some(ash::Device::get_buffer_device_address as _)
+        } else {
+            None
+        };
+
         let device = Device {
             shared: Arc::new(RawDevice {
                 raw: device_raw,
@@ -839,6 +847,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 extension_fns: DeviceExtensionFunctions {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
+                    get_buffer_device_address: buffer_device_address_fn,
                 },
                 maintenance_level,
             }),
@@ -1055,6 +1064,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
         if self.supports_extension(*KHR_DRAW_INDIRECT_COUNT) {
             bits |= Features::DRAW_INDIRECT_COUNT
+        }
+        if self.supports_extension(*KHR_BUFFER_DEVICE_ADDRESS) {
+            bits |= Features::BUFFER_DEVICE_ADDRESS;
         }
         // This will only be some if the extension exists
         if let Some(ref desc_indexing) = descriptor_indexing_features {
@@ -1424,6 +1436,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 struct DeviceExtensionFunctions {
     mesh_shaders: Option<MeshShader>,
     draw_indirect_count: Option<DrawIndirectCount>,
+    get_buffer_device_address: Option<unsafe fn(&ash::Device, &vk::BufferDeviceAddressInfo) -> vk::DeviceAddress>,
 }
 
 #[doc(hidden)]

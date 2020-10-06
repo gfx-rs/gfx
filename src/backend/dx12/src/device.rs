@@ -3612,6 +3612,10 @@ impl d::Device<B> for Device {
         let cwstr = wide_cstr(name);
         pipeline.raw.SetName(cwstr.as_ptr());
     }
+
+    unsafe fn get_buffer_device_address(&self, _buf: &r::Buffer) -> NonZeroU64 {
+        unimplemented!()
+    }
 }
 
 #[test]
