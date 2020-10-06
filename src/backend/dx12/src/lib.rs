@@ -13,10 +13,14 @@ mod resource;
 mod root_constants;
 mod window;
 
+use auxil::FastHashMap;
 use hal::{
     adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Hints, Limits,
 };
+use range_alloc::RangeAllocator;
 
+use parking_lot::{Mutex, RwLock};
+use smallvec::SmallVec;
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, minwindef::TRUE, winerror},
     um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase},
@@ -30,7 +34,7 @@ use std::{
     mem,
     os::windows::ffi::OsStringExt,
     //TODO: use parking_lot
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use self::descriptors_cpu::DescriptorCpuPool;
@@ -47,6 +51,8 @@ const MAX_VERTEX_BUFFERS: usize = 16;
 const MAX_DESCRIPTOR_SETS: usize = 8;
 
 const NUM_HEAP_PROPERTIES: usize = 3;
+
+pub type DescriptorIndex = u64;
 
 // Memory types are grouped according to the supported resources.
 // Grouping is done to circumvent the limitations of heap tier 1 devices.
@@ -205,10 +211,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         families: &[(&QueueFamily, &[q::QueuePriority])],
         requested_features: Features,
     ) -> Result<adapter::Gpu<Backend>, hal::device::CreationError> {
-        let lock = self.is_open.try_lock();
-        let mut open_guard = match lock {
-            Ok(inner) => inner,
-            Err(_) => return Err(hal::device::CreationError::TooManyObjects),
+        let mut open_guard = match self.is_open.try_lock() {
+            Some(inner) => inner,
+            None => return Err(hal::device::CreationError::TooManyObjects),
         };
 
         if !self.features().contains(requested_features) {
@@ -461,13 +466,20 @@ impl q::CommandQueue<Backend> for CommandQueue {
         synchapi::ResetEvent(self.idle_event.0);
 
         // TODO: semaphores
-        let mut lists = submission
+        let command_buffers = submission
             .command_buffers
             .into_iter()
-            .map(|buf| buf.borrow().as_raw_list())
-            .collect::<Vec<_>>();
+            .map(|buf| buf.borrow())
+            .collect::<SmallVec<[_; 4]>>();
+        let lists = command_buffers
+            .iter()
+            .map(|buf| buf.as_raw_list())
+            .collect::<SmallVec<[_; 4]>>();
         self.raw
-            .ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
+            .ExecuteCommandLists(lists.len() as _, lists.as_ptr());
+        for command_buffer in command_buffers {
+            command_buffer.after_submit();
+        }
 
         if let Some(fence) = fence {
             assert_eq!(winerror::S_OK, self.raw.Signal(fence.raw.as_mut_ptr(), 1));
@@ -547,15 +559,22 @@ pub struct Device {
     features: Features,
     format_properties: Arc<FormatProperties>,
     heap_properties: &'static [HeapProperties],
+    // resources
+    samplers: Mutex<FastHashMap<image::SamplerDesc, DescriptorIndex>>,
     // CPU only pools
     rtv_pool: Mutex<DescriptorCpuPool>,
     dsv_pool: Mutex<DescriptorCpuPool>,
     srv_uav_pool: Mutex<DescriptorCpuPool>,
-    sampler_pool: Mutex<DescriptorCpuPool>,
     descriptor_update_pools: Mutex<Vec<descriptors_cpu::HeapLinear>>,
     // CPU/GPU descriptor heaps
-    heap_srv_cbv_uav: Mutex<resource::DescriptorHeap>,
-    heap_sampler: Mutex<resource::DescriptorHeap>,
+    heap_srv_cbv_uav: (
+        resource::DescriptorHeap,
+        Mutex<RangeAllocator<DescriptorIndex>>,
+    ),
+    heap_sampler: (
+        resource::DescriptorHeap,
+        RwLock<resource::DescriptorOrigins>,
+    ),
     events: Mutex<Vec<native::Event>>,
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
@@ -588,14 +607,16 @@ impl Device {
         let rtv_pool = DescriptorCpuPool::new(device, native::DescriptorHeapType::Rtv);
         let dsv_pool = DescriptorCpuPool::new(device, native::DescriptorHeapType::Dsv);
         let srv_uav_pool = DescriptorCpuPool::new(device, native::DescriptorHeapType::CbvSrvUav);
-        let sampler_pool = DescriptorCpuPool::new(device, native::DescriptorHeapType::Sampler);
 
+        // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
+        let view_capacity = 1_000_000;
         let heap_srv_cbv_uav = Self::create_descriptor_heap_impl(
             device,
             native::DescriptorHeapType::CbvSrvUav,
             true,
-            1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
+            view_capacity,
         );
+        let view_range_allocator = RangeAllocator::new(0..(view_capacity as u64));
 
         let heap_sampler = Self::create_descriptor_heap_impl(
             device,
@@ -629,13 +650,13 @@ impl Device {
             features: Features::empty(),
             format_properties: physical_device.format_properties.clone(),
             heap_properties: physical_device.heap_properties,
+            samplers: Mutex::default(),
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(dsv_pool),
             srv_uav_pool: Mutex::new(srv_uav_pool),
-            sampler_pool: Mutex::new(sampler_pool),
             descriptor_update_pools: Mutex::new(Vec::new()),
-            heap_srv_cbv_uav: Mutex::new(heap_srv_cbv_uav),
-            heap_sampler: Mutex::new(heap_sampler),
+            heap_srv_cbv_uav: (heap_srv_cbv_uav, Mutex::new(view_range_allocator)),
+            heap_sampler: (heap_sampler, RwLock::default()),
             events: Mutex::new(Vec::new()),
             shared: Arc::new(shared),
             present_queue,
@@ -658,22 +679,22 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        *self.open.lock().unwrap() = false;
+        *self.open.lock() = false;
 
         unsafe {
             for queue in &mut self.queues {
+                let _ = q::CommandQueue::wait_idle(queue);
                 queue.destroy();
             }
 
             self.shared.destroy();
-            self.heap_srv_cbv_uav.lock().unwrap().destroy();
-            self.heap_sampler.lock().unwrap().destroy();
-            self.rtv_pool.lock().unwrap().destroy();
-            self.dsv_pool.lock().unwrap().destroy();
-            self.srv_uav_pool.lock().unwrap().destroy();
-            self.sampler_pool.lock().unwrap().destroy();
+            self.heap_srv_cbv_uav.0.destroy();
+            self.heap_sampler.0.destroy();
+            self.rtv_pool.lock().destroy();
+            self.dsv_pool.lock().destroy();
+            self.srv_uav_pool.lock().destroy();
 
-            for pool in &*self.descriptor_update_pools.lock().unwrap() {
+            for pool in &*self.descriptor_update_pools.lock() {
                 pool.destroy();
             }
 
@@ -1256,7 +1277,7 @@ impl FormatProperties {
     }
 
     fn get(&self, idx: usize) -> FormatInfo {
-        let mut guard = self.info[idx].lock().unwrap();
+        let mut guard = self.info[idx].lock();
         if let Some(info) = *guard {
             return info;
         }
