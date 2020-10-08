@@ -553,14 +553,26 @@ impl Shared {
     }
 }
 
+pub struct SamplerStorage {
+    map: Mutex<FastHashMap<image::SamplerDesc, native::CpuDescriptor>>,
+    pool: Mutex<DescriptorCpuPool>,
+    heap: resource::DescriptorHeap,
+    origins: RwLock<resource::DescriptorOrigins>,
+}
+
+impl SamplerStorage {
+    unsafe fn destroy(&mut self) {
+        self.pool.lock().destroy();
+        self.heap.destroy();
+    }
+}
+
 pub struct Device {
     raw: native::Device,
     private_caps: Capabilities,
     features: Features,
     format_properties: Arc<FormatProperties>,
     heap_properties: &'static [HeapProperties],
-    // resources
-    samplers: Mutex<FastHashMap<image::SamplerDesc, DescriptorIndex>>,
     // CPU only pools
     rtv_pool: Mutex<DescriptorCpuPool>,
     dsv_pool: Mutex<DescriptorCpuPool>,
@@ -571,10 +583,7 @@ pub struct Device {
         resource::DescriptorHeap,
         Mutex<RangeAllocator<DescriptorIndex>>,
     ),
-    heap_sampler: (
-        resource::DescriptorHeap,
-        RwLock<resource::DescriptorOrigins>,
-    ),
+    samplers: SamplerStorage,
     events: Mutex<Vec<native::Event>>,
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
@@ -618,6 +627,7 @@ impl Device {
         );
         let view_range_allocator = RangeAllocator::new(0..(view_capacity as u64));
 
+        let sampler_pool = DescriptorCpuPool::new(device, native::DescriptorHeapType::Sampler);
         let heap_sampler = Self::create_descriptor_heap_impl(
             device,
             native::DescriptorHeapType::Sampler,
@@ -650,13 +660,17 @@ impl Device {
             features: Features::empty(),
             format_properties: physical_device.format_properties.clone(),
             heap_properties: physical_device.heap_properties,
-            samplers: Mutex::default(),
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(dsv_pool),
             srv_uav_pool: Mutex::new(srv_uav_pool),
             descriptor_update_pools: Mutex::new(Vec::new()),
             heap_srv_cbv_uav: (heap_srv_cbv_uav, Mutex::new(view_range_allocator)),
-            heap_sampler: (heap_sampler, RwLock::default()),
+            samplers: SamplerStorage {
+                map: Mutex::default(),
+                pool: Mutex::new(sampler_pool),
+                heap: heap_sampler,
+                origins: RwLock::default(),
+            },
             events: Mutex::new(Vec::new()),
             shared: Arc::new(shared),
             present_queue,
@@ -689,7 +703,7 @@ impl Drop for Device {
 
             self.shared.destroy();
             self.heap_srv_cbv_uav.0.destroy();
-            self.heap_sampler.0.destroy();
+            self.samplers.destroy();
             self.rtv_pool.lock().destroy();
             self.dsv_pool.lock().destroy();
             self.srv_uav_pool.lock().destroy();

@@ -2751,11 +2751,10 @@ impl d::Device<B> for Device {
         if !info.normalized {
             warn!("Sampler with unnormalized coordinates is not supported!");
         }
-        let index = match self.samplers.lock().entry(info.clone()) {
+        let handle = match self.samplers.map.lock().entry(info.clone()) {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
-                let index = self.heap_sampler.1.write().alloc();
-                let handle = self.heap_sampler.0.cpu_descriptor_at(index);
+                let handle = self.samplers.pool.lock().alloc_handle();
                 let info = e.key();
                 let op = match info.comparison {
                     Some(_) => d3d12::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
@@ -2781,10 +2780,10 @@ impl d::Device<B> for Device {
                     info.border.into(),
                     info.lod_range.start.0..info.lod_range.end.0,
                 );
-                *e.insert(index)
+                *e.insert(handle)
             }
         };
-        Ok(r::Sampler { index })
+        Ok(r::Sampler { handle })
     }
 
     unsafe fn create_descriptor_pool<I>(
@@ -2859,7 +2858,7 @@ impl d::Device<B> for Device {
 
         Ok(r::DescriptorPool {
             heap_srv_cbv_uav,
-            heap_raw_sampler: self.heap_sampler.0.raw,
+            heap_raw_sampler: self.samplers.heap.raw,
             pools: descriptor_pools,
             max_size: max_sets as _,
         })
@@ -2904,7 +2903,7 @@ impl d::Device<B> for Device {
             let base_sampler_offset = write.set.sampler_offset(write.binding, write.array_offset);
             trace!("\tsampler offset {}", base_sampler_offset);
             let mut sampler_offset = base_sampler_offset;
-            let mut desc_samplers = write.set.sampler_indices.borrow_mut();
+            let mut desc_samplers = write.set.sampler_origins.borrow_mut();
 
             for descriptor in write.descriptors {
                 // spill over the writes onto the next binding
@@ -3035,11 +3034,11 @@ impl d::Device<B> for Device {
                     }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
                         src_srv = image.handle_srv;
-                        desc_samplers[sampler_offset] = sampler.index;
+                        desc_samplers[sampler_offset] = sampler.handle;
                         sampler_offset += 1;
                     }
                     pso::Descriptor::Sampler(sampler) => {
-                        desc_samplers[sampler_offset] = sampler.index;
+                        desc_samplers[sampler_offset] = sampler.handle;
                         sampler_offset += 1;
                     }
                     pso::Descriptor::TexelBuffer(buffer_view) => {
@@ -3094,7 +3093,7 @@ impl d::Device<B> for Device {
                 drop(desc_samplers);
                 write
                     .set
-                    .update_samplers(&self.heap_sampler.0, &self.heap_sampler.1, &mut accum);
+                    .update_samplers(&self.samplers.heap, &self.samplers.origins, &mut accum);
             }
         }
 
@@ -3160,15 +3159,15 @@ impl d::Device<B> for Device {
                 let dst_offset = copy
                     .dst_set
                     .sampler_offset(copy.dst_binding, copy.dst_array_offset);
-                let src_samplers = copy.src_set.sampler_indices.borrow();
-                let mut dst_samplers = copy.dst_set.sampler_indices.borrow_mut();
+                let src_samplers = copy.src_set.sampler_origins.borrow();
+                let mut dst_samplers = copy.dst_set.sampler_origins.borrow_mut();
                 dst_samplers[dst_offset..dst_offset + copy.count]
                     .copy_from_slice(&src_samplers[src_offset..src_offset + copy.count]);
                 drop(dst_samplers);
 
                 copy.dst_set.update_samplers(
-                    &self.heap_sampler.0,
-                    &self.heap_sampler.1,
+                    &self.samplers.heap,
+                    &self.samplers.origins,
                     &mut accum,
                 );
             }
