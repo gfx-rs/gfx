@@ -15,7 +15,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::{root_constants::RootConstant, Backend, DescriptorIndex, MAX_VERTEX_BUFFERS};
+use crate::{
+    descriptors_cpu::MultiCopyAccumulator, root_constants::RootConstant, Backend, DescriptorIndex,
+    MAX_VERTEX_BUFFERS,
+};
 
 // ShaderModule is either a precompiled if the source comes from HLSL or
 // the SPIR-V module doesn't contain specialization constants or push constants
@@ -615,9 +618,7 @@ impl DescriptorSet {
         &self,
         heap: &DescriptorHeap,
         origins: &RwLock<DescriptorOrigins>,
-        src_descriptors: &mut Vec<native::CpuDescriptor>,
-        dst_descriptors: &mut Vec<native::CpuDescriptor>,
-        counts: &mut Vec<u32>,
+        accum: &mut MultiCopyAccumulator,
     ) {
         let set_indices = self.sampler_indices.borrow();
         let start_index = if let Some(index) = {
@@ -632,10 +633,11 @@ impl DescriptorSet {
         } else {
             let base = origins.write().grow(&*set_indices);
             // copy the descriptors from their origins into the new location
-            for (index, &origin) in set_indices.iter().enumerate() {
-                src_descriptors.push(heap.cpu_descriptor_at(origin));
-                dst_descriptors.push(heap.cpu_descriptor_at(base + index as DescriptorIndex));
-                counts.push(1);
+            accum
+                .dst_samplers
+                .add(heap.cpu_descriptor_at(base), set_indices.len() as u32);
+            for &origin in set_indices.iter() {
+                accum.src_samplers.add(heap.cpu_descriptor_at(origin), 1);
             }
             Some(base)
         };

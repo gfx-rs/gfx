@@ -161,3 +161,64 @@ impl DescriptorCpuPool {
         }
     }
 }
+
+#[derive(Default)]
+pub struct CopyAccumulator {
+    starts: Vec<CpuDescriptor>,
+    counts: Vec<u32>,
+}
+
+impl CopyAccumulator {
+    pub fn add(&mut self, start: CpuDescriptor, count: u32) {
+        self.starts.push(start);
+        self.counts.push(count);
+    }
+
+    pub fn clear(&mut self) {
+        self.starts.clear();
+        self.counts.clear();
+    }
+
+    fn total(&self) -> u32 {
+        self.counts.iter().sum()
+    }
+}
+
+#[derive(Default)]
+pub struct MultiCopyAccumulator {
+    pub src_views: CopyAccumulator,
+    pub src_samplers: CopyAccumulator,
+    pub dst_views: CopyAccumulator,
+    pub dst_samplers: CopyAccumulator,
+}
+
+impl MultiCopyAccumulator {
+    pub unsafe fn flush(&self, device: native::Device) {
+        use winapi::um::d3d12;
+        assert_eq!(self.src_views.total(), self.dst_views.total());
+        assert_eq!(self.src_samplers.total(), self.dst_samplers.total());
+
+        if !self.src_views.starts.is_empty() {
+            device.CopyDescriptors(
+                self.dst_views.starts.len() as u32,
+                self.dst_views.starts.as_ptr(),
+                self.dst_views.counts.as_ptr(),
+                self.src_views.starts.len() as u32,
+                self.src_views.starts.as_ptr(),
+                self.src_views.counts.as_ptr(),
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            );
+        }
+        if !self.src_samplers.starts.is_empty() {
+            device.CopyDescriptors(
+                self.dst_samplers.starts.len() as u32,
+                self.dst_samplers.starts.as_ptr(),
+                self.dst_samplers.counts.as_ptr(),
+                self.src_samplers.starts.len() as u32,
+                self.src_samplers.starts.as_ptr(),
+                self.src_samplers.counts.as_ptr(),
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+            );
+        }
+    }
+}
