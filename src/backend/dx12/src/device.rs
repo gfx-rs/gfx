@@ -2751,11 +2751,10 @@ impl d::Device<B> for Device {
         if !info.normalized {
             warn!("Sampler with unnormalized coordinates is not supported!");
         }
-        let index = match self.samplers.lock().entry(info.clone()) {
+        let handle = match self.samplers.map.lock().entry(info.clone()) {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
-                let index = self.heap_sampler.1.write().alloc();
-                let handle = self.heap_sampler.0.cpu_descriptor_at(index);
+                let handle = self.samplers.pool.lock().alloc_handle();
                 let info = e.key();
                 let op = match info.comparison {
                     Some(_) => d3d12::D3D12_FILTER_REDUCTION_TYPE_COMPARISON,
@@ -2781,10 +2780,10 @@ impl d::Device<B> for Device {
                     info.border.into(),
                     info.lod_range.start.0..info.lod_range.end.0,
                 );
-                *e.insert(index)
+                *e.insert(handle)
             }
         };
-        Ok(r::Sampler { index })
+        Ok(r::Sampler { handle })
     }
 
     unsafe fn create_descriptor_pool<I>(
@@ -2859,7 +2858,7 @@ impl d::Device<B> for Device {
 
         Ok(r::DescriptorPool {
             heap_srv_cbv_uav,
-            heap_raw_sampler: self.heap_sampler.0.raw,
+            heap_raw_sampler: self.samplers.heap.raw,
             pools: descriptor_pools,
             max_size: max_sets as _,
         })
@@ -2890,13 +2889,7 @@ impl d::Device<B> for Device {
         let mut descriptor_update_pools = self.descriptor_update_pools.lock();
         let mut update_pool_index = 0;
 
-        //TODO: combine destination ranges
-        let mut dst_samplers = Vec::new();
-        let mut dst_views = Vec::new();
-        let mut src_samplers = Vec::new();
-        let mut src_views = Vec::new();
-        let mut num_samplers = Vec::new();
-        let mut num_views = Vec::new();
+        let mut accum = descriptors_cpu::MultiCopyAccumulator::default();
         debug!("write_descriptor_sets");
 
         for write in write_iter {
@@ -2910,7 +2903,7 @@ impl d::Device<B> for Device {
             let base_sampler_offset = write.set.sampler_offset(write.binding, write.array_offset);
             trace!("\tsampler offset {}", base_sampler_offset);
             let mut sampler_offset = base_sampler_offset;
-            let mut desc_samplers = write.set.sampler_indices.borrow_mut();
+            let mut desc_samplers = write.set.sampler_origins.borrow_mut();
 
             for descriptor in write.descriptors {
                 // spill over the writes onto the next binding
@@ -3041,11 +3034,11 @@ impl d::Device<B> for Device {
                     }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
                         src_srv = image.handle_srv;
-                        desc_samplers[sampler_offset] = sampler.index;
+                        desc_samplers[sampler_offset] = sampler.handle;
                         sampler_offset += 1;
                     }
                     pso::Descriptor::Sampler(sampler) => {
-                        desc_samplers[sampler_offset] = sampler.index;
+                        desc_samplers[sampler_offset] = sampler.handle;
                         sampler_offset += 1;
                     }
                     pso::Descriptor::TexelBuffer(buffer_view) => {
@@ -3068,15 +3061,17 @@ impl d::Device<B> for Device {
 
                 if let Some(handle) = src_cbv {
                     trace!("\tcbv offset {}", offset);
-                    src_views.push(handle);
-                    dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                    num_views.push(1);
+                    accum.src_views.add(handle, 1);
+                    accum
+                        .dst_views
+                        .add(bind_info.view_range.as_ref().unwrap().at(offset), 1);
                 }
                 if let Some(handle) = src_srv {
                     trace!("\tsrv offset {}", offset);
-                    src_views.push(handle);
-                    dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                    num_views.push(1);
+                    accum.src_views.add(handle, 1);
+                    accum
+                        .dst_views
+                        .add(bind_info.view_range.as_ref().unwrap().at(offset), 1);
                 }
                 if let Some(handle) = src_uav {
                     let uav_offset = if bind_info.content.contains(r::DescriptorContent::SRV) {
@@ -3085,9 +3080,10 @@ impl d::Device<B> for Device {
                         offset
                     };
                     trace!("\tuav offset {}", uav_offset);
-                    src_views.push(handle);
-                    dst_views.push(bind_info.view_range.as_ref().unwrap().at(uav_offset));
-                    num_views.push(1);
+                    accum.src_views.add(handle, 1);
+                    accum
+                        .dst_views
+                        .add(bind_info.view_range.as_ref().unwrap().at(uav_offset), 1);
                 }
 
                 offset += 1;
@@ -3095,38 +3091,13 @@ impl d::Device<B> for Device {
 
             if sampler_offset != base_sampler_offset {
                 drop(desc_samplers);
-                write.set.update_samplers(
-                    &self.heap_sampler.0,
-                    &self.heap_sampler.1,
-                    &mut src_samplers,
-                    &mut dst_samplers,
-                    &mut num_samplers,
-                );
+                write
+                    .set
+                    .update_samplers(&self.samplers.heap, &self.samplers.origins, &mut accum);
             }
         }
 
-        if !num_views.is_empty() {
-            self.raw.clone().CopyDescriptors(
-                dst_views.len() as u32,
-                dst_views.as_ptr(),
-                num_views.as_ptr(),
-                src_views.len() as u32,
-                src_views.as_ptr(),
-                num_views.as_ptr(),
-                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            );
-        }
-        if !num_samplers.is_empty() {
-            self.raw.clone().CopyDescriptors(
-                dst_samplers.len() as u32,
-                dst_samplers.as_ptr(),
-                num_samplers.as_ptr(),
-                src_samplers.len() as u32,
-                src_samplers.as_ptr(),
-                num_samplers.as_ptr(),
-                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-            );
-        }
+        accum.flush(self.raw.clone());
 
         // reset the temporary CPU-size descriptor pools
         for buffer_desc_pool in descriptor_update_pools.iter_mut() {
@@ -3139,12 +3110,7 @@ impl d::Device<B> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
     {
-        let mut dst_views = Vec::new();
-        let mut dst_samplers = Vec::new();
-        let mut src_views = Vec::new();
-        let mut src_samplers = Vec::new();
-        let mut num_views = Vec::new();
-        let mut num_samplers = Vec::new();
+        let mut accum = descriptors_cpu::MultiCopyAccumulator::default();
 
         for copy_wrap in copy_iter {
             let copy = copy_wrap.borrow();
@@ -3156,9 +3122,13 @@ impl d::Device<B> for Device {
             {
                 assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
                 assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
-                src_views.push(src_range.at(copy.src_array_offset as _));
-                dst_views.push(dst_range.at(copy.dst_array_offset as _));
-                num_views.push(copy.count as u32);
+                let count = copy.count as u32;
+                accum
+                    .src_views
+                    .add(src_range.at(copy.src_array_offset as _), count);
+                accum
+                    .dst_views
+                    .add(dst_range.at(copy.dst_array_offset as _), count);
 
                 if (src_info.content & dst_info.content)
                     .contains(r::DescriptorContent::SRV | r::DescriptorContent::UAV)
@@ -3171,45 +3141,39 @@ impl d::Device<B> for Device {
                         dst_info.count as usize + copy.dst_array_offset + copy.count
                             <= dst_range.count as usize
                     );
-                    src_views.push(src_range.at(src_info.count + copy.src_array_offset as u64));
-                    dst_views.push(dst_range.at(dst_info.count + copy.dst_array_offset as u64));
-                    num_views.push(copy.count as u32);
+                    accum.src_views.add(
+                        src_range.at(src_info.count + copy.src_array_offset as u64),
+                        count,
+                    );
+                    accum.dst_views.add(
+                        dst_range.at(dst_info.count + copy.dst_array_offset as u64),
+                        count,
+                    );
                 }
             }
 
             if dst_info.content.contains(r::DescriptorContent::SAMPLER) {
+                let src_offset = copy
+                    .src_set
+                    .sampler_offset(copy.src_binding, copy.src_array_offset);
+                let dst_offset = copy
+                    .dst_set
+                    .sampler_offset(copy.dst_binding, copy.dst_array_offset);
+                let src_samplers = copy.src_set.sampler_origins.borrow();
+                let mut dst_samplers = copy.dst_set.sampler_origins.borrow_mut();
+                dst_samplers[dst_offset..dst_offset + copy.count]
+                    .copy_from_slice(&src_samplers[src_offset..src_offset + copy.count]);
+                drop(dst_samplers);
+
                 copy.dst_set.update_samplers(
-                    &self.heap_sampler.0,
-                    &self.heap_sampler.1,
-                    &mut src_samplers,
-                    &mut dst_samplers,
-                    &mut num_samplers,
+                    &self.samplers.heap,
+                    &self.samplers.origins,
+                    &mut accum,
                 );
             }
         }
 
-        if !num_views.is_empty() {
-            self.raw.clone().CopyDescriptors(
-                dst_views.len() as u32,
-                dst_views.as_ptr(),
-                num_views.as_ptr(),
-                src_views.len() as u32,
-                src_views.as_ptr(),
-                num_views.as_ptr(),
-                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            );
-        }
-        if !num_samplers.is_empty() {
-            self.raw.clone().CopyDescriptors(
-                dst_samplers.len() as u32,
-                dst_samplers.as_ptr(),
-                num_samplers.as_ptr(),
-                src_samplers.len() as u32,
-                src_samplers.as_ptr(),
-                num_samplers.as_ptr(),
-                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-            );
-        }
+        accum.flush(self.raw.clone());
     }
 
     unsafe fn map_memory(

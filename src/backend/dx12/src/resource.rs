@@ -12,10 +12,14 @@ use std::{
     collections::BTreeMap,
     fmt,
     ops::Range,
+    slice,
     sync::Arc,
 };
 
-use crate::{root_constants::RootConstant, Backend, DescriptorIndex, MAX_VERTEX_BUFFERS};
+use crate::{
+    descriptors_cpu::MultiCopyAccumulator, root_constants::RootConstant, Backend, DescriptorIndex,
+    MAX_VERTEX_BUFFERS,
+};
 
 // ShaderModule is either a precompiled if the source comes from HLSL or
 // the SPIR-V module doesn't contain specialization constants or push constants
@@ -389,9 +393,14 @@ impl ImageView {
     }
 }
 
-#[derive(Debug)]
 pub struct Sampler {
-    pub(crate) index: DescriptorIndex,
+    pub(crate) handle: native::CpuDescriptor,
+}
+
+impl fmt::Debug for Sampler {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Sampler")
+    }
 }
 
 #[derive(Debug)]
@@ -535,30 +544,27 @@ pub struct DescriptorBindingInfo {
 
 #[derive(Default)]
 pub struct DescriptorOrigins {
-    // For each index on the heap, this array stores the earlier index,
-    // where the relevant element has been created, and then copied.
-    origins: Vec<DescriptorIndex>,
+    // For each index on the heap, this array stores the origin CPU handle.
+    origins: Vec<native::CpuDescriptor>,
 }
 
 impl DescriptorOrigins {
-    fn find(&self, other: &[DescriptorIndex]) -> Option<DescriptorIndex> {
+    fn find(&self, other: &[native::CpuDescriptor]) -> Option<DescriptorIndex> {
         //TODO: need a smarter algorithm here!
         for i in other.len()..=self.origins.len() {
             let base = i - other.len();
-            if &self.origins[base..i] == other {
+            //TODO: use slice comparison when `CpuDescriptor` implements `PartialEq`.
+            if unsafe {
+                slice::from_raw_parts(&self.origins[base].ptr, other.len())
+                    == slice::from_raw_parts(&other[0].ptr, other.len())
+            } {
                 return Some(base as DescriptorIndex);
             }
         }
         None
     }
 
-    pub fn alloc(&mut self) -> DescriptorIndex {
-        let index = self.origins.len() as DescriptorIndex;
-        self.origins.push(index);
-        index
-    }
-
-    fn grow(&mut self, other: &[DescriptorIndex]) -> DescriptorIndex {
+    fn grow(&mut self, other: &[native::CpuDescriptor]) -> DescriptorIndex {
         let base = self.origins.len() as DescriptorIndex;
         self.origins.extend_from_slice(other);
         base
@@ -569,7 +575,7 @@ pub struct DescriptorSet {
     // Required for binding at command buffer
     pub(crate) heap_srv_cbv_uav: native::DescriptorHeap,
     pub(crate) heap_samplers: native::DescriptorHeap,
-    pub(crate) sampler_indices: RefCell<Box<[DescriptorIndex]>>,
+    pub(crate) sampler_origins: RefCell<Box<[native::CpuDescriptor]>>,
     pub(crate) binding_infos: Vec<DescriptorBindingInfo>,
     pub(crate) first_gpu_sampler: Cell<Option<native::GpuDescriptor>>,
     pub(crate) first_gpu_view: Option<native::GpuDescriptor>,
@@ -615,27 +621,26 @@ impl DescriptorSet {
         &self,
         heap: &DescriptorHeap,
         origins: &RwLock<DescriptorOrigins>,
-        src_descriptors: &mut Vec<native::CpuDescriptor>,
-        dst_descriptors: &mut Vec<native::CpuDescriptor>,
-        counts: &mut Vec<u32>,
+        accum: &mut MultiCopyAccumulator,
     ) {
-        let set_indices = self.sampler_indices.borrow();
+        let desc_origins = self.sampler_origins.borrow();
         let start_index = if let Some(index) = {
             // explicit variable allows to limit the lifetime of that borrow
             let borrow = origins.read();
-            borrow.find(&*set_indices)
+            borrow.find(&*desc_origins)
         } {
             Some(index)
-        } else if set_indices.contains(&!0) {
+        } else if desc_origins.iter().any(|desc| desc.ptr == 0) {
             // set is incomplete, don't try to build it
             None
         } else {
-            let base = origins.write().grow(&*set_indices);
+            let base = origins.write().grow(&*desc_origins);
             // copy the descriptors from their origins into the new location
-            for (index, &origin) in set_indices.iter().enumerate() {
-                src_descriptors.push(heap.cpu_descriptor_at(origin));
-                dst_descriptors.push(heap.cpu_descriptor_at(base + index as DescriptorIndex));
-                counts.push(1);
+            accum
+                .dst_samplers
+                .add(heap.cpu_descriptor_at(base), desc_origins.len() as u32);
+            for &origin in desc_origins.iter() {
+                accum.src_samplers.add(origin, 1);
             }
             Some(base)
         };
@@ -817,7 +822,9 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         Ok(DescriptorSet {
             heap_srv_cbv_uav: self.heap_srv_cbv_uav.heap,
             heap_samplers: self.heap_raw_sampler,
-            sampler_indices: RefCell::new(vec![!0; num_samplers].into_boxed_slice()),
+            sampler_origins: RefCell::new(
+                vec![native::CpuDescriptor { ptr: 0 }; num_samplers].into_boxed_slice(),
+            ),
             binding_infos,
             first_gpu_sampler: Cell::new(None),
             first_gpu_view,
