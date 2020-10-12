@@ -1296,6 +1296,7 @@ impl FormatProperties {
             return info;
         }
         let format: f::Format = unsafe { mem::transmute(idx as u32) };
+        let is_compressed = format.surface_desc().is_compressed();
         let dxgi_format = match conv::map_format(format) {
             Some(format) => format,
             None => {
@@ -1326,7 +1327,7 @@ impl FormatProperties {
                         | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
                         | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
                         | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
-            let can_linear = can_image && !format.surface_desc().is_compressed();
+            let can_linear = can_image && !is_compressed;
             if can_image {
                 props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
             }
@@ -1380,25 +1381,31 @@ impl FormatProperties {
             props
         };
 
-        let mut sample_count_mask = 0;
-        for i in 0..6 {
-            let mut data = d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS {
-                Format: dxgi_format,
-                SampleCount: 1 << i,
-                Flags: 0,
-                NumQualityLevels: 0,
-            };
-            assert_eq!(winerror::S_OK, unsafe {
-                self.device.CheckFeatureSupport(
-                    d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
-                    &mut data as *mut _ as *mut _,
-                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
-                )
-            });
-            if data.NumQualityLevels != 0 {
-                sample_count_mask |= 1 << i;
+        let sample_count_mask = if is_compressed {
+            // just an optimization to avoid the queries
+            1
+        } else {
+            let mut mask = 0;
+            for i in 0..6 {
+                let mut data = d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS {
+                    Format: dxgi_format,
+                    SampleCount: 1 << i,
+                    Flags: 0,
+                    NumQualityLevels: 0,
+                };
+                assert_eq!(winerror::S_OK, unsafe {
+                    self.device.CheckFeatureSupport(
+                        d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                        &mut data as *mut _ as *mut _,
+                        mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
+                    )
+                });
+                if data.NumQualityLevels != 0 {
+                    mask |= 1 << i;
+                }
             }
-        }
+            mask
+        };
 
         let info = FormatInfo {
             properties,
