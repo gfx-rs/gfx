@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.6.7 (12-10-2020)
+  - get proper support for compressed textures
+
 ### backend-dx12-0.6.6 (05-10-2020)
   - allow color blend factors to be used on alpha channel
 
