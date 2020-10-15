@@ -1623,12 +1623,12 @@ impl d::Device<B> for Device {
         let immutable_samplers = immutable_sampler_iter.into_iter().map(|is| is.borrow().0);
         let mut sampler_offset = 0;
 
-        let bindings = Arc::new(
-            binding_iter
-                .into_iter()
-                .map(|b| b.borrow().clone())
-                .collect::<Vec<_>>(),
-        );
+        let mut bindings = binding_iter
+            .into_iter()
+            .map(|b| b.borrow().clone())
+            .collect::<Vec<_>>();
+        // Sorting will come handy in `write_descriptor_sets`.
+        bindings.sort_by_key(|b| b.binding);
 
         let result = inplace_it::inplace_or_alloc_array(immutable_samplers.len(), |uninit_guard| {
             let immutable_samplers = uninit_guard.init_with_iter(immutable_samplers);
@@ -1668,7 +1668,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(layout) => Ok(n::DescriptorSetLayout {
                 raw: layout,
-                bindings,
+                bindings: Arc::new(bindings),
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
@@ -1682,33 +1682,51 @@ impl d::Device<B> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        let mut raw_writes = Vec::new();
+        let mut raw_writes = Vec::<vk::WriteDescriptorSet>::new();
         let mut image_infos = Vec::new();
         let mut buffer_infos = Vec::new();
         let mut texel_buffer_views = Vec::new();
 
         for sw in write_iter {
-            let layout = sw
+            // gfx-hal allows the type and stages to be different between the descriptor
+            // in a single write, while Vulkan requires them to be the same.
+            let mut last_type = vk::DescriptorType::SAMPLER;
+            let mut last_stages = pso::ShaderStageFlags::empty();
+
+            let mut binding_pos = sw
                 .set
                 .bindings
-                .iter()
-                .find(|lb| lb.binding == sw.binding)
+                .binary_search_by_key(&sw.binding, |b| b.binding)
                 .expect("Descriptor set writes don't match the set layout!");
-            let mut raw = vk::WriteDescriptorSet {
-                s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                p_next: ptr::null(),
-                dst_set: sw.set.raw,
-                dst_binding: sw.binding,
-                dst_array_element: sw.array_offset as _,
-                descriptor_count: 0,
-                descriptor_type: conv::map_descriptor_type(layout.ty),
-                p_image_info: ptr::null(),
-                p_buffer_info: ptr::null(),
-                p_texel_buffer_view: ptr::null(),
-            };
 
             for descriptor in sw.descriptors {
-                raw.descriptor_count += 1;
+                let layout = &sw.set.bindings[binding_pos];
+                binding_pos += 1;
+
+                let descriptor_type = conv::map_descriptor_type(layout.ty);
+                if descriptor_type == last_type && layout.stage_flags == last_stages {
+                    raw_writes.last_mut().unwrap().descriptor_count += 1;
+                } else {
+                    last_type = descriptor_type;
+                    last_stages = layout.stage_flags;
+                    raw_writes.push(vk::WriteDescriptorSet {
+                        s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                        p_next: ptr::null(),
+                        dst_set: sw.set.raw,
+                        dst_binding: layout.binding,
+                        dst_array_element: if layout.binding == sw.binding {
+                            sw.array_offset as _
+                        } else {
+                            0
+                        },
+                        descriptor_count: 1,
+                        descriptor_type,
+                        p_image_info: image_infos.len() as _,
+                        p_buffer_info: buffer_infos.len() as _,
+                        p_texel_buffer_view: texel_buffer_views.len() as _,
+                    });
+                }
+
                 match *descriptor.borrow() {
                     pso::Descriptor::Sampler(sampler) => {
                         image_infos.push(vk::DescriptorImageInfo {
@@ -1743,14 +1761,9 @@ impl d::Device<B> for Device {
                     }
                 }
             }
-
-            raw.p_image_info = image_infos.len() as _;
-            raw.p_buffer_info = buffer_infos.len() as _;
-            raw.p_texel_buffer_view = texel_buffer_views.len() as _;
-            raw_writes.push(raw);
         }
 
-        // Patch the pointers now that we have all the storage allocated
+        // Patch the pointers now that we have all the storage allocated.
         for raw in &mut raw_writes {
             use crate::vk::DescriptorType as Dt;
             match raw.descriptor_type {
@@ -1761,14 +1774,13 @@ impl d::Device<B> for Device {
                 | Dt::INPUT_ATTACHMENT => {
                     raw.p_buffer_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
-                    let base = raw.p_image_info as usize - raw.descriptor_count as usize;
-                    raw.p_image_info = image_infos[base..].as_ptr();
+                    raw.p_image_info = image_infos[raw.p_image_info as usize..].as_ptr();
                 }
                 Dt::UNIFORM_TEXEL_BUFFER | Dt::STORAGE_TEXEL_BUFFER => {
                     raw.p_buffer_info = ptr::null();
                     raw.p_image_info = ptr::null();
-                    let base = raw.p_texel_buffer_view as usize - raw.descriptor_count as usize;
-                    raw.p_texel_buffer_view = texel_buffer_views[base..].as_ptr();
+                    raw.p_texel_buffer_view =
+                        texel_buffer_views[raw.p_texel_buffer_view as usize..].as_ptr();
                 }
                 Dt::UNIFORM_BUFFER
                 | Dt::STORAGE_BUFFER
@@ -1776,8 +1788,7 @@ impl d::Device<B> for Device {
                 | Dt::UNIFORM_BUFFER_DYNAMIC => {
                     raw.p_image_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
-                    let base = raw.p_buffer_info as usize - raw.descriptor_count as usize;
-                    raw.p_buffer_info = buffer_infos[base..].as_ptr();
+                    raw.p_buffer_info = buffer_infos[raw.p_buffer_info as usize..].as_ptr();
                 }
                 _ => panic!("unknown descriptor type"),
             }
