@@ -1,9 +1,58 @@
 # Change Log
 
+### backend-vulkan-0.6.5 (15-10-2020)
+  - support different types of descriptors in a single `DescriptorSetWrite`
+
 ### backend-dx12-0.6.3 backend-dx11-0.6.1 backend-metal-0.6.2 auxil-0.5.1 (31-08-2020)
   - update spirv_cross to 0.21:
     - force zero initialization in all generated shaders
     - force the use of native arrays for MSL
+
+### backend-dx12-0.6.7 (12-10-2020)
+  - get proper support for compressed textures
+
+### backend-dx12-0.6.6 (05-10-2020)
+  - allow color blend factors to be used on alpha channel
+
+### backend-dx12-0.6.5 (04-10-2020)
+  - implement command buffer markers
+  - debug names for render passes and descriptor sets
+
+### backend-vulkan-0.6.3 (30-09-2020)
+  - enable VK_KHR_maintenance3 when VK_EXT_descriptor_indexing is enabled
+
+### backend-dx12-0.6.4 backend-vulkan-0.6.2 backend-metal-0.6.3 (23-09-2020)
+  - fix descriptor indexing features
+
+### backend-dx11-0.6.4 (07-09-2020)
+  - fix memory flush ranges
+  - support presentation modes
+
+### backend-dx11-0.6.3 (04-09-2020)
+  - fix cpu-visible mapping
+  - fix UAV reset count
+
+### backend-dx11-0.6.2 (02-09-2020)
+  - fix bindings filter by shader stages
+  - implement copies from buffers into R8, RG8, and RGBA8 textures
+  - fix read-only storage buffer support
+  - fix race condition in internal shader operations
+
+### auxil-0.6.0 (02-09-2020)
+  - update to newer version of spirv_cross to be consistent with backends
+
+### backend-dx12-0.6.3 (02-09-2020)
+  - fix root signature indexing
+  - force zero initialization for shader variables
+
+### backend-metal-0.6.2 (02-09-2020)
+  - enable compatibility with iOS emulator
+  - force zero initialization for shader variables
+  - force the use of native arrays for MSL
+
+### backend-dx11-0.6.1 (02-09-2020)
+  - force zero initialization for shader variables
+>>>>>>> 0f207ed5... [vk] fix support for writing descriptor arrays
 
 ### backend-metal-0.6.1 (23-08-2020)
   - fix layer checks in `clear_image`
