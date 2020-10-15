@@ -451,23 +451,15 @@ where
         );
 
         unsafe {
-            device.write_descriptor_sets(vec![
-                pso::DescriptorSetWrite {
-                    set: &desc_set,
-                    binding: 0,
-                    array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Image(
-                        &*image_srv,
-                        i::Layout::ShaderReadOnlyOptimal,
-                    )),
-                },
-                pso::DescriptorSetWrite {
-                    set: &desc_set,
-                    binding: 1,
-                    array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Sampler(&*sampler)),
-                },
-            ]);
+            device.write_descriptor_sets(iter::once(pso::DescriptorSetWrite {
+                set: &desc_set,
+                binding: 0,
+                array_offset: 0,
+                descriptors: vec![
+                    pso::Descriptor::Image(&*image_srv, i::Layout::ShaderReadOnlyOptimal),
+                    pso::Descriptor::Sampler(&*sampler),
+                ],
+            }));
         }
 
         // copy buffer to texture
