@@ -12,7 +12,7 @@ use hal::{
 
 use smallvec::SmallVec;
 
-use std::{borrow::Borrow, mem, ptr};
+use std::{borrow::Borrow, mem};
 
 pub fn map_format(format: format::Format) -> vk::Format {
     vk::Format::from_raw(format as i32)
@@ -507,13 +507,11 @@ where
         .into_iter()
         .map(|range| {
             let &(ref memory, ref segment) = range.borrow();
-            vk::MappedMemoryRange {
-                s_type: vk::StructureType::MAPPED_MEMORY_RANGE,
-                p_next: ptr::null(),
-                memory: memory.raw,
-                offset: segment.offset,
-                size: segment.size.unwrap_or(vk::WHOLE_SIZE),
-            }
+            vk::MappedMemoryRange::builder()
+                .memory(memory.raw)
+                .offset(segment.offset)
+                .size(segment.size.unwrap_or(vk::WHOLE_SIZE))
+                .build()
         })
         .collect()
 }
