@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-vulkan-0.6.4 (15-10-2020)
+  - support different types of descriptors in a single `DescriptorSetWrite`
+
 ### backend-dx12-0.6.7 (12-10-2020)
   - get proper support for compressed textures
 

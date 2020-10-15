@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-vulkan"
-version = "0.6.3"
+version = "0.6.4"
 description = "Vulkan API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
