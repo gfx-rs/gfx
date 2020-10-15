@@ -1704,23 +1704,28 @@ impl d::Device<B> for Device {
                 .bindings
                 .binary_search_by_key(&sw.binding, |b| b.binding)
                 .expect("Descriptor set writes don't match the set layout!");
+            let mut array_offset = sw.array_offset;
 
             for descriptor in sw.descriptors {
-                let layout = &sw.set.bindings[binding_pos];
-                binding_pos += 1;
+                let layout_binding = &sw.set.bindings[binding_pos];
+                array_offset += 1;
+                if array_offset == layout_binding.count {
+                    array_offset = 0;
+                    binding_pos += 1;
+                }
 
-                let descriptor_type = conv::map_descriptor_type(layout.ty);
-                if descriptor_type == last_type && layout.stage_flags == last_stages {
+                let descriptor_type = conv::map_descriptor_type(layout_binding.ty);
+                if descriptor_type == last_type && layout_binding.stage_flags == last_stages {
                     raw_writes.last_mut().unwrap().descriptor_count += 1;
                 } else {
                     last_type = descriptor_type;
-                    last_stages = layout.stage_flags;
+                    last_stages = layout_binding.stage_flags;
                     raw_writes.push(vk::WriteDescriptorSet {
                         s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
                         p_next: ptr::null(),
                         dst_set: sw.set.raw,
-                        dst_binding: layout.binding,
-                        dst_array_element: if layout.binding == sw.binding {
+                        dst_binding: layout_binding.binding,
+                        dst_array_element: if layout_binding.binding == sw.binding {
                             sw.array_offset as _
                         } else {
                             0
