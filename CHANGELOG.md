@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.6.8 (16-10-2020)
+  - improve the accuracy of limits
+
 ### backend-vulkan-0.6.5 (15-10-2020)
   - support different types of descriptors in a single `DescriptorSetWrite`
 
