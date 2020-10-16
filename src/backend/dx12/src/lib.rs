@@ -1047,6 +1047,23 @@ impl hal::Instance<Backend> for Instance {
             //TODO: find a way to get a tighter bound?
             let sample_count_mask = 0x3F;
 
+            // Theoretically vram limited, but in practice 2^20 is the limit
+            let tier3_practical_descriptor_limit = 1 << 20;
+
+            let full_heap_count = match features.ResourceBindingTier {
+                d3d12::D3D12_RESOURCE_BINDING_TIER_1 => d3d12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
+                d3d12::D3D12_RESOURCE_BINDING_TIER_2 => d3d12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2,
+                d3d12::D3D12_RESOURCE_BINDING_TIER_3 => tier3_practical_descriptor_limit,
+                _ => unreachable!(),
+            } as _;
+
+            let uav_limit = match features.ResourceBindingTier {
+                d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 8, // conservative, is 64 on feature level 11.1
+                d3d12::D3D12_RESOURCE_BINDING_TIER_2 => 64,
+                d3d12::D3D12_RESOURCE_BINDING_TIER_3 => tier3_practical_descriptor_limit,
+                _ => unreachable!(),
+            } as _;
+
             let physical_device = PhysicalDevice {
                 library: Arc::clone(&self.library),
                 adapter,
@@ -1063,6 +1080,7 @@ impl hal::Instance<Backend> for Instance {
                     Features::MULTI_DRAW_INDIRECT |
                     Features::FORMAT_BC |
                     Features::INSTANCE_RATE |
+                    Features::DEPTH_CLAMP |
                     Features::SAMPLER_MIP_LOD_BIAS |
                     Features::SAMPLER_ANISOTROPY |
                     Features::TEXTURE_DESCRIPTOR_ARRAY |
@@ -1081,13 +1099,34 @@ impl hal::Instance<Backend> for Instance {
                     max_bound_descriptor_sets: MAX_DESCRIPTOR_SETS as u16,
                     max_descriptor_set_uniform_buffers_dynamic: 8,
                     max_descriptor_set_storage_buffers_dynamic: 4,
-                    max_per_stage_descriptor_sampled_images: d3d12::D3D12_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
-                    max_per_stage_descriptor_samplers: d3d12::D3D12_COMMONSHADER_SAMPLER_REGISTER_COUNT as _,
-                    max_per_stage_descriptor_storage_buffers: 4,
-                    max_per_stage_descriptor_storage_images: 4,
-                    max_per_stage_descriptor_uniform_buffers: d3d12::D3D12_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _,
+                    max_descriptor_set_sampled_images: full_heap_count,
+                    max_descriptor_set_storage_buffers: uav_limit,
+                    max_descriptor_set_storage_images: uav_limit,
+                    max_descriptor_set_uniform_buffers: full_heap_count,
+                    max_descriptor_set_samplers: d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE as _,
+                    max_per_stage_descriptor_sampled_images: match features.ResourceBindingTier {
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
+                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
+                        | _ => full_heap_count,
+                    } as _,
+                    max_per_stage_descriptor_samplers: match features.ResourceBindingTier {
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
+                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
+                        | _ => d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE
+                    } as _,
+                    max_per_stage_descriptor_storage_buffers: uav_limit,
+                    max_per_stage_descriptor_storage_images: uav_limit,
+                    max_per_stage_descriptor_uniform_buffers: match features.ResourceBindingTier {
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_1
+                        | d3d12::D3D12_RESOURCE_BINDING_TIER_2 => d3d12::D3D12_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
+                        d3d12::D3D12_RESOURCE_BINDING_TIER_3
+                        | _ => full_heap_count as _,
+                    } as _,
                     max_uniform_buffer_range: (d3d12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16) as _,
                     max_storage_buffer_range: !0,
+                    // Is actually 256, but need space for the descriptors in there, so leave at 128 to discourage explosions
                     max_push_constants_size: 128,
                     max_image_1d_size: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION as _,
                     max_image_2d_size: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
@@ -1104,14 +1143,15 @@ impl hal::Instance<Backend> for Instance {
                         depth: 1,
                     },
                     max_compute_work_group_count: [
+                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                    ],
+                    max_compute_work_group_invocations: d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+                    max_compute_work_group_size: [
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
-                    ],
-                    max_compute_work_group_size: [
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
-                        1, //TODO
-                        1, //TODO
                     ],
                     max_vertex_input_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
                     max_vertex_input_bindings: 31, //TODO
