@@ -481,6 +481,15 @@ pub enum IndexType {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct UnsupportedBackend;
 
+impl fmt::Display for UnsupportedBackend {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "UnsupportedBackend")
+    }
+}
+
+impl std::error::Error for UnsupportedBackend {}
+
+
 /// An instantiated backend.
 ///
 /// Any startup the backend needs to perform will be done when creating the type that implements
