@@ -137,16 +137,45 @@ impl Instance {
 
 fn get_features(
     _device: ComPtr<d3d11::ID3D11Device>,
-    _feature_level: d3dcommon::D3D_FEATURE_LEVEL,
+    feature_level: d3dcommon::D3D_FEATURE_LEVEL,
 ) -> hal::Features {
-    hal::Features::empty()
-        | hal::Features::ROBUST_BUFFER_ACCESS
-        | hal::Features::FULL_DRAW_INDEX_U32
-        | hal::Features::FORMAT_BC
+    let mut features = hal::Features::empty()
+        | hal::Features::ROBUST_BUFFER_ACCESS // TODO: verify
         | hal::Features::INSTANCE_RATE
+        | hal::Features::INDEPENDENT_BLENDING // TODO: verify
         | hal::Features::SAMPLER_MIP_LOD_BIAS
         | hal::Features::SAMPLER_MIRROR_CLAMP_EDGE
-        | hal::Features::NDC_Y_UP
+        | hal::Features::SAMPLER_ANISOTROPY
+        | hal::Features::DEPTH_CLAMP
+        | hal::Features::NDC_Y_UP;
+
+    features.set(
+        // TODO: Add indirect rendering when supported
+        hal::Features::TEXTURE_DESCRIPTOR_ARRAY
+        | hal::Features::FULL_DRAW_INDEX_U32
+        | hal::Features::GEOMETRY_SHADER,
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_0
+    );
+
+    features.set(
+        hal::Features::IMAGE_CUBE_ARRAY,
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_1
+    );
+
+    features.set(
+        hal::Features::VERTEX_STORES_AND_ATOMICS
+        | hal::Features::FRAGMENT_STORES_AND_ATOMICS
+        | hal::Features::FORMAT_BC
+        | hal::Features::TESSELLATION_SHADER,
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_0
+    );
+
+    features.set(
+        hal::Features::LOGIC_OP, // TODO: Optional at 10_0 -> 11_0
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_1
+    );
+
+    features
 }
 
 fn get_format_properties(
@@ -577,7 +606,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 return Err(hal::device::CreationError::InitializationFailed);
             }
 
-            info!("feature level={:x}", feature_level);
+            info!("feature level={:x}=FL{}_{}", feature_level, feature_level >> 12, feature_level >> 8 & 0xF);
 
             (ComPtr::from_raw(device), ComPtr::from_raw(cxt))
         };
