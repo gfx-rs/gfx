@@ -179,6 +179,110 @@ fn get_features(
     features
 }
 
+fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
+    let max_texture_uv_dimension = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1 | d3dcommon::D3D_FEATURE_LEVEL_9_2 => 2048,
+        d3dcommon::D3D_FEATURE_LEVEL_9_3 => 4096,
+        d3dcommon::D3D_FEATURE_LEVEL_10_0 | d3dcommon::D3D_FEATURE_LEVEL_10_1 => 8192,
+        d3dcommon::D3D_FEATURE_LEVEL_11_0 | d3dcommon::D3D_FEATURE_LEVEL_11_1 | _ => 16384,
+    };
+
+    let max_texture_w_dimension = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2
+        | d3dcommon::D3D_FEATURE_LEVEL_9_3 => 256,
+        d3dcommon::D3D_FEATURE_LEVEL_10_0
+        | d3dcommon::D3D_FEATURE_LEVEL_10_1
+        | d3dcommon::D3D_FEATURE_LEVEL_11_0
+        | d3dcommon::D3D_FEATURE_LEVEL_11_1
+        | _ => 2048,
+    };
+
+    let max_texture_cube_dimension = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2 => 512,
+        _ => max_texture_uv_dimension,
+    };
+
+    let max_image_uav = 2;
+    let max_buffer_uav = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize - max_image_uav;
+
+    let max_input_slots = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2
+        | d3dcommon::D3D_FEATURE_LEVEL_9_3
+        | d3dcommon::D3D_FEATURE_LEVEL_10_0 => 16,
+        d3dcommon::D3D_FEATURE_LEVEL_10_1
+        | d3dcommon::D3D_FEATURE_LEVEL_11_0
+        | d3dcommon::D3D_FEATURE_LEVEL_11_1
+        | _ => 32,
+    };
+
+    let max_color_attachments = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2
+        | d3dcommon::D3D_FEATURE_LEVEL_9_3
+        | d3dcommon::D3D_FEATURE_LEVEL_10_0 => 4,
+        d3dcommon::D3D_FEATURE_LEVEL_10_1
+        | d3dcommon::D3D_FEATURE_LEVEL_11_0
+        | d3dcommon::D3D_FEATURE_LEVEL_11_1
+        | _ => 8,
+    };
+
+    hal::Limits {
+        max_image_1d_size: max_texture_uv_dimension,
+        max_image_2d_size: max_texture_uv_dimension,
+        max_image_3d_size: max_texture_w_dimension,
+        max_image_cube_size: max_texture_cube_dimension,
+        max_image_array_layers: max_texture_cube_dimension as _,
+        max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT as _,
+        max_per_stage_descriptor_uniform_buffers: d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_HW_SLOT_COUNT as _,
+        max_per_stage_descriptor_storage_buffers: max_buffer_uav,
+        max_per_stage_descriptor_storage_images: max_image_uav,
+        max_per_stage_descriptor_sampled_images: d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
+        max_texel_elements: max_texture_uv_dimension as _, //TODO
+        max_patch_size: d3d11::D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT as _,
+        max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
+        max_viewport_dimensions: [d3d11::D3D11_VIEWPORT_BOUNDS_MAX; 2],
+        max_framebuffer_extent: hal::image::Extent {
+            //TODO
+            width: 4096,
+            height: 4096,
+            depth: 1,
+        },
+        max_compute_work_group_count: [
+            d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+            d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+            d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+        ],
+        max_compute_work_group_invocations: d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+        max_compute_work_group_size: [
+            d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
+            d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
+            d3d11::D3D11_CS_THREAD_GROUP_MAX_Z,
+        ], // TODO
+        max_vertex_input_attribute_offset: 255, // TODO
+        max_vertex_input_attributes: max_input_slots,
+        max_vertex_input_binding_stride: d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
+        max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
+        max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
+        min_texel_buffer_offset_alignment: 1,                                     // TODO
+        min_uniform_buffer_offset_alignment: 16,
+        min_storage_buffer_offset_alignment: 16, // TODO
+        framebuffer_color_sample_counts: 1,      // TODO
+        framebuffer_depth_sample_counts: 1,      // TODO
+        framebuffer_stencil_sample_counts: 1,    // TODO
+        max_color_attachments,
+        buffer_image_granularity: 1,
+        non_coherent_atom_size: 1, // TODO
+        max_sampler_anisotropy: 16.,
+        optimal_buffer_copy_offset_alignment: 1, // TODO
+        optimal_buffer_copy_pitch_alignment: 1,  // TODO
+        min_vertex_input_binding_stride_alignment: 1,
+        ..hal::Limits::default() //TODO
+    }
+}
+
 fn get_format_properties(
     device: ComPtr<d3d11::ID3D11Device>,
 ) -> [format::Properties; format::NUM_FORMATS] {
@@ -382,65 +486,7 @@ impl hal::Instance<Backend> for Instance {
                 memory_heaps: vec![!0, !0],
             };
 
-            let max_image_uav = 2;
-            let max_buffer_uav = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize - max_image_uav;
-
-            let limits = hal::Limits {
-                max_image_1d_size: d3d11::D3D11_REQ_TEXTURE1D_U_DIMENSION as _,
-                max_image_2d_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
-                max_image_3d_size: d3d11::D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
-                max_image_cube_size: d3d11::D3D11_REQ_TEXTURECUBE_DIMENSION as _,
-                max_image_array_layers: d3d11::D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
-                max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT
-                    as _,
-                max_per_stage_descriptor_uniform_buffers:
-                    d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_HW_SLOT_COUNT as _,
-                max_per_stage_descriptor_storage_buffers: max_buffer_uav,
-                max_per_stage_descriptor_storage_images: max_image_uav,
-                max_per_stage_descriptor_sampled_images:
-                    d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
-                max_texel_elements: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _, //TODO
-                max_patch_size: 0,                                                    // TODO
-                max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
-                max_viewport_dimensions: [d3d11::D3D11_VIEWPORT_BOUNDS_MAX; 2],
-                max_framebuffer_extent: hal::image::Extent {
-                    //TODO
-                    width: 4096,
-                    height: 4096,
-                    depth: 1,
-                },
-                max_compute_work_group_count: [
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_Z,
-                ],
-                max_compute_work_group_size: [
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
-                    1,
-                    1,
-                ], // TODO
-                max_vertex_input_attribute_offset: 255, // TODO
-                max_vertex_input_attributes: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
-                max_vertex_input_binding_stride:
-                    d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
-                max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
-                max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
-                min_texel_buffer_offset_alignment: 1,                                     // TODO
-                min_uniform_buffer_offset_alignment: 16, // TODO: verify
-                min_storage_buffer_offset_alignment: 1,  // TODO
-                framebuffer_color_sample_counts: 1,      // TODO
-                framebuffer_depth_sample_counts: 1,      // TODO
-                framebuffer_stencil_sample_counts: 1,    // TODO
-                max_color_attachments: d3d11::D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
-                buffer_image_granularity: 1,
-                non_coherent_atom_size: 1, // TODO
-                max_sampler_anisotropy: 16.,
-                optimal_buffer_copy_offset_alignment: 1, // TODO
-                optimal_buffer_copy_pitch_alignment: 1,  // TODO
-                min_vertex_input_binding_stride_alignment: 1,
-                ..hal::Limits::default() //TODO
-            };
-
+            let limits = get_limits(feature_level);
             let features = get_features(device.clone(), feature_level);
             let format_properties = get_format_properties(device.clone());
             let hints = hal::Hints::BASE_VERTEX_INSTANCE_DRAWING;
