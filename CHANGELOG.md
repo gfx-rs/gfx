@@ -1,5 +1,10 @@
 # Change Log
 
+### backend-dx11-0.6.5 (17-10-2020)
+  - shaders are properly cleared when using a pipeline without a PS, GS, HS, or DS.
+  - fix buffer to image copies with multiple layers
+  - improve the accuracy of features and limits
+
 ### backend-dx12-0.6.8 (16-10-2020)
   - improve the accuracy of limits
 
