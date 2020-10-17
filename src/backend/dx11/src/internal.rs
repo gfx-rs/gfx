@@ -854,34 +854,40 @@ impl Internal {
             );
 
             for copy in regions {
-                let info = copy.borrow();
+                let info: &command::BufferImageCopy = copy.borrow();
 
                 let bytes_per_texel = format_desc.bits as u32 / 8;
+
+                let bounds = d3d11::D3D11_BOX {
+                    left: info.image_offset.x as _,
+                    top: info.image_offset.y as _,
+                    front: info.image_offset.z as _,
+                    right: info.image_offset.x as u32 + info.image_extent.width,
+                    bottom: info.image_offset.y as u32 + info.image_extent.height,
+                    back: info.image_offset.z as u32 + info.image_extent.depth,
+                };
 
                 let row_pitch = bytes_per_texel * info.image_extent.width / 4;
                 let depth_pitch = row_pitch * info.image_extent.height / 4;
 
-                unsafe {
-                    context.UpdateSubresource(
-                        dst.internal.raw,
-                        dst.calc_subresource(
-                            info.image_layers.level as _,
-                            info.image_layers.layers.start as _,
-                        ),
-                        &d3d11::D3D11_BOX {
-                            left: info.image_offset.x as _,
-                            top: info.image_offset.y as _,
-                            front: info.image_offset.z as _,
-                            right: info.image_offset.x as u32 + info.image_extent.width,
-                            bottom: info.image_offset.y as u32 + info.image_extent.height,
-                            back: info.image_offset.z as u32 + info.image_extent.depth,
-                        },
-                        src.memory_ptr
-                            .offset(src.bound_range.start as isize + info.buffer_offset as isize)
-                            as _,
-                        row_pitch,
-                        depth_pitch,
-                    );
+                for layer in info.image_layers.layers.clone() {
+                    let layer_offset = layer - info.image_layers.layers.start;
+
+                    unsafe {
+                        context.UpdateSubresource(
+                            dst.internal.raw,
+                            dst.calc_subresource(
+                                info.image_layers.level as _,
+                                layer as _,
+                            ),
+                            &bounds,
+                            src.memory_ptr
+                                .offset(src.bound_range.start as isize + info.buffer_offset as isize + depth_pitch as isize * layer_offset as isize)
+                                as _,
+                            row_pitch,
+                            depth_pitch,
+                        );
+                    }
                 }
             }
         } else {
