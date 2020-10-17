@@ -1034,7 +1034,7 @@ impl RenderPassCache {
 
         cache
             .dirty_flag
-            .insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::VIEWPORTS);
+            .insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::PIPELINE_PS | DirtyStateFlag::VIEWPORTS);
         internal.clear_attachments(
             context,
             attachments,
@@ -1082,8 +1082,12 @@ bitflags! {
         const RENDER_TARGETS = (1 << 1);
         const VERTEX_BUFFERS = (1 << 2);
         const GRAPHICS_PIPELINE = (1 << 3);
-        const VIEWPORTS = (1 << 4);
-        const BLEND_STATE = (1 << 5);
+        const PIPELINE_GS = (1 << 4);
+        const PIPELINE_HS = (1 << 5);
+        const PIPELINE_DS = (1 << 6);
+        const PIPELINE_PS = (1 << 7);
+        const VIEWPORTS = (1 << 8);
+        const BLEND_STATE = (1 << 9);
     }
 }
 
@@ -1283,9 +1287,34 @@ impl CommandBufferState {
     }
 
     pub fn set_graphics_pipeline(&mut self, pipeline: GraphicsPipeline) {
-        self.graphics_pipeline = Some(pipeline);
+        let prev = self.graphics_pipeline.take();
 
+        let mut prev_has_ps = false;
+        let mut prev_has_gs = false;
+        let mut prev_has_ds = false;
+        let mut prev_has_hs = false;
+        if let Some(p) = prev {
+            prev_has_ps = p.ps.is_some();
+            prev_has_gs = p.gs.is_some();
+            prev_has_ds = p.ds.is_some();
+            prev_has_hs = p.hs.is_some();
+        }
+
+        if prev_has_ps || pipeline.ps.is_some() {
+            self.dirty_flag.insert(DirtyStateFlag::PIPELINE_PS);
+        }
+        if prev_has_gs || pipeline.gs.is_some() {
+            self.dirty_flag.insert(DirtyStateFlag::PIPELINE_GS);
+        }
+        if prev_has_ds || pipeline.ds.is_some() {
+            self.dirty_flag.insert(DirtyStateFlag::PIPELINE_DS);
+        }
+        if prev_has_hs || pipeline.hs.is_some() {
+            self.dirty_flag.insert(DirtyStateFlag::PIPELINE_HS);
+        }
         self.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE);
+
+        self.graphics_pipeline = Some(pipeline);
     }
 
     pub fn bind_graphics_pipeline(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
@@ -1305,17 +1334,33 @@ impl CommandBufferState {
                 context.IASetInputLayout(pipeline.input_layout.as_raw());
 
                 context.VSSetShader(pipeline.vs.as_raw(), ptr::null_mut(), 0);
-                if let Some(ref ps) = pipeline.ps {
-                    context.PSSetShader(ps.as_raw(), ptr::null_mut(), 0);
+
+                if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_PS) {
+                    let ps = pipeline.ps.as_ref().map_or(ptr::null_mut(), |ps| ps.as_raw());
+                    context.PSSetShader(ps, ptr::null_mut(), 0);
+
+                    self.dirty_flag.remove(DirtyStateFlag::PIPELINE_PS)
                 }
-                if let Some(ref gs) = pipeline.gs {
-                    context.GSSetShader(gs.as_raw(), ptr::null_mut(), 0);
+
+                if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_GS) {
+                    let gs = pipeline.gs.as_ref().map_or(ptr::null_mut(), |gs| gs.as_raw());
+                    context.GSSetShader(gs, ptr::null_mut(), 0);
+
+                    self.dirty_flag.remove(DirtyStateFlag::PIPELINE_GS)
                 }
-                if let Some(ref hs) = pipeline.hs {
-                    context.HSSetShader(hs.as_raw(), ptr::null_mut(), 0);
+
+                if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_HS) {
+                    let hs = pipeline.hs.as_ref().map_or(ptr::null_mut(), |hs| hs.as_raw());
+                    context.HSSetShader(hs, ptr::null_mut(), 0);
+
+                    self.dirty_flag.remove(DirtyStateFlag::PIPELINE_HS)
                 }
-                if let Some(ref ds) = pipeline.ds {
-                    context.DSSetShader(ds.as_raw(), ptr::null_mut(), 0);
+
+                if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_DS) {
+                    let ds = pipeline.ds.as_ref().map_or(ptr::null_mut(), |ds| ds.as_raw());
+                    context.DSSetShader(ds, ptr::null_mut(), 0);
+
+                    self.dirty_flag.remove(DirtyStateFlag::PIPELINE_DS)
                 }
 
                 context.RSSetState(pipeline.rasterizer_state.as_raw());
@@ -1674,6 +1719,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         if let Some(ref pass) = self.render_pass_cache {
             self.cache.dirty_flag.insert(
                 DirtyStateFlag::GRAPHICS_PIPELINE
+                    | DirtyStateFlag::PIPELINE_PS
                     | DirtyStateFlag::VIEWPORTS
                     | DirtyStateFlag::RENDER_TARGETS,
             );
@@ -1713,7 +1759,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         self.cache
             .dirty_flag
-            .insert(DirtyStateFlag::GRAPHICS_PIPELINE);
+            .insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::PIPELINE_PS);
 
         self.internal
             .blit_2d_image(&self.context, src, dst, filter, regions);
