@@ -691,7 +691,7 @@ fn map_stencil_side(side: &StencilFace) -> D3D11_DEPTH_STENCILOP_DESC {
 
 pub(crate) fn map_depth_stencil_desc(
     desc: &DepthStencilDesc,
-) -> (D3D11_DEPTH_STENCIL_DESC, State<StencilValue>) {
+) -> (D3D11_DEPTH_STENCIL_DESC, State<StencilValue>, bool) {
     let (depth_on, depth_write, depth_func) = match desc.depth {
         Some(ref depth) => (TRUE, depth.write, map_comparison(depth.fun)),
         None => unsafe { mem::zeroed() },
@@ -730,6 +730,15 @@ pub(crate) fn map_depth_stencil_desc(
         None => unsafe { mem::zeroed() },
     };
 
+    let stencil_read_only = write_mask == 0 ||
+        (front.StencilDepthFailOp == D3D11_STENCIL_OP_KEEP
+            && front.StencilFailOp == D3D11_STENCIL_OP_KEEP
+            && front.StencilPassOp == D3D11_STENCIL_OP_KEEP
+            && back.StencilDepthFailOp == D3D11_STENCIL_OP_KEEP
+            && back.StencilFailOp == D3D11_STENCIL_OP_KEEP
+            && back.StencilPassOp == D3D11_STENCIL_OP_KEEP);
+    let read_only = !depth_write && stencil_read_only;
+
     (
         D3D11_DEPTH_STENCIL_DESC {
             DepthEnable: depth_on,
@@ -746,6 +755,7 @@ pub(crate) fn map_depth_stencil_desc(
             BackFace: back,
         },
         stencil_ref,
+        read_only
     )
 }
 

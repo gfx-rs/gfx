@@ -29,6 +29,7 @@ use hal::{
     IndexCount, InstanceCount, Limits, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
 };
 use range_alloc::RangeAllocator;
+use crate::device::DepthStencilState;
 
 use winapi::{
     shared::{
@@ -974,6 +975,7 @@ impl window::PresentationSurface<Backend> for Surface {
             dsv_handle: None,
             srv_handle: None,
             uav_handle: None,
+            rodsv_handle: None,
         };
         Ok((image_view, None))
     }
@@ -1132,18 +1134,27 @@ impl RenderPassCache {
                     .as_raw()
             })
             .collect::<Vec<_>>();
-        let ds_view = match subpass.depth_stencil_attachment {
-            Some((id, _)) => Some(
-                self.framebuffer.attachments[id]
+        let (ds_view, rods_view) = match subpass.depth_stencil_attachment {
+            Some((id, _)) => {
+                let attachment = &self.framebuffer.attachments[id];
+                let ds_view = attachment
                     .dsv_handle
                     .clone()
                     .unwrap()
-                    .as_raw(),
-            ),
-            None => None,
+                    .as_raw();
+
+                let rods_view = attachment
+                    .rodsv_handle
+                    .clone()
+                    .unwrap()
+                    .as_raw();
+
+                (Some(ds_view), Some(rods_view))
+            },
+            None => (None, None),
         };
 
-        cache.set_render_targets(&color_views, ds_view);
+        cache.set_render_targets(&color_views, ds_view, rods_view);
         cache.bind(context);
     }
 
@@ -1172,6 +1183,8 @@ pub struct CommandBufferState {
     render_target_len: u32,
     render_targets: [*mut d3d11::ID3D11RenderTargetView; 8],
     depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
+    readonly_depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
+    depth_target_read_only: bool,
     graphics_pipeline: Option<GraphicsPipeline>,
 
     // a bitmask that keeps track of what vertex buffer bindings have been "bound" into
@@ -1207,6 +1220,8 @@ impl CommandBufferState {
             render_target_len: 0,
             render_targets: [ptr::null_mut(); 8],
             depth_target: None,
+            readonly_depth_target: None,
+            depth_target_read_only: false,
             graphics_pipeline: None,
             bound_bindings: 0,
             required_bindings: None,
@@ -1226,6 +1241,8 @@ impl CommandBufferState {
     fn clear(&mut self) {
         self.render_target_len = 0;
         self.depth_target = None;
+        self.readonly_depth_target = None;
+        self.depth_target_read_only = false;
         self.graphics_pipeline = None;
         self.bound_bindings = 0;
         self.required_bindings = None;
@@ -1311,6 +1328,7 @@ impl CommandBufferState {
         &mut self,
         render_targets: &[*mut d3d11::ID3D11RenderTargetView],
         depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
+        readonly_depth_target: Option<*mut d3d11::ID3D11DepthStencilView>
     ) {
         for (idx, &rt) in render_targets.iter().enumerate() {
             self.render_targets[idx] = rt;
@@ -1318,16 +1336,23 @@ impl CommandBufferState {
 
         self.render_target_len = render_targets.len() as u32;
         self.depth_target = depth_target;
+        self.readonly_depth_target = readonly_depth_target;
 
         self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS);
     }
 
     pub fn bind_render_targets(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        let depth_target = if self.depth_target_read_only {
+            self.readonly_depth_target
+        } else {
+            self.depth_target
+        }.unwrap_or(ptr::null_mut());
+
         unsafe {
             context.OMSetRenderTargets(
                 self.render_target_len,
                 self.render_targets.as_ptr(),
-                self.depth_target.unwrap_or(ptr::null_mut()),
+                depth_target,
             );
         }
 
@@ -1387,6 +1412,19 @@ impl CommandBufferState {
         if prev_has_hs || pipeline.hs.is_some() {
             self.dirty_flag.insert(DirtyStateFlag::PIPELINE_HS);
         }
+
+        // If we don't have depth stencil state, we use the old value, so we don't bother changing anything.
+        let depth_target_read_only =
+            pipeline
+                .depth_stencil_state
+                .as_ref()
+                .map_or(self.depth_target_read_only, |ds| ds.read_only);
+
+        if self.depth_target_read_only != depth_target_read_only {
+            self.depth_target_read_only = depth_target_read_only;
+            self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS);
+        }
+
         self.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE);
 
         self.graphics_pipeline = Some(pipeline);
@@ -1446,14 +1484,10 @@ impl CommandBufferState {
                     context.RSSetScissorRects(1, [conv::map_rect(&scissor)].as_ptr());
                 }
 
-                if let Some((ref state, reference)) = pipeline.depth_stencil_state {
-                    let stencil_ref = if let pso::State::Static(reference) = reference {
-                        reference
-                    } else {
-                        self.stencil_ref.unwrap_or(0)
-                    };
+                if let Some(ref state) = pipeline.depth_stencil_state {
+                    let stencil_ref = state.stencil_ref.static_or(0);
 
-                    context.OMSetDepthStencilState(state.as_raw(), stencil_ref);
+                    context.OMSetDepthStencilState(state.raw.as_raw(), stencil_ref);
                 }
                 self.current_blend = Some(pipeline.blend_state.as_raw());
             }
@@ -1938,7 +1972,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
         self.cache.set_graphics_pipeline(pipeline.clone());
-        self.cache.bind_graphics_pipeline(&self.context);
+        self.cache.bind(&self.context);
     }
 
     unsafe fn bind_graphics_descriptor_sets<'a, I, J>(
@@ -2887,6 +2921,7 @@ pub struct ImageView {
     rtv_handle: Option<ComPtr<d3d11::ID3D11RenderTargetView>>,
     srv_handle: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
     dsv_handle: Option<ComPtr<d3d11::ID3D11DepthStencilView>>,
+    rodsv_handle: Option<ComPtr<d3d11::ID3D11DepthStencilView>>,
     uav_handle: Option<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
 }
 
@@ -2941,10 +2976,7 @@ pub struct GraphicsPipeline {
     input_layout: ComPtr<d3d11::ID3D11InputLayout>,
     rasterizer_state: ComPtr<d3d11::ID3D11RasterizerState>,
     blend_state: ComPtr<d3d11::ID3D11BlendState>,
-    depth_stencil_state: Option<(
-        ComPtr<d3d11::ID3D11DepthStencilState>,
-        pso::State<pso::StencilValue>,
-    )>,
+    depth_stencil_state: Option<DepthStencilState>,
     baked_states: pso::BakedStates,
     required_bindings: u32,
     max_vertex_bindings: u32,

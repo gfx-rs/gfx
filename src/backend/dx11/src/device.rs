@@ -35,6 +35,13 @@ struct InputLayout {
     vertex_strides: Vec<u32>,
 }
 
+#[derive(Clone)]
+pub struct DepthStencilState {
+    pub raw: ComPtr<d3d11::ID3D11DepthStencilState>,
+    pub stencil_ref: pso::State<pso::StencilValue>,
+    pub read_only: bool,
+}
+
 pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
@@ -124,14 +131,11 @@ impl Device {
         &self,
         depth_desc: &pso::DepthStencilDesc,
     ) -> Result<
-        (
-            ComPtr<d3d11::ID3D11DepthStencilState>,
-            pso::State<pso::StencilValue>,
-        ),
+        DepthStencilState,
         pso::CreationError,
     > {
         let mut depth = ptr::null_mut();
-        let (desc, stencil_ref) = conv::map_depth_stencil_desc(depth_desc);
+        let (desc, stencil_ref, read_only) = conv::map_depth_stencil_desc(depth_desc);
 
         let hr = unsafe {
             self.raw
@@ -139,7 +143,11 @@ impl Device {
         };
 
         if winerror::SUCCEEDED(hr) {
-            Ok((unsafe { ComPtr::from_raw(depth) }, stencil_ref))
+            Ok(DepthStencilState {
+                raw: unsafe{ ComPtr::from_raw(depth) },
+                stencil_ref,
+                read_only
+            })
         } else {
             Err(pso::CreationError::Other)
         }
@@ -621,6 +629,7 @@ impl Device {
     fn view_image_as_depth_stencil(
         &self,
         info: &ViewInfo,
+        read_only_stencil: Option<bool>,
     ) -> Result<ComPtr<d3d11::ID3D11DepthStencilView>, image::ViewCreationError> {
         #![allow(non_snake_case)]
 
@@ -632,6 +641,13 @@ impl Device {
 
         let mut desc: d3d11::D3D11_DEPTH_STENCIL_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
+
+        if let Some(stencil) = read_only_stencil {
+            desc.Flags = match stencil {
+                true => d3d11::D3D11_DSV_READ_ONLY_DEPTH | d3d11::D3D11_DSV_READ_ONLY_STENCIL,
+                false => d3d11::D3D11_DSV_READ_ONLY_DEPTH,
+            }
+        }
 
         match info.view_kind {
             image::ViewKind::D2 => {
@@ -1567,7 +1583,7 @@ impl device::Device<Backend> for Device {
                     };
 
                     depth_stencil_views.push(
-                        self.view_image_as_depth_stencil(&view)
+                        self.view_image_as_depth_stencil(&view, None)
                             .map_err(|_| device::BindError::WrongMemory)?,
                     );
                 }
@@ -1641,7 +1657,12 @@ impl device::Device<Backend> for Device {
                 None
             },
             dsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(&info)?)
+                Some(self.view_image_as_depth_stencil(&info, None)?)
+            } else {
+                None
+            },
+            rodsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
+                Some(self.view_image_as_depth_stencil(&info, Some(image.format.is_stencil()))?)
             } else {
                 None
             },
