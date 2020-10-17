@@ -137,16 +137,149 @@ impl Instance {
 
 fn get_features(
     _device: ComPtr<d3d11::ID3D11Device>,
-    _feature_level: d3dcommon::D3D_FEATURE_LEVEL,
+    feature_level: d3dcommon::D3D_FEATURE_LEVEL,
 ) -> hal::Features {
-    hal::Features::empty()
-        | hal::Features::ROBUST_BUFFER_ACCESS
-        | hal::Features::FULL_DRAW_INDEX_U32
-        | hal::Features::FORMAT_BC
+    let mut features = hal::Features::empty()
+        | hal::Features::ROBUST_BUFFER_ACCESS // TODO: verify
         | hal::Features::INSTANCE_RATE
+        | hal::Features::INDEPENDENT_BLENDING // TODO: verify
         | hal::Features::SAMPLER_MIP_LOD_BIAS
         | hal::Features::SAMPLER_MIRROR_CLAMP_EDGE
-        | hal::Features::NDC_Y_UP
+        | hal::Features::SAMPLER_ANISOTROPY
+        | hal::Features::DEPTH_CLAMP
+        | hal::Features::NDC_Y_UP;
+
+    features.set(
+        // TODO: Add indirect rendering when supported
+        hal::Features::TEXTURE_DESCRIPTOR_ARRAY
+        | hal::Features::FULL_DRAW_INDEX_U32
+        | hal::Features::GEOMETRY_SHADER,
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_0
+    );
+
+    features.set(
+        hal::Features::IMAGE_CUBE_ARRAY,
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_1
+    );
+
+    features.set(
+        hal::Features::VERTEX_STORES_AND_ATOMICS
+        | hal::Features::FRAGMENT_STORES_AND_ATOMICS
+        | hal::Features::FORMAT_BC
+        | hal::Features::TESSELLATION_SHADER,
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_0
+    );
+
+    features.set(
+        hal::Features::LOGIC_OP, // TODO: Optional at 10_0 -> 11_0
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_1
+    );
+
+    features
+}
+
+fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
+    let max_texture_uv_dimension = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1 | d3dcommon::D3D_FEATURE_LEVEL_9_2 => 2048,
+        d3dcommon::D3D_FEATURE_LEVEL_9_3 => 4096,
+        d3dcommon::D3D_FEATURE_LEVEL_10_0 | d3dcommon::D3D_FEATURE_LEVEL_10_1 => 8192,
+        d3dcommon::D3D_FEATURE_LEVEL_11_0 | d3dcommon::D3D_FEATURE_LEVEL_11_1 | _ => 16384,
+    };
+
+    let max_texture_w_dimension = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2
+        | d3dcommon::D3D_FEATURE_LEVEL_9_3 => 256,
+        d3dcommon::D3D_FEATURE_LEVEL_10_0
+        | d3dcommon::D3D_FEATURE_LEVEL_10_1
+        | d3dcommon::D3D_FEATURE_LEVEL_11_0
+        | d3dcommon::D3D_FEATURE_LEVEL_11_1
+        | _ => 2048,
+    };
+
+    let max_texture_cube_dimension = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2 => 512,
+        _ => max_texture_uv_dimension,
+    };
+
+    let max_image_uav = 2;
+    let max_buffer_uav = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize - max_image_uav;
+
+    let max_input_slots = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2
+        | d3dcommon::D3D_FEATURE_LEVEL_9_3
+        | d3dcommon::D3D_FEATURE_LEVEL_10_0 => 16,
+        d3dcommon::D3D_FEATURE_LEVEL_10_1
+        | d3dcommon::D3D_FEATURE_LEVEL_11_0
+        | d3dcommon::D3D_FEATURE_LEVEL_11_1
+        | _ => 32,
+    };
+
+    let max_color_attachments = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2
+        | d3dcommon::D3D_FEATURE_LEVEL_9_3
+        | d3dcommon::D3D_FEATURE_LEVEL_10_0 => 4,
+        d3dcommon::D3D_FEATURE_LEVEL_10_1
+        | d3dcommon::D3D_FEATURE_LEVEL_11_0
+        | d3dcommon::D3D_FEATURE_LEVEL_11_1
+        | _ => 8,
+    };
+
+    hal::Limits {
+        max_image_1d_size: max_texture_uv_dimension,
+        max_image_2d_size: max_texture_uv_dimension,
+        max_image_3d_size: max_texture_w_dimension,
+        max_image_cube_size: max_texture_cube_dimension,
+        max_image_array_layers: max_texture_cube_dimension as _,
+        max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT as _,
+        max_per_stage_descriptor_uniform_buffers: d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_HW_SLOT_COUNT as _,
+        max_per_stage_descriptor_storage_buffers: max_buffer_uav,
+        max_per_stage_descriptor_storage_images: max_image_uav,
+        max_per_stage_descriptor_sampled_images: d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
+        max_texel_elements: max_texture_uv_dimension as _, //TODO
+        max_patch_size: d3d11::D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT as _,
+        max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
+        max_viewport_dimensions: [d3d11::D3D11_VIEWPORT_BOUNDS_MAX; 2],
+        max_framebuffer_extent: hal::image::Extent {
+            //TODO
+            width: 4096,
+            height: 4096,
+            depth: 1,
+        },
+        max_compute_work_group_count: [
+            d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+            d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+            d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+        ],
+        max_compute_work_group_invocations: d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+        max_compute_work_group_size: [
+            d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
+            d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
+            d3d11::D3D11_CS_THREAD_GROUP_MAX_Z,
+        ], // TODO
+        max_vertex_input_attribute_offset: 255, // TODO
+        max_vertex_input_attributes: max_input_slots,
+        max_vertex_input_binding_stride: d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
+        max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
+        max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
+        min_texel_buffer_offset_alignment: 1,                                     // TODO
+        min_uniform_buffer_offset_alignment: 16,
+        min_storage_buffer_offset_alignment: 16, // TODO
+        framebuffer_color_sample_counts: 1,      // TODO
+        framebuffer_depth_sample_counts: 1,      // TODO
+        framebuffer_stencil_sample_counts: 1,    // TODO
+        max_color_attachments,
+        buffer_image_granularity: 1,
+        non_coherent_atom_size: 1, // TODO
+        max_sampler_anisotropy: 16.,
+        optimal_buffer_copy_offset_alignment: 1, // TODO
+        optimal_buffer_copy_pitch_alignment: 1,  // TODO
+        min_vertex_input_binding_stride_alignment: 1,
+        ..hal::Limits::default() //TODO
+    }
 }
 
 fn get_format_properties(
@@ -352,65 +485,7 @@ impl hal::Instance<Backend> for Instance {
                 memory_heaps: vec![!0, !0],
             };
 
-            let max_image_uav = 2;
-            let max_buffer_uav = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize - max_image_uav;
-
-            let limits = hal::Limits {
-                max_image_1d_size: d3d11::D3D11_REQ_TEXTURE1D_U_DIMENSION as _,
-                max_image_2d_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
-                max_image_3d_size: d3d11::D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
-                max_image_cube_size: d3d11::D3D11_REQ_TEXTURECUBE_DIMENSION as _,
-                max_image_array_layers: d3d11::D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
-                max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT
-                    as _,
-                max_per_stage_descriptor_uniform_buffers:
-                    d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_HW_SLOT_COUNT as _,
-                max_per_stage_descriptor_storage_buffers: max_buffer_uav,
-                max_per_stage_descriptor_storage_images: max_image_uav,
-                max_per_stage_descriptor_sampled_images:
-                    d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
-                max_texel_elements: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _, //TODO
-                max_patch_size: 0,                                                    // TODO
-                max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
-                max_viewport_dimensions: [d3d11::D3D11_VIEWPORT_BOUNDS_MAX; 2],
-                max_framebuffer_extent: hal::image::Extent {
-                    //TODO
-                    width: 4096,
-                    height: 4096,
-                    depth: 1,
-                },
-                max_compute_work_group_count: [
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_Z,
-                ],
-                max_compute_work_group_size: [
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
-                    1,
-                    1,
-                ], // TODO
-                max_vertex_input_attribute_offset: 255, // TODO
-                max_vertex_input_attributes: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
-                max_vertex_input_binding_stride:
-                    d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
-                max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
-                max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
-                min_texel_buffer_offset_alignment: 1,                                     // TODO
-                min_uniform_buffer_offset_alignment: 16, // TODO: verify
-                min_storage_buffer_offset_alignment: 1,  // TODO
-                framebuffer_color_sample_counts: 1,      // TODO
-                framebuffer_depth_sample_counts: 1,      // TODO
-                framebuffer_stencil_sample_counts: 1,    // TODO
-                max_color_attachments: d3d11::D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
-                buffer_image_granularity: 1,
-                non_coherent_atom_size: 1, // TODO
-                max_sampler_anisotropy: 16.,
-                optimal_buffer_copy_offset_alignment: 1, // TODO
-                optimal_buffer_copy_pitch_alignment: 1,  // TODO
-                min_vertex_input_binding_stride_alignment: 1,
-                ..hal::Limits::default() //TODO
-            };
-
+            let limits = get_limits(feature_level);
             let features = get_features(device.clone(), feature_level);
             let format_properties = get_format_properties(device.clone());
             let hints = hal::Hints::BASE_VERTEX_INSTANCE_DRAWING;
@@ -577,7 +652,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 return Err(hal::device::CreationError::InitializationFailed);
             }
 
-            info!("feature level={:x}", feature_level);
+            info!("feature level={:x}=FL{}_{}", feature_level, feature_level >> 12, feature_level >> 8 & 0xF);
 
             (ComPtr::from_raw(device), ComPtr::from_raw(cxt))
         };
@@ -1034,7 +1109,7 @@ impl RenderPassCache {
 
         cache
             .dirty_flag
-            .insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::VIEWPORTS);
+            .insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::PIPELINE_PS | DirtyStateFlag::VIEWPORTS);
         internal.clear_attachments(
             context,
             attachments,
@@ -1082,8 +1157,12 @@ bitflags! {
         const RENDER_TARGETS = (1 << 1);
         const VERTEX_BUFFERS = (1 << 2);
         const GRAPHICS_PIPELINE = (1 << 3);
-        const VIEWPORTS = (1 << 4);
-        const BLEND_STATE = (1 << 5);
+        const PIPELINE_GS = (1 << 4);
+        const PIPELINE_HS = (1 << 5);
+        const PIPELINE_DS = (1 << 6);
+        const PIPELINE_PS = (1 << 7);
+        const VIEWPORTS = (1 << 8);
+        const BLEND_STATE = (1 << 9);
     }
 }
 
@@ -1283,9 +1362,34 @@ impl CommandBufferState {
     }
 
     pub fn set_graphics_pipeline(&mut self, pipeline: GraphicsPipeline) {
-        self.graphics_pipeline = Some(pipeline);
+        let prev = self.graphics_pipeline.take();
 
+        let mut prev_has_ps = false;
+        let mut prev_has_gs = false;
+        let mut prev_has_ds = false;
+        let mut prev_has_hs = false;
+        if let Some(p) = prev {
+            prev_has_ps = p.ps.is_some();
+            prev_has_gs = p.gs.is_some();
+            prev_has_ds = p.ds.is_some();
+            prev_has_hs = p.hs.is_some();
+        }
+
+        if prev_has_ps || pipeline.ps.is_some() {
+            self.dirty_flag.insert(DirtyStateFlag::PIPELINE_PS);
+        }
+        if prev_has_gs || pipeline.gs.is_some() {
+            self.dirty_flag.insert(DirtyStateFlag::PIPELINE_GS);
+        }
+        if prev_has_ds || pipeline.ds.is_some() {
+            self.dirty_flag.insert(DirtyStateFlag::PIPELINE_DS);
+        }
+        if prev_has_hs || pipeline.hs.is_some() {
+            self.dirty_flag.insert(DirtyStateFlag::PIPELINE_HS);
+        }
         self.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE);
+
+        self.graphics_pipeline = Some(pipeline);
     }
 
     pub fn bind_graphics_pipeline(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
@@ -1305,17 +1409,33 @@ impl CommandBufferState {
                 context.IASetInputLayout(pipeline.input_layout.as_raw());
 
                 context.VSSetShader(pipeline.vs.as_raw(), ptr::null_mut(), 0);
-                if let Some(ref ps) = pipeline.ps {
-                    context.PSSetShader(ps.as_raw(), ptr::null_mut(), 0);
+
+                if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_PS) {
+                    let ps = pipeline.ps.as_ref().map_or(ptr::null_mut(), |ps| ps.as_raw());
+                    context.PSSetShader(ps, ptr::null_mut(), 0);
+
+                    self.dirty_flag.remove(DirtyStateFlag::PIPELINE_PS)
                 }
-                if let Some(ref gs) = pipeline.gs {
-                    context.GSSetShader(gs.as_raw(), ptr::null_mut(), 0);
+
+                if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_GS) {
+                    let gs = pipeline.gs.as_ref().map_or(ptr::null_mut(), |gs| gs.as_raw());
+                    context.GSSetShader(gs, ptr::null_mut(), 0);
+
+                    self.dirty_flag.remove(DirtyStateFlag::PIPELINE_GS)
                 }
-                if let Some(ref hs) = pipeline.hs {
-                    context.HSSetShader(hs.as_raw(), ptr::null_mut(), 0);
+
+                if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_HS) {
+                    let hs = pipeline.hs.as_ref().map_or(ptr::null_mut(), |hs| hs.as_raw());
+                    context.HSSetShader(hs, ptr::null_mut(), 0);
+
+                    self.dirty_flag.remove(DirtyStateFlag::PIPELINE_HS)
                 }
-                if let Some(ref ds) = pipeline.ds {
-                    context.DSSetShader(ds.as_raw(), ptr::null_mut(), 0);
+
+                if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_DS) {
+                    let ds = pipeline.ds.as_ref().map_or(ptr::null_mut(), |ds| ds.as_raw());
+                    context.DSSetShader(ds, ptr::null_mut(), 0);
+
+                    self.dirty_flag.remove(DirtyStateFlag::PIPELINE_DS)
                 }
 
                 context.RSSetState(pipeline.rasterizer_state.as_raw());
@@ -1674,6 +1794,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         if let Some(ref pass) = self.render_pass_cache {
             self.cache.dirty_flag.insert(
                 DirtyStateFlag::GRAPHICS_PIPELINE
+                    | DirtyStateFlag::PIPELINE_PS
                     | DirtyStateFlag::VIEWPORTS
                     | DirtyStateFlag::RENDER_TARGETS,
             );
@@ -1713,7 +1834,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         self.cache
             .dirty_flag
-            .insert(DirtyStateFlag::GRAPHICS_PIPELINE);
+            .insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::PIPELINE_PS);
 
         self.internal
             .blit_2d_image(&self.context, src, dst, filter, regions);
