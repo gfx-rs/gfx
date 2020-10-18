@@ -2,7 +2,6 @@ use std::{
     borrow::Borrow,
     fmt, hash,
     os::raw::c_void,
-    ptr,
     sync::{Arc, Mutex},
     time::Instant,
 };
@@ -100,13 +99,10 @@ impl Instance {
 
         let surface = {
             let xlib_loader = khr::XlibSurface::new(entry, &self.raw.inner);
-            let info = vk::XlibSurfaceCreateInfoKHR {
-                s_type: vk::StructureType::XLIB_SURFACE_CREATE_INFO_KHR,
-                p_next: ptr::null(),
-                flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
-                window,
-                dpy,
-            };
+            let info = vk::XlibSurfaceCreateInfoKHR::builder()
+                .flags(vk::XlibSurfaceCreateFlagsKHR::empty())
+                .window(window)
+                .dpy(dpy);
 
             unsafe { xlib_loader.create_xlib_surface(&info, None) }
                 .expect("XlibSurface::create_xlib_surface() failed")
@@ -131,13 +127,10 @@ impl Instance {
 
         let surface = {
             let xcb_loader = khr::XcbSurface::new(entry, &self.raw.inner);
-            let info = vk::XcbSurfaceCreateInfoKHR {
-                s_type: vk::StructureType::XCB_SURFACE_CREATE_INFO_KHR,
-                p_next: ptr::null(),
-                flags: vk::XcbSurfaceCreateFlagsKHR::empty(),
-                window,
-                connection,
-            };
+            let info = vk::XcbSurfaceCreateInfoKHR::builder()
+                .flags(vk::XcbSurfaceCreateFlagsKHR::empty())
+                .window(window)
+                .connection(connection);
 
             unsafe { xcb_loader.create_xcb_surface(&info, None) }
                 .expect("XcbSurface::create_xcb_surface() failed")
@@ -162,13 +155,10 @@ impl Instance {
 
         let surface = {
             let w_loader = khr::WaylandSurface::new(entry, &self.raw.inner);
-            let info = vk::WaylandSurfaceCreateInfoKHR {
-                s_type: vk::StructureType::WAYLAND_SURFACE_CREATE_INFO_KHR,
-                p_next: ptr::null(),
-                flags: vk::WaylandSurfaceCreateFlagsKHR::empty(),
-                display: display as *mut _,
-                surface: surface as *mut _,
-            };
+            let info = vk::WaylandSurfaceCreateInfoKHR::builder()
+                .flags(vk::WaylandSurfaceCreateFlagsKHR::empty())
+                .display(display)
+                .surface(surface);
 
             unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
         };
@@ -184,12 +174,9 @@ impl Instance {
 
         let surface = {
             let loader = khr::AndroidSurface::new(entry, &self.raw.inner);
-            let info = vk::AndroidSurfaceCreateInfoKHR {
-                s_type: vk::StructureType::ANDROID_SURFACE_CREATE_INFO_KHR,
-                p_next: ptr::null(),
-                flags: vk::AndroidSurfaceCreateFlagsKHR::empty(),
-                window: window as *const _ as *mut _,
-            };
+            let info = vk::AndroidSurfaceCreateInfoKHR::builder()
+                .flags(vk::AndroidSurfaceCreateFlagsKHR::empty())
+                .window(window as *mut _);
 
             unsafe { loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
         };
@@ -208,13 +195,10 @@ impl Instance {
         }
 
         let surface = {
-            let info = vk::Win32SurfaceCreateInfoKHR {
-                s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
-                p_next: ptr::null(),
-                flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
-                hinstance: hinstance as *mut _,
-                hwnd: hwnd as *mut _,
-            };
+            let info = vk::Win32SurfaceCreateInfoKHR::builder()
+                .flags(vk::Win32SurfaceCreateFlagsKHR::empty())
+                .hinstance(hinstance)
+                .hwnd(hwnd);
             let win32_loader = khr::Win32Surface::new(entry, &self.raw.inner);
             unsafe {
                 win32_loader
@@ -269,12 +253,11 @@ impl Instance {
 
         let surface = {
             let mac_os_loader = mvk::MacOSSurface::new(entry, &self.raw.inner);
-            let info = vk::MacOSSurfaceCreateInfoMVK {
-                s_type: vk::StructureType::MACOS_SURFACE_CREATE_INFO_M,
-                p_next: ptr::null(),
-                flags: vk::MacOSSurfaceCreateFlagsMVK::empty(),
-                p_view: view,
-            };
+            let mut info = vk::MacOSSurfaceCreateInfoMVK::builder()
+                .flags(vk::MacOSSurfaceCreateFlagsMVK::empty());
+            if let Some(view) = unsafe { view.as_ref() } {
+                info = info.view(view);
+            }
 
             unsafe {
                 mac_os_loader
