@@ -175,7 +175,7 @@ impl w::PresentationSurface<Backend> for Surface {
         let view = r::ImageView {
             resource: sc.resources[index as usize],
             handle_srv: None,
-            handle_rtv: Some(sc.rtv_heap.at(index as _, 0).cpu),
+            handle_rtv: r::RenderTargetHandle::Swapchain(sc.rtv_heap.at(index as _, 0).cpu),
             handle_uav: None,
             handle_dsv: None,
             dxgi_format: conv::map_format(present.format).unwrap(),
