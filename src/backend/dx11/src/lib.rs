@@ -980,6 +980,7 @@ impl window::PresentationSurface<Backend> for Surface {
     ) -> Result<(ImageView, Option<window::Suboptimal>), window::AcquireError> {
         let present = self.presentation.as_ref().unwrap();
         let image_view = ImageView {
+            subresource: d3d11::D3D11CalcSubresource(0, 0, 1),
             format: present.format,
             rtv_handle: Some(present.view.clone()),
             dsv_handle: None,
@@ -1168,7 +1169,37 @@ impl RenderPassCache {
         cache.bind(context);
     }
 
-    pub fn next_subpass(&mut self) {
+    fn resolve_msaa(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        let subpass: &SubpassDesc = &self.render_pass.subpasses[self.current_subpass as usize];
+
+        for (&(color_id, _), &(resolve_id, _)) in subpass.color_attachments.iter().zip(subpass.resolve_attachments.iter()) {
+            if color_id == pass::ATTACHMENT_UNUSED || resolve_id == pass::ATTACHMENT_UNUSED {
+                continue;
+            }
+
+            let color_framebuffer = &self.framebuffer.attachments[color_id];
+            let resolve_framebuffer = &self.framebuffer.attachments[resolve_id];
+
+            let mut color_resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
+            let mut resolve_resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
+
+            unsafe {
+                color_framebuffer.rtv_handle.as_ref().expect("Framebuffer must have COLOR_ATTACHMENT usage").GetResource(&mut color_resource as *mut *mut _);
+                resolve_framebuffer.rtv_handle.as_ref().expect("Resolve texture must have COLOR_ATTACHMENT usage").GetResource(&mut resolve_resource as *mut *mut _);
+
+                context.ResolveSubresource(
+                    resolve_resource,
+                    resolve_framebuffer.subresource,
+                    color_resource,
+                    color_framebuffer.subresource,
+                    conv::map_format(color_framebuffer.format).unwrap()
+                );
+            }
+        }
+    }
+
+    pub fn next_subpass(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        self.resolve_msaa(context);
         self.current_subpass += 1;
     }
 }
@@ -1885,13 +1916,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn next_subpass(&mut self, _contents: command::SubpassContents) {
         if let Some(ref mut current_render_pass) = self.render_pass_cache {
-            // TODO: resolve msaa
-            current_render_pass.next_subpass();
+            current_render_pass.next_subpass(&self.context);
             current_render_pass.start_subpass(&self.internal, &self.context, &mut self.cache);
         }
     }
 
     unsafe fn end_render_pass(&mut self) {
+        if let Some(ref mut current_render_pass) = self.render_pass_cache {
+            current_render_pass.resolve_msaa(&self.context);
+        }
+
         self.context
             .OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
 
@@ -3109,6 +3143,7 @@ impl Image {
 
 #[derive(Clone)]
 pub struct ImageView {
+    subresource: UINT,
     format: format::Format,
     rtv_handle: Option<ComPtr<d3d11::ID3D11RenderTargetView>>,
     srv_handle: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
