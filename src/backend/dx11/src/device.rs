@@ -77,11 +77,11 @@ impl Device {
         memory_properties: MemoryProperties,
     ) -> Self {
         Device {
-            raw: device.clone(),
+            internal: Arc::new(internal::Internal::new(&device)),
+            raw: device,
             context,
             features,
             memory_properties,
-            internal: Arc::new(internal::Internal::new(&device)),
         }
     }
 

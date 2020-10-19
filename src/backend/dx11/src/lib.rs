@@ -31,20 +31,17 @@ use hal::{
 use range_alloc::RangeAllocator;
 use crate::device::DepthStencilState;
 
-use winapi::{
-    shared::{
-        dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT_ALLOW_TEARING},
-        dxgiformat,
-        minwindef::{FALSE, HMODULE, UINT},
-        windef::{HWND, RECT},
-        winerror,
-    },
-    um::{d3d11, d3dcommon, winuser::GetClientRect},
-    Interface as _,
-};
+use winapi::{shared::{
+    dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT_ALLOW_TEARING},
+    dxgiformat,
+    minwindef::{FALSE, HMODULE, UINT},
+    windef::{HWND, RECT},
+    winerror,
+}, um::{d3d11, d3d11_1, d3dcommon, winuser::GetClientRect}, Interface as _};
 
 use wio::com::ComPtr;
 
+use arrayvec::ArrayVec;
 use parking_lot::{Condvar, Mutex};
 
 use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, os::raw::c_void, ptr, sync::Arc};
@@ -1518,9 +1515,134 @@ impl CommandBufferState {
     }
 }
 
+type PerConstantBufferVec<T> = ArrayVec<[T; d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _]>;
+
+fn generate_graphics_dynamic_constant_buffer_offsets<'a>(
+    bindings: impl IntoIterator<Item = &'a pso::DescriptorSetLayoutBinding>,
+    offset_iter: &mut impl Iterator<Item = u32>,
+    context1_some: bool,
+) -> (PerConstantBufferVec<UINT>, PerConstantBufferVec<UINT>) {
+    let mut vs_offsets = ArrayVec::new();
+    let mut fs_offsets = ArrayVec::new();
+
+    let mut exists_dynamic_constant_buffer = false;
+
+    for binding in bindings.into_iter() {
+        match binding.ty {
+            pso::DescriptorType::Buffer {
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: true
+                },
+                ty: pso::BufferDescriptorType::Uniform,
+            } => {
+                let offset = offset_iter.next().unwrap();
+
+                if binding.stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
+                    vs_offsets.push(offset / 16)
+                };
+
+                if binding.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
+                    fs_offsets.push(offset / 16)
+                };
+                exists_dynamic_constant_buffer = true;
+            }
+            pso::DescriptorType::Buffer {
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: false
+                },
+                ty: pso::BufferDescriptorType::Uniform,
+            } => {
+                if binding.stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
+                    vs_offsets.push(0)
+                };
+
+                if binding.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
+                    fs_offsets.push(0)
+                };
+            }
+            pso::DescriptorType::Buffer {
+                ty: pso::BufferDescriptorType::Storage { .. },
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: true
+                },
+            } => {
+                // TODO: Storage buffer offsets require new buffer views with correct sizes.
+                //       Might also require D3D11_BUFFEREX_SRV to act like RBA is happening.
+                let _ = offset_iter.next().unwrap();
+                warn!("Dynamic offsets into storage buffers are currently unsupported on DX11.");
+            }
+            _ => {}
+        }
+    }
+
+    if exists_dynamic_constant_buffer && context1_some {
+        warn!("D3D11.1 runtime required for dynamic offsets into constant buffers. Offsets will be ignored.");
+    }
+
+    (vs_offsets, fs_offsets)
+}
+
+fn generate_compute_dynamic_constant_buffer_offsets<'a>(
+    bindings: impl IntoIterator<Item = &'a pso::DescriptorSetLayoutBinding>,
+    offset_iter: &mut impl Iterator<Item = u32>,
+    context1_some: bool,
+) -> PerConstantBufferVec<UINT> {
+    let mut cs_offsets = ArrayVec::new();
+
+    let mut exists_dynamic_constant_buffer = false;
+
+    for binding in bindings.into_iter() {
+        match binding.ty {
+            pso::DescriptorType::Buffer {
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: true
+                },
+                ty: pso::BufferDescriptorType::Uniform,
+            } => {
+                let offset = offset_iter.next().unwrap();
+
+                if binding.stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
+                    cs_offsets.push(offset / 16)
+                };
+
+                exists_dynamic_constant_buffer = true;
+            }
+            pso::DescriptorType::Buffer {
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: false
+                },
+                ty: pso::BufferDescriptorType::Uniform,
+            } => {
+                if binding.stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
+                    cs_offsets.push(0)
+                };
+            }
+            pso::DescriptorType::Buffer {
+                ty: pso::BufferDescriptorType::Storage { .. },
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: true
+                },
+            } => {
+                // TODO: Storage buffer offsets require new buffer views with correct sizes.
+                //       Might also require D3D11_BUFFEREX_SRV to act like RBA is happening.
+                let _ = offset_iter.next().unwrap();
+                warn!("Dynamic offsets into storage buffers are currently unsupported on DX11.");
+            }
+            _ => {}
+        }
+    }
+
+    if exists_dynamic_constant_buffer && context1_some {
+        warn!("D3D11.1 runtime required for dynamic offsets into constant buffers. Offsets will be ignored.");
+    }
+
+    cs_offsets
+}
+
 pub struct CommandBuffer {
     internal: Arc<internal::Internal>,
     context: ComPtr<d3d11::ID3D11DeviceContext>,
+    context1: Option<ComPtr<d3d11_1::ID3D11DeviceContext1>>,
     list: RefCell<Option<ComPtr<d3d11::ID3D11CommandList>>>,
 
     // since coherent memory needs to be synchronized at submission, we need to gather up all
@@ -1556,9 +1678,13 @@ impl CommandBuffer {
             unsafe { device.CreateDeferredContext(0, &mut context as *mut *mut _ as *mut *mut _) };
         assert_eq!(hr, winerror::S_OK);
 
+        let context = unsafe { ComPtr::from_raw(context) };
+        let context1 = context.cast::<d3d11_1::ID3D11DeviceContext1>().ok();
+
         CommandBuffer {
             internal,
-            context: unsafe { ComPtr::from_raw(context) },
+            context,
+            context1,
             list: RefCell::new(None),
             flush_coherent_memory: Vec::new(),
             invalidate_coherent_memory: Vec::new(),
@@ -1981,7 +2107,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         layout: &PipelineLayout,
         first_set: usize,
         sets: I,
-        _offsets: J,
+        offsets: J,
     ) where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSet>,
@@ -1999,10 +2125,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             ptr::null_mut(),
         );
 
-        //let offsets: Vec<command::DescriptorSetOffset> = offsets.into_iter().map(|o| *o.borrow()).collect();
+        let mut offset_iter = offsets.into_iter().map(|o: J::Item| *o.borrow());
 
         for (set, info) in sets.into_iter().zip(&layout.sets[first_set..]) {
-            let set = set.borrow();
+            let set: &DescriptorSet = set.borrow();
 
             {
                 let coherent_buffers = set.coherent_buffers.lock();
@@ -2038,49 +2164,81 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 }
             }
 
-            // TODO: offsets
+            let (vs_offsets, fs_offsets) = generate_graphics_dynamic_constant_buffer_offsets(
+                &*set.layout.bindings,
+                &mut offset_iter,
+                self.context1.is_some()
+            );
 
             if let Some(rd) = info.registers.vs.c.as_some() {
-                self.context.VSSetConstantBuffers(
-                    rd.res_index as u32,
-                    rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
-                );
+                let start_slot = rd.res_index as u32;
+                let num_buffers = rd.count as u32;
+                let constant_buffers = set.handles.offset(rd.pool_offset as isize);
+                if let Some(ref context1) = self.context1 {
+                    // TODO: This should be the actual buffer length for RBA purposes,
+                    //       but that information isn't easily accessible here.
+                    context1.VSSetConstantBuffers1(
+                        start_slot,
+                        num_buffers,
+                        constant_buffers as *const *mut _,
+                        vs_offsets.as_ptr(),
+                        self.internal.constant_buffer_count_buffer.as_ptr(),
+                    );
+                } else {
+                    self.context.VSSetConstantBuffers(
+                        start_slot,
+                        num_buffers,
+                        constant_buffers as *const *mut _
+                    );
+                }
             }
             if let Some(rd) = info.registers.vs.t.as_some() {
                 self.context.VSSetShaderResources(
                     rd.res_index as u32,
                     rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
+                    set.handles.offset(rd.pool_offset as isize) as *const *mut _,
                 );
             }
             if let Some(rd) = info.registers.vs.s.as_some() {
                 self.context.VSSetSamplers(
                     rd.res_index as u32,
                     rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
+                    set.handles.offset(rd.pool_offset as isize) as *const *mut _,
                 );
             }
 
             if let Some(rd) = info.registers.ps.c.as_some() {
-                self.context.PSSetConstantBuffers(
-                    rd.res_index as u32,
-                    rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
-                );
+                let start_slot = rd.res_index as u32;
+                let num_buffers = rd.count as u32;
+                let constant_buffers = set.handles.offset(rd.pool_offset as isize);
+                if let Some(ref context1) = self.context1 {
+                    context1.PSSetConstantBuffers1(
+                        start_slot,
+                        num_buffers,
+                        constant_buffers as *const *mut _,
+                        fs_offsets.as_ptr(),
+                        self.internal.constant_buffer_count_buffer.as_ptr(),
+                    );
+                } else {
+                    self.context.PSSetConstantBuffers(
+                        start_slot,
+                        num_buffers,
+                        constant_buffers as *const *mut _
+                    );
+                }
             }
             if let Some(rd) = info.registers.ps.t.as_some() {
                 self.context.PSSetShaderResources(
                     rd.res_index as u32,
                     rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
+                    set.handles.offset(rd.pool_offset as isize) as *const *mut _,
                 );
             }
             if let Some(rd) = info.registers.ps.s.as_some() {
                 self.context.PSSetSamplers(
                     rd.res_index as u32,
                     rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
+                    set.handles.offset(rd.pool_offset as isize) as *const *mut _,
                 );
             }
         }
@@ -2096,7 +2254,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         layout: &PipelineLayout,
         first_set: usize,
         sets: I,
-        _offsets: J,
+        offsets: J,
     ) where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSet>,
@@ -2113,8 +2271,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             ptr::null_mut(),
         );
 
+        let mut offset_iter = offsets.into_iter().map(|o: J::Item| *o.borrow());
+
         for (set, info) in sets.into_iter().zip(&layout.sets[first_set..]) {
-            let set = set.borrow();
+            let set: &DescriptorSet = set.borrow();
 
             {
                 let coherent_buffers = set.coherent_buffers.lock();
@@ -2149,27 +2309,46 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 }
             }
 
-            // TODO: offsets
+            let cs_offsets = generate_compute_dynamic_constant_buffer_offsets(
+                &*set.layout.bindings,
+                &mut offset_iter,
+                self.context1.is_some()
+            );
 
             if let Some(rd) = info.registers.cs.c.as_some() {
-                self.context.CSSetConstantBuffers(
-                    rd.res_index as u32,
-                    rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
-                );
+                let start_slot = rd.res_index as u32;
+                let num_buffers = rd.count as u32;
+                let constant_buffers = set.handles.offset(rd.pool_offset as isize);
+                if let Some(ref context1) = self.context1 {
+                    // TODO: This should be the actual buffer length for RBA purposes,
+                    //       but that information isn't easily accessible here.
+                    context1.CSSetConstantBuffers1(
+                        start_slot,
+                        num_buffers,
+                        constant_buffers as *const *mut _,
+                        cs_offsets.as_ptr(),
+                        self.internal.constant_buffer_count_buffer.as_ptr(),
+                    );
+                } else {
+                    self.context.CSSetConstantBuffers(
+                        start_slot,
+                        num_buffers,
+                        constant_buffers as *const *mut _
+                    );
+                }
             }
             if let Some(rd) = info.registers.cs.t.as_some() {
                 self.context.CSSetShaderResources(
                     rd.res_index as u32,
                     rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
+                    set.handles.offset(rd.pool_offset as isize) as *const *mut _,
                 );
             }
             if let Some(rd) = info.registers.cs.u.as_some() {
                 self.context.CSSetUnorderedAccessViews(
                     rd.res_index as u32,
                     rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
+                    set.handles.offset(rd.pool_offset as isize) as *const *mut _,
                     ptr::null_mut(),
                 );
             }
@@ -2177,7 +2356,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 self.context.CSSetSamplers(
                     rd.res_index as u32,
                     rd.count as u32,
-                    set.handles.offset(rd.pool_offset as isize) as *const *mut _ as *const *mut _,
+                    set.handles.offset(rd.pool_offset as isize) as *const *mut _,
                 );
             }
         }
