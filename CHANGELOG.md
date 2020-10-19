@@ -3,6 +3,7 @@
 ### backend-dx11-unreleased
   - fix read only depth stencil
   - support dynamic uniform buffer descriptors
+  - support MSAA resolve
 
 ### backend-dx12-0.6.9 (19-10-2020)
   - implement descriptor freeing and recycling
