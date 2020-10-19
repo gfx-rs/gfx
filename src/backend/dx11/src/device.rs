@@ -1662,6 +1662,7 @@ impl device::Device<Backend> for Device {
         };
 
         Ok(ImageView {
+            subresource: d3d11::D3D11CalcSubresource(0, range.layer_start as _, range.level_start as _),
             format,
             srv_handle: if image.usage.intersects(image::Usage::SAMPLED) {
                 Some(self.view_image_as_shader_resource(&srv_info)?)
