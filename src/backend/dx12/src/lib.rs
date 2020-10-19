@@ -554,7 +554,7 @@ impl Shared {
 }
 
 pub struct SamplerStorage {
-    map: Mutex<FastHashMap<image::SamplerDesc, native::CpuDescriptor>>,
+    map: Mutex<FastHashMap<image::SamplerDesc, descriptors_cpu::Handle>>,
     pool: Mutex<DescriptorCpuPool>,
     heap: resource::DescriptorHeap,
     origins: RwLock<resource::DescriptorOrigins>,
@@ -1086,8 +1086,12 @@ impl hal::Instance<Backend> for Instance {
             let tier3_practical_descriptor_limit = 1 << 20;
 
             let full_heap_count = match features.ResourceBindingTier {
-                d3d12::D3D12_RESOURCE_BINDING_TIER_1 => d3d12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
-                d3d12::D3D12_RESOURCE_BINDING_TIER_2 => d3d12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2,
+                d3d12::D3D12_RESOURCE_BINDING_TIER_1 => {
+                    d3d12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1
+                }
+                d3d12::D3D12_RESOURCE_BINDING_TIER_2 => {
+                    d3d12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2
+                }
                 d3d12::D3D12_RESOURCE_BINDING_TIER_3 => tier3_practical_descriptor_limit,
                 _ => unreachable!(),
             } as _;
