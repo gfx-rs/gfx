@@ -636,12 +636,13 @@ impl CommandBuffer {
         let color_views = subpass
             .color_attachments
             .iter()
-            .map(|&(id, _)| state.framebuffer.attachments[id].handle_rtv.unwrap())
+            .map(|&(id, _)| state.framebuffer.attachments[id].handle_rtv.raw().unwrap())
             .collect::<Vec<_>>();
         let ds_view = match subpass.depth_stencil_attachment {
             Some((id, _)) => state.framebuffer.attachments[id]
                 .handle_dsv
                 .as_ref()
+                .map(|handle| &handle.raw)
                 .unwrap() as *const _,
             None => ptr::null(),
         };
@@ -666,8 +667,8 @@ impl CommandBuffer {
                 continue;
             }
 
-            if let (Some(handle), Some(cv)) = (view.handle_rtv, clear.value) {
-                self.clear_render_target_view(handle, unsafe { cv.color }, &[state.target_rect]);
+            if let (Some(rtv), Some(cv)) = (view.handle_rtv.raw(), clear.value) {
+                self.clear_render_target_view(rtv, unsafe { cv.color }, &[state.target_rect]);
             }
 
             if let Some(handle) = view.handle_dsv {
@@ -675,7 +676,7 @@ impl CommandBuffer {
                 let stencil = clear.stencil_value;
 
                 if depth.is_some() || stencil.is_some() {
-                    self.clear_depth_stencil_view(handle, depth, stencil, &[state.target_rect]);
+                    self.clear_depth_stencil_view(handle.raw, depth, stencil, &[state.target_rect]);
                 }
             }
         }
@@ -1435,15 +1436,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             for rel_layer in 0..sub.resolve_layer_count(image.kind.num_layers()) {
                 let layer = (sub.layer_start + rel_layer) as usize;
                 if sub.aspects.contains(Aspects::COLOR) {
-                    let rtv = image.clear_cv[layer];
+                    let rtv = image.clear_cv[layer].raw;
                     self.clear_render_target_view(rtv, value.color, &[]);
                 }
                 if sub.aspects.contains(Aspects::DEPTH) {
-                    let dsv = image.clear_dv[layer];
+                    let dsv = image.clear_dv[layer].raw;
                     self.clear_depth_stencil_view(dsv, Some(value.depth_stencil.depth), None, &[]);
                 }
                 if sub.aspects.contains(Aspects::STENCIL) {
-                    let dsv = image.clear_sv[layer];
+                    let dsv = image.clear_sv[layer].raw;
                     self.clear_depth_stencil_view(
                         dsv,
                         None,

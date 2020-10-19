@@ -6,7 +6,7 @@ use winapi::{
 use hal::{buffer, format, image, memory, pass, pso};
 use range_alloc::RangeAllocator;
 
-use crate::{root_constants::RootConstant, Backend, MAX_VERTEX_BUFFERS};
+use crate::{descriptors_cpu::Handle, root_constants::RootConstant, Backend, MAX_VERTEX_BUFFERS};
 
 use std::{cell::UnsafeCell, collections::BTreeMap, fmt, ops::Range, sync::Arc};
 
@@ -178,7 +178,7 @@ pub struct BufferUnbound {
 pub struct BufferBound {
     pub(crate) resource: native::Resource,
     pub(crate) requirements: memory::Requirements,
-    pub(crate) clear_uav: Option<native::CpuDescriptor>,
+    pub(crate) clear_uav: Option<Handle>,
 }
 
 impl fmt::Debug for BufferBound {
@@ -220,9 +220,9 @@ impl Buffer {
 #[derive(Copy, Clone)]
 pub struct BufferView {
     // Descriptor handle for uniform texel buffers.
-    pub(crate) handle_srv: native::CpuDescriptor,
+    pub(crate) handle_srv: Option<Handle>,
     // Descriptor handle for storage texel buffers.
-    pub(crate) handle_uav: native::CpuDescriptor,
+    pub(crate) handle_uav: Option<Handle>,
 }
 
 impl fmt::Debug for BufferView {
@@ -254,9 +254,9 @@ pub struct ImageBound {
     pub(crate) bytes_per_block: u8,
     // Dimension of a texel block (compressed formats).
     pub(crate) block_dim: (u8, u8),
-    pub(crate) clear_cv: Vec<native::CpuDescriptor>,
-    pub(crate) clear_dv: Vec<native::CpuDescriptor>,
-    pub(crate) clear_sv: Vec<native::CpuDescriptor>,
+    pub(crate) clear_cv: Vec<Handle>,
+    pub(crate) clear_dv: Vec<Handle>,
+    pub(crate) clear_sv: Vec<Handle>,
     pub(crate) requirements: memory::Requirements,
 }
 
@@ -353,12 +353,29 @@ impl Image {
 }
 
 #[derive(Copy, Clone)]
+pub enum RenderTargetHandle {
+    None,
+    Swapchain(native::CpuDescriptor),
+    Pool(Handle),
+}
+
+impl RenderTargetHandle {
+    pub fn raw(&self) -> Option<native::CpuDescriptor> {
+        match *self {
+            RenderTargetHandle::None => None,
+            RenderTargetHandle::Swapchain(rtv) => Some(rtv),
+            RenderTargetHandle::Pool(ref handle) => Some(handle.raw),
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
 pub struct ImageView {
     pub(crate) resource: native::Resource, // weak-ptr owned by image.
-    pub(crate) handle_srv: Option<native::CpuDescriptor>,
-    pub(crate) handle_rtv: Option<native::CpuDescriptor>,
-    pub(crate) handle_dsv: Option<native::CpuDescriptor>,
-    pub(crate) handle_uav: Option<native::CpuDescriptor>,
+    pub(crate) handle_srv: Option<Handle>,
+    pub(crate) handle_rtv: RenderTargetHandle,
+    pub(crate) handle_dsv: Option<Handle>,
+    pub(crate) handle_uav: Option<Handle>,
     // Required for attachment resolves.
     pub(crate) dxgi_format: DXGI_FORMAT,
     pub(crate) num_levels: image::Level,
@@ -383,7 +400,7 @@ impl ImageView {
 }
 
 pub struct Sampler {
-    pub(crate) handle: native::CpuDescriptor,
+    pub(crate) handle: Handle,
 }
 
 impl fmt::Debug for Sampler {

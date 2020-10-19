@@ -675,9 +675,9 @@ impl Device {
     fn view_image_as_render_target(
         &self,
         info: &ViewInfo,
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
+    ) -> Result<descriptors_cpu::Handle, image::ViewCreationError> {
         let handle = self.rtv_pool.lock().unwrap().alloc_handle();
-        Self::view_image_as_render_target_impl(self.raw, handle, info).map(|_| handle)
+        Self::view_image_as_render_target_impl(self.raw, handle.raw, info).map(|_| handle)
     }
 
     pub(crate) fn view_image_as_depth_stencil_impl(
@@ -763,9 +763,9 @@ impl Device {
     fn view_image_as_depth_stencil(
         &self,
         info: &ViewInfo,
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
+    ) -> Result<descriptors_cpu::Handle, image::ViewCreationError> {
         let handle = self.dsv_pool.lock().unwrap().alloc_handle();
-        Self::view_image_as_depth_stencil_impl(self.raw, handle, info).map(|_| handle)
+        Self::view_image_as_depth_stencil_impl(self.raw, handle.raw, info).map(|_| handle)
     }
 
     pub(crate) fn build_image_as_shader_resource_desc(
@@ -891,12 +891,12 @@ impl Device {
     fn view_image_as_shader_resource(
         &self,
         info: &ViewInfo,
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
+    ) -> Result<descriptors_cpu::Handle, image::ViewCreationError> {
         let desc = Self::build_image_as_shader_resource_desc(&info)?;
         let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
         unsafe {
             self.raw
-                .CreateShaderResourceView(info.resource.as_mut_ptr(), &desc, handle);
+                .CreateShaderResourceView(info.resource.as_mut_ptr(), &desc, handle.raw);
         }
 
         Ok(handle)
@@ -905,7 +905,7 @@ impl Device {
     fn view_image_as_storage(
         &self,
         info: &ViewInfo,
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
+    ) -> Result<descriptors_cpu::Handle, image::ViewCreationError> {
         #![allow(non_snake_case)]
         assert_eq!(info.levels.start + 1, info.levels.end);
 
@@ -981,7 +981,7 @@ impl Device {
                 info.resource.as_mut_ptr(),
                 ptr::null_mut(),
                 &desc,
-                handle,
+                handle.raw,
             );
         }
 
@@ -2273,7 +2273,7 @@ impl d::Device<B> for Device {
                 resource.as_mut_ptr(),
                 ptr::null_mut(),
                 &view_desc,
-                handle,
+                handle.raw,
             );
             Some(handle)
         } else {
@@ -2330,12 +2330,14 @@ impl d::Device<B> for Device {
             };
 
             let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
-            self.raw
-                .clone()
-                .CreateShaderResourceView(buffer.resource.as_mut_ptr(), &desc, handle);
-            handle
+            self.raw.clone().CreateShaderResourceView(
+                buffer.resource.as_mut_ptr(),
+                &desc,
+                handle.raw,
+            );
+            Some(handle)
         } else {
-            d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 }
+            None
         };
 
         let handle_uav = if buffer_features.intersects(
@@ -2360,11 +2362,11 @@ impl d::Device<B> for Device {
                 buffer.resource.as_mut_ptr(),
                 ptr::null_mut(),
                 &desc,
-                handle,
+                handle.raw,
             );
-            handle
+            Some(handle)
         } else {
-            d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 }
+            None
         };
 
         return Ok(r::BufferView {
@@ -2731,9 +2733,9 @@ impl d::Device<B> for Device {
                 None
             },
             handle_rtv: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
-                self.view_image_as_render_target(&info).ok()
+                r::RenderTargetHandle::Pool(self.view_image_as_render_target(&info).unwrap())
             } else {
-                None
+                r::RenderTargetHandle::None
             },
             handle_uav: if image.usage.contains(image::Usage::STORAGE) {
                 self.view_image_as_storage(&info).ok()
@@ -2773,7 +2775,7 @@ impl d::Device<B> for Device {
             None => d3d12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
         };
         self.raw.create_sampler(
-            handle,
+            handle.raw,
             conv::map_filter(
                 info.mag_filter,
                 info.min_filter,
@@ -3052,33 +3054,29 @@ impl d::Device<B> for Device {
                     }
                     pso::Descriptor::Image(image, _layout) => {
                         if bind_info.content.contains(r::DescriptorContent::SRV) {
-                            src_srv = image.handle_srv;
+                            src_srv = image.handle_srv.map(|h| h.raw);
                         }
                         if bind_info.content.contains(r::DescriptorContent::UAV) {
-                            src_uav = image.handle_uav;
+                            src_uav = image.handle_uav.map(|h| h.raw);
                         }
                     }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
-                        src_srv = image.handle_srv;
-                        src_sampler = Some(sampler.handle);
+                        src_srv = image.handle_srv.map(|h| h.raw);
+                        src_sampler = Some(sampler.handle.raw);
                     }
                     pso::Descriptor::Sampler(sampler) => {
-                        src_sampler = Some(sampler.handle);
+                        src_sampler = Some(sampler.handle.raw);
                     }
                     pso::Descriptor::TexelBuffer(buffer_view) => {
                         if bind_info.content.contains(r::DescriptorContent::SRV) {
-                            let handle = buffer_view.handle_srv;
-                            src_srv = Some(handle);
-                            if handle.ptr == 0 {
-                                error!("SRV handle of the storage texel buffer is zero (not supported by specified format).");
-                            }
+                            let handle = buffer_view.handle_srv
+                                .expect("SRV handle of the storage texel buffer is zero (not supported by specified format)");
+                            src_srv = Some(handle.raw);
                         }
                         if bind_info.content.contains(r::DescriptorContent::UAV) {
-                            let handle = buffer_view.handle_uav;
-                            src_uav = Some(handle);
-                            if handle.ptr == 0 {
-                                error!("UAV handle of the storage texel buffer is zero (not supported by specified format).");
-                            }
+                            let handle = buffer_view.handle_uav
+                                .expect("UAV handle of the storage texel buffer is zero (not supported by specified format)");
+                            src_uav = Some(handle.raw);
                         }
                     }
                 }
@@ -3480,31 +3478,64 @@ impl d::Device<B> for Device {
     unsafe fn destroy_buffer(&self, buffer: r::Buffer) {
         match buffer {
             r::Buffer::Bound(buffer) => {
+                if let Some(handle) = buffer.clear_uav {
+                    self.srv_uav_pool.lock().unwrap().free_handle(handle);
+                }
                 buffer.resource.destroy();
             }
             r::Buffer::Unbound(_) => {}
         }
     }
 
-    unsafe fn destroy_buffer_view(&self, _view: r::BufferView) {
-        // empty
+    unsafe fn destroy_buffer_view(&self, view: r::BufferView) {
+        let mut pool = self.srv_uav_pool.lock().unwrap();
+        if let Some(handle) = view.handle_srv {
+            pool.free_handle(handle);
+        }
+        if let Some(handle) = view.handle_uav {
+            pool.free_handle(handle);
+        }
     }
 
     unsafe fn destroy_image(&self, image: r::Image) {
         match image {
             r::Image::Bound(image) => {
+                let mut dsv_pool = self.dsv_pool.lock().unwrap();
+                for handle in image.clear_cv {
+                    self.rtv_pool.lock().unwrap().free_handle(handle);
+                }
+                for handle in image.clear_dv {
+                    dsv_pool.free_handle(handle);
+                }
+                for handle in image.clear_sv {
+                    dsv_pool.free_handle(handle);
+                }
                 image.resource.destroy();
             }
             r::Image::Unbound(_) => {}
         }
     }
 
-    unsafe fn destroy_image_view(&self, _view: r::ImageView) {
-        // Just drop
+    unsafe fn destroy_image_view(&self, view: r::ImageView) {
+        if let Some(handle) = view.handle_srv {
+            self.srv_uav_pool.lock().unwrap().free_handle(handle);
+        }
+        if let Some(handle) = view.handle_uav {
+            self.srv_uav_pool.lock().unwrap().free_handle(handle);
+        }
+        if let r::RenderTargetHandle::Pool(handle) = view.handle_rtv {
+            self.rtv_pool.lock().unwrap().free_handle(handle);
+        }
+        if let Some(handle) = view.handle_dsv {
+            self.dsv_pool.lock().unwrap().free_handle(handle);
+        }
     }
 
-    unsafe fn destroy_sampler(&self, _sampler: r::Sampler) {
-        // Just drop
+    unsafe fn destroy_sampler(&self, sampler: r::Sampler) {
+        self.sampler_pool
+            .lock()
+            .unwrap()
+            .free_handle(sampler.handle);
     }
 
     unsafe fn destroy_descriptor_pool(&self, pool: r::DescriptorPool) {

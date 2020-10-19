@@ -4,6 +4,9 @@
   - fix read only depth stencil
   - support dynamic uniform buffer descriptors
 
+### backend-dx12-0.6.9 (19-10-2020)
+  - implement descriptor freeing and recycling
+
 ### backend-dx11-0.6.5 (17-10-2020)
   - shaders are properly cleared when using a pipeline without a PS, GS, HS, or DS.
   - fix buffer to image copies with multiple layers
