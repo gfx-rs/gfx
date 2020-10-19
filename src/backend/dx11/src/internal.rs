@@ -8,6 +8,7 @@ use winapi::{
         winerror,
     },
     um::{d3d11, d3dcommon},
+    shared::minwindef::UINT
 };
 
 use wio::com::ComPtr;
@@ -144,6 +145,8 @@ pub struct Internal {
     // public buffer that is used as intermediate storage for some operations (memory invalidation)
     pub working_buffer: ComPtr<d3d11::ID3D11Buffer>,
     pub working_buffer_size: u64,
+
+    pub constant_buffer_count_buffer: [UINT; d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _],
 }
 
 fn compile_blob(src: &[u8], entrypoint: &str, stage: ShaderStage) -> ComPtr<d3dcommon::ID3DBlob> {
@@ -615,6 +618,8 @@ impl Internal {
             }),
             working_buffer,
             working_buffer_size: working_buffer_size as _,
+
+            constant_buffer_count_buffer: [4096_u32; d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _],
         }
     }
 
