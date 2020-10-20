@@ -226,6 +226,19 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         | _ => 8,
     };
 
+    // https://docs.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11device-checkmultisamplequalitylevels#remarks
+    // for more information.
+    let max_samples = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2
+        | d3dcommon::D3D_FEATURE_LEVEL_9_3
+        | d3dcommon::D3D_FEATURE_LEVEL_10_0 => 0b0001, // Conservative, MSAA isn't required.
+        d3dcommon::D3D_FEATURE_LEVEL_10_1 => 0b0101, // Optimistic, 4xMSAA is required on all formats _but_ RGBA32.
+        d3dcommon::D3D_FEATURE_LEVEL_11_0
+        | d3dcommon::D3D_FEATURE_LEVEL_11_1
+        | _ => 0b1101, // Optimistic, 8xMSAA and 4xMSAA is required on all formats _but_ RGBA32 which requires 4x.
+    };
+
     hal::Limits {
         max_image_1d_size: max_texture_uv_dimension,
         max_image_2d_size: max_texture_uv_dimension,
@@ -266,9 +279,9 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         min_texel_buffer_offset_alignment: 1,                                     // TODO
         min_uniform_buffer_offset_alignment: 16,
         min_storage_buffer_offset_alignment: 16, // TODO
-        framebuffer_color_sample_counts: 1,      // TODO
-        framebuffer_depth_sample_counts: 1,      // TODO
-        framebuffer_stencil_sample_counts: 1,    // TODO
+        framebuffer_color_sample_counts: max_samples,
+        framebuffer_depth_sample_counts: max_samples,
+        framebuffer_stencil_sample_counts: max_samples,
         max_color_attachments,
         buffer_image_granularity: 1,
         non_coherent_atom_size: 1, // TODO
@@ -967,6 +980,7 @@ impl window::PresentationSurface<Backend> for Surface {
     ) -> Result<(ImageView, Option<window::Suboptimal>), window::AcquireError> {
         let present = self.presentation.as_ref().unwrap();
         let image_view = ImageView {
+            subresource: d3d11::D3D11CalcSubresource(0, 0, 1),
             format: present.format,
             rtv_handle: Some(present.view.clone()),
             dsv_handle: None,
@@ -1155,7 +1169,37 @@ impl RenderPassCache {
         cache.bind(context);
     }
 
-    pub fn next_subpass(&mut self) {
+    fn resolve_msaa(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        let subpass: &SubpassDesc = &self.render_pass.subpasses[self.current_subpass as usize];
+
+        for (&(color_id, _), &(resolve_id, _)) in subpass.color_attachments.iter().zip(subpass.resolve_attachments.iter()) {
+            if color_id == pass::ATTACHMENT_UNUSED || resolve_id == pass::ATTACHMENT_UNUSED {
+                continue;
+            }
+
+            let color_framebuffer = &self.framebuffer.attachments[color_id];
+            let resolve_framebuffer = &self.framebuffer.attachments[resolve_id];
+
+            let mut color_resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
+            let mut resolve_resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
+
+            unsafe {
+                color_framebuffer.rtv_handle.as_ref().expect("Framebuffer must have COLOR_ATTACHMENT usage").GetResource(&mut color_resource as *mut *mut _);
+                resolve_framebuffer.rtv_handle.as_ref().expect("Resolve texture must have COLOR_ATTACHMENT usage").GetResource(&mut resolve_resource as *mut *mut _);
+
+                context.ResolveSubresource(
+                    resolve_resource,
+                    resolve_framebuffer.subresource,
+                    color_resource,
+                    color_framebuffer.subresource,
+                    conv::map_format(color_framebuffer.format).unwrap()
+                );
+            }
+        }
+    }
+
+    pub fn next_subpass(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        self.resolve_msaa(context);
         self.current_subpass += 1;
     }
 }
@@ -1872,13 +1916,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn next_subpass(&mut self, _contents: command::SubpassContents) {
         if let Some(ref mut current_render_pass) = self.render_pass_cache {
-            // TODO: resolve msaa
-            current_render_pass.next_subpass();
+            current_render_pass.next_subpass(&self.context);
             current_render_pass.start_subpass(&self.internal, &self.context, &mut self.cache);
         }
     }
 
     unsafe fn end_render_pass(&mut self) {
+        if let Some(ref mut current_render_pass) = self.render_pass_cache {
+            current_render_pass.resolve_msaa(&self.context);
+        }
+
         self.context
             .OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
 
@@ -3096,6 +3143,7 @@ impl Image {
 
 #[derive(Clone)]
 pub struct ImageView {
+    subresource: UINT,
     format: format::Format,
     rtv_handle: Option<ComPtr<d3d11::ID3D11RenderTargetView>>,
     srv_handle: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,

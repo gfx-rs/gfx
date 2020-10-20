@@ -4,8 +4,8 @@ use hal::{
     image::{Filter, WrapMode},
     pso::{
         BlendDesc, BlendOp, ColorBlendDesc, Comparison, DepthBias, DepthStencilDesc, Face, Factor,
-        FrontFace, InputAssemblerDesc, PolygonMode, Rasterizer, Rect, Sided, State, StencilFace,
-        StencilOp, StencilValue, Viewport,
+        FrontFace, InputAssemblerDesc, Multisampling, PolygonMode, Rasterizer, Rect, Sided, State, StencilFace,
+        StencilOp, StencilValue, Viewport
     },
     IndexType,
 };
@@ -510,7 +510,7 @@ fn map_cull_mode(mode: Face) -> D3D11_CULL_MODE {
     }
 }
 
-pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
+pub(crate) fn map_rasterizer_desc(desc: &Rasterizer, multisampling_desc: &Option<Multisampling>) -> D3D11_RASTERIZER_DESC {
     let bias = match desc.depth_bias {
         //TODO: support dynamic depth bias
         Some(State::Static(db)) => db,
@@ -519,6 +519,7 @@ pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
     if let State::Static(w) = desc.line_width {
         super::validate_line_width(w);
     }
+    let multisampled = multisampling_desc.is_some();
     D3D11_RASTERIZER_DESC {
         FillMode: map_fill_mode(desc.polygon_mode),
         CullMode: map_cull_mode(desc.cull_face),
@@ -532,10 +533,8 @@ pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
         DepthClipEnable: !desc.depth_clamping as _,
         // TODO:
         ScissorEnable: TRUE,
-        // TODO: msaa
-        MultisampleEnable: FALSE,
-        // TODO: line aa?
-        AntialiasedLineEnable: FALSE,
+        MultisampleEnable: multisampled as _,
+        AntialiasedLineEnable: multisampled as _,
         // TODO: conservative raster in >=11.x
     }
 }
