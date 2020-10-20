@@ -226,6 +226,19 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         | _ => 8,
     };
 
+    // https://docs.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11device-checkmultisamplequalitylevels#remarks
+    // for more information.
+    let max_samples = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_9_1
+        | d3dcommon::D3D_FEATURE_LEVEL_9_2
+        | d3dcommon::D3D_FEATURE_LEVEL_9_3
+        | d3dcommon::D3D_FEATURE_LEVEL_10_0 => 0b0001, // Conservative, MSAA isn't required.
+        d3dcommon::D3D_FEATURE_LEVEL_10_1 => 0b0101, // Optimistic, 4xMSAA is required on all formats _but_ RGBA32.
+        d3dcommon::D3D_FEATURE_LEVEL_11_0
+        | d3dcommon::D3D_FEATURE_LEVEL_11_1
+        | _ => 0b1101, // Optimistic, 8xMSAA and 4xMSAA is required on all formats _but_ RGBA32 which requires 4x.
+    };
+
     hal::Limits {
         max_image_1d_size: max_texture_uv_dimension,
         max_image_2d_size: max_texture_uv_dimension,
@@ -266,9 +279,9 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         min_texel_buffer_offset_alignment: 1,                                     // TODO
         min_uniform_buffer_offset_alignment: 16,
         min_storage_buffer_offset_alignment: 16, // TODO
-        framebuffer_color_sample_counts: 1,      // TODO
-        framebuffer_depth_sample_counts: 1,      // TODO
-        framebuffer_stencil_sample_counts: 1,    // TODO
+        framebuffer_color_sample_counts: max_samples,
+        framebuffer_depth_sample_counts: max_samples,
+        framebuffer_stencil_sample_counts: max_samples,
         max_color_attachments,
         buffer_image_granularity: 1,
         non_coherent_atom_size: 1, // TODO

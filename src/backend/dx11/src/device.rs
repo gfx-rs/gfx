@@ -92,9 +92,10 @@ impl Device {
     fn create_rasterizer_state(
         &self,
         rasterizer_desc: &pso::Rasterizer,
+        multisampling_desc: &Option<pso::Multisampling>
     ) -> Result<ComPtr<d3d11::ID3D11RasterizerState>, pso::CreationError> {
         let mut rasterizer = ptr::null_mut();
-        let desc = conv::map_rasterizer_desc(rasterizer_desc);
+        let desc = conv::map_rasterizer_desc(rasterizer_desc, multisampling_desc);
 
         let hr = unsafe {
             self.raw
@@ -588,15 +589,36 @@ impl Device {
                 }
             }
             image::ViewKind::D2 => {
-                desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
-                *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV { MipSlice }
+                match info.kind {
+                    image::Kind::D2(_, _, _, 1) => {
+                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
+                        *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV { MipSlice }
+                    }
+                    image::Kind::D2(_, _, _, _) => {
+                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMS;
+                        *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_RTV { UnusedField_NothingToDefine: 0 }
+                    }
+                    _ => unreachable!(),
+                }
             }
             image::ViewKind::D2Array => {
-                desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
-                *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_RTV {
-                    MipSlice,
-                    FirstArraySlice,
-                    ArraySize,
+                match info.kind {
+                    image::Kind::D2(_, _, _, 1) => {
+                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+                        *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_RTV {
+                            MipSlice,
+                            FirstArraySlice,
+                            ArraySize,
+                        }
+                    }
+                    image::Kind::D2(_, _, _, _) => {
+                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                        *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_RTV {
+                            FirstArraySlice,
+                            ArraySize,
+                        }
+                    }
+                    _ => unreachable!(),
                 }
             }
             image::ViewKind::D3 => {
@@ -944,7 +966,7 @@ impl device::Device<Backend> for Device {
             None
         };
 
-        let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
+        let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer, &desc.multisampling)?;
         let blend_state = self.create_blend_state(&desc.blender)?;
         let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
 
@@ -1417,7 +1439,7 @@ impl device::Device<Backend> for Device {
 
                 image::ViewKind::D1Array
             }
-            image::Kind::D2(width, height, layers, _) => {
+            image::Kind::D2(width, height, layers, samples) => {
                 let desc = d3d11::D3D11_TEXTURE2D_DESC {
                     Width: width,
                     Height: height,
@@ -1425,7 +1447,7 @@ impl device::Device<Backend> for Device {
                     ArraySize: layers as _,
                     Format: decomposed.typeless,
                     SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                        Count: 1,
+                        Count: samples as _,
                         Quality: 0,
                     },
                     Usage: usage,
