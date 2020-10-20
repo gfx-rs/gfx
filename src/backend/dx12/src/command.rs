@@ -1678,6 +1678,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             native::DescriptorHeapFlags::SHADER_VISIBLE,
             0,
         );
+        self.raw.set_descriptor_heaps(&[srv_heap]);
+        self.temporary_gpu_heaps.push(srv_heap);
+
         let srv_desc = Device::build_image_as_shader_resource_desc(&device::ViewInfo {
             resource: src.resource,
             kind: src.kind,
@@ -1694,8 +1697,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             &srv_desc,
             srv_heap.start_cpu_descriptor(),
         );
-        self.raw.set_descriptor_heaps(&[srv_heap]);
-        self.temporary_gpu_heaps.push(srv_heap);
 
         let filter = match filter {
             image::Filter::Nearest => d3d12::D3D12_FILTER_MIN_MAG_MIP_POINT,
@@ -2129,12 +2130,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn fill_buffer(&mut self, buffer: &r::Buffer, range: buffer::SubRange, _data: u32) {
+    unsafe fn fill_buffer(&mut self, buffer: &r::Buffer, range: buffer::SubRange, data: u32) {
         let buffer = buffer.expect_bound();
-        assert!(
-            buffer.clear_uav.is_some(),
-            "Buffer needs to be created with usage `TRANSFER_DST`"
-        );
         let bytes_per_unit = 4;
         let start = range.offset as i32;
         let end = range
@@ -2143,7 +2140,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         if start % 4 != 0 || end % 4 != 0 {
             warn!("Fill buffer bounds have to be multiples of 4");
         }
-        let _rect = d3d12::D3D12_RECT {
+        let rect = d3d12::D3D12_RECT {
             left: start / bytes_per_unit,
             top: 0,
             right: end / bytes_per_unit,
@@ -2160,22 +2157,47 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         });
         self.raw.ResourceBarrier(1, &pre_barrier);
 
-        error!("fill_buffer currently unimplemented");
-        // TODO: GPU handle must be in the current heap. Atm we use a CPU descriptor heap for allocation
-        //       which is not shader visible.
-        /*
-        let handle = buffer.clear_uav.unwrap();
-        unsafe {
-            self.raw.ClearUnorderedAccessViewUint(
-                handle.gpu,
-                handle.cpu,
-                buffer.resource,
-                &[data as UINT; 4],
-                1,
-                &rect as *const _,
-            );
-        }
-        */
+        // Descriptor heap for the current blit, only storing the src image
+        let device = self.shared.service_pipes.device.clone();
+        let (uav_heap, _) = device.create_descriptor_heap(
+            1,
+            native::DescriptorHeapType::CbvSrvUav,
+            native::DescriptorHeapFlags::SHADER_VISIBLE,
+            0,
+        );
+        let mut uav_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+            Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+            ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
+            u: mem::zeroed(),
+        };
+        *uav_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
+            FirstElement: 0,
+            NumElements: (buffer.requirements.size / bytes_per_unit as u64) as u32,
+            StructureByteStride: 0,
+            CounterOffsetInBytes: 0,
+            Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
+        };
+        device.CreateUnorderedAccessView(
+            buffer.resource.as_mut_ptr(),
+            ptr::null_mut(),
+            &uav_desc,
+            uav_heap.start_cpu_descriptor(),
+        );
+        self.raw.set_descriptor_heaps(&[uav_heap]);
+        self.temporary_gpu_heaps.push(uav_heap);
+
+        let cpu_descriptor = buffer
+            .clear_uav
+            .expect("Buffer needs to be created with usage `TRANSFER_DST`");
+
+        self.raw.ClearUnorderedAccessViewUint(
+            uav_heap.start_gpu_descriptor(),
+            cpu_descriptor.raw,
+            buffer.resource.as_mut_ptr(),
+            &[data; 4],
+            1,
+            &rect as *const _,
+        );
 
         let post_barrier = Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
             pResource: buffer.resource.as_mut_ptr(),
