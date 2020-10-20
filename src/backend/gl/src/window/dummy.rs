@@ -44,7 +44,7 @@ impl window::Surface<Backend> for Surface {
 }
 
 impl window::PresentationSurface<Backend> for Surface {
-    type SwapchainImage = native::ImageView;
+    type SwapchainImage = native::SwapchainImage;
 
     unsafe fn configure_swapchain(
         &mut self,

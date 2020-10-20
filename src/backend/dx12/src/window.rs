@@ -1,12 +1,12 @@
-use std::{collections::VecDeque, fmt, mem, os::raw::c_void};
+use std::{borrow::Borrow, collections::VecDeque, fmt, mem, os::raw::c_void};
 
 use winapi::{
     shared::{
-        dxgi, dxgi1_4,
+        dxgi, dxgi1_4, dxgitype,
         windef::{HWND, RECT},
         winerror,
     },
-    um::{synchapi, winbase, winnt::HANDLE, winuser::GetClientRect},
+    um::{d3d12, synchapi, winbase, winnt::HANDLE, winuser::GetClientRect},
 };
 
 use crate::{conv, resource as r, Backend, Device, Instance, PhysicalDevice, QueueFamily};
@@ -88,7 +88,7 @@ impl w::Surface<Backend> for Surface {
                 height: 4096,
             },
             max_image_layers: 1,
-            usage: i::Usage::COLOR_ATTACHMENT,
+            usage: i::Usage::COLOR_ATTACHMENT | i::Usage::TRANSFER_SRC | i::Usage::TRANSFER_DST,
         }
     }
 
@@ -104,8 +104,26 @@ impl w::Surface<Backend> for Surface {
     }
 }
 
+#[derive(Debug)]
+pub struct SwapchainImage {
+    image: r::Image,
+    view: r::ImageView,
+}
+
+impl Borrow<r::Image> for SwapchainImage {
+    fn borrow(&self) -> &r::Image {
+        &self.image
+    }
+}
+
+impl Borrow<r::ImageView> for SwapchainImage {
+    fn borrow(&self) -> &r::ImageView {
+        &self.view
+    }
+}
+
 impl w::PresentationSurface<Backend> for Surface {
-    type SwapchainImage = r::ImageView;
+    type SwapchainImage = SwapchainImage;
 
     unsafe fn configure_swapchain(
         &mut self,
@@ -165,27 +183,73 @@ impl w::PresentationSurface<Backend> for Surface {
     unsafe fn acquire_image(
         &mut self,
         timeout_ns: u64,
-    ) -> Result<(r::ImageView, Option<w::Suboptimal>), w::AcquireError> {
+    ) -> Result<(SwapchainImage, Option<w::Suboptimal>), w::AcquireError> {
         let present = self.presentation.as_mut().unwrap();
         let sc = &mut present.swapchain;
 
         sc.wait((timeout_ns / 1_000_000) as u32)?;
 
         let index = sc.inner.GetCurrentBackBufferIndex();
-        let view = r::ImageView {
-            resource: sc.resources[index as usize],
-            handle_srv: None,
-            handle_rtv: r::RenderTargetHandle::Swapchain(sc.rtv_heap.at(index as _, 0).cpu),
-            handle_uav: None,
-            handle_dsv: None,
-            dxgi_format: conv::map_format(present.format).unwrap(),
-            num_levels: 1,
-            mip_levels: (0, 1),
-            layers: (0, 1),
-            kind: i::Kind::D2(present.size.width, present.size.height, 1, 1),
+        let resource = sc.resources[index as usize];
+
+        let kind = i::Kind::D2(present.size.width, present.size.height, 1, 1);
+        let base_format = present.format.base_format();
+        let dxgi_format = conv::map_format(present.format).unwrap();
+        let rtv = sc.rtv_heap.at(index as _, 0).cpu;
+
+        let descriptor = d3d12::D3D12_RESOURCE_DESC {
+            Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+            Alignment: 0,
+            Width: present.size.width as _,
+            Height: present.size.height as _,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: dxgi_format,
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
+            Flags: d3d12::D3D12_RESOURCE_FLAG_NONE, //TODO?
         };
 
-        Ok((view, None))
+        let image = r::ImageBound {
+            resource: resource,
+            place: r::Place::Swapchain {},
+            surface_type: base_format.0,
+            kind,
+            mip_levels: 1,
+            usage: sc.usage,
+            default_view_format: None,
+            view_caps: i::ViewCapabilities::empty(),
+            descriptor,
+            clear_cv: Vec::new(), //TODO
+            clear_dv: Vec::new(),
+            clear_sv: Vec::new(),
+            requirements: hal::memory::Requirements {
+                size: 0,
+                alignment: 1,
+                type_mask: 0,
+            },
+        };
+
+        let swapchain_image = SwapchainImage {
+            image: r::Image::Bound(image),
+            view: r::ImageView {
+                resource,
+                handle_srv: None,
+                handle_rtv: r::RenderTargetHandle::Swapchain(rtv),
+                handle_uav: None,
+                handle_dsv: None,
+                dxgi_format,
+                num_levels: 1,
+                mip_levels: (0, 1),
+                layers: (0, 1),
+                kind,
+            },
+        };
+
+        Ok((swapchain_image, None))
     }
 }
 
@@ -199,6 +263,7 @@ pub struct Swapchain {
     // when the swapchain is destroyed
     pub(crate) resources: Vec<native::Resource>,
     pub(crate) waitable: HANDLE,
+    pub(crate) usage: i::Usage,
 }
 
 impl Swapchain {

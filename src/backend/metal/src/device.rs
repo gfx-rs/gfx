@@ -387,8 +387,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     fn memory_properties(&self) -> adapter::MemoryProperties {
         adapter::MemoryProperties {
             memory_heaps: vec![
-                !0, //TODO: private memory limits
-                self.shared.private_caps.max_buffer_size,
+                adapter::MemoryHeap {
+                    size: !0, //TODO: private memory limits
+                    flags: memory::HeapFlags::DEVICE_LOCAL,
+                },
+                adapter::MemoryHeap {
+                    size: self.shared.private_caps.max_buffer_size,
+                    flags: memory::HeapFlags::empty(),
+                },
             ],
             memory_types: self.memory_types.to_vec(),
         }

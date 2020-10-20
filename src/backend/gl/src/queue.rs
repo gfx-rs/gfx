@@ -1214,7 +1214,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn present(
         &mut self,
         surface: &mut Surface,
-        _image: native::ImageView,
+        _image: native::SwapchainImage,
         _wait_semaphore: Option<&native::Semaphore>,
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError> {
         let swapchain = surface

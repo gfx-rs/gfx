@@ -489,7 +489,7 @@ impl q::CommandQueue<Backend> for CommandQueue {
     unsafe fn present(
         &mut self,
         surface: &mut window::Surface,
-        _image: resource::ImageView,
+        _image: window::SwapchainImage,
         _wait_semaphore: Option<&resource::Semaphore>,
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError> {
         surface.present();
@@ -1070,14 +1070,17 @@ impl hal::Instance<Backend> for Instance {
                     mem_info.Budget
                 };
 
-                let local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_LOCAL);
-                match memory_architecture {
-                    MemoryArchitecture::NUMA => {
-                        let non_local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL);
-                        vec![local, non_local]
-                    }
-                    _ => vec![local],
+                let mut heaps = vec![adapter::MemoryHeap {
+                    size: query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_LOCAL),
+                    flags: memory::HeapFlags::DEVICE_LOCAL,
+                }];
+                if let MemoryArchitecture::NUMA = memory_architecture {
+                    heaps.push(adapter::MemoryHeap {
+                        size: query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL),
+                        flags: memory::HeapFlags::empty(),
+                    });
                 }
+                heaps
             };
             //TODO: find a way to get a tighter bound?
             let sample_count_mask = 0x3F;

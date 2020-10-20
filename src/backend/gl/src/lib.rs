@@ -50,12 +50,6 @@ pub use crate::window::surfman::{Instance, Surface, Swapchain};
 #[cfg(surfman)]
 surfman::declare_surfman!();
 
-// WGL implementation
-#[cfg(wgl)]
-pub use crate::window::wgl::{Instance, Surface, Swapchain};
-#[cfg(wgl)]
-use window::wgl::DeviceContext;
-
 // Catch-all dummy implementation
 #[cfg(dummy)]
 pub use window::dummy::{Instance, Surface, Swapchain};
@@ -733,8 +727,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .iter()
                 .map(|(mem_type, _)| *mem_type)
                 .collect(),
-            // heap 0 is DEVICE_LOCAL, heap 1 is CPU_VISIBLE
-            memory_heaps: vec![!0, !0],
+            memory_heaps: vec![
+                adapter::MemoryHeap {
+                    size: !0,
+                    flags: memory::HeapFlags::DEVICE_LOCAL,
+                },
+                adapter::MemoryHeap {
+                    size: !0,
+                    flags: memory::HeapFlags::empty(),
+                },
+            ],
         }
     }
 

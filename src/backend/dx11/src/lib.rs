@@ -494,7 +494,16 @@ impl hal::Instance<Backend> for Instance {
                 ],
                 // TODO: would using *VideoMemory and *SystemMemory from
                 //       DXGI_ADAPTER_DESC be too optimistic? :)
-                memory_heaps: vec![!0, !0],
+                memory_heaps: vec![
+                    adapter::MemoryHeap {
+                        size: !0,
+                        flags: memory::HeapFlags::DEVICE_LOCAL,
+                    },
+                    adapter::MemoryHeap {
+                        size: !0,
+                        flags: memory::HeapFlags::empty(),
+                    },
+                ],
             };
 
             let limits = get_limits(feature_level);
@@ -825,6 +834,7 @@ struct Presentation {
     format: format::Format,
     size: window::Extent2D,
     mode: window::PresentMode,
+    image: Arc<Image>,
     is_init: bool,
 }
 
@@ -895,8 +905,24 @@ impl window::Surface<Backend> for Surface {
     }
 }
 
+#[derive(Debug)]
+pub struct SwapchainImage {
+    image: Arc<Image>,
+    view: ImageView,
+}
+impl Borrow<Image> for SwapchainImage {
+    fn borrow(&self) -> &Image {
+        &*self.image
+    }
+}
+impl Borrow<ImageView> for SwapchainImage {
+    fn borrow(&self) -> &ImageView {
+        &self.view
+    }
+}
+
 impl window::PresentationSurface<Backend> for Surface {
-    type SwapchainImage = ImageView;
+    type SwapchainImage = SwapchainImage;
 
     unsafe fn configure_swapchain(
         &mut self,
@@ -945,20 +971,18 @@ impl window::PresentationSurface<Backend> for Surface {
 
         let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
         let format = conv::map_format(config.format).unwrap();
-        let decomposed = conv::DecomposedDxgiFormat::from_dxgi_format(format);
+        let decomposed_format = conv::DecomposedDxgiFormat::from_dxgi_format(format);
 
         let view_info = ViewInfo {
             resource,
             kind,
             caps: image::ViewCapabilities::empty(),
             view_kind: image::ViewKind::D2,
-            format: decomposed.rtv.unwrap(),
+            format: decomposed_format.rtv.unwrap(),
             levels: 0..1,
             layers: 0..1,
         };
         let view = device.view_image_as_render_target(&view_info).unwrap();
-
-        (*resource).Release();
 
         self.presentation = Some(Presentation {
             swapchain,
@@ -966,6 +990,28 @@ impl window::PresentationSurface<Backend> for Surface {
             format: config.format,
             size: config.extent,
             mode: config.present_mode,
+            image: Arc::new(Image {
+                kind,
+                usage: config.image_usage,
+                format: config.format,
+                view_caps: image::ViewCapabilities::empty(),
+                decomposed_format,
+                mip_levels: 1,
+                internal: InternalImage {
+                    raw: resource,
+                    copy_srv: None, //TODO
+                    srv: None,      //TODO
+                    unordered_access_views: Vec::new(),
+                    depth_stencil_views: Vec::new(),
+                    render_target_views: Vec::new(),
+                },
+                bind: conv::map_image_usage(config.image_usage, config.format.surface_desc()),
+                requirements: memory::Requirements {
+                    size: 0,
+                    alignment: 1,
+                    type_mask: 0,
+                },
+            }),
             is_init: true,
         });
         Ok(())
@@ -978,18 +1024,21 @@ impl window::PresentationSurface<Backend> for Surface {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64, //TODO: use the timeout
-    ) -> Result<(ImageView, Option<window::Suboptimal>), window::AcquireError> {
+    ) -> Result<(SwapchainImage, Option<window::Suboptimal>), window::AcquireError> {
         let present = self.presentation.as_ref().unwrap();
-        let image_view = ImageView {
-            subresource: d3d11::D3D11CalcSubresource(0, 0, 1),
-            format: present.format,
-            rtv_handle: Some(present.view.clone()),
-            dsv_handle: None,
-            srv_handle: None,
-            uav_handle: None,
-            rodsv_handle: None,
+        let swapchain_image = SwapchainImage {
+            image: Arc::clone(&present.image),
+            view: ImageView {
+                subresource: d3d11::D3D11CalcSubresource(0, 0, 1),
+                format: present.format,
+                rtv_handle: Some(present.view.clone()),
+                dsv_handle: None,
+                srv_handle: None,
+                uav_handle: None,
+                rodsv_handle: None,
+            },
         };
-        Ok((image_view, None))
+        Ok((swapchain_image, None))
     }
 }
 
@@ -1070,7 +1119,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn present(
         &mut self,
         surface: &mut Surface,
-        _image: ImageView,
+        _image: SwapchainImage,
         _wait_semaphore: Option<&Semaphore>,
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
         let mut presentation = surface.presentation.as_mut().unwrap();
@@ -3107,11 +3156,11 @@ unsafe impl Send for Image {}
 unsafe impl Sync for Image {}
 
 impl Image {
-    pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
+    fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
         mip_level + (layer * self.mip_levels as UINT)
     }
 
-    pub fn get_uav(
+    fn get_uav(
         &self,
         mip_level: image::Level,
         _layer: image::Layer,
@@ -3121,7 +3170,7 @@ impl Image {
             .get(self.calc_subresource(mip_level as _, 0) as usize)
     }
 
-    pub fn get_dsv(
+    fn get_dsv(
         &self,
         mip_level: image::Level,
         layer: image::Layer,
@@ -3131,7 +3180,7 @@ impl Image {
             .get(self.calc_subresource(mip_level as _, layer as _) as usize)
     }
 
-    pub fn get_rtv(
+    fn get_rtv(
         &self,
         mip_level: image::Level,
         layer: image::Layer,
@@ -3139,6 +3188,14 @@ impl Image {
         self.internal
             .render_target_views
             .get(self.calc_subresource(mip_level as _, layer as _) as usize)
+    }
+}
+
+impl Drop for Image {
+    fn drop(&mut self) {
+        unsafe {
+            (*self.internal.raw).Release();
+        }
     }
 }
 

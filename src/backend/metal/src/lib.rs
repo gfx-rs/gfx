@@ -297,8 +297,8 @@ impl hal::Instance<Backend> for Instance {
         }
     }
 
-    unsafe fn destroy_surface(&self, _surface: Surface) {
-        // TODO: Implement Surface cleanup
+    unsafe fn destroy_surface(&self, surface: Surface) {
+        surface.dispose();
     }
 }
 
@@ -351,7 +351,7 @@ unsafe impl Sync for GfxManagedMetalLayerDelegate {}
 
 impl Instance {
     #[cfg(target_os = "ios")]
-    unsafe fn create_from_uiview(&self, uiview: *mut c_void) -> window::SurfaceInner {
+    unsafe fn create_from_uiview(&self, uiview: *mut c_void) -> Surface {
         let view: cocoa_foundation::base::id = mem::transmute(uiview);
         if view.is_null() {
             panic!("window does not have a valid contentView");
@@ -382,11 +382,11 @@ impl Instance {
         }
 
         let _: *mut c_void = msg_send![view, retain];
-        window::SurfaceInner::new(NonNull::new(view), render_layer)
+        Surface::new(NonNull::new(view), render_layer)
     }
 
     #[cfg(target_os = "macos")]
-    unsafe fn create_from_nsview(&self, nsview: *mut c_void) -> window::SurfaceInner {
+    unsafe fn create_from_nsview(&self, nsview: *mut c_void) -> Surface {
         let view: cocoa_foundation::base::id = mem::transmute(nsview);
         if view.is_null() {
             panic!("window does not have a valid contentView");
@@ -426,28 +426,28 @@ impl Instance {
         };
 
         let _: *mut c_void = msg_send![view, retain];
-        window::SurfaceInner::new(NonNull::new(view), render_layer)
+        Surface::new(NonNull::new(view), render_layer)
     }
 
-    unsafe fn create_from_layer(&self, layer: &CoreAnimationLayerRef) -> window::SurfaceInner {
+    unsafe fn create_from_layer(&self, layer: &CoreAnimationLayerRef) -> Surface {
         let class = class!(CAMetalLayer);
         let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
         assert_eq!(proper_kind, YES);
-        window::SurfaceInner::new(None, layer.to_owned())
+        Surface::new(None, layer.to_owned())
     }
 
     pub fn create_surface_from_layer(&self, layer: &CoreAnimationLayerRef) -> Surface {
-        unsafe { self.create_from_layer(layer) }.into_surface()
+        unsafe { self.create_from_layer(layer) }
     }
 
     #[cfg(target_os = "macos")]
     pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
-        unsafe { self.create_from_nsview(nsview) }.into_surface()
+        unsafe { self.create_from_nsview(nsview) }
     }
 
     #[cfg(target_os = "ios")]
     pub fn create_surface_from_uiview(&self, uiview: *mut c_void) -> Surface {
-        unsafe { self.create_from_uiview(uiview) }.into_surface()
+        unsafe { self.create_from_uiview(uiview) }
     }
 }
 
@@ -457,7 +457,7 @@ impl hal::Backend for Backend {
     type Instance = Instance;
     type PhysicalDevice = device::PhysicalDevice;
     type Device = device::Device;
-    type Surface = window::Surface;
+    type Surface = Surface;
 
     type QueueFamily = QueueFamily;
     type CommandQueue = command::CommandQueue;

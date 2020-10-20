@@ -66,6 +66,8 @@ pub struct Swapchain {
     pub(crate) context: Starc<glutin::RawContext<glutin::PossiblyCurrent>>,
     // Extent because the window lies
     pub(crate) extent: window::Extent2D,
+    pub(crate) channel: f::ChannelType,
+    pub(crate) raw_format: native::TextureFormat,
     ///
     pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
 }
@@ -231,7 +233,7 @@ impl Surface {
 }
 
 impl window::PresentationSurface<B> for Surface {
-    type SwapchainImage = native::ImageView;
+    type SwapchainImage = native::SwapchainImage;
 
     unsafe fn configure_swapchain(
         &mut self,
@@ -270,6 +272,8 @@ impl window::PresentationSurface<B> for Surface {
         self.swapchain = Some(Swapchain {
             context: self.context.clone(),
             extent: config.extent,
+            channel: config.format.base_format().1,
+            raw_format: desc.tex_external,
             fbos: iter::once(fbo).collect(),
         });
 
@@ -292,8 +296,10 @@ impl window::PresentationSurface<B> for Surface {
         &mut self,
         _timeout_ns: u64,
     ) -> Result<(Self::SwapchainImage, Option<window::Suboptimal>), window::AcquireError> {
-        let image = native::ImageView::Renderbuffer(self.renderbuffer.unwrap());
-        Ok((image, None))
+        let sc = self.swapchain.as_ref().unwrap();
+        let swapchain_image =
+            native::SwapchainImage::new(self.renderbuffer.unwrap(), sc.raw_format, sc.channel);
+        Ok((swapchain_image, None))
     }
 }
 

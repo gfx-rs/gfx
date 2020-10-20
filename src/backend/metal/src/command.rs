@@ -2410,7 +2410,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn present(
         &mut self,
         _surface: &mut window::Surface,
-        image: window::SurfaceImage,
+        image: window::SwapchainImage,
         wait_semaphore: Option<&native::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError> {
         self.wait(wait_semaphore);

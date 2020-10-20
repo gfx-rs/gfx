@@ -1092,6 +1092,7 @@ impl Device {
             rtv_heap,
             resources,
             waitable,
+            usage: config.image_usage,
         }
     }
 }
@@ -2579,8 +2580,8 @@ impl d::Device<B> for Device {
 
         *image = r::Image::Bound(r::ImageBound {
             resource: resource,
-            place: r::Place {
-                heap: memory.heap.clone(),
+            place: r::Place::Heap {
+                raw: memory.heap.clone(),
                 offset,
             },
             surface_type: image_unbound.format.base_format().0,
@@ -2590,8 +2591,6 @@ impl d::Device<B> for Device {
             default_view_format: image_unbound.view_format,
             view_caps: image_unbound.view_caps,
             descriptor: image_unbound.desc,
-            bytes_per_block: image_unbound.bytes_per_block,
-            block_dim: image_unbound.block_dim,
             clear_cv: if aspects.contains(Aspects::COLOR) && can_clear_color {
                 let format = image_unbound.view_format.unwrap();
                 (0..num_layers)

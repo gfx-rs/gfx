@@ -392,7 +392,14 @@ impl w::Surface<Backend> for Surface {
 #[derive(Debug)]
 pub struct SurfaceImage {
     pub(crate) index: w::SwapImageIndex,
+    image: native::Image,
     view: native::ImageView,
+}
+
+impl Borrow<native::Image> for SurfaceImage {
+    fn borrow(&self) -> &native::Image {
+        &self.image
+    }
 }
 
 impl Borrow<native::ImageView> for SurfaceImage {
@@ -481,6 +488,12 @@ impl w::PresentationSurface<Backend> for Surface {
                 }
                 let image = Self::SwapchainImage {
                     index,
+                    image: native::Image {
+                        raw: frame.image,
+                        ty: vk::ImageType::TYPE_2D,
+                        flags: vk::ImageCreateFlags::empty(),
+                        extent: ssc.swapchain.extent,
+                    },
                     view: native::ImageView {
                         image: frame.image,
                         view: frame.view,
@@ -519,6 +532,7 @@ pub struct Swapchain {
     pub(crate) raw: vk::SwapchainKHR,
     pub(crate) functor: khr::Swapchain,
     pub(crate) vendor_id: u32,
+    pub(crate) extent: vk::Extent3D,
 }
 
 impl fmt::Debug for Swapchain {

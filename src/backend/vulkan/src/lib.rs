@@ -920,48 +920,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         };
         let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize]
             .iter()
-            .map(|mem| mem.size)
+            .map(|mem| adapter::MemoryHeap {
+                size: mem.size,
+                flags: conv::map_memory_heap_flags(mem.flags),
+            })
             .collect();
         let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize]
             .iter()
             .filter_map(|mem| {
-                use crate::memory::Properties;
-                let mut properties = Properties::empty();
-
-                if mem
-                    .property_flags
-                    .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
-                {
-                    properties |= Properties::DEVICE_LOCAL;
-                }
-                if mem
-                    .property_flags
-                    .contains(vk::MemoryPropertyFlags::HOST_VISIBLE)
-                {
-                    properties |= Properties::CPU_VISIBLE;
-                }
-                if mem
-                    .property_flags
-                    .contains(vk::MemoryPropertyFlags::HOST_COHERENT)
-                {
-                    properties |= Properties::COHERENT;
-                }
-                if mem
-                    .property_flags
-                    .contains(vk::MemoryPropertyFlags::HOST_CACHED)
-                {
-                    properties |= Properties::CPU_CACHED;
-                }
-                if mem
-                    .property_flags
-                    .contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)
-                {
-                    properties |= Properties::LAZILY_ALLOCATED;
-                }
-
                 if self.known_memory_flags.contains(mem.property_flags) {
                     Some(adapter::MemoryType {
-                        properties,
+                        properties: conv::map_memory_properties(mem.property_flags),
                         heap_index: mem.heap_index as usize,
                     })
                 } else {

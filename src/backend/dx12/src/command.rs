@@ -860,13 +860,15 @@ impl CommandBuffer {
         } else {
             r.buffer_height
         };
+        let desc = image.surface_type.desc();
+        let bytes_per_block = desc.bits as u32 / 8;
         let image_extent_aligned = image::Extent {
-            width: up_align(r.image_extent.width, image.block_dim.0 as _),
-            height: up_align(r.image_extent.height, image.block_dim.1 as _),
+            width: up_align(r.image_extent.width, desc.dim.0 as _),
+            height: up_align(r.image_extent.height, desc.dim.1 as _),
             depth: r.image_extent.depth,
         };
-        let row_pitch = div(buffer_width, image.block_dim.0 as _) * image.bytes_per_block as u32;
-        let slice_pitch = div(buffer_height, image.block_dim.1 as _) * row_pitch;
+        let row_pitch = div(buffer_width, desc.dim.0 as _) * bytes_per_block;
+        let slice_pitch = div(buffer_height, desc.dim.1 as _) * row_pitch;
         let is_pitch_aligned = row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0;
 
         for layer in r.image_layers.layers.clone() {
@@ -889,13 +891,11 @@ impl CommandBuffer {
                 });
             } else if is_pitch_aligned {
                 // buffer offset is not aligned
-                let row_pitch_texels =
-                    row_pitch / image.bytes_per_block as u32 * image.block_dim.0 as u32;
+                let row_pitch_texels = row_pitch / bytes_per_block * desc.dim.0 as u32;
                 let gap = (layer_offset - aligned_offset) as i32;
                 let buf_offset = image::Offset {
-                    x: (gap % row_pitch as i32) / image.bytes_per_block as i32
-                        * image.block_dim.0 as i32,
-                    y: (gap % slice_pitch as i32) / row_pitch as i32 * image.block_dim.1 as i32,
+                    x: (gap % row_pitch as i32) / bytes_per_block as i32 * desc.dim.0 as i32,
+                    y: (gap % slice_pitch as i32) / row_pitch as i32 * desc.dim.1 as i32,
                     z: gap / slice_pitch as i32,
                 };
                 let footprint = image::Extent {
@@ -939,7 +939,7 @@ impl CommandBuffer {
                         footprint_offset: aligned_offset,
                         footprint: image::Extent {
                             width: image_extent_aligned.width - half,
-                            height: footprint.height + image.block_dim.1 as u32,
+                            height: footprint.height + desc.dim.1 as u32,
                             depth: footprint.depth,
                         },
                         row_pitch,
@@ -950,7 +950,7 @@ impl CommandBuffer {
                         },
                         buf_offset: image::Offset {
                             x: 0,
-                            y: buf_offset.y + image.block_dim.1 as i32,
+                            y: buf_offset.y + desc.dim.1 as i32,
                             z: buf_offset.z,
                         },
                         copy_extent: image::Extent {
@@ -962,7 +962,7 @@ impl CommandBuffer {
             } else {
                 // worst case: row by row copy
                 for z in 0..r.image_extent.depth {
-                    for y in 0..image_extent_aligned.height / image.block_dim.1 as u32 {
+                    for y in 0..image_extent_aligned.height / desc.dim.1 as u32 {
                         // an image row starts non-aligned
                         let row_offset = layer_offset
                             + z as u64 * slice_pitch as u64
@@ -972,16 +972,16 @@ impl CommandBuffer {
                         let next_aligned_offset =
                             aligned_offset + d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64;
                         let cut_row_texels = (next_aligned_offset - row_offset)
-                            / image.bytes_per_block as u64
-                            * image.block_dim.0 as u64;
+                            / bytes_per_block as u64
+                            * desc.dim.0 as u64;
                         let cut_width =
                             cmp::min(image_extent_aligned.width, cut_row_texels as image::Size);
                         let gap_texels = (row_offset - aligned_offset) as image::Size
-                            / image.bytes_per_block as image::Size
-                            * image.block_dim.0 as image::Size;
+                            / bytes_per_block as image::Size
+                            * desc.dim.0 as image::Size;
                         // this is a conservative row pitch that should be compatible with both copies
                         let max_unaligned_pitch =
-                            (r.image_extent.width + gap_texels) * image.bytes_per_block as u32;
+                            (r.image_extent.width + gap_texels) * bytes_per_block;
                         let row_pitch = (max_unaligned_pitch
                             | (d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1))
                             + 1;
@@ -990,14 +990,14 @@ impl CommandBuffer {
                             footprint_offset: aligned_offset,
                             footprint: image::Extent {
                                 width: cut_width + gap_texels,
-                                height: image.block_dim.1 as _,
+                                height: desc.dim.1 as _,
                                 depth: 1,
                             },
                             row_pitch,
                             img_subresource,
                             img_offset: image::Offset {
                                 x: r.image_offset.x,
-                                y: r.image_offset.y + image.block_dim.1 as i32 * y as i32,
+                                y: r.image_offset.y + desc.dim.1 as i32 * y as i32,
                                 z: r.image_offset.z + z as i32,
                             },
                             buf_offset: image::Offset {
@@ -1007,7 +1007,7 @@ impl CommandBuffer {
                             },
                             copy_extent: image::Extent {
                                 width: cut_width,
-                                height: image.block_dim.1 as _,
+                                height: desc.dim.1 as _,
                                 depth: 1,
                             },
                         });
@@ -1022,20 +1022,20 @@ impl CommandBuffer {
                             footprint_offset: next_aligned_offset,
                             footprint: image::Extent {
                                 width: leftover,
-                                height: image.block_dim.1 as _,
+                                height: desc.dim.1 as _,
                                 depth: 1,
                             },
                             row_pitch,
                             img_subresource,
                             img_offset: image::Offset {
                                 x: r.image_offset.x + cut_width as i32,
-                                y: r.image_offset.y + y as i32 * image.block_dim.1 as i32,
+                                y: r.image_offset.y + y as i32 * desc.dim.1 as i32,
                                 z: r.image_offset.z + z as i32,
                             },
                             buf_offset: image::Offset::ZERO,
                             copy_extent: image::Extent {
                                 width: leftover,
-                                height: image.block_dim.1 as _,
+                                height: desc.dim.1 as _,
                                 depth: 1,
                             },
                         });
@@ -2255,11 +2255,18 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 Format: dst.descriptor.Format,
                 ..src.descriptor.clone()
             };
+            let (heap_ptr, heap_offset) = match src.place {
+                r::Place::Heap { raw, offset } => (raw.as_mut_ptr(), offset),
+                r::Place::Swapchain {} => {
+                    error!("Unable to copy swapchain image, skipping");
+                    return;
+                }
+            };
             assert_eq!(
                 winerror::S_OK,
                 device.CreatePlacedResource(
-                    src.place.heap.as_mut_ptr(),
-                    src.place.offset,
+                    heap_ptr,
+                    heap_offset,
                     &desc,
                     d3d12::D3D12_RESOURCE_STATE_COMMON,
                     ptr::null(),
