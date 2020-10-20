@@ -1775,7 +1775,7 @@ impl device::Device<Backend> for Device {
 
         for binding in bindings.iter() {
             let content = DescriptorContent::from(binding.ty);
-            total.add_content(content, binding.stage_flags);
+            total.add_content_many(content, binding.stage_flags, binding.count as _);
         }
 
         bindings.sort_by_key(|a| a.binding);
@@ -1797,11 +1797,14 @@ impl device::Device<Backend> for Device {
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
         for write in write_iter {
+            // Get baseline mapping
             let mut mapping = write
                 .set
                 .layout
                 .pool_mapping
                 .map_register(|mapping| mapping.offset);
+
+            // Iterate over layout bindings until the first binding is found.
             let binding_start = write
                 .set
                 .layout
@@ -1809,15 +1812,32 @@ impl device::Device<Backend> for Device {
                 .iter()
                 .position(|binding| binding.binding == write.binding)
                 .unwrap();
+
+            // If we've skipped layout bindings, we need to add them to get the correct binding offset
             for binding in &write.set.layout.bindings[..binding_start] {
                 let content = DescriptorContent::from(binding.ty);
-                mapping.add_content(content, binding.stage_flags);
+                mapping.add_content_many(content, binding.stage_flags, binding.count as _);
             }
 
-            for (binding, descriptor) in write.set.layout.bindings[binding_start..]
-                .iter()
-                .zip(write.descriptors)
-            {
+            // We start at the given binding index and array index
+            let mut binding_index = binding_start;
+            let mut array_index = write.array_offset;
+
+            // If we're skipping array indices in the current binding, we need to add them to get the correct binding offset
+            if array_index > 0 {
+                let binding: &pso::DescriptorSetLayoutBinding = &write.set.layout.bindings[binding_index];
+                let content = DescriptorContent::from(binding.ty);
+                mapping.add_content_many(content, binding.stage_flags, array_index as _);
+            }
+
+            // Iterate over the descriptors, figuring out the corresponding binding, and adding
+            // it to the set of bindings.
+            //
+            // When we hit the end of an array of descriptors and there are still descriptors left
+            // over, we will spill into writing the next binding.
+            for descriptor in write.descriptors {
+                let binding: &pso::DescriptorSetLayoutBinding = &write.set.layout.bindings[binding_index];
+
                 let handles = match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref _sub) => RegisterData {
                         c: match buffer.internal.disjoint_cb {
@@ -1889,7 +1909,14 @@ impl device::Device<Backend> for Device {
                         .assign_stages(&offsets, binding.stage_flags, handles.s);
                 };
 
-                mapping.add_content(content, binding.stage_flags);
+                mapping.add_content_many(content, binding.stage_flags, 1);
+
+                array_index += 1;
+                if array_index >= binding.count {
+                    // We've run out of array to write to, we should overflow to the next binding.
+                    array_index = 0;
+                    binding_index += 1;
+                }
             }
         }
     }

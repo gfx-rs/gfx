@@ -3307,15 +3307,15 @@ impl<T> MultiStageData<RegisterData<T>> {
 }
 
 impl MultiStageData<RegisterData<DescriptorIndex>> {
-    fn add_content(&mut self, content: DescriptorContent, stages: pso::ShaderStageFlags) {
+    fn add_content_many(&mut self, content: DescriptorContent, stages: pso::ShaderStageFlags, count: DescriptorIndex) {
         if stages.contains(pso::ShaderStageFlags::VERTEX) {
-            self.vs.add_content(content);
+            self.vs.add_content_many(content, count);
         }
         if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-            self.ps.add_content(content);
+            self.ps.add_content_many(content, count);
         }
         if stages.contains(pso::ShaderStageFlags::COMPUTE) {
-            self.cs.add_content(content);
+            self.cs.add_content_many(content, count);
         }
     }
 
@@ -3443,7 +3443,7 @@ impl DescriptorSetInfo {
             if binding.binding == binding_index {
                 return (content, res_offsets.map(|offset| *offset as ResourceIndex));
             }
-            res_offsets.add_content(content);
+            res_offsets.add_content_many(content, 1);
         }
         panic!("Unable to find binding {:?}", binding_index);
     }
