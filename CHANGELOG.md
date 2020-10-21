@@ -1,5 +1,9 @@
 # Change Log
 
+### backend-dx11-unreleased
+  - enable alpha to coverage
+  - support debug names and markers
+
 ### backend-dx11-0.6.6 (20-10-2020)
   - fix read only depth stencil
   - support dynamic uniform buffer descriptors
