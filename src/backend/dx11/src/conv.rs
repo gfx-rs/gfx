@@ -4,8 +4,8 @@ use hal::{
     image::{Filter, WrapMode},
     pso::{
         BlendDesc, BlendOp, ColorBlendDesc, Comparison, DepthBias, DepthStencilDesc, Face, Factor,
-        FrontFace, InputAssemblerDesc, PolygonMode, Rasterizer, Rect, Sided, State, StencilFace,
-        StencilOp, StencilValue, Viewport,
+        FrontFace, InputAssemblerDesc, Multisampling, PolygonMode, Rasterizer, Rect, Sided, State, StencilFace,
+        StencilOp, StencilValue, Viewport
     },
     IndexType,
 };
@@ -95,8 +95,8 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
         D16Unorm => DXGI_FORMAT_D16_UNORM,
         D32Sfloat => DXGI_FORMAT_D32_FLOAT,
         D32SfloatS8Uint => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
-        Bc1RgbUnorm => DXGI_FORMAT_BC1_UNORM,
-        Bc1RgbSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
+        Bc1RgbUnorm | Bc1RgbaUnorm => DXGI_FORMAT_BC1_UNORM,
+        Bc1RgbSrgb | Bc1RgbaSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
         Bc2Unorm => DXGI_FORMAT_BC2_UNORM,
         Bc2Srgb => DXGI_FORMAT_BC2_UNORM_SRGB,
         Bc3Unorm => DXGI_FORMAT_BC3_UNORM,
@@ -510,7 +510,7 @@ fn map_cull_mode(mode: Face) -> D3D11_CULL_MODE {
     }
 }
 
-pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
+pub(crate) fn map_rasterizer_desc(desc: &Rasterizer, multisampling_desc: &Option<Multisampling>) -> D3D11_RASTERIZER_DESC {
     let bias = match desc.depth_bias {
         //TODO: support dynamic depth bias
         Some(State::Static(db)) => db,
@@ -519,6 +519,7 @@ pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
     if let State::Static(w) = desc.line_width {
         super::validate_line_width(w);
     }
+    let multisampled = multisampling_desc.is_some();
     D3D11_RASTERIZER_DESC {
         FillMode: map_fill_mode(desc.polygon_mode),
         CullMode: map_cull_mode(desc.cull_face),
@@ -532,10 +533,8 @@ pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
         DepthClipEnable: !desc.depth_clamping as _,
         // TODO:
         ScissorEnable: TRUE,
-        // TODO: msaa
-        MultisampleEnable: FALSE,
-        // TODO: line aa?
-        AntialiasedLineEnable: FALSE,
+        MultisampleEnable: multisampled as _,
+        AntialiasedLineEnable: multisampled as _,
         // TODO: conservative raster in >=11.x
     }
 }
@@ -691,7 +690,7 @@ fn map_stencil_side(side: &StencilFace) -> D3D11_DEPTH_STENCILOP_DESC {
 
 pub(crate) fn map_depth_stencil_desc(
     desc: &DepthStencilDesc,
-) -> (D3D11_DEPTH_STENCIL_DESC, State<StencilValue>) {
+) -> (D3D11_DEPTH_STENCIL_DESC, State<StencilValue>, bool) {
     let (depth_on, depth_write, depth_func) = match desc.depth {
         Some(ref depth) => (TRUE, depth.write, map_comparison(depth.fun)),
         None => unsafe { mem::zeroed() },
@@ -730,6 +729,15 @@ pub(crate) fn map_depth_stencil_desc(
         None => unsafe { mem::zeroed() },
     };
 
+    let stencil_read_only = write_mask == 0 ||
+        (front.StencilDepthFailOp == D3D11_STENCIL_OP_KEEP
+            && front.StencilFailOp == D3D11_STENCIL_OP_KEEP
+            && front.StencilPassOp == D3D11_STENCIL_OP_KEEP
+            && back.StencilDepthFailOp == D3D11_STENCIL_OP_KEEP
+            && back.StencilFailOp == D3D11_STENCIL_OP_KEEP
+            && back.StencilPassOp == D3D11_STENCIL_OP_KEEP);
+    let read_only = !depth_write && stencil_read_only;
+
     (
         D3D11_DEPTH_STENCIL_DESC {
             DepthEnable: depth_on,
@@ -746,6 +754,7 @@ pub(crate) fn map_depth_stencil_desc(
             BackFace: back,
         },
         stencil_ref,
+        read_only
     )
 }
 

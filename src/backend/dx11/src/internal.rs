@@ -8,6 +8,7 @@ use winapi::{
         winerror,
     },
     um::{d3d11, d3dcommon},
+    shared::minwindef::UINT
 };
 
 use wio::com::ComPtr;
@@ -144,6 +145,8 @@ pub struct Internal {
     // public buffer that is used as intermediate storage for some operations (memory invalidation)
     pub working_buffer: ComPtr<d3d11::ID3D11Buffer>,
     pub working_buffer_size: u64,
+
+    pub constant_buffer_count_buffer: [UINT; d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _],
 }
 
 fn compile_blob(src: &[u8], entrypoint: &str, stage: ShaderStage) -> ComPtr<d3dcommon::ID3DBlob> {
@@ -615,6 +618,8 @@ impl Internal {
             }),
             working_buffer,
             working_buffer_size: working_buffer_size as _,
+
+            constant_buffer_count_buffer: [4096_u32; d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _],
         }
     }
 
@@ -854,34 +859,40 @@ impl Internal {
             );
 
             for copy in regions {
-                let info = copy.borrow();
+                let info: &command::BufferImageCopy = copy.borrow();
 
                 let bytes_per_texel = format_desc.bits as u32 / 8;
+
+                let bounds = d3d11::D3D11_BOX {
+                    left: info.image_offset.x as _,
+                    top: info.image_offset.y as _,
+                    front: info.image_offset.z as _,
+                    right: info.image_offset.x as u32 + info.image_extent.width,
+                    bottom: info.image_offset.y as u32 + info.image_extent.height,
+                    back: info.image_offset.z as u32 + info.image_extent.depth,
+                };
 
                 let row_pitch = bytes_per_texel * info.image_extent.width / 4;
                 let depth_pitch = row_pitch * info.image_extent.height / 4;
 
-                unsafe {
-                    context.UpdateSubresource(
-                        dst.internal.raw,
-                        dst.calc_subresource(
-                            info.image_layers.level as _,
-                            info.image_layers.layers.start as _,
-                        ),
-                        &d3d11::D3D11_BOX {
-                            left: info.image_offset.x as _,
-                            top: info.image_offset.y as _,
-                            front: info.image_offset.z as _,
-                            right: info.image_offset.x as u32 + info.image_extent.width,
-                            bottom: info.image_offset.y as u32 + info.image_extent.height,
-                            back: info.image_offset.z as u32 + info.image_extent.depth,
-                        },
-                        src.memory_ptr
-                            .offset(src.bound_range.start as isize + info.buffer_offset as isize)
-                            as _,
-                        row_pitch,
-                        depth_pitch,
-                    );
+                for layer in info.image_layers.layers.clone() {
+                    let layer_offset = layer - info.image_layers.layers.start;
+
+                    unsafe {
+                        context.UpdateSubresource(
+                            dst.internal.raw,
+                            dst.calc_subresource(
+                                info.image_layers.level as _,
+                                layer as _,
+                            ),
+                            &bounds,
+                            src.memory_ptr
+                                .offset(src.bound_range.start as isize + info.buffer_offset as isize + depth_pitch as isize * layer_offset as isize)
+                                as _,
+                            row_pitch,
+                            depth_pitch,
+                        );
+                    }
                 }
             }
         } else {

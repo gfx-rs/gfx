@@ -35,6 +35,13 @@ struct InputLayout {
     vertex_strides: Vec<u32>,
 }
 
+#[derive(Clone)]
+pub struct DepthStencilState {
+    pub raw: ComPtr<d3d11::ID3D11DepthStencilState>,
+    pub stencil_ref: pso::State<pso::StencilValue>,
+    pub read_only: bool,
+}
+
 pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
@@ -70,11 +77,11 @@ impl Device {
         memory_properties: MemoryProperties,
     ) -> Self {
         Device {
-            raw: device.clone(),
+            internal: Arc::new(internal::Internal::new(&device)),
+            raw: device,
             context,
             features,
             memory_properties,
-            internal: Arc::new(internal::Internal::new(&device)),
         }
     }
 
@@ -85,9 +92,10 @@ impl Device {
     fn create_rasterizer_state(
         &self,
         rasterizer_desc: &pso::Rasterizer,
+        multisampling_desc: &Option<pso::Multisampling>
     ) -> Result<ComPtr<d3d11::ID3D11RasterizerState>, pso::CreationError> {
         let mut rasterizer = ptr::null_mut();
-        let desc = conv::map_rasterizer_desc(rasterizer_desc);
+        let desc = conv::map_rasterizer_desc(rasterizer_desc, multisampling_desc);
 
         let hr = unsafe {
             self.raw
@@ -124,14 +132,11 @@ impl Device {
         &self,
         depth_desc: &pso::DepthStencilDesc,
     ) -> Result<
-        (
-            ComPtr<d3d11::ID3D11DepthStencilState>,
-            pso::State<pso::StencilValue>,
-        ),
+        DepthStencilState,
         pso::CreationError,
     > {
         let mut depth = ptr::null_mut();
-        let (desc, stencil_ref) = conv::map_depth_stencil_desc(depth_desc);
+        let (desc, stencil_ref, read_only) = conv::map_depth_stencil_desc(depth_desc);
 
         let hr = unsafe {
             self.raw
@@ -139,7 +144,11 @@ impl Device {
         };
 
         if winerror::SUCCEEDED(hr) {
-            Ok((unsafe { ComPtr::from_raw(depth) }, stencil_ref))
+            Ok(DepthStencilState {
+                raw: unsafe{ ComPtr::from_raw(depth) },
+                stencil_ref,
+                read_only
+            })
         } else {
             Err(pso::CreationError::Other)
         }
@@ -580,15 +589,36 @@ impl Device {
                 }
             }
             image::ViewKind::D2 => {
-                desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
-                *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV { MipSlice }
+                match info.kind {
+                    image::Kind::D2(_, _, _, 1) => {
+                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
+                        *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV { MipSlice }
+                    }
+                    image::Kind::D2(_, _, _, _) => {
+                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMS;
+                        *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_RTV { UnusedField_NothingToDefine: 0 }
+                    }
+                    _ => unreachable!(),
+                }
             }
             image::ViewKind::D2Array => {
-                desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
-                *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_RTV {
-                    MipSlice,
-                    FirstArraySlice,
-                    ArraySize,
+                match info.kind {
+                    image::Kind::D2(_, _, _, 1) => {
+                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+                        *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_RTV {
+                            MipSlice,
+                            FirstArraySlice,
+                            ArraySize,
+                        }
+                    }
+                    image::Kind::D2(_, _, _, _) => {
+                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                        *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_RTV {
+                            FirstArraySlice,
+                            ArraySize,
+                        }
+                    }
+                    _ => unreachable!(),
                 }
             }
             image::ViewKind::D3 => {
@@ -621,6 +651,7 @@ impl Device {
     fn view_image_as_depth_stencil(
         &self,
         info: &ViewInfo,
+        read_only_stencil: Option<bool>,
     ) -> Result<ComPtr<d3d11::ID3D11DepthStencilView>, image::ViewCreationError> {
         #![allow(non_snake_case)]
 
@@ -632,6 +663,13 @@ impl Device {
 
         let mut desc: d3d11::D3D11_DEPTH_STENCIL_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
+
+        if let Some(stencil) = read_only_stencil {
+            desc.Flags = match stencil {
+                true => d3d11::D3D11_DSV_READ_ONLY_DEPTH | d3d11::D3D11_DSV_READ_ONLY_STENCIL,
+                false => d3d11::D3D11_DSV_READ_ONLY_DEPTH,
+            }
+        }
 
         match info.view_kind {
             image::ViewKind::D2 => {
@@ -928,7 +966,7 @@ impl device::Device<Backend> for Device {
             None
         };
 
-        let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
+        let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer, &desc.multisampling)?;
         let blend_state = self.create_blend_state(&desc.blender)?;
         let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
 
@@ -1401,7 +1439,7 @@ impl device::Device<Backend> for Device {
 
                 image::ViewKind::D1Array
             }
-            image::Kind::D2(width, height, layers, _) => {
+            image::Kind::D2(width, height, layers, samples) => {
                 let desc = d3d11::D3D11_TEXTURE2D_DESC {
                     Width: width,
                     Height: height,
@@ -1409,7 +1447,7 @@ impl device::Device<Backend> for Device {
                     ArraySize: layers as _,
                     Format: decomposed.typeless,
                     SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                        Count: 1,
+                        Count: samples as _,
                         Quality: 0,
                     },
                     Usage: usage,
@@ -1567,7 +1605,7 @@ impl device::Device<Backend> for Device {
                     };
 
                     depth_stencil_views.push(
-                        self.view_image_as_depth_stencil(&view)
+                        self.view_image_as_depth_stencil(&view, None)
                             .map_err(|_| device::BindError::WrongMemory)?,
                     );
                 }
@@ -1624,6 +1662,7 @@ impl device::Device<Backend> for Device {
         };
 
         Ok(ImageView {
+            subresource: d3d11::D3D11CalcSubresource(0, range.layer_start as _, range.level_start as _),
             format,
             srv_handle: if image.usage.intersects(image::Usage::SAMPLED) {
                 Some(self.view_image_as_shader_resource(&srv_info)?)
@@ -1641,7 +1680,12 @@ impl device::Device<Backend> for Device {
                 None
             },
             dsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(&info)?)
+                Some(self.view_image_as_depth_stencil(&info, None)?)
+            } else {
+                None
+            },
+            rodsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
+                Some(self.view_image_as_depth_stencil(&info, Some(image.format.is_stencil()))?)
             } else {
                 None
             },
@@ -1731,7 +1775,7 @@ impl device::Device<Backend> for Device {
 
         for binding in bindings.iter() {
             let content = DescriptorContent::from(binding.ty);
-            total.add_content(content, binding.stage_flags);
+            total.add_content_many(content, binding.stage_flags, binding.count as _);
         }
 
         bindings.sort_by_key(|a| a.binding);
@@ -1753,11 +1797,14 @@ impl device::Device<Backend> for Device {
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
         for write in write_iter {
+            // Get baseline mapping
             let mut mapping = write
                 .set
                 .layout
                 .pool_mapping
                 .map_register(|mapping| mapping.offset);
+
+            // Iterate over layout bindings until the first binding is found.
             let binding_start = write
                 .set
                 .layout
@@ -1765,15 +1812,32 @@ impl device::Device<Backend> for Device {
                 .iter()
                 .position(|binding| binding.binding == write.binding)
                 .unwrap();
+
+            // If we've skipped layout bindings, we need to add them to get the correct binding offset
             for binding in &write.set.layout.bindings[..binding_start] {
                 let content = DescriptorContent::from(binding.ty);
-                mapping.add_content(content, binding.stage_flags);
+                mapping.add_content_many(content, binding.stage_flags, binding.count as _);
             }
 
-            for (binding, descriptor) in write.set.layout.bindings[binding_start..]
-                .iter()
-                .zip(write.descriptors)
-            {
+            // We start at the given binding index and array index
+            let mut binding_index = binding_start;
+            let mut array_index = write.array_offset;
+
+            // If we're skipping array indices in the current binding, we need to add them to get the correct binding offset
+            if array_index > 0 {
+                let binding: &pso::DescriptorSetLayoutBinding = &write.set.layout.bindings[binding_index];
+                let content = DescriptorContent::from(binding.ty);
+                mapping.add_content_many(content, binding.stage_flags, array_index as _);
+            }
+
+            // Iterate over the descriptors, figuring out the corresponding binding, and adding
+            // it to the set of bindings.
+            //
+            // When we hit the end of an array of descriptors and there are still descriptors left
+            // over, we will spill into writing the next binding.
+            for descriptor in write.descriptors {
+                let binding: &pso::DescriptorSetLayoutBinding = &write.set.layout.bindings[binding_index];
+
                 let handles = match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref _sub) => RegisterData {
                         c: match buffer.internal.disjoint_cb {
@@ -1845,7 +1909,14 @@ impl device::Device<Backend> for Device {
                         .assign_stages(&offsets, binding.stage_flags, handles.s);
                 };
 
-                mapping.add_content(content, binding.stage_flags);
+                mapping.add_content_many(content, binding.stage_flags, 1);
+
+                array_index += 1;
+                if array_index >= binding.count {
+                    // We've run out of array to write to, we should overflow to the next binding.
+                    array_index = 0;
+                    binding_index += 1;
+                }
             }
         }
     }
