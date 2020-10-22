@@ -76,7 +76,6 @@ macro_rules! debug_marker {
 }
 
 mod conv;
-#[cfg(debug_assertions)]
 mod debug;
 mod device;
 mod dxgi;
@@ -642,7 +641,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             let create_flags = 0;
 
             // TODO: request debug device only on debug config?
-            let mut device = ptr::null_mut();
+            let mut device: *mut d3d11::ID3D11Device = ptr::null_mut();
             let mut cxt = ptr::null_mut();
             let hr = func(
                 self.adapter.as_raw() as *mut _,
@@ -669,8 +668,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             (ComPtr::from_raw(device), ComPtr::from_raw(cxt))
         };
 
+        let device1 = device.cast::<d3d11_1::ID3D11Device1>().ok();
+
         let device = device::Device::new(
             device,
+            device1,
             cxt,
             requested_features,
             self.memory_properties.clone(),
@@ -1621,7 +1623,7 @@ fn generate_graphics_dynamic_constant_buffer_offsets<'a>(
         }
     }
 
-    if exists_dynamic_constant_buffer && context1_some {
+    if exists_dynamic_constant_buffer && !context1_some {
         warn!("D3D11.1 runtime required for dynamic offsets into constant buffers. Offsets will be ignored.");
     }
 
@@ -1678,7 +1680,7 @@ fn generate_compute_dynamic_constant_buffer_offsets<'a>(
         }
     }
 
-    if exists_dynamic_constant_buffer && context1_some {
+    if exists_dynamic_constant_buffer && !context1_some {
         warn!("D3D11.1 runtime required for dynamic offsets into constant buffers. Offsets will be ignored.");
     }
 
@@ -1719,16 +1721,30 @@ unsafe impl Sync for CommandBuffer {}
 
 impl CommandBuffer {
     fn create_deferred(
-        device: ComPtr<d3d11::ID3D11Device>,
+        device: &d3d11::ID3D11Device,
+        device1: Option<&d3d11_1::ID3D11Device1>,
         internal: Arc<internal::Internal>,
     ) -> Self {
-        let mut context: *mut d3d11::ID3D11DeviceContext = ptr::null_mut();
-        let hr =
-            unsafe { device.CreateDeferredContext(0, &mut context as *mut *mut _ as *mut *mut _) };
-        assert_eq!(hr, winerror::S_OK);
+        let (context, context1) = if let Some(device1) = device1 {
+            let mut context1: *mut d3d11_1::ID3D11DeviceContext1 = ptr::null_mut();
+            let hr =
+                unsafe { device1.CreateDeferredContext1(0, &mut context1 as *mut *mut _) };
+            assert_eq!(hr, winerror::S_OK);
 
-        let context = unsafe { ComPtr::from_raw(context) };
-        let context1 = context.cast::<d3d11_1::ID3D11DeviceContext1>().ok();
+            let context1 = unsafe { ComPtr::from_raw(context1) };
+            let context = context1.cast::<d3d11::ID3D11DeviceContext>().unwrap();
+
+            (context, Some(context1))
+        } else {
+            let mut context: *mut d3d11::ID3D11DeviceContext = ptr::null_mut();
+            let hr =
+                unsafe { device.CreateDeferredContext(0, &mut context as *mut *mut _) };
+            assert_eq!(hr, winerror::S_OK);
+
+            let context = unsafe { ComPtr::from_raw(context) };
+
+            (context, None)
+        };
 
         CommandBuffer {
             internal,
@@ -2974,6 +2990,7 @@ impl Memory {
 #[derive(Debug)]
 pub struct CommandPool {
     device: ComPtr<d3d11::ID3D11Device>,
+    device1: Option<ComPtr<d3d11_1::ID3D11Device1>>,
     internal: Arc<internal::Internal>,
 }
 
@@ -2986,7 +3003,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
     }
 
     unsafe fn allocate_one(&mut self, _level: command::Level) -> CommandBuffer {
-        CommandBuffer::create_deferred(self.device.clone(), Arc::clone(&self.internal))
+        CommandBuffer::create_deferred(&self.device, self.device1.as_deref(), Arc::clone(&self.internal))
     }
 
     unsafe fn free<I>(&mut self, _cbufs: I)
