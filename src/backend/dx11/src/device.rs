@@ -22,6 +22,7 @@ use crate::{
     InternalBuffer, InternalImage, Memory, MultiStageData, PipelineLayout, QueryPool, RawFence,
     RegisterAccumulator, RegisterData, RenderPass, ResourceIndex, Sampler, Semaphore, ShaderModule,
     SubpassDesc, ViewInfo,
+    debug::{set_debug_name_with_suffix, set_debug_name, verify_debug_ascii},
 };
 
 //TODO: expose coherent type 0x2 when it's properly supported
@@ -112,9 +113,10 @@ impl Device {
     fn create_blend_state(
         &self,
         blend_desc: &pso::BlendDesc,
+        multisampling: &Option<pso::Multisampling>,
     ) -> Result<ComPtr<d3d11::ID3D11BlendState>, pso::CreationError> {
         let mut blend = ptr::null_mut();
-        let desc = conv::map_blend_desc(blend_desc);
+        let desc = conv::map_blend_desc(blend_desc, multisampling);
 
         let hr = unsafe {
             self.raw
@@ -187,7 +189,6 @@ impl Device {
                     Some(buffer_desc) => buffer_desc,
                     None => {
                         // TODO:
-                        // L
                         // error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
                         return Some(Err(pso::CreationError::Other));
                     }
@@ -730,7 +731,6 @@ impl Device {
                 ScanlineOrdering: dxgitype::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
                 Scaling: dxgitype::DXGI_MODE_SCALING_UNSPECIFIED,
             },
-            // TODO: msaa on backbuffer?
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: 1,
                 Quality: 0,
@@ -967,7 +967,7 @@ impl device::Device<Backend> for Device {
         };
 
         let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer, &desc.multisampling)?;
-        let blend_state = self.create_blend_state(&desc.blender)?;
+        let blend_state = self.create_blend_state(&desc.blender, &desc.multisampling)?;
         let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
 
         Ok(GraphicsPipeline {
@@ -1097,6 +1097,7 @@ impl device::Device<Backend> for Device {
                 srv: None,
                 uav: None,
                 usage,
+                debug_name: None,
             },
             bound_range: 0..0,
             is_coherent: false,
@@ -1162,18 +1163,22 @@ impl device::Device<Backend> for Device {
                 },
             };
 
-            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let mut raw: *mut d3d11::ID3D11Buffer = ptr::null_mut();
             let hr = self.raw.CreateBuffer(
                 &desc,
                 initial_data.as_ref().map_or(ptr::null_mut(), |id| id),
-                &mut buffer as *mut *mut _ as *mut *mut _,
+                &mut raw as *mut *mut _ as *mut *mut _,
             );
 
             if !winerror::SUCCEEDED(hr) {
                 return Err(device::BindError::WrongMemory);
             }
 
-            ComPtr::from_raw(buffer)
+            if let Some(ref mut name) = buffer.internal.debug_name {
+                set_debug_name(&*raw, name);
+            }
+
+            ComPtr::from_raw(raw)
         };
 
         let disjoint_cb = if buffer.internal.disjoint_cb.is_some() {
@@ -1186,18 +1191,22 @@ impl device::Device<Backend> for Device {
                 StructureByteStride: 0,
             };
 
-            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let mut disjoint_raw: *mut d3d11::ID3D11Buffer = ptr::null_mut();
             let hr = self.raw.CreateBuffer(
                 &desc,
                 initial_data.as_ref().map_or(ptr::null_mut(), |id| id),
-                &mut buffer as *mut *mut _ as *mut *mut _,
+                &mut disjoint_raw as *mut *mut _ as *mut *mut _,
             );
 
             if !winerror::SUCCEEDED(hr) {
                 return Err(device::BindError::WrongMemory);
             }
 
-            Some(buffer)
+            if let Some(ref mut name) = buffer.internal.debug_name {
+                set_debug_name_with_suffix(&*disjoint_raw, name, " -- Constant Buffer");
+            }
+
+            Some(disjoint_raw)
         } else {
             None
         };
@@ -1212,7 +1221,7 @@ impl device::Device<Backend> for Device {
                 Flags: d3d11::D3D11_BUFFEREX_SRV_FLAG_RAW,
             };
 
-            let mut srv = ptr::null_mut();
+            let mut srv: *mut d3d11::ID3D11ShaderResourceView = ptr::null_mut();
             let hr = self.raw.CreateShaderResourceView(
                 raw.as_raw() as *mut _,
                 &desc,
@@ -1223,6 +1232,10 @@ impl device::Device<Backend> for Device {
                 error!("CreateShaderResourceView failed: 0x{:x}", hr);
 
                 return Err(device::BindError::WrongMemory);
+            }
+
+            if let Some(ref mut name) = buffer.internal.debug_name {
+                set_debug_name_with_suffix(&*srv, name, " -- SRV");
             }
 
             Some(srv)
@@ -1240,7 +1253,7 @@ impl device::Device<Backend> for Device {
                 Flags: d3d11::D3D11_BUFFER_UAV_FLAG_RAW,
             };
 
-            let mut uav = ptr::null_mut();
+            let mut uav: *mut d3d11::ID3D11UnorderedAccessView = ptr::null_mut();
             let hr = self.raw.CreateUnorderedAccessView(
                 raw.as_raw() as *mut _,
                 &desc,
@@ -1251,6 +1264,10 @@ impl device::Device<Backend> for Device {
                 error!("CreateUnorderedAccessView failed: 0x{:x}", hr);
 
                 return Err(device::BindError::WrongMemory);
+            }
+
+            if let Some(ref mut name) = buffer.internal.debug_name {
+                set_debug_name_with_suffix(&*uav, name, " -- UAV");
             }
 
             Some(uav)
@@ -1264,6 +1281,7 @@ impl device::Device<Backend> for Device {
             srv,
             uav,
             usage: buffer.internal.usage,
+            debug_name: buffer.internal.debug_name.take()
         };
         let range = offset..offset + buffer.requirements.size;
 
@@ -1339,6 +1357,7 @@ impl device::Device<Backend> for Device {
                 unordered_access_views: Vec::new(),
                 depth_stencil_views: Vec::new(),
                 render_target_views: Vec::new(),
+                debug_name: None,
             },
             decomposed_format: conv::DecomposedDxgiFormat::UNKNOWN,
             kind,
@@ -1519,10 +1538,15 @@ impl device::Device<Backend> for Device {
                     layers: 0..image.kind.num_layers(),
                 };
 
-                unordered_access_views.push(
-                    self.view_image_as_unordered_access(&view)
-                        .map_err(|_| device::BindError::WrongMemory)?,
-                );
+                let uav = self
+                    .view_image_as_unordered_access(&view)
+                    .map_err(|_| device::BindError::WrongMemory)?;
+
+                if let Some(ref name) = image.internal.debug_name {
+                    set_debug_name(&uav, &format!("{} -- UAV Mip {}", name, mip));
+                }
+
+                unordered_access_views.push(uav);
             }
         }
 
@@ -1572,7 +1596,7 @@ impl device::Device<Backend> for Device {
             for layer in 0..image.kind.num_layers() {
                 for mip in 0..image.mip_levels {
                     let view = ViewInfo {
-                        resource: resource,
+                        resource,
                         kind: image.kind,
                         caps: image::ViewCapabilities::empty(),
                         view_kind,
@@ -1581,10 +1605,15 @@ impl device::Device<Backend> for Device {
                         layers: layer..(layer + 1),
                     };
 
-                    render_target_views.push(
-                        self.view_image_as_render_target(&view)
-                            .map_err(|_| device::BindError::WrongMemory)?,
-                    );
+                    let rtv = self
+                        .view_image_as_render_target(&view)
+                        .map_err(|_| device::BindError::WrongMemory)?;
+
+                    if let Some(ref name) = image.internal.debug_name {
+                        set_debug_name(&rtv, &format!("{} -- RTV Mip {} Layer {}", name, mip, layer));
+                    }
+
+                    render_target_views.push(rtv);
                 }
             }
         };
@@ -1595,7 +1624,7 @@ impl device::Device<Backend> for Device {
             for layer in 0..image.kind.num_layers() {
                 for mip in 0..image.mip_levels {
                     let view = ViewInfo {
-                        resource: resource,
+                        resource,
                         kind: image.kind,
                         caps: image::ViewCapabilities::empty(),
                         view_kind,
@@ -1604,11 +1633,26 @@ impl device::Device<Backend> for Device {
                         layers: layer..(layer + 1),
                     };
 
-                    depth_stencil_views.push(
-                        self.view_image_as_depth_stencil(&view, None)
-                            .map_err(|_| device::BindError::WrongMemory)?,
-                    );
+                    let dsv = self
+                            .view_image_as_depth_stencil(&view, None)
+                            .map_err(|_| device::BindError::WrongMemory)?;
+
+                    if let Some(ref name) = image.internal.debug_name {
+                        set_debug_name(&dsv, &format!("{} -- DSV Mip {} Layer {}", name, mip, layer));
+                    }
+
+                    depth_stencil_views.push(dsv);
                 }
+            }
+        }
+
+        if let Some(ref mut name) = image.internal.debug_name {
+            set_debug_name(&*resource, name);
+            if let Some(ref copy_srv) = copy_srv {
+                set_debug_name_with_suffix(copy_srv, name, " -- Copy SRV");
+            }
+            if let Some(ref srv) = srv {
+                set_debug_name_with_suffix(srv, name, " -- SRV");
             }
         }
 
@@ -1619,6 +1663,7 @@ impl device::Device<Backend> for Device {
             unordered_access_views,
             depth_stencil_views,
             render_target_views,
+            debug_name: image.internal.debug_name.take()
         };
 
         image.decomposed_format = decomposed;
@@ -1661,31 +1706,64 @@ impl device::Device<Backend> for Device {
             ..info.clone()
         };
 
+        let mut debug_name = image.internal.debug_name.clone();
+
         Ok(ImageView {
             subresource: d3d11::D3D11CalcSubresource(0, range.layer_start as _, range.level_start as _),
             format,
             srv_handle: if image.usage.intersects(image::Usage::SAMPLED) {
-                Some(self.view_image_as_shader_resource(&srv_info)?)
+                let srv = self.view_image_as_shader_resource(&srv_info)?;
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&srv, name, " -- SRV");
+                }
+
+                Some(srv)
             } else {
                 None
             },
             rtv_handle: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
-                Some(self.view_image_as_render_target(&info)?)
+                let rtv = self.view_image_as_render_target(&info)?;
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&rtv, name, " -- RTV");
+                }
+
+                Some(rtv)
             } else {
                 None
             },
             uav_handle: if image.usage.contains(image::Usage::STORAGE) {
-                Some(self.view_image_as_unordered_access(&info)?)
+                let uav = self.view_image_as_unordered_access(&info)?;
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&uav, name, " -- UAV");
+                }
+
+                Some(uav)
             } else {
                 None
             },
             dsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(&info, None)?)
+                let dsv = self.view_image_as_depth_stencil(&info, None)?;
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&dsv, name, " -- DSV");
+                }
+
+                Some(dsv)
             } else {
                 None
             },
             rodsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(&info, Some(image.format.is_stencil()))?)
+                let rodsv = self.view_image_as_depth_stencil(&info, Some(image.format.is_stencil()))?;
+
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&rodsv, name, " -- DSV");
+                }
+
+                Some(rodsv)
             } else {
                 None
             },
@@ -2190,16 +2268,28 @@ impl device::Device<Backend> for Device {
         // unimplemented!()
     }
 
-    unsafe fn set_image_name(&self, _image: &mut Image, _name: &str) {
-        // TODO
+    unsafe fn set_image_name(&self, image: &mut Image, name: &str) {
+        if !verify_debug_ascii(name) {
+            return;
+        }
+
+        image.internal.debug_name = Some(name.to_string());
     }
 
-    unsafe fn set_buffer_name(&self, _buffer: &mut Buffer, _name: &str) {
-        // TODO
+    unsafe fn set_buffer_name(&self, buffer: &mut Buffer, name: &str) {
+        if !verify_debug_ascii(name) {
+            return;
+        }
+
+        buffer.internal.debug_name = Some(name.to_string());
     }
 
-    unsafe fn set_command_buffer_name(&self, _command_buffer: &mut CommandBuffer, _name: &str) {
-        // TODO
+    unsafe fn set_command_buffer_name(&self, command_buffer: &mut CommandBuffer, name: &str) {
+        if !verify_debug_ascii(name) {
+            return;
+        }
+
+        command_buffer.debug_name = Some(name.to_string());
     }
 
     unsafe fn set_semaphore_name(&self, _semaphore: &mut Semaphore, _name: &str) {
@@ -2244,9 +2334,20 @@ impl device::Device<Backend> for Device {
 
     unsafe fn set_graphics_pipeline_name(
         &self,
-        _graphics_pipeline: &mut GraphicsPipeline,
-        _name: &str,
+        graphics_pipeline: &mut GraphicsPipeline,
+        name: &str,
     ) {
-        // TODO
+        if !verify_debug_ascii(name) {
+            return;
+        }
+
+        let mut name = name.to_string();
+
+        set_debug_name_with_suffix(&graphics_pipeline.blend_state, &mut name, " -- Blend State");
+        set_debug_name_with_suffix(&graphics_pipeline.rasterizer_state, &mut name, " -- Rasterizer State");
+        set_debug_name_with_suffix(&graphics_pipeline.input_layout, &mut name, " -- Input Layout");
+        if let Some(ref dss) = graphics_pipeline.depth_stencil_state {
+            set_debug_name_with_suffix(&dss.raw, &mut name, " -- Depth Stencil State");
+        }
     }
 }
