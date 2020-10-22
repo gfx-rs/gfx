@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, collections::VecDeque, fmt, mem, os::raw::c_void};
+use std::{borrow::Borrow, fmt, mem, os::raw::c_void};
 
 use winapi::{
     shared::{
@@ -45,13 +45,23 @@ unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
 
 impl Surface {
-    pub(crate) unsafe fn present(&self) {
-        self.presentation
-            .as_ref()
-            .unwrap()
-            .swapchain
-            .inner
-            .Present(1, 0);
+    pub(crate) unsafe fn present(&mut self, image: SwapchainImage) -> Result<(), w::PresentError> {
+        let present = self.presentation.as_mut().unwrap();
+        let sc = &mut present.swapchain;
+        sc.acquired_count -= 1;
+
+        let expected_index = sc.inner.GetCurrentBackBufferIndex() as w::SwapImageIndex;
+        if image.index != expected_index {
+            log::warn!(
+                "Expected frame {}, got frame {}",
+                expected_index,
+                image.index
+            );
+            return Err(w::PresentError::OutOfDate);
+        }
+
+        sc.inner.Present(1, 0);
+        Ok(())
     }
 }
 
@@ -106,6 +116,7 @@ impl w::Surface<Backend> for Surface {
 
 #[derive(Debug)]
 pub struct SwapchainImage {
+    index: w::SwapImageIndex,
     image: r::Image,
     view: r::ImageView,
 }
@@ -189,8 +200,10 @@ impl w::PresentationSurface<Backend> for Surface {
 
         sc.wait((timeout_ns / 1_000_000) as u32)?;
 
-        let index = sc.inner.GetCurrentBackBufferIndex();
-        let resource = sc.resources[index as usize];
+        let base_index = sc.inner.GetCurrentBackBufferIndex() as usize;
+        let index = (base_index + sc.acquired_count) % sc.resources.len();
+        sc.acquired_count += 1;
+        let resource = sc.resources[index];
 
         let kind = i::Kind::D2(present.size.width, present.size.height, 1, 1);
         let base_format = present.format.base_format();
@@ -214,7 +227,7 @@ impl w::PresentationSurface<Backend> for Surface {
         };
 
         let image = r::ImageBound {
-            resource: resource,
+            resource,
             place: r::Place::Swapchain {},
             surface_type: base_format.0,
             kind,
@@ -234,6 +247,7 @@ impl w::PresentationSurface<Backend> for Surface {
         };
 
         let swapchain_image = SwapchainImage {
+            index: index as _,
             image: r::Image::Bound(image),
             view: r::ImageView {
                 resource,
@@ -256,7 +270,6 @@ impl w::PresentationSurface<Backend> for Surface {
 #[derive(Debug)]
 pub struct Swapchain {
     pub(crate) inner: native::WeakPtr<dxgi1_4::IDXGISwapChain3>,
-    pub(crate) frame_queue: VecDeque<usize>,
     #[allow(dead_code)]
     pub(crate) rtv_heap: r::DescriptorHeap,
     // need to associate raw image pointers with the swapchain so they can be properly released
@@ -264,6 +277,7 @@ pub struct Swapchain {
     pub(crate) resources: Vec<native::Resource>,
     pub(crate) waitable: HANDLE,
     pub(crate) usage: i::Usage,
+    pub(crate) acquired_count: usize,
 }
 
 impl Swapchain {

@@ -489,11 +489,10 @@ impl q::CommandQueue<Backend> for CommandQueue {
     unsafe fn present(
         &mut self,
         surface: &mut window::Surface,
-        _image: window::SwapchainImage,
+        image: window::SwapchainImage,
         _wait_semaphore: Option<&resource::Semaphore>,
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError> {
-        surface.present();
-        Ok(None)
+        surface.present(image).map(|()| None)
     }
 
     fn wait_idle(&self) -> Result<(), hal::device::OutOfMemory> {
