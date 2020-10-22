@@ -5,12 +5,13 @@ use wio::{com::ComPtr, wide::ToWide};
 use std::{env, ffi::OsStr, fmt};
 
 #[must_use]
-#[cfg(debug_assertions)]
 pub struct DebugScope {
     annotation: ComPtr<d3d11_1::ID3DUserDefinedAnnotation>,
 }
 
 impl DebugScope {
+    // TODO: Not used currently in release, will be used in the future
+    #[allow(dead_code)]
     pub fn with_name(
         context: &ComPtr<d3d11::ID3D11DeviceContext>,
         args: fmt::Arguments,
@@ -38,7 +39,6 @@ impl DebugScope {
     }
 }
 
-#[cfg(debug_assertions)]
 impl Drop for DebugScope {
     fn drop(&mut self) {
         unsafe {

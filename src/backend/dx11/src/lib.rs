@@ -76,7 +76,6 @@ macro_rules! debug_marker {
 }
 
 mod conv;
-#[cfg(debug_assertions)]
 mod debug;
 mod device;
 mod dxgi;
