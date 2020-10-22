@@ -2292,10 +2292,16 @@ impl Device {
             _ => unreachable!(),
         };
 
+        let extent = vk::Extent3D {
+            width: config.extent.width,
+            height: config.extent.height,
+            depth: 1,
+        };
         let swapchain = w::Swapchain {
             raw: swapchain_raw,
             functor,
             vendor_id: self.vendor_id,
+            extent,
         };
 
         let images = backbuffer_images
@@ -2304,11 +2310,7 @@ impl Device {
                 raw: image,
                 ty: vk::ImageType::TYPE_2D,
                 flags: vk::ImageCreateFlags::empty(),
-                extent: vk::Extent3D {
-                    width: config.extent.width,
-                    height: config.extent.height,
-                    depth: 1,
-                },
+                extent,
             })
             .collect();
 

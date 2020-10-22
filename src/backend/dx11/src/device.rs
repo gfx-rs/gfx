@@ -1297,38 +1297,12 @@ impl device::Device<Backend> for Device {
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
     ) -> Result<Image, image::CreationError> {
-        use image::Usage;
-        //
-        // TODO: create desc
-
         let surface_desc = format.base_format().0.desc();
         let bytes_per_texel = surface_desc.bits / 8;
         let ext = kind.extent();
         let size = (ext.width * ext.height * ext.depth) as u64 * bytes_per_texel as u64;
-        let compressed = surface_desc.is_compressed();
-        let depth = format.is_depth();
 
-        let mut bind = 0;
-
-        if usage.intersects(Usage::TRANSFER_SRC | Usage::SAMPLED | Usage::STORAGE) {
-            bind |= d3d11::D3D11_BIND_SHADER_RESOURCE;
-        }
-
-        // we cant get RTVs or UAVs on compressed & depth formats
-        if !compressed && !depth {
-            if usage.intersects(Usage::COLOR_ATTACHMENT | Usage::TRANSFER_DST) {
-                bind |= d3d11::D3D11_BIND_RENDER_TARGET;
-            }
-
-            if usage.intersects(Usage::TRANSFER_DST | Usage::STORAGE) {
-                bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS;
-            }
-        }
-
-        if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
-            bind |= d3d11::D3D11_BIND_DEPTH_STENCIL;
-        }
-
+        let bind = conv::map_image_usage(usage, surface_desc);
         debug!("{:b}", bind);
 
         Ok(Image {
@@ -2151,12 +2125,11 @@ impl device::Device<Backend> for Device {
     unsafe fn destroy_buffer(&self, _buffer: Buffer) {}
 
     unsafe fn destroy_buffer_view(&self, _view: BufferView) {
-        unimplemented!()
+        //unimplemented!()
     }
 
     unsafe fn destroy_image(&self, _image: Image) {
-        // TODO:
-        // unimplemented!()
+        //unimplemented!()
     }
 
     unsafe fn destroy_image_view(&self, _view: ImageView) {

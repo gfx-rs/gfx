@@ -247,9 +247,9 @@ unsafe impl Send for BufferView {}
 unsafe impl Sync for BufferView {}
 
 #[derive(Clone)]
-pub struct Place {
-    pub(crate) heap: native::Heap,
-    pub(crate) offset: u64,
+pub enum Place {
+    Heap { raw: native::Heap, offset: u64 },
+    Swapchain {},
 }
 
 #[derive(Clone)]
@@ -263,9 +263,6 @@ pub struct ImageBound {
     pub(crate) default_view_format: Option<DXGI_FORMAT>,
     pub(crate) view_caps: image::ViewCapabilities,
     pub(crate) descriptor: d3d12::D3D12_RESOURCE_DESC,
-    pub(crate) bytes_per_block: u8,
-    // Dimension of a texel block (compressed formats).
-    pub(crate) block_dim: (u8, u8),
     pub(crate) clear_cv: Vec<Handle>,
     pub(crate) clear_dv: Vec<Handle>,
     pub(crate) clear_sv: Vec<Handle>,

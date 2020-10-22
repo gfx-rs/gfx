@@ -634,3 +634,37 @@ pub fn map_descriptor_pool_create_flags(
 ) -> vk::DescriptorPoolCreateFlags {
     vk::DescriptorPoolCreateFlags::from_raw(flags.bits())
 }
+
+pub fn map_memory_properties(flags: vk::MemoryPropertyFlags) -> hal::memory::Properties {
+    use crate::memory::Properties;
+    let mut properties = Properties::empty();
+
+    if flags.contains(vk::MemoryPropertyFlags::DEVICE_LOCAL) {
+        properties |= Properties::DEVICE_LOCAL;
+    }
+    if flags.contains(vk::MemoryPropertyFlags::HOST_VISIBLE) {
+        properties |= Properties::CPU_VISIBLE;
+    }
+    if flags.contains(vk::MemoryPropertyFlags::HOST_COHERENT) {
+        properties |= Properties::COHERENT;
+    }
+    if flags.contains(vk::MemoryPropertyFlags::HOST_CACHED) {
+        properties |= Properties::CPU_CACHED;
+    }
+    if flags.contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED) {
+        properties |= Properties::LAZILY_ALLOCATED;
+    }
+
+    properties
+}
+
+pub fn map_memory_heap_flags(flags: vk::MemoryHeapFlags) -> hal::memory::HeapFlags {
+    use hal::memory::HeapFlags;
+    let mut hal_flags = HeapFlags::empty();
+
+    if flags.contains(vk::MemoryHeapFlags::DEVICE_LOCAL) {
+        hal_flags |= HeapFlags::DEVICE_LOCAL;
+    }
+
+    hal_flags
+}

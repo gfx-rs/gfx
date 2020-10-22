@@ -1,7 +1,5 @@
 use parking_lot::{Mutex, RwLock};
-use std::cell::Cell;
-use std::ops::Range;
-use std::sync::Arc;
+use std::{borrow::Borrow, cell::Cell, ops::Range, sync::Arc};
 
 use auxil::FastHashMap;
 use hal::memory::{Properties, Requirements};
@@ -203,6 +201,51 @@ pub enum ImageView {
     Renderbuffer(Renderbuffer),
     Texture(Texture, TextureTarget, i::Level),
     TextureLayer(Texture, TextureTarget, i::Level, i::Layer),
+}
+
+#[derive(Debug)]
+pub struct SwapchainImage {
+    pub image: Image,
+    pub view: ImageView,
+}
+
+impl Borrow<Image> for SwapchainImage {
+    fn borrow(&self) -> &Image {
+        &self.image
+    }
+}
+
+impl Borrow<ImageView> for SwapchainImage {
+    fn borrow(&self) -> &ImageView {
+        &self.view
+    }
+}
+
+impl SwapchainImage {
+    #[cfg(not(dummy))]
+    pub(crate) fn new(
+        renderbuffer: Renderbuffer,
+        format: TextureFormat,
+        channel: format::ChannelType,
+    ) -> Self {
+        SwapchainImage {
+            image: Image {
+                kind: ImageKind::Renderbuffer {
+                    renderbuffer,
+                    format,
+                },
+                channel,
+                requirements: Requirements {
+                    size: 0,
+                    alignment: 1,
+                    type_mask: 0,
+                },
+                num_levels: 1,
+                num_layers: 1,
+            },
+            view: ImageView::Renderbuffer(renderbuffer),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

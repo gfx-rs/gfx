@@ -1,6 +1,6 @@
 use std::{
     borrow::Borrow,
-    collections::{hash_map::Entry, BTreeMap, VecDeque},
+    collections::{hash_map::Entry, BTreeMap},
     ffi, iter, mem,
     ops::Range,
     ptr, slice,
@@ -409,6 +409,9 @@ impl Device {
         compile_options.shader_model = shader_model;
         compile_options.vertex.invert_y = !features.contains(hal::Features::NDC_Y_UP);
         compile_options.force_zero_initialized_variables = true;
+        // these are technically incorrect, but better than panicking
+        compile_options.point_size_compat = true;
+        compile_options.point_coord_compat = true;
 
         let stage_flag = stage.to_flag();
         let root_constant_layout = layout
@@ -474,11 +477,11 @@ impl Device {
                     .map_err(gen_query_error)?;
                 // TODO: opt: don't query *all* entry points.
                 let entry_points = ast.get_entry_points().map_err(gen_query_error)?;
-                entry_points
+                match entry_points
                     .iter()
                     .find(|entry_point| entry_point.name == real_name)
-                    .ok_or(d::ShaderError::MissingEntryPoint(source.entry.into()))
-                    .and_then(|entry_point| {
+                {
+                    Some(entry_point) => {
                         let stage = conv::map_execution_model(entry_point.execution_model);
                         let shader = compile_shader(
                             stage,
@@ -488,7 +491,9 @@ impl Device {
                             shader_code.as_bytes(),
                         )?;
                         Ok((shader, true))
-                    })
+                    }
+                    None => Err(d::ShaderError::MissingEntryPoint(source.entry.into())),
+                }
             }
         }
     }
@@ -1088,10 +1093,11 @@ impl Device {
 
         Swapchain {
             inner,
-            frame_queue: VecDeque::new(),
             rtv_heap,
             resources,
             waitable,
+            usage: config.image_usage,
+            acquired_count: 0,
         }
     }
 }
@@ -2579,8 +2585,8 @@ impl d::Device<B> for Device {
 
         *image = r::Image::Bound(r::ImageBound {
             resource: resource,
-            place: r::Place {
-                heap: memory.heap.clone(),
+            place: r::Place::Heap {
+                raw: memory.heap.clone(),
                 offset,
             },
             surface_type: image_unbound.format.base_format().0,
@@ -2590,8 +2596,6 @@ impl d::Device<B> for Device {
             default_view_format: image_unbound.view_format,
             view_caps: image_unbound.view_caps,
             descriptor: image_unbound.desc,
-            bytes_per_block: image_unbound.bytes_per_block,
-            block_dim: image_unbound.block_dim,
             clear_cv: if aspects.contains(Aspects::COLOR) && can_clear_color {
                 let format = image_unbound.view_format.unwrap();
                 (0..num_layers)
@@ -2716,7 +2720,12 @@ impl d::Device<B> for Device {
                 None
             },
             handle_rtv: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
-                r::RenderTargetHandle::Pool(self.view_image_as_render_target(&info).unwrap())
+                // This view is not necessarily going to be rendered to, even
+                // if the image supports that in general.
+                match self.view_image_as_render_target(&info) {
+                    Ok(handle) => r::RenderTargetHandle::Pool(handle),
+                    Err(_) => r::RenderTargetHandle::None,
+                }
             } else {
                 r::RenderTargetHandle::None
             },
