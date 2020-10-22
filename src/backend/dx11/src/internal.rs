@@ -147,6 +147,10 @@ pub struct Internal {
     pub working_buffer_size: u64,
 
     pub constant_buffer_count_buffer: [UINT; d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _],
+
+    /// Command lists are not supported by graphics card and are being emulated.
+    /// Requires various workarounds to make things work correctly.
+    pub command_list_emulation: bool,
 }
 
 fn compile_blob(src: &[u8], entrypoint: &str, stage: ShaderStage) -> ComPtr<d3dcommon::ID3DBlob> {
@@ -590,6 +594,15 @@ impl Internal {
             },
         );
 
+        let mut threading_capability: d3d11::D3D11_FEATURE_DATA_THREADING = unsafe { mem::zeroed() };
+        let hr = unsafe { device.CheckFeatureSupport(d3d11::D3D11_FEATURE_THREADING, &mut threading_capability as *mut _ as *mut _, mem::size_of::<d3d11::D3D11_FEATURE_DATA_THREADING>() as _) };
+        assert_eq!(hr, winerror::S_OK);
+
+        let command_list_emulation = !(threading_capability.DriverCommandLists >= 1);
+        if command_list_emulation {
+            info!("D3D11 command list emulation is active");
+        }
+
         Internal {
             vs_partial_clear: compile_vs(device, clear_shaders, "vs_partial_clear"),
             ps_partial_clear_float: compile_ps(device, clear_shaders, "ps_partial_clear_float"),
@@ -620,6 +633,8 @@ impl Internal {
             working_buffer_size: working_buffer_size as _,
 
             constant_buffer_count_buffer: [4096_u32; d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _],
+
+            command_list_emulation,
         }
     }
 
