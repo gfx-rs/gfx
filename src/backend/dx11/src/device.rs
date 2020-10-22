@@ -6,7 +6,7 @@ use hal::{
 
 use winapi::{
     shared::{dxgi, dxgiformat, dxgitype, minwindef::TRUE, windef::HWND, winerror},
-    um::{d3d11, d3d11sdklayers, d3dcommon},
+    um::{d3d11, d3d11_1, d3d11sdklayers, d3dcommon},
 };
 
 use wio::com::ComPtr;
@@ -45,6 +45,7 @@ pub struct DepthStencilState {
 
 pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
+    raw1: Option<ComPtr<d3d11_1::ID3D11Device1>>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     features: hal::Features,
     memory_properties: MemoryProperties,
@@ -73,6 +74,7 @@ unsafe impl Sync for Device {}
 impl Device {
     pub fn new(
         device: ComPtr<d3d11::ID3D11Device>,
+        device1: Option<ComPtr<d3d11_1::ID3D11Device1>>,
         context: ComPtr<d3d11::ID3D11DeviceContext>,
         features: hal::Features,
         memory_properties: MemoryProperties,
@@ -80,6 +82,7 @@ impl Device {
         Device {
             internal: Arc::new(internal::Internal::new(&device)),
             raw: device,
+            raw1: device1,
             context,
             features,
             memory_properties,
@@ -798,6 +801,7 @@ impl device::Device<Backend> for Device {
         // TODO:
         Ok(CommandPool {
             device: self.raw.clone(),
+            device1: self.raw1.clone(),
             internal: Arc::clone(&self.internal),
         })
     }
