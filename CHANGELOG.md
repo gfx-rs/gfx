@@ -1,8 +1,9 @@
 # Change Log
 
-### backend-dx11-unreleased
+### backend-dx11-0.6.7 (22-10-2020)
   - enable alpha to coverage
   - support debug names and markers
+  - fix DX11.1 device creation
 
 ### backend-dx11-0.6.6 (20-10-2020)
   - fix read only depth stencil
