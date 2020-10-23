@@ -4,6 +4,7 @@
   - enable alpha to coverage
   - support debug names and markers
   - fix DX11.1 device creation
+  - fix dynamic offsets with command list emulation
 
 ### backend-dx11-0.6.6 (20-10-2020)
   - fix read only depth stencil
