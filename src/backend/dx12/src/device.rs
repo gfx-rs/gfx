@@ -2159,7 +2159,8 @@ impl d::Device<B> for Device {
             // Constant buffer view sizes need to be aligned.
             // Coupled with the offset alignment we can enforce an aligned CBV size
             // on descriptor updates.
-            size = (size + 255) & !255;
+            let mask = d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64 - 1;
+            size = (size + mask) & !mask;
         }
         if usage.contains(buffer::Usage::TRANSFER_DST) {
             // minimum of 1 word for the clear UAV
@@ -2958,10 +2959,12 @@ impl d::Device<B> for Device {
                                 // alignment to 256 allows us to patch the size here.
                                 // We can always enforce the size to be aligned to 256 for
                                 // CBVs without going out-of-bounds.
+                                let mask =
+                                    d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
                                 let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
                                     BufferLocation: (*buffer.resource).GetGPUVirtualAddress()
                                         + sub.offset,
-                                    SizeInBytes: ((size + 0xFF) & !0xFF) as _,
+                                    SizeInBytes: (size as u32 + mask) as u32 & !mask,
                                 };
                                 let handle = heap.alloc_handle();
                                 self.raw.CreateConstantBufferView(&desc, handle);

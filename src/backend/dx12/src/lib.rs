@@ -1202,8 +1202,8 @@ impl hal::Instance<Backend> for Instance {
                     max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
                     max_vertex_output_components: 16, // TODO
                     min_texel_buffer_offset_alignment: 1, // TODO
-                    min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
-                    min_storage_buffer_offset_alignment: 1, // TODO
+                    min_uniform_buffer_offset_alignment: d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as _,
+                    min_storage_buffer_offset_alignment: 4, // TODO
                     framebuffer_color_sample_counts: sample_count_mask,
                     framebuffer_depth_sample_counts: sample_count_mask,
                     framebuffer_stencil_sample_counts: sample_count_mask,
