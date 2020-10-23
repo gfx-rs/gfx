@@ -43,9 +43,9 @@ use winapi::{shared::{
 use wio::com::ComPtr;
 
 use arrayvec::ArrayVec;
-use parking_lot::{Condvar, Mutex};
+use parking_lot::{Condvar, Mutex, RwLock};
 
-use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, os::raw::c_void, ptr, sync::Arc};
+use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, os::raw::c_void, ptr, sync::{Arc, Weak}};
 
 macro_rules! debug_scope {
     ($context:expr, $($arg:tt)+) => ({
@@ -2946,7 +2946,9 @@ impl MemoryInvalidate {
     }
 }
 
-// Since we dont have any heaps to work with directly, everytime we bind a
+type LocalResourceArena<T> = thunderdome::Arena<(Range<u64>, T)>;
+
+// Since we dont have any heaps to work with directly, Beverytime we bind a
 // buffer/image to memory we allocate a dx11 resource and assign it a range.
 //
 // `HOST_VISIBLE` memory gets a `Vec<u8>` which covers the entire memory
@@ -2961,10 +2963,10 @@ pub struct Memory {
     host_ptr: *mut u8,
 
     // list of all buffers bound to this memory
-    local_buffers: RefCell<Vec<(Range<u64>, InternalBuffer)>>,
+    local_buffers: Arc<RwLock<LocalResourceArena<InternalBuffer>>>,
 
     // list of all images bound to this memory
-    _local_images: RefCell<Vec<(Range<u64>, InternalImage)>>,
+    local_images: Arc<RwLock<LocalResourceArena<InternalImage>>>,
 }
 
 impl fmt::Debug for Memory {
@@ -2981,14 +2983,15 @@ impl Memory {
         segment.offset..segment.size.map_or(self.size, |s| segment.offset + s)
     }
 
-    pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) {
-        self.local_buffers.borrow_mut().push((range, buffer));
+    pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) -> thunderdome::Index {
+        let mut local_buffers = self.local_buffers.write();
+        local_buffers.insert((range, buffer))
     }
 
     pub fn flush(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, range: Range<u64>) {
         use buffer::Usage;
 
-        for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
+        for (_, &(ref buffer_range, ref buffer)) in self.local_buffers.read().iter() {
             let range = match intersection(&range, &buffer_range) {
                 Some(r) => r,
                 None => continue,
@@ -3043,7 +3046,7 @@ impl Memory {
         working_buffer: ComPtr<d3d11::ID3D11Buffer>,
         working_buffer_size: u64,
     ) {
-        for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
+        for (_, &(ref buffer_range, ref buffer)) in self.local_buffers.read().iter() {
             if let Some(range) = intersection(&range, &buffer_range) {
                 MemoryInvalidate {
                     working_buffer: Some(working_buffer.clone()),
@@ -3145,11 +3148,29 @@ pub struct InternalBuffer {
     debug_name: Option<String>,
 }
 
+impl InternalBuffer {
+    unsafe fn release_resources(&mut self) {
+        (&*self.raw).Release();
+        self.raw = ptr::null_mut();
+        self.disjoint_cb.take().map(|cb| (&*cb).Release());
+        self.uav.take().map(|uav| (&*uav).Release());
+        self.srv.take().map(|srv| (&*srv).Release());
+        self.usage = buffer::Usage::empty();
+        self.debug_name = None;
+    }
+}
+
 pub struct Buffer {
     internal: InternalBuffer,
     is_coherent: bool,
     memory_ptr: *mut u8,     // null if unbound or non-cpu-visible
     bound_range: Range<u64>, // 0 if unbound
+    /// Handle to the Memory arena storing this buffer.
+    local_memory_arena: Weak<RwLock<LocalResourceArena<InternalBuffer>>>,
+    /// Index into the above memory arena.
+    ///
+    /// Once memory is bound to a buffer, this should never be None.
+    memory_index: Option<thunderdome::Index>,
     requirements: memory::Requirements,
     bind: d3d11::D3D11_BIND_FLAG,
 }
