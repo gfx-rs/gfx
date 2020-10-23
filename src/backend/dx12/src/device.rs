@@ -3127,8 +3127,8 @@ impl d::Device<B> for Device {
             if let (Some(src_range), Some(dst_range)) =
                 (src_info.view_range.as_ref(), dst_info.view_range.as_ref())
             {
-                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
+                assert!(copy.src_array_offset + copy.count <= src_range.handle.size as usize);
+                assert!(copy.dst_array_offset + copy.count <= dst_range.handle.size as usize);
                 let count = copy.count as u32;
                 accum
                     .src_views
@@ -3142,11 +3142,11 @@ impl d::Device<B> for Device {
                 {
                     assert!(
                         src_info.count as usize + copy.src_array_offset + copy.count
-                            <= src_range.count as usize
+                            <= src_range.handle.size as usize
                     );
                     assert!(
                         dst_info.count as usize + copy.dst_array_offset + copy.count
-                            <= dst_range.count as usize
+                            <= dst_range.handle.size as usize
                     );
                     accum.src_views.add(
                         src_range.at(src_info.count + copy.src_array_offset as u64),
