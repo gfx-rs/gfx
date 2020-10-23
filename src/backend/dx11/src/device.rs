@@ -789,7 +789,6 @@ impl device::Device<Backend> for Device {
             size,
             host_ptr,
             local_buffers: Arc::new(RwLock::new(thunderdome::Arena::new())),
-            local_images: Arc::new(RwLock::new(thunderdome::Arena::new())),
         })
     }
 
@@ -2190,9 +2189,6 @@ impl device::Device<Backend> for Device {
         for (_, (_range, mut internal)) in memory.local_buffers.write().drain() {
             internal.release_resources()
         }
-        for (_, (_range, internal)) in memory.local_images.write().drain() {
-            (*internal.raw).Release();
-        }
     }
 
     unsafe fn create_query_pool(
@@ -2260,9 +2256,8 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn destroy_image(&self, _image: Image) {
-        // TODO:
-        // unimplemented!()
+    unsafe fn destroy_image(&self, mut image: Image) {
+        image.internal.release_resources();
     }
 
     unsafe fn destroy_image_view(&self, _view: ImageView) {

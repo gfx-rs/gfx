@@ -2913,9 +2913,6 @@ pub struct Memory {
 
     // list of all buffers bound to this memory
     local_buffers: Arc<RwLock<LocalResourceArena<InternalBuffer>>>,
-
-    // list of all images bound to this memory
-    local_images: Arc<RwLock<LocalResourceArena<InternalImage>>>,
 }
 
 impl fmt::Debug for Memory {
@@ -3169,6 +3166,17 @@ pub struct InternalImage {
     render_target_views: Vec<ComPtr<d3d11::ID3D11RenderTargetView>>,
 
     debug_name: Option<String>
+}
+
+impl InternalImage {
+    unsafe fn release_resources(&mut self) {
+        (&*self.raw).Release();
+        self.copy_srv = None;
+        self.srv = None;
+        self.unordered_access_views.clear();
+        self.depth_stencil_views.clear();
+        self.render_target_views.clear();
+    }
 }
 
 impl fmt::Debug for InternalImage {
