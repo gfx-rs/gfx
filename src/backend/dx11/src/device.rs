@@ -11,9 +11,9 @@ use winapi::{
 
 use wio::com::ComPtr;
 
-use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, ptr, sync::Arc};
+use std::{borrow::Borrow, fmt, mem, ops::Range, ptr, sync::{Arc, Weak}};
 
-use parking_lot::{Condvar, Mutex};
+use parking_lot::{Condvar, Mutex, RwLock};
 
 use crate::{
     conv, internal, shader, Backend, Buffer, BufferView, CommandBuffer, CommandPool,
@@ -788,8 +788,8 @@ impl device::Device<Backend> for Device {
             properties,
             size,
             host_ptr,
-            local_buffers: RefCell::new(Vec::new()),
-            _local_images: RefCell::new(Vec::new()),
+            local_buffers: Arc::new(RwLock::new(thunderdome::Arena::new())),
+            local_images: Arc::new(RwLock::new(thunderdome::Arena::new())),
         })
     }
 
@@ -1104,6 +1104,8 @@ impl device::Device<Backend> for Device {
                 debug_name: None,
             },
             bound_range: 0..0,
+            local_memory_arena: Weak::new(),
+            memory_index: None,
             is_coherent: false,
             memory_ptr: ptr::null_mut(),
             bind,
@@ -1289,7 +1291,7 @@ impl device::Device<Backend> for Device {
         };
         let range = offset..offset + buffer.requirements.size;
 
-        memory.bind_buffer(range.clone(), internal.clone());
+        let memory_index = memory.bind_buffer(range.clone(), internal.clone());
 
         buffer.internal = internal;
         buffer.is_coherent = memory
@@ -1297,6 +1299,8 @@ impl device::Device<Backend> for Device {
             .contains(hal::memory::Properties::COHERENT);
         buffer.memory_ptr = memory.host_ptr;
         buffer.bound_range = range;
+        buffer.local_memory_arena = Arc::downgrade(&memory.local_buffers);
+        buffer.memory_index = Some(memory_index);
 
         Ok(())
     }
@@ -2183,11 +2187,11 @@ impl device::Device<Backend> for Device {
             // let it drop
             memory.host_ptr = ptr::null_mut();
         }
-        for (_range, internal) in memory.local_buffers.borrow_mut().drain(..) {
+        for (_, (_range, mut internal)) in memory.local_buffers.write().drain() {
+            internal.release_resources()
+        }
+        for (_, (_range, internal)) in memory.local_images.write().drain() {
             (*internal.raw).Release();
-            if let Some(srv) = internal.srv {
-                (*srv).Release();
-            }
         }
     }
 
@@ -2230,7 +2234,27 @@ impl device::Device<Backend> for Device {
 
     unsafe fn destroy_framebuffer(&self, _fb: Framebuffer) {}
 
-    unsafe fn destroy_buffer(&self, _buffer: Buffer) {}
+    unsafe fn destroy_buffer(&self, buffer: Buffer) {
+        let mut internal = buffer.internal;
+
+        if internal.raw.is_null() {
+            return;
+        }
+
+        let arena_arc = match buffer.local_memory_arena.upgrade() {
+            Some(arena) => arena,
+            // Memory is destroyed before the buffer, we've already been destroyed.
+            None => return,
+        };
+        let mut arena = arena_arc.write();
+
+        let memory_index = buffer.memory_index.expect("Buffer's memory index unset");
+        // Drop the internal stored by the arena on the floor, it owns nothing.
+        let _ = arena.remove(memory_index);
+
+        // Release all memory owned by this buffer
+        internal.release_resources();
+    }
 
     unsafe fn destroy_buffer_view(&self, _view: BufferView) {
         unimplemented!()
