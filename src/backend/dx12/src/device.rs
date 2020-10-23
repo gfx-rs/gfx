@@ -3163,8 +3163,8 @@ impl d::Device<B> for Device {
             if let (Some(src_range), Some(dst_range)) =
                 (src_info.view_range.as_ref(), dst_info.view_range.as_ref())
             {
-                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
+                assert!(copy.src_array_offset + copy.count <= src_range.handle.size as usize);
+                assert!(copy.dst_array_offset + copy.count <= dst_range.handle.size as usize);
                 src_views.push(src_range.at(copy.src_array_offset as _));
                 dst_views.push(dst_range.at(copy.dst_array_offset as _));
                 num_views.push(copy.count as u32);
@@ -3174,11 +3174,11 @@ impl d::Device<B> for Device {
                 {
                     assert!(
                         src_info.count as usize + copy.src_array_offset + copy.count
-                            <= src_range.count as usize
+                            <= src_range.handle.size as usize
                     );
                     assert!(
                         dst_info.count as usize + copy.dst_array_offset + copy.count
-                            <= dst_range.count as usize
+                            <= dst_range.handle.size as usize
                     );
                     src_views.push(src_range.at(src_info.count + copy.src_array_offset as u64));
                     dst_views.push(dst_range.at(dst_info.count + copy.dst_array_offset as u64));
@@ -3189,8 +3189,8 @@ impl d::Device<B> for Device {
                 src_info.sampler_range.as_ref(),
                 dst_info.sampler_range.as_ref(),
             ) {
-                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
+                assert!(copy.src_array_offset + copy.count <= src_range.handle.size as usize);
+                assert!(copy.dst_array_offset + copy.count <= dst_range.handle.size as usize);
                 src_samplers.push(src_range.at(copy.src_array_offset as _));
                 dst_samplers.push(dst_range.at(copy.dst_array_offset as _));
                 num_samplers.push(copy.count as u32);

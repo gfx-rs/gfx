@@ -523,12 +523,11 @@ pub struct DescriptorRange {
     pub(crate) handle: DualHandle,
     pub(crate) ty: pso::DescriptorType,
     pub(crate) handle_size: u64,
-    pub(crate) count: u64,
 }
 
 impl DescriptorRange {
     pub(crate) fn at(&self, index: u64) -> native::CpuDescriptor {
-        assert!(index < self.count);
+        assert!(index < self.handle.size);
         let ptr = self.handle.cpu.ptr + (self.handle_size * index) as usize;
         native::CpuDescriptor { ptr }
     }
@@ -656,7 +655,7 @@ impl DescriptorHeapSlice {
     /// Do not use this with handles not given out by this `DescriptorHeapSlice`.
     pub(crate) fn free_handles(&mut self, handle: DualHandle) {
         let start = (handle.gpu.ptr - self.start.gpu.ptr) / self.handle_size;
-        let handle_range = start..start + handle.size as u64;
+        let handle_range = start..start + handle.size;
         self.range_allocator.free_range(handle_range);
     }
 
@@ -719,7 +718,6 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                     Some(DescriptorRange {
                         handle,
                         ty: binding.ty,
-                        count,
                         handle_size: self.heap_srv_cbv_uav.handle_size,
                     })
                 } else {
@@ -740,7 +738,6 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                         Some(DescriptorRange {
                             handle,
                             ty: binding.ty,
-                            count,
                             handle_size: self.heap_sampler.handle_size,
                         })
                     } else {
@@ -774,13 +771,13 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         I: IntoIterator<Item = DescriptorSet>,
     {
         for descriptor_set in descriptor_sets {
-            for binding_info in &descriptor_set.binding_infos {
-                if let Some(ref view_range) = binding_info.view_range {
+            for binding_info in descriptor_set.binding_infos {
+                if let Some(view_range) = binding_info.view_range {
                     if binding_info.content.intersects(DescriptorContent::VIEW) {
                         self.heap_srv_cbv_uav.free_handles(view_range.handle);
                     }
                 }
-                if let Some(ref sampler_range) = binding_info.sampler_range {
+                if let Some(sampler_range) = binding_info.sampler_range {
                     if binding_info.content.intersects(DescriptorContent::SAMPLER) {
                         self.heap_sampler.free_handles(sampler_range.handle);
                     }
