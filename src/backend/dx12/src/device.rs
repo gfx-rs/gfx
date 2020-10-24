@@ -2913,8 +2913,8 @@ impl d::Device<B> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        let mut descriptor_update_pools = self.descriptor_update_pools.lock().unwrap();
-        let mut update_pool_index = 0;
+        let mut descriptor_updater = self.descriptor_updater.lock().unwrap();
+        descriptor_updater.reset();
 
         //TODO: combine destination ranges
         let mut dst_samplers = Vec::new();
@@ -2959,15 +2959,6 @@ impl d::Device<B> for Device {
                                 buffer_address + sub.offset;
                         } else {
                             // Descriptor table
-                            if update_pool_index == descriptor_update_pools.len() {
-                                let max_size = 1u64 << 12; //arbitrary
-                                descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
-                                    self.raw,
-                                    native::DescriptorHeapType::CbvSrvUav,
-                                    max_size as _,
-                                ));
-                            }
-                            let mut heap = descriptor_update_pools.pop().unwrap();
                             let size = sub.size_to(buffer.requirements.size);
 
                             if bind_info.content.contains(r::DescriptorContent::CBV) {
@@ -2983,7 +2974,7 @@ impl d::Device<B> for Device {
                                         + sub.offset,
                                     SizeInBytes: (size as u32 + mask) as u32 & !mask,
                                 };
-                                let handle = heap.alloc_handle();
+                                let handle = descriptor_updater.alloc_handle(self.raw);
                                 self.raw.CreateConstantBufferView(&desc, handle);
                                 src_cbv = Some(handle);
                             }
@@ -3001,7 +2992,7 @@ impl d::Device<B> for Device {
                                     StructureByteStride: 0,
                                     Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
                                 };
-                                let handle = heap.alloc_handle();
+                                let handle = descriptor_updater.alloc_handle(self.raw);
                                 self.raw.CreateShaderResourceView(
                                     buffer.resource.as_mut_ptr(),
                                     &desc,
@@ -3023,21 +3014,7 @@ impl d::Device<B> for Device {
                                     CounterOffsetInBytes: 0,
                                     Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
                                 };
-                                if heap.is_full() {
-                                    // pool is full, move to the next one
-                                    update_pool_index += 1;
-                                    let max_size = 1u64 << 12; //arbitrary
-                                    let full_heap = mem::replace(
-                                        &mut heap,
-                                        descriptors_cpu::HeapLinear::new(
-                                            self.raw,
-                                            native::DescriptorHeapType::CbvSrvUav,
-                                            max_size as _,
-                                        ),
-                                    );
-                                    descriptor_update_pools.push(full_heap);
-                                }
-                                let handle = heap.alloc_handle();
+                                let handle = descriptor_updater.alloc_handle(self.raw);
                                 self.raw.CreateUnorderedAccessView(
                                     buffer.resource.as_mut_ptr(),
                                     ptr::null_mut(),
@@ -3046,13 +3023,6 @@ impl d::Device<B> for Device {
                                 );
                                 src_uav = Some(handle);
                             }
-
-                            // always leave this block of code prepared
-                            if heap.is_full() {
-                                // pool is full, move to the next one
-                                update_pool_index += 1;
-                            }
-                            descriptor_update_pools.push(heap);
                         }
                     }
                     pso::Descriptor::Image(image, _layout) => {
@@ -3139,11 +3109,6 @@ impl d::Device<B> for Device {
                 num_samplers.as_ptr(),
                 d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
             );
-        }
-
-        // reset the temporary CPU-size descriptor pools
-        for buffer_desc_pool in descriptor_update_pools.iter_mut() {
-            buffer_desc_pool.clear();
         }
     }
 
