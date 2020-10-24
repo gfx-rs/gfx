@@ -2734,7 +2734,10 @@ impl d::Device<B> for Device {
                 None
             },
             handle_rtv: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
-                r::RenderTargetHandle::Pool(self.view_image_as_render_target(&info).unwrap())
+                match self.view_image_as_render_target(&info) {
+                    Ok(handle) => r::RenderTargetHandle::Pool(handle),
+                    Err(_) => r::RenderTargetHandle::None,
+                }
             } else {
                 r::RenderTargetHandle::None
             },
