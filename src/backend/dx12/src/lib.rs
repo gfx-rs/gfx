@@ -566,6 +566,61 @@ impl SamplerStorage {
     }
 }
 
+struct DescriptorUpdater {
+    heaps: Vec<descriptors_cpu::HeapLinear>,
+    heap_index: usize,
+    reset_heap_index: usize,
+}
+
+impl DescriptorUpdater {
+    fn new(device: native::Device) -> Self {
+        DescriptorUpdater {
+            heaps: vec![Self::create_heap(device)],
+            heap_index: 0,
+            reset_heap_index: 0,
+        }
+    }
+
+    unsafe fn destroy(&mut self) {
+        for heap in self.heaps.drain(..) {
+            heap.destroy();
+        }
+    }
+
+    fn reset(&mut self) {
+        self.reset_heap_index = self.heap_index;
+        // Note: this could clear all the heaps, but WARP has an issue with that
+        if false {
+            for heap in self.heaps.iter_mut() {
+                heap.clear();
+            }
+        }
+    }
+
+    fn create_heap(device: native::Device) -> descriptors_cpu::HeapLinear {
+        let size = 1 << 12; //arbitrary
+        descriptors_cpu::HeapLinear::new(device, native::DescriptorHeapType::CbvSrvUav, size)
+    }
+
+    fn alloc_handle(&mut self, device: native::Device) -> native::CpuDescriptor {
+        if self.heaps[self.heap_index].is_full() {
+            self.heap_index += 1;
+            if self.heap_index == self.heaps.len() {
+                self.heap_index = 0;
+            }
+            if self.heap_index == self.reset_heap_index {
+                let heap = Self::create_heap(device);
+                self.heaps.insert(self.heap_index, heap);
+                self.reset_heap_index += 1;
+            } else {
+                self.heaps[self.heap_index].clear();
+            }
+        }
+        self.heaps[self.heap_index].alloc_handle()
+    }
+}
+
+
 pub struct Device {
     raw: native::Device,
     private_caps: Capabilities,
@@ -576,7 +631,7 @@ pub struct Device {
     rtv_pool: Mutex<DescriptorCpuPool>,
     dsv_pool: Mutex<DescriptorCpuPool>,
     srv_uav_pool: Mutex<DescriptorCpuPool>,
-    descriptor_update_pools: Mutex<Vec<descriptors_cpu::HeapLinear>>,
+    descriptor_updater: Mutex<DescriptorUpdater>,
     // CPU/GPU descriptor heaps
     heap_srv_cbv_uav: (
         resource::DescriptorHeap,
@@ -662,7 +717,7 @@ impl Device {
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(dsv_pool),
             srv_uav_pool: Mutex::new(srv_uav_pool),
-            descriptor_update_pools: Mutex::new(Vec::new()),
+            descriptor_updater: Mutex::new(DescriptorUpdater::new(device)),
             heap_srv_cbv_uav: (heap_srv_cbv_uav, Mutex::new(view_range_allocator)),
             samplers: SamplerStorage {
                 map: Mutex::default(),
@@ -707,9 +762,7 @@ impl Drop for Device {
             self.dsv_pool.lock().destroy();
             self.srv_uav_pool.lock().destroy();
 
-            for pool in &*self.descriptor_update_pools.lock() {
-                pool.destroy();
-            }
+            self.descriptor_updater.lock().unwrap().destroy();
 
             // Debug tracking alive objects
             let (debug_device, hr_debug) = self.raw.cast::<d3d12sdklayers::ID3D12DebugDevice>();
