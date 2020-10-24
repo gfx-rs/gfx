@@ -1,5 +1,9 @@
 # Change Log
 
+### backend-dx11-0.6.8 (23-10-2020)
+  - fix buffer leak when `Memory` was reused
+  - fix image leaks
+
 ### backend-dx11-0.6.7 (22-10-2020)
   - enable alpha to coverage
   - support debug names and markers
