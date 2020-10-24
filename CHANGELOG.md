@@ -1,5 +1,9 @@
 # Change Log
 
+### backend-dx12-0.6.10 (24-10-2020)
+  - actually free descriptor sets
+  - work around descriptor update issue on WARP
+
 ### backend-dx11-0.6.8 (23-10-2020)
   - fix buffer leak when `Memory` was reused
   - fix image leaks
