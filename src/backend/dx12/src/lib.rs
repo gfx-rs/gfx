@@ -179,6 +179,13 @@ static QUEUE_FAMILIES: [QueueFamily; 4] = [
     QueueFamily::Normal(q::QueueType::Transfer),
 ];
 
+#[derive(Default)]
+struct Workarounds {
+    // On WARP, temporary CPU descriptors are still used by the runtime
+    // after we call `CopyDescriptors`.
+    avoid_cpu_descriptor_overwrites: bool,
+}
+
 //Note: fields are dropped in the order of declaration, so we put the
 // most owning fields last.
 pub struct PhysicalDevice {
@@ -187,6 +194,7 @@ pub struct PhysicalDevice {
     limits: Limits,
     format_properties: Arc<FormatProperties>,
     private_caps: Capabilities,
+    workarounds: Workarounds,
     heap_properties: &'static [HeapProperties; NUM_HEAP_PROPERTIES],
     memory_properties: adapter::MemoryProperties,
     // Indicates that there is currently an active logical device.
@@ -306,7 +314,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn format_properties(&self, fmt: Option<f::Format>) -> f::Properties {
         let idx = fmt.map(|fmt| fmt as usize).unwrap_or(0);
-        self.format_properties.get(idx).properties
+        self.format_properties.resolve(idx).properties
     }
 
     fn image_format_properties(
@@ -318,7 +326,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
-        let format_info = self.format_properties.get(format as usize);
+        let format_info = self.format_properties.resolve(format as usize);
 
         let supported_usage = {
             use hal::image::Usage as U;
@@ -576,7 +584,7 @@ pub struct Device {
     rtv_pool: Mutex<DescriptorCpuPool>,
     dsv_pool: Mutex<DescriptorCpuPool>,
     srv_uav_pool: Mutex<DescriptorCpuPool>,
-    descriptor_update_pools: Mutex<Vec<descriptors_cpu::HeapLinear>>,
+    descriptor_updater: Mutex<descriptors_cpu::DescriptorUpdater>,
     // CPU/GPU descriptor heaps
     heap_srv_cbv_uav: (
         resource::DescriptorHeap,
@@ -634,6 +642,11 @@ impl Device {
             2_048,
         );
 
+        let descriptor_updater = descriptors_cpu::DescriptorUpdater::new(
+            device,
+            physical_device.workarounds.avoid_cpu_descriptor_overwrites,
+        );
+
         let draw_signature = Self::create_command_signature(device, device::CommandSignature::Draw);
         let draw_indexed_signature =
             Self::create_command_signature(device, device::CommandSignature::DrawIndexed);
@@ -662,7 +675,7 @@ impl Device {
             rtv_pool: Mutex::new(rtv_pool),
             dsv_pool: Mutex::new(dsv_pool),
             srv_uav_pool: Mutex::new(srv_uav_pool),
-            descriptor_update_pools: Mutex::new(Vec::new()),
+            descriptor_updater: Mutex::new(descriptor_updater),
             heap_srv_cbv_uav: (heap_srv_cbv_uav, Mutex::new(view_range_allocator)),
             samplers: SamplerStorage {
                 map: Mutex::default(),
@@ -707,9 +720,7 @@ impl Drop for Device {
             self.dsv_pool.lock().destroy();
             self.srv_uav_pool.lock().destroy();
 
-            for pool in &*self.descriptor_update_pools.lock() {
-                pool.destroy();
-            }
+            self.descriptor_updater.lock().destroy();
 
             // Debug tracking alive objects
             let (debug_device, hr_debug) = self.raw.cast::<d3d12sdklayers::ID3D12DebugDevice>();
@@ -888,11 +899,14 @@ impl hal::Instance<Backend> for Instance {
                 )
             });
 
+            let mut workarounds = Workarounds::default();
+
             let info = adapter::AdapterInfo {
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
                 device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+                    workarounds.avoid_cpu_descriptor_overwrites = true;
                     adapter::DeviceType::VirtualGpu
                 } else if features_architecture.CacheCoherentUMA == TRUE {
                     adapter::DeviceType::IntegratedGpu
@@ -1202,8 +1216,8 @@ impl hal::Instance<Backend> for Instance {
                     max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
                     max_vertex_output_components: 16, // TODO
                     min_texel_buffer_offset_alignment: 1, // TODO
-                    min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
-                    min_storage_buffer_offset_alignment: 1, // TODO
+                    min_uniform_buffer_offset_alignment: d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as _,
+                    min_storage_buffer_offset_alignment: 4, // TODO
                     framebuffer_color_sample_counts: sample_count_mask,
                     framebuffer_depth_sample_counts: sample_count_mask,
                     framebuffer_stencil_sample_counts: sample_count_mask,
@@ -1221,6 +1235,7 @@ impl hal::Instance<Backend> for Instance {
                     heterogeneous_resource_heaps,
                     memory_architecture,
                 },
+                workarounds,
                 heap_properties,
                 memory_properties: adapter::MemoryProperties {
                     memory_types,
@@ -1336,7 +1351,7 @@ impl FormatProperties {
         }
     }
 
-    fn get(&self, idx: usize) -> FormatInfo {
+    fn resolve(&self, idx: usize) -> FormatInfo {
         let mut guard = self.info[idx].lock();
         if let Some(info) = *guard {
             return info;

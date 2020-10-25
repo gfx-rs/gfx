@@ -2159,7 +2159,8 @@ impl d::Device<B> for Device {
             // Constant buffer view sizes need to be aligned.
             // Coupled with the offset alignment we can enforce an aligned CBV size
             // on descriptor updates.
-            size = (size + 255) & !255;
+            let mask = d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as u64 - 1;
+            size = (size + mask) & !mask;
         }
         if usage.contains(buffer::Usage::TRANSFER_DST) {
             // minimum of 1 word for the clear UAV
@@ -2289,7 +2290,10 @@ impl d::Device<B> for Device {
         let buffer = buffer.expect_bound();
         let buffer_features = {
             let idx = format.map(|fmt| fmt as usize).unwrap_or(0);
-            self.format_properties.get(idx).properties.buffer_features
+            self.format_properties
+                .resolve(idx)
+                .properties
+                .buffer_features
         };
         let (format, format_desc) = match format.and_then(conv::map_format) {
             Some(fmt) => (fmt, format.unwrap().surface_desc()),
@@ -2384,7 +2388,7 @@ impl d::Device<B> for Device {
         let view_format = conv::map_format(format);
         let extent = kind.extent();
 
-        let format_info = self.format_properties.get(format as usize);
+        let format_info = self.format_properties.resolve(format as usize);
         let (layout, features) = match tiling {
             image::Tiling::Optimal => (
                 d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
@@ -2567,7 +2571,7 @@ impl d::Device<B> for Device {
         // if the format supports being rendered into, allowing us to create clear_Xv
         let format_properties = self
             .format_properties
-            .get(image_unbound.format as usize)
+            .resolve(image_unbound.format as usize)
             .properties;
         let props = match image_unbound.tiling {
             image::Tiling::Optimal => format_properties.optimal_tiling,
@@ -2897,8 +2901,8 @@ impl d::Device<B> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        let mut descriptor_update_pools = self.descriptor_update_pools.lock();
-        let mut update_pool_index = 0;
+        let mut descriptor_updater = self.descriptor_updater.lock();
+        descriptor_updater.reset();
 
         let mut accum = descriptors_cpu::MultiCopyAccumulator::default();
         debug!("write_descriptor_sets");
@@ -2941,15 +2945,6 @@ impl d::Device<B> for Device {
                                 buffer_address + sub.offset;
                         } else {
                             // Descriptor table
-                            if update_pool_index == descriptor_update_pools.len() {
-                                let max_size = 1u64 << 12; //arbitrary
-                                descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
-                                    self.raw,
-                                    native::DescriptorHeapType::CbvSrvUav,
-                                    max_size as _,
-                                ));
-                            }
-                            let mut heap = descriptor_update_pools.pop().unwrap();
                             let size = sub.size_to(buffer.requirements.size);
 
                             if bind_info.content.contains(r::DescriptorContent::CBV) {
@@ -2958,12 +2953,14 @@ impl d::Device<B> for Device {
                                 // alignment to 256 allows us to patch the size here.
                                 // We can always enforce the size to be aligned to 256 for
                                 // CBVs without going out-of-bounds.
+                                let mask =
+                                    d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
                                 let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
                                     BufferLocation: (*buffer.resource).GetGPUVirtualAddress()
                                         + sub.offset,
-                                    SizeInBytes: ((size + 0xFF) & !0xFF) as _,
+                                    SizeInBytes: (size as u32 + mask) as u32 & !mask,
                                 };
-                                let handle = heap.alloc_handle();
+                                let handle = descriptor_updater.alloc_handle(self.raw);
                                 self.raw.CreateConstantBufferView(&desc, handle);
                                 src_cbv = Some(handle);
                             }
@@ -2981,7 +2978,7 @@ impl d::Device<B> for Device {
                                     StructureByteStride: 0,
                                     Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
                                 };
-                                let handle = heap.alloc_handle();
+                                let handle = descriptor_updater.alloc_handle(self.raw);
                                 self.raw.CreateShaderResourceView(
                                     buffer.resource.as_mut_ptr(),
                                     &desc,
@@ -3003,21 +3000,7 @@ impl d::Device<B> for Device {
                                     CounterOffsetInBytes: 0,
                                     Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
                                 };
-                                if heap.is_full() {
-                                    // pool is full, move to the next one
-                                    update_pool_index += 1;
-                                    let max_size = 1u64 << 12; //arbitrary
-                                    let full_heap = mem::replace(
-                                        &mut heap,
-                                        descriptors_cpu::HeapLinear::new(
-                                            self.raw,
-                                            native::DescriptorHeapType::CbvSrvUav,
-                                            max_size as _,
-                                        ),
-                                    );
-                                    descriptor_update_pools.push(full_heap);
-                                }
-                                let handle = heap.alloc_handle();
+                                let handle = descriptor_updater.alloc_handle(self.raw);
                                 self.raw.CreateUnorderedAccessView(
                                     buffer.resource.as_mut_ptr(),
                                     ptr::null_mut(),
@@ -3026,13 +3009,6 @@ impl d::Device<B> for Device {
                                 );
                                 src_uav = Some(handle);
                             }
-
-                            // always leave this block of code prepared
-                            if heap.is_full() {
-                                // pool is full, move to the next one
-                                update_pool_index += 1;
-                            }
-                            descriptor_update_pools.push(heap);
                         }
                     }
                     pso::Descriptor::Image(image, _layout) => {
@@ -3104,12 +3080,7 @@ impl d::Device<B> for Device {
             }
         }
 
-        accum.flush(self.raw.clone());
-
-        // reset the temporary CPU-size descriptor pools
-        for buffer_desc_pool in descriptor_update_pools.iter_mut() {
-            buffer_desc_pool.clear();
-        }
+        accum.flush(self.raw);
     }
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
@@ -3127,8 +3098,8 @@ impl d::Device<B> for Device {
             if let (Some(src_range), Some(dst_range)) =
                 (src_info.view_range.as_ref(), dst_info.view_range.as_ref())
             {
-                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
+                assert!(copy.src_array_offset + copy.count <= src_range.handle.size as usize);
+                assert!(copy.dst_array_offset + copy.count <= dst_range.handle.size as usize);
                 let count = copy.count as u32;
                 accum
                     .src_views
@@ -3142,11 +3113,11 @@ impl d::Device<B> for Device {
                 {
                     assert!(
                         src_info.count as usize + copy.src_array_offset + copy.count
-                            <= src_range.count as usize
+                            <= src_range.handle.size as usize
                     );
                     assert!(
                         dst_info.count as usize + copy.dst_array_offset + copy.count
-                            <= dst_range.count as usize
+                            <= dst_range.handle.size as usize
                     );
                     accum.src_views.add(
                         src_range.at(src_info.count + copy.src_array_offset as u64),
