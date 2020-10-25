@@ -2290,7 +2290,10 @@ impl d::Device<B> for Device {
         let buffer = buffer.expect_bound();
         let buffer_features = {
             let idx = format.map(|fmt| fmt as usize).unwrap_or(0);
-            self.format_properties.get(idx).properties.buffer_features
+            self.format_properties
+                .resolve(idx)
+                .properties
+                .buffer_features
         };
         let (format, format_desc) = match format.and_then(conv::map_format) {
             Some(fmt) => (fmt, format.unwrap().surface_desc()),
@@ -2385,7 +2388,7 @@ impl d::Device<B> for Device {
         let view_format = conv::map_format(format);
         let extent = kind.extent();
 
-        let format_info = self.format_properties.get(format as usize);
+        let format_info = self.format_properties.resolve(format as usize);
         let (layout, features) = match tiling {
             image::Tiling::Optimal => (
                 d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
@@ -2568,7 +2571,7 @@ impl d::Device<B> for Device {
         // if the format supports being rendered into, allowing us to create clear_Xv
         let format_properties = self
             .format_properties
-            .get(image_unbound.format as usize)
+            .resolve(image_unbound.format as usize)
             .properties;
         let props = match image_unbound.tiling {
             image::Tiling::Optimal => format_properties.optimal_tiling,
@@ -2898,7 +2901,7 @@ impl d::Device<B> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        let mut descriptor_updater = self.descriptor_updater.lock().unwrap();
+        let mut descriptor_updater = self.descriptor_updater.lock();
         descriptor_updater.reset();
 
         let mut accum = descriptors_cpu::MultiCopyAccumulator::default();

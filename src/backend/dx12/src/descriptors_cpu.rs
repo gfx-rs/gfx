@@ -246,3 +246,60 @@ impl MultiCopyAccumulator {
         }
     }
 }
+
+pub struct DescriptorUpdater {
+    heaps: Vec<HeapLinear>,
+    heap_index: usize,
+    reset_heap_index: usize,
+    avoid_overwrite: bool,
+}
+
+impl DescriptorUpdater {
+    pub fn new(device: native::Device, avoid_overwrite: bool) -> Self {
+        DescriptorUpdater {
+            heaps: vec![Self::create_heap(device)],
+            heap_index: 0,
+            reset_heap_index: 0,
+            avoid_overwrite,
+        }
+    }
+
+    pub unsafe fn destroy(&mut self) {
+        for heap in self.heaps.drain(..) {
+            heap.destroy();
+        }
+    }
+
+    pub fn reset(&mut self) {
+        if self.avoid_overwrite {
+            self.reset_heap_index = self.heap_index;
+        } else {
+            self.heap_index = 0;
+            for heap in self.heaps.iter_mut() {
+                heap.clear();
+            }
+        }
+    }
+
+    fn create_heap(device: native::Device) -> HeapLinear {
+        let size = 1 << 12; //arbitrary
+        HeapLinear::new(device, native::DescriptorHeapType::CbvSrvUav, size)
+    }
+
+    pub fn alloc_handle(&mut self, device: native::Device) -> CpuDescriptor {
+        if self.heaps[self.heap_index].is_full() {
+            self.heap_index += 1;
+            if self.heap_index == self.heaps.len() {
+                self.heap_index = 0;
+            }
+            if self.heap_index == self.reset_heap_index {
+                let heap = Self::create_heap(device);
+                self.heaps.insert(self.heap_index, heap);
+                self.reset_heap_index += 1;
+            } else {
+                self.heaps[self.heap_index].clear();
+            }
+        }
+        self.heaps[self.heap_index].alloc_handle()
+    }
+}
