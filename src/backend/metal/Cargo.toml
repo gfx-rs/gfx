@@ -34,7 +34,7 @@ foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
 cocoa-foundation = "0.1"
-spirv_cross = { version = "0.21", features = ["msl"] }
+spirv_cross = { version = "0.22", features = ["msl"] }
 parking_lot = "0.11"
 storage-map = "0.3"
 lazy_static = "1"

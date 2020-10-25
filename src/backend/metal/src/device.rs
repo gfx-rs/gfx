@@ -6,7 +6,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use auxil::{spirv_cross_specialize_ast, FastHashMap};
+use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
 use cocoa_foundation::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
@@ -718,6 +718,7 @@ impl Device {
         layout: &n::PipelineLayout,
         primitive_class: MTLPrimitiveTopologyClass,
         pipeline_cache: Option<&n::PipelineCache>,
+        stage: ShaderStage,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
         let device = &self.shared.device;
         let msl_version = self.shared.private_caps.msl_version;
@@ -727,10 +728,16 @@ impl Device {
         let info = match *ep.module {
             n::ShaderModule::Compiled(ref info) => info,
             n::ShaderModule::Raw(ref data) => {
-                let compiler_options = match primitive_class {
-                    MTLPrimitiveTopologyClass::Point => &layout.shader_compiler_options_point,
-                    _ => &layout.shader_compiler_options,
+                let compiler_options = &mut match primitive_class {
+                    MTLPrimitiveTopologyClass::Point => layout.shader_compiler_options_point.clone(),
+                    _ => layout.shader_compiler_options.clone(),
                 };
+                compiler_options.entry_point = Some((ep.entry.to_string(), match stage {
+                    ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
+                    ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
+                    ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
+                    _ => return Err(pso::CreationError::UnsupportedPipeline),
+                }));
                 match pipeline_cache {
                     Some(cache) => {
                         module_map = cache
@@ -1459,7 +1466,7 @@ impl hal::device::Device<Backend> for Device {
 
         // Vertex shader
         let (vs_lib, vs_function, _, enable_rasterization) =
-            self.load_shader(vs, pipeline_layout, primitive_class, cache)?;
+            self.load_shader(vs, pipeline_layout, primitive_class, cache, ShaderStage::Vertex)?;
         pipeline.set_vertex_function(Some(&vs_function));
 
         // Fragment shader
@@ -1467,7 +1474,7 @@ impl hal::device::Device<Backend> for Device {
         let fs_lib = match pipeline_desc.fragment {
             Some(ref ep) => {
                 let (lib, fun, _, _) =
-                    self.load_shader(ep, pipeline_layout, primitive_class, cache)?;
+                    self.load_shader(ep, pipeline_layout, primitive_class, cache, ShaderStage::Fragment)?;
                 fs_function = fun;
                 pipeline.set_fragment_function(Some(&fs_function));
                 Some(lib)
@@ -1722,6 +1729,7 @@ impl hal::device::Device<Backend> for Device {
             &pipeline_desc.layout,
             MTLPrimitiveTopologyClass::Unspecified,
             cache,
+            ShaderStage::Compute,
         )?;
         pipeline.set_compute_function(Some(&cs_function));
 

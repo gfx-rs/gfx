@@ -404,6 +404,7 @@ impl Device {
         layout: &r::PipelineLayout,
         stage: ShaderStage,
         features: &hal::Features,
+        entry_point: &str,
     ) -> Result<String, d::ShaderError> {
         let mut compile_options = hlsl::CompilerOptions::default();
         compile_options.shader_model = shader_model;
@@ -412,6 +413,7 @@ impl Device {
         // these are technically incorrect, but better than panicking
         compile_options.point_size_compat = true;
         compile_options.point_coord_compat = true;
+        compile_options.entry_point = Some((entry_point.to_string(), conv::map_stage(stage)));
 
         let stage_flag = stage.to_flag();
         let root_constant_layout = layout
@@ -469,7 +471,7 @@ impl Device {
 
                 let shader_model = hlsl::ShaderModel::V5_1;
                 let shader_code =
-                    Self::translate_spirv(&mut ast, shader_model, layout, stage, features)?;
+                    Self::translate_spirv(&mut ast, shader_model, layout, stage, features, source.entry)?;
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
                 let real_name = ast

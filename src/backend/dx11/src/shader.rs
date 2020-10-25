@@ -44,7 +44,7 @@ pub(crate) fn compile_spirv_entrypoint(
 
     patch_spirv_resources(&mut ast, stage, layout)?;
     let shader_model = hlsl::ShaderModel::V5_0;
-    let shader_code = translate_spirv(&mut ast, shader_model, layout, stage, features)?;
+    let shader_code = translate_spirv(&mut ast, shader_model, layout, stage, features, source.entry)?;
     log::debug!(
         "Generated {:?} shader:\n{:?}",
         stage,
@@ -251,13 +251,15 @@ fn translate_spirv(
     ast: &mut spirv::Ast<hlsl::Target>,
     shader_model: hlsl::ShaderModel,
     _layout: &PipelineLayout,
-    _stage: ShaderStage,
+    stage: ShaderStage,
     features: &hal::Features,
+    entry_point: &str,
 ) -> Result<String, device::ShaderError> {
     let mut compile_options = hlsl::CompilerOptions::default();
     compile_options.shader_model = shader_model;
     compile_options.vertex.invert_y = !features.contains(hal::Features::NDC_Y_UP);
     compile_options.force_zero_initialized_variables = true;
+    compile_options.entry_point = Some((entry_point.to_string(), conv::map_stage(stage)));
 
     //let stage_flag = stage.into();
 
