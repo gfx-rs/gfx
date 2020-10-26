@@ -177,6 +177,8 @@ impl Device {
     fn translate_spirv(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
+        stage: ShaderStage,
+        entry_point: &str,
     ) -> Result<String, d::ShaderError> {
         let mut compile_options = glsl::CompilerOptions::default();
         // see version table at https://en.wikipedia.org/wiki/OpenGL_Shading_Language
@@ -210,6 +212,12 @@ impl Device {
         };
         compile_options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
         compile_options.force_zero_initialized_variables = true;
+        compile_options.entry_point = Some((entry_point.to_string(), match stage {
+            ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
+            ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
+            ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
+            _ => return Err(d::ShaderError::CompilationFailed("Unsupported execution model".into())),
+        }));
         debug!("SPIR-V options {:?}", compile_options);
 
         ast.set_compiler_options(&compile_options)
@@ -378,7 +386,7 @@ impl Device {
                 );
                 self.set_push_const_layout(&mut ast).unwrap();
 
-                let glsl = self.translate_spirv(&mut ast).unwrap();
+                let glsl = self.translate_spirv(&mut ast, stage, point.entry).unwrap();
                 debug!("SPIRV-Cross generated shader:\n{}", glsl);
                 let shader = match self.create_shader_module_from_source(&glsl, stage).unwrap() {
                     n::ShaderModule::Raw(raw) => raw,
