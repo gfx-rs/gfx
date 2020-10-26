@@ -13,7 +13,7 @@ use winapi::{
     Interface,
 };
 
-use std::{borrow::Borrow, cell::Cell, cmp, fmt, iter, mem, ops::Range, ptr, sync::Arc};
+use std::{borrow::Borrow, cmp, fmt, iter, mem, ops::Range, ptr, sync::Arc};
 
 use crate::{
     conv, descriptors_cpu, device, internal, pool::PoolShared, resource as r, validate_line_width,
@@ -375,7 +375,8 @@ enum Phase {
     Initial,
     Recording,
     Executable,
-    Pending,
+    // Pending, // not useful, and we don't have mutable access
+    // to self in `submit()`, so we can't set it anyway.
 }
 
 pub struct CommandBuffer {
@@ -383,7 +384,7 @@ pub struct CommandBuffer {
     // `unwrap()` on every operation. This is not idiomatic.
     pub(crate) raw: native::GraphicsCommandList,
     allocator: Option<native::CommandAllocator>,
-    phase: Cell<Phase>,
+    phase: Phase,
     shared: Arc<Shared>,
     pool_shared: Arc<PoolShared>,
     begin_flags: com::CommandBufferFlags,
@@ -471,7 +472,7 @@ impl CommandBuffer {
             allocator: None,
             shared: Arc::clone(shared),
             pool_shared: Arc::clone(pool_shared),
-            phase: Cell::new(Phase::Initial),
+            phase: Phase::Initial,
             begin_flags: com::CommandBufferFlags::empty(),
             pass_cache: None,
             cur_subpass: !0,
@@ -500,13 +501,13 @@ impl CommandBuffer {
         Option<native::CommandAllocator>,
         Option<native::GraphicsCommandList>,
     ) {
-        let list = match self.phase.get() {
+        let list = match self.phase {
+            Phase::Initial => None,
             Phase::Recording => {
                 self.raw.close();
                 Some(self.raw)
             }
             Phase::Executable => Some(self.raw),
-            Phase::Initial | Phase::Pending => None,
         };
         for heap in &self.rtv_pools {
             heap.destroy();
@@ -521,21 +522,11 @@ impl CommandBuffer {
     }
 
     pub(crate) unsafe fn as_raw_list(&self) -> *mut d3d12::ID3D12CommandList {
-        match self.phase.get() {
+        match self.phase {
             Phase::Executable => (),
             other => error!("Submitting a command buffer in {:?} state", other),
         }
         self.raw.as_mut_ptr() as *mut _
-    }
-
-    pub(crate) fn after_submit(&self) {
-        if self
-            .begin_flags
-            .contains(com::CommandBufferFlags::ONE_TIME_SUBMIT)
-        {
-            self.pool_shared.release_list(self.raw);
-            self.phase.set(Phase::Pending);
-        }
     }
 
     // Indicates that the pipeline slot has been overriden with an internal pipeline.
@@ -1154,39 +1145,39 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         // TODO: Implement flags and secondary command buffers (bundles).
         // Note: we need to be ready for a situation where the whole
         // command pool was reset.
-        self.reset(false);
-        self.phase.set(Phase::Recording);
+        self.reset(true);
+        self.phase = Phase::Recording;
         self.begin_flags = flags;
         let (allocator, list) = self.pool_shared.acquire();
+
+        assert!(self.allocator.is_none());
+        assert_eq!(self.raw, native::GraphicsCommandList::null());
         self.allocator = Some(allocator);
         self.raw = list;
     }
 
     unsafe fn finish(&mut self) {
         self.raw.close();
-        assert_eq!(self.phase.get(), Phase::Recording);
-        self.phase.set(Phase::Executable);
+        assert_eq!(self.phase, Phase::Recording);
+        self.phase = Phase::Executable;
         self.pool_shared
             .release_allocator(self.allocator.take().unwrap());
     }
 
     unsafe fn reset(&mut self, release_resources: bool) {
-        if self.phase.get() == Phase::Recording {
+        if self.phase == Phase::Recording {
             self.raw.close();
         }
-        match self.phase.get() {
-            Phase::Recording | Phase::Executable => {
-                self.pool_shared.release_list(self.raw);
-                self.raw = native::GraphicsCommandList::null();
-            }
-            Phase::Initial | Phase::Pending => {}
+        if self.phase != Phase::Initial {
+            self.pool_shared.release_list(self.raw);
+            self.raw = native::GraphicsCommandList::null();
         }
         if release_resources {
             if let Some(allocator) = self.allocator.take() {
                 self.pool_shared.release_allocator(allocator);
             }
         }
-        self.phase.set(Phase::Initial);
+        self.phase = Phase::Initial;
 
         self.pass_cache = None;
         self.cur_subpass = !0;

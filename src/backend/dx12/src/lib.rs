@@ -474,20 +474,13 @@ impl q::CommandQueue<Backend> for CommandQueue {
         synchapi::ResetEvent(self.idle_event.0);
 
         // TODO: semaphores
-        let command_buffers = submission
+        let lists = submission
             .command_buffers
             .into_iter()
-            .map(|buf| buf.borrow())
-            .collect::<SmallVec<[_; 4]>>();
-        let lists = command_buffers
-            .iter()
-            .map(|buf| buf.as_raw_list())
+            .map(|cmd_buf| cmd_buf.borrow().as_raw_list())
             .collect::<SmallVec<[_; 4]>>();
         self.raw
             .ExecuteCommandLists(lists.len() as _, lists.as_ptr());
-        for command_buffer in command_buffers {
-            command_buffer.after_submit();
-        }
 
         if let Some(fence) = fence {
             assert_eq!(winerror::S_OK, self.raw.Signal(fence.raw.as_mut_ptr(), 1));
