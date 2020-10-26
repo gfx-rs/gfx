@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.6.4, backend-dx12-0.6.11, backend-dx11-0.6.9 (26-10-2020)
+  - fix entry point selection to choose the correct entry point (instead of a default) when multiple entry points exist
+
 ### backend-dx12-0.6.10 (24-10-2020)
   - actually free descriptor sets
   - work around descriptor update issue on WARP
