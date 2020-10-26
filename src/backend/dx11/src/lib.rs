@@ -2415,6 +2415,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 let num_buffers = rd.count as u32;
                 let constant_buffers = set.handles.offset(rd.pool_offset as isize);
                 if let Some(ref context1) = self.context1 {
+                    // This call with offsets won't work right with command list emulation
+                    // unless we reset the first and last constant buffers to null.
+                    if self.internal.command_list_emulation {
+                        let null_cbuf = [ptr::null_mut::<d3d11::ID3D11Buffer>()];
+                        context1.CSSetConstantBuffers(start_slot, 1, &null_cbuf as *const _);
+                        if num_buffers > 1 {
+                            context1.CSSetConstantBuffers(start_slot + num_buffers - 1, 1, &null_cbuf as *const _);
+                        }
+                    }
+
                     // TODO: This should be the actual buffer length for RBA purposes,
                     //       but that information isn't easily accessible here.
                     context1.CSSetConstantBuffers1(
