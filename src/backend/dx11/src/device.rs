@@ -889,7 +889,35 @@ impl device::Device<Backend> for Device {
             });
         }
 
-        //TODO: assert that res_offsets are within supported range
+        res_offsets.map_other(|data| {
+            // These use <= because this tells us the _next_ register, so maximum usage will be equal to the limit.
+            //
+            // Leave one slot for push constants
+            assert!(
+                data.c.res_index as u32 <= d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1,
+                "{} bound constant buffers exceeds limit of {}",
+                data.c.res_index as u32,
+                d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1,
+            );
+            assert!(
+                data.s.res_index as u32 <= d3d11::D3D11_COMMONSHADER_SAMPLER_REGISTER_COUNT,
+                "{} bound samplers exceeds limit of {}",
+                data.s.res_index as u32,
+                d3d11::D3D11_COMMONSHADER_SAMPLER_REGISTER_COUNT,
+            );
+            assert!(
+                data.t.res_index as u32 <= d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT,
+                "{} bound sampled textures and read-only buffers exceeds limit of {}",
+                data.t.res_index as u32,
+                d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT,
+            );
+            assert!(
+                data.u.res_index as u32 <= d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT,
+                "{} bound storage textures and read-write buffers exceeds limit of {}",
+                data.u.res_index as u32,
+                d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT,
+            );
+        });
 
         Ok(PipelineLayout { sets })
     }
