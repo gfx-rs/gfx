@@ -1173,7 +1173,7 @@ impl device::Device<Backend> for Device {
         );
 
         #[allow(non_snake_case)]
-        let MiscFlags = if buffer.bind
+        let mut MiscFlags = if buffer.bind
             & (d3d11::D3D11_BIND_SHADER_RESOURCE | d3d11::D3D11_BIND_UNORDERED_ACCESS)
             != 0
         {
@@ -1181,6 +1181,10 @@ impl device::Device<Backend> for Device {
         } else {
             0
         };
+
+        if buffer.internal.usage.contains(buffer::Usage::INDIRECT) {
+            MiscFlags |= d3d11::D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS;
+        }
 
         let initial_data = if memory.host_ptr.is_null() {
             None
