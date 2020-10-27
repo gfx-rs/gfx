@@ -1881,7 +1881,8 @@ impl CommandBuffer {
                 working_buffer: Some(self.internal.working_buffer.clone()),
                 working_buffer_size: self.internal.working_buffer_size,
                 host_memory: buffer.memory_ptr,
-                sync_range: buffer.bound_range.clone(),
+                host_sync_range: buffer.bound_range.clone(),
+                buffer_sync_range: buffer.bound_range.clone(),
                 buffer: buffer.internal.raw,
             });
         }
@@ -2340,7 +2341,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                             working_buffer: Some(self.internal.working_buffer.clone()),
                             working_buffer_size: self.internal.working_buffer_size,
                             host_memory: sync.host_ptr,
-                            sync_range: sync.range.clone(),
+                            host_sync_range: sync.range.clone(),
+                            buffer_sync_range: sync.range.clone(),
                             buffer: sync.device_buffer,
                         });
                     }
@@ -2520,7 +2522,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                             working_buffer: Some(self.internal.working_buffer.clone()),
                             working_buffer_size: self.internal.working_buffer_size,
                             host_memory: sync.host_ptr,
-                            sync_range: sync.range.clone(),
+                            host_sync_range: sync.range.clone(),
+                            buffer_sync_range: sync.range.clone(),
                             buffer: sync.device_buffer,
                         });
                     }
@@ -2931,7 +2934,8 @@ pub struct MemoryInvalidate {
     working_buffer: Option<ComPtr<d3d11::ID3D11Buffer>>,
     working_buffer_size: u64,
     host_memory: *mut u8,
-    sync_range: Range<u64>,
+    host_sync_range: Range<u64>,
+    buffer_sync_range: Range<u64>,
     buffer: *mut d3d11::ID3D11Buffer,
 }
 
@@ -2985,8 +2989,12 @@ impl MemoryInvalidate {
         &self,
         context: &ComPtr<d3d11::ID3D11DeviceContext>,
         buffer: *mut d3d11::ID3D11Buffer,
-        range: Range<u64>,
+        host_range: Range<u64>,
+        buffer_range: Range<u64>
     ) {
+        // Range<u64> doesn't impl `len` for some bizzare reason relating to underflow
+        debug_assert_eq!(host_range.end - host_range.start, buffer_range.end - buffer_range.start);
+
         unsafe {
             context.CopySubresourceRegion(
                 self.working_buffer.clone().unwrap().as_raw() as _,
@@ -2997,40 +3005,49 @@ impl MemoryInvalidate {
                 buffer as _,
                 0,
                 &d3d11::D3D11_BOX {
-                    left: range.start as _,
+                    left: buffer_range.start as _,
                     top: 0,
                     front: 0,
-                    right: range.end as _,
+                    right: buffer_range.end as _,
                     bottom: 1,
                     back: 1,
                 },
             );
 
             // copy over to our vec
-            let dst = self.host_memory.offset(range.start as isize);
+            let dst = self.host_memory.offset(host_range.start as isize);
             let src = self.map(&context);
-            ptr::copy(src, dst, (range.end - range.start) as usize);
+            ptr::copy(src, dst, (host_range.end - host_range.start) as usize);
             self.unmap(&context);
         }
     }
 
     fn do_invalidate(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
         let stride = self.working_buffer_size;
-        let range = &self.sync_range;
-        let len = range.end - range.start;
+        let len = self.host_sync_range.end - self.host_sync_range.start;
         let chunks = len / stride;
         let remainder = len % stride;
 
         // we split up the copies into chunks the size of our working buffer
         for i in 0..chunks {
-            let offset = range.start + i * stride;
-            let range = offset..(offset + stride);
+            let host_offset = self.host_sync_range.start + i * stride;
+            let host_range = host_offset..(host_offset + stride);
+            let buffer_offset = self.buffer_sync_range.start + i * stride;
+            let buffer_range = buffer_offset..(buffer_offset + stride);
 
-            self.download(context, self.buffer, range);
+            self.download(context, self.buffer, host_range, buffer_range);
         }
 
         if remainder != 0 {
-            self.download(context, self.buffer, (chunks * stride)..range.end);
+            let host_offset = self.host_sync_range.start + chunks * stride;
+            let host_range = host_offset..self.host_sync_range.end;
+            let buffer_offset = self.buffer_sync_range.start + chunks * stride;
+            let buffer_range = buffer_offset..self.buffer_sync_range.end;
+
+            debug_assert!(host_range.end - host_range.start <= stride);
+            debug_assert!(buffer_range.end - buffer_range.start <= stride);
+
+            self.download(context, self.buffer, host_range, buffer_range);
         }
     }
 
@@ -3159,11 +3176,17 @@ impl Memory {
     ) {
         for (_, &(ref buffer_range, ref buffer)) in self.local_buffers.read().iter() {
             if let Some(range) = intersection(&range, &buffer_range) {
+                let buffer_start_offset = range.start - buffer_range.start;
+                let buffer_end_offset = range.end - buffer_range.start;
+
+                let buffer_sync_range = buffer_start_offset..buffer_end_offset;
+
                 MemoryInvalidate {
                     working_buffer: Some(working_buffer.clone()),
                     working_buffer_size,
                     host_memory: self.host_ptr,
-                    sync_range: range.clone(),
+                    host_sync_range: range.clone(),
+                    buffer_sync_range: buffer_sync_range,
                     buffer: buffer.raw,
                 }
                 .do_invalidate(&context);
