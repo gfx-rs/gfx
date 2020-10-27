@@ -561,6 +561,8 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(uav) })
         } else {
+            error!("CreateUnorderedAccessView failed: 0x{:x}", hr);
+
             Err(image::ViewCreationError::Unsupported)
         }
     }
@@ -593,36 +595,28 @@ impl Device {
                 }
             }
             image::ViewKind::D2 => {
-                match info.kind {
-                    image::Kind::D2(_, _, _, 1) => {
-                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
-                        *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV { MipSlice }
-                    }
-                    image::Kind::D2(_, _, _, _) => {
-                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMS;
-                        *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_RTV { UnusedField_NothingToDefine: 0 }
-                    }
-                    _ => unreachable!(),
+                if info.kind.num_samples() > 1 {
+                    desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMS;
+                    *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_RTV { UnusedField_NothingToDefine: 0 }
+                } else {
+                    desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
+                    *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV { MipSlice }
                 }
             }
             image::ViewKind::D2Array => {
-                match info.kind {
-                    image::Kind::D2(_, _, _, 1) => {
-                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
-                        *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_RTV {
-                            MipSlice,
-                            FirstArraySlice,
-                            ArraySize,
-                        }
+                if info.kind.num_samples() > 1 {
+                    desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                    *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_RTV {
+                        FirstArraySlice,
+                        ArraySize,
                     }
-                    image::Kind::D2(_, _, _, _) => {
-                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
-                        *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_RTV {
-                            FirstArraySlice,
-                            ArraySize,
-                        }
+                } else {
+                    desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+                    *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_RTV {
+                        MipSlice,
+                        FirstArraySlice,
+                        ArraySize,
                     }
-                    _ => unreachable!(),
                 }
             }
             image::ViewKind::D3 => {
@@ -648,6 +642,8 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(rtv) })
         } else {
+            error!("CreateRenderTargetView failed: 0x{:x}", hr);
+
             Err(image::ViewCreationError::Unsupported)
         }
     }
@@ -677,15 +673,30 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D2 => {
-                desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2D;
-                *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_DSV { MipSlice }
+                if info.kind.num_samples() > 1 {
+                    desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DMS;
+                    *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_DSV {
+                        UnusedField_NothingToDefine: 0,
+                    }
+                } else {
+                    desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2D;
+                    *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_DSV { MipSlice }
+                }
             }
             image::ViewKind::D2Array => {
-                desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
-                *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_DSV {
-                    MipSlice,
-                    FirstArraySlice,
-                    ArraySize,
+                if info.kind.num_samples() > 1 {
+                    desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
+                    *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_DSV {
+                        FirstArraySlice,
+                        ArraySize,
+                    }
+                } else {
+                    desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+                    *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_DSV {
+                        MipSlice,
+                        FirstArraySlice,
+                        ArraySize,
+                    }
                 }
             }
             _ => unimplemented!(),
@@ -703,6 +714,8 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(dsv) })
         } else {
+            error!("CreateDepthStencilView failed: 0x{:x}", hr);
+
             Err(image::ViewCreationError::Unsupported)
         }
     }
