@@ -268,6 +268,20 @@ fn patch_spirv_resources(
             .map_err(gen_unexpected_error)?;
     }
 
+    assert!(shader_resources.push_constant_buffers.len() <= 1, "Only 1 push constant buffer is supported");
+    for push_constant_buffer in &shader_resources.push_constant_buffers {
+        ast.set_decoration(
+            push_constant_buffer.id,
+            spirv::Decoration::DescriptorSet,
+            0 // value doesn't matter, just needs a value
+        ).map_err(gen_unexpected_error)?;
+        ast.set_decoration(
+            push_constant_buffer.id,
+            spirv::Decoration::Binding,
+            d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1
+        ).map_err(gen_unexpected_error)?;
+    }
+
     Ok(())
 }
 
