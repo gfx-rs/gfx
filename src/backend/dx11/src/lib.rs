@@ -1125,9 +1125,13 @@ impl RenderPassCache {
             .filter(|clear| clear.subpass_id == Some(self.current_subpass))
             .map(|clear| clear.raw);
 
-        cache
-            .dirty_flag
-            .insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::PIPELINE_PS | DirtyStateFlag::VIEWPORTS);
+        cache.dirty_flag.insert(
+            DirtyStateFlag::GRAPHICS_PIPELINE
+                | DirtyStateFlag::DEPTH_STENCIL_STATE
+                | DirtyStateFlag::PIPELINE_PS
+                | DirtyStateFlag::VIEWPORTS
+                | DirtyStateFlag::RENDER_TARGETS_AND_UAVS,
+        );
         internal.clear_attachments(
             context,
             attachments,
@@ -1220,6 +1224,7 @@ bitflags! {
         const PIPELINE_PS = (1 << 7);
         const VIEWPORTS = (1 << 8);
         const BLEND_STATE = (1 << 9);
+        const DEPTH_STENCIL_STATE = (1 << 10);
     }
 }
 
@@ -1463,6 +1468,32 @@ impl CommandBufferState {
         }
     }
 
+    pub fn set_stencil_ref(&mut self, value: pso::StencilValue) {
+        self.stencil_ref = Some(value);
+        self.dirty_flag.insert(DirtyStateFlag::DEPTH_STENCIL_STATE);
+    }
+
+    pub fn bind_depth_stencil_state(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if !self.dirty_flag.contains(DirtyStateFlag::DEPTH_STENCIL_STATE) {
+            return;
+        }
+
+        let pipeline = match self.graphics_pipeline {
+            Some(ref pipeline) => pipeline,
+            None => return,
+        };
+
+        if let Some(ref state) = pipeline.depth_stencil_state {
+            let stencil_ref = state.stencil_ref.static_or(self.stencil_ref.unwrap_or(0));
+
+            unsafe {
+                context.OMSetDepthStencilState(state.raw.as_raw(), stencil_ref);
+            }
+        }
+
+        self.dirty_flag.remove(DirtyStateFlag::DEPTH_STENCIL_STATE)
+    }
+
     pub fn set_graphics_pipeline(&mut self, pipeline: GraphicsPipeline) {
         let prev = self.graphics_pipeline.take();
 
@@ -1502,7 +1533,7 @@ impl CommandBufferState {
             self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
         }
 
-        self.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE);
+        self.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::DEPTH_STENCIL_STATE);
 
         self.graphics_pipeline = Some(pipeline);
     }
@@ -1565,16 +1596,12 @@ impl CommandBufferState {
                     context.RSSetScissorRects(1, [conv::map_rect(&scissor)].as_ptr());
                 }
 
-                if let Some(ref state) = pipeline.depth_stencil_state {
-                    let stencil_ref = state.stencil_ref.static_or(0);
-
-                    context.OMSetDepthStencilState(state.raw.as_raw(), stencil_ref);
-                }
                 self.current_blend = Some(pipeline.blend_state.as_raw());
             }
         };
 
         self.bind_blend_state(context);
+        self.bind_depth_stencil_state(context);
 
         self.dirty_flag.remove(DirtyStateFlag::GRAPHICS_PIPELINE);
     }
@@ -2054,6 +2081,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         if let Some(ref pass) = self.render_pass_cache {
             self.cache.dirty_flag.insert(
                 DirtyStateFlag::GRAPHICS_PIPELINE
+                    | DirtyStateFlag::DEPTH_STENCIL_STATE
                     | DirtyStateFlag::PIPELINE_PS
                     | DirtyStateFlag::VIEWPORTS
                     | DirtyStateFlag::RENDER_TARGETS_AND_UAVS,
@@ -2172,7 +2200,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_stencil_reference(&mut self, _faces: pso::Face, value: pso::StencilValue) {
-        self.cache.stencil_ref = Some(value);
+        self.cache.set_stencil_ref(value);
+        self.cache.bind_depth_stencil_state(&self.context);
     }
 
     unsafe fn set_stencil_read_mask(&mut self, _faces: pso::Face, value: pso::StencilValue) {
