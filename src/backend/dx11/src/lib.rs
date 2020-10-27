@@ -247,7 +247,8 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         max_image_cube_size: max_texture_cube_dimension,
         max_image_array_layers: max_texture_cube_dimension as _,
         max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT as _,
-        max_per_stage_descriptor_uniform_buffers: d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_HW_SLOT_COUNT as _,
+        // Leave top buffer for push constants
+        max_per_stage_descriptor_uniform_buffers: d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1 as _,
         max_per_stage_descriptor_storage_buffers: max_buffer_uav,
         max_per_stage_descriptor_storage_images: max_image_uav,
         max_per_stage_descriptor_sampled_images: d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
