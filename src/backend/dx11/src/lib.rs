@@ -242,6 +242,8 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         | _ => 0b1101, // Optimistic, 8xMSAA and 4xMSAA is required on all formats _but_ RGBA32 which requires 4x.
     };
 
+    let max_constant_buffers = d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1;
+
     hal::Limits {
         max_image_1d_size: max_texture_uv_dimension,
         max_image_2d_size: max_texture_uv_dimension,
@@ -250,10 +252,12 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         max_image_array_layers: max_texture_cube_dimension as _,
         max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT as _,
         // Leave top buffer for push constants
-        max_per_stage_descriptor_uniform_buffers: (d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1) as _,
+        max_per_stage_descriptor_uniform_buffers: max_constant_buffers as _,
         max_per_stage_descriptor_storage_buffers: max_buffer_uav,
         max_per_stage_descriptor_storage_images: max_image_uav,
         max_per_stage_descriptor_sampled_images: d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
+        max_descriptor_set_uniform_buffers_dynamic: max_constant_buffers as _,
+        max_descriptor_set_storage_buffers_dynamic: 0, // TODO: Implement dynamic offsets for storage buffers
         max_texel_elements: max_texture_uv_dimension as _, //TODO
         max_patch_size: d3d11::D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT as _,
         max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
@@ -294,6 +298,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         optimal_buffer_copy_pitch_alignment: 1,  // TODO
         min_vertex_input_binding_stride_alignment: 1,
         max_push_constants_size: MAX_PUSH_CONSTANT_SIZE,
+        max_uniform_buffer_range: 1 << 16,
         ..hal::Limits::default() //TODO
     }
 }
