@@ -149,7 +149,6 @@ fn get_features(
         | hal::Features::NDC_Y_UP;
 
     features.set(
-        // TODO: Add indirect rendering when supported
         hal::Features::TEXTURE_DESCRIPTOR_ARRAY
         | hal::Features::FULL_DRAW_INDEX_U32
         | hal::Features::GEOMETRY_SHADER,
@@ -165,7 +164,8 @@ fn get_features(
         hal::Features::VERTEX_STORES_AND_ATOMICS
         | hal::Features::FRAGMENT_STORES_AND_ATOMICS
         | hal::Features::FORMAT_BC
-        | hal::Features::TESSELLATION_SHADER,
+        | hal::Features::TESSELLATION_SHADER
+        | hal::Features::DRAW_INDIRECT_FIRST_INSTANCE,
         feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_0
     );
 
@@ -2775,22 +2775,30 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn draw_indirect(
         &mut self,
-        _buffer: &Buffer,
-        _offset: buffer::Offset,
-        _draw_count: DrawCount,
+        buffer: &Buffer,
+        offset: buffer::Offset,
+        draw_count: DrawCount,
         _stride: u32,
     ) {
-        unimplemented!()
+        assert_eq!(draw_count, 1, "DX11 doesn't support MULTI_DRAW_INDIRECT");
+        self.context.DrawInstancedIndirect(
+            buffer.internal.raw,
+            offset as _,
+        );
     }
 
     unsafe fn draw_indexed_indirect(
         &mut self,
-        _buffer: &Buffer,
-        _offset: buffer::Offset,
-        _draw_count: DrawCount,
+        buffer: &Buffer,
+        offset: buffer::Offset,
+        draw_count: DrawCount,
         _stride: u32,
     ) {
-        unimplemented!()
+        assert_eq!(draw_count, 1, "DX11 doesn't support MULTI_DRAW_INDIRECT");
+        self.context.DrawIndexedInstancedIndirect(
+            buffer.internal.raw,
+            offset as _,
+        );
     }
 
     unsafe fn draw_indirect_count(
