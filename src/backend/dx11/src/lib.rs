@@ -177,6 +177,8 @@ fn get_features(
     features
 }
 
+const MAX_PUSH_CONSTANT_SIZE: usize = 256;
+
 fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
     let max_texture_uv_dimension = match feature_level {
         d3dcommon::D3D_FEATURE_LEVEL_9_1 | d3dcommon::D3D_FEATURE_LEVEL_9_2 => 2048,
@@ -248,7 +250,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         max_image_array_layers: max_texture_cube_dimension as _,
         max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT as _,
         // Leave top buffer for push constants
-        max_per_stage_descriptor_uniform_buffers: d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1 as _,
+        max_per_stage_descriptor_uniform_buffers: (d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1) as _,
         max_per_stage_descriptor_storage_buffers: max_buffer_uav,
         max_per_stage_descriptor_storage_images: max_image_uav,
         max_per_stage_descriptor_sampled_images: d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
@@ -291,6 +293,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         optimal_buffer_copy_offset_alignment: 1, // TODO
         optimal_buffer_copy_pitch_alignment: 1,  // TODO
         min_vertex_input_binding_stride_alignment: 1,
+        max_push_constants_size: MAX_PUSH_CONSTANT_SIZE,
         ..hal::Limits::default() //TODO
     }
 }
@@ -1805,6 +1808,10 @@ pub struct CommandBuffer {
     // holds information about the active render pass
     render_pass_cache: Option<RenderPassCache>,
 
+    // Have to update entire push constant buffer at once, keep whole buffer data local.
+    push_constant_data: [u32; MAX_PUSH_CONSTANT_SIZE / 4],
+    push_constant_buffer: ComPtr<d3d11::ID3D11Buffer>,
+
     cache: CommandBufferState,
 
     one_time_submit: bool,
@@ -1849,6 +1856,28 @@ impl CommandBuffer {
             (context, None)
         };
 
+        let push_constant_buffer = {
+            let desc = d3d11::D3D11_BUFFER_DESC {
+                ByteWidth: MAX_PUSH_CONSTANT_SIZE as _,
+                Usage: d3d11::D3D11_USAGE_DEFAULT,
+                BindFlags: d3d11::D3D11_BIND_CONSTANT_BUFFER,
+                CPUAccessFlags: 0,
+                MiscFlags: 0,
+                StructureByteStride: 0,
+            };
+
+            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let hr = unsafe {
+                device.CreateBuffer(&desc as *const _, ptr::null_mut(), &mut buffer as *mut _)
+            };
+
+            assert_eq!(hr, winerror::S_OK);
+
+            unsafe { ComPtr::from_raw(buffer) }
+        };
+
+        let push_constant_data = [0_u32; 64];
+
         CommandBuffer {
             internal,
             context,
@@ -1857,6 +1886,8 @@ impl CommandBuffer {
             flush_coherent_memory: Vec::new(),
             invalidate_coherent_memory: Vec::new(),
             render_pass_cache: None,
+            push_constant_data,
+            push_constant_buffer,
             cache: CommandBufferState::new(),
             one_time_submit: false,
             debug_name: None,
@@ -1919,6 +1950,24 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     ) {
         self.one_time_submit = flags.contains(command::CommandBufferFlags::ONE_TIME_SUBMIT);
         self.reset();
+
+        // Push constants are at the top register to allow them to be bound only once.
+        let raw_push_constant_buffer = self.push_constant_buffer.as_raw();
+        self.context.VSSetConstantBuffers(
+            d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1,
+            1,
+            &raw_push_constant_buffer as *const _
+        );
+        self.context.PSSetConstantBuffers(
+            d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1,
+            1,
+            &raw_push_constant_buffer as *const _
+        );
+        self.context.CSSetConstantBuffers(
+            d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1,
+            1,
+            &raw_push_constant_buffer as *const _
+        );
     }
 
     unsafe fn finish(&mut self) {
@@ -2844,19 +2893,43 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         &mut self,
         _layout: &PipelineLayout,
         _stages: pso::ShaderStageFlags,
-        _offset: u32,
-        _constants: &[u32],
+        offset: u32,
+        constants: &[u32],
     ) {
-        // unimplemented!()
+        let start = offset as usize;
+        let end = start + constants.len();
+
+        self.push_constant_data[start..end].copy_from_slice(constants);
+
+        self.context.UpdateSubresource(
+            self.push_constant_buffer.as_raw() as *mut _,
+            0,
+            ptr::null(),
+            self.push_constant_data.as_ptr() as *const _,
+            MAX_PUSH_CONSTANT_SIZE as _,
+            1,
+        );
     }
 
     unsafe fn push_compute_constants(
         &mut self,
         _layout: &PipelineLayout,
-        _offset: u32,
-        _constants: &[u32],
+        offset: u32,
+        constants: &[u32],
     ) {
-        unimplemented!()
+        let start = offset as usize;
+        let end = start + constants.len();
+
+        self.push_constant_data[start..end].copy_from_slice(constants);
+
+        self.context.UpdateSubresource(
+            self.push_constant_buffer.as_raw() as *mut _,
+            0,
+            ptr::null(),
+            self.push_constant_data.as_ptr() as *const _,
+            MAX_PUSH_CONSTANT_SIZE as _,
+            1,
+        );
     }
 
     unsafe fn execute_commands<'a, T, I>(&mut self, _buffers: I)
