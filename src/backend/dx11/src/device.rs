@@ -1847,7 +1847,18 @@ impl device::Device<Backend> for Device {
 
         for binding in bindings.iter() {
             let content = DescriptorContent::from(binding.ty);
-            total.add_content_many(content, binding.stage_flags, binding.count as _);
+            // If this binding is used by the graphics pipeline and is a UAV, it belongs to the "Output Merger"
+            // stage, so we only put them in the fragment stage to save redundant descriptor allocations.
+            let stage_flags =
+                if content.contains(DescriptorContent::UAV)
+                    && binding.stage_flags.intersects(pso::ShaderStageFlags::ALL - pso::ShaderStageFlags::COMPUTE) {
+                let mut stage_flags = pso::ShaderStageFlags::FRAGMENT;
+                stage_flags.set(pso::ShaderStageFlags::COMPUTE, binding.stage_flags.contains(pso::ShaderStageFlags::COMPUTE));
+                stage_flags
+            } else {
+                binding.stage_flags
+            };
+            total.add_content_many(content, stage_flags, binding.count as _);
         }
 
         bindings.sort_by_key(|a| a.binding);
@@ -1969,10 +1980,20 @@ impl device::Device<Backend> for Device {
                         .assign_stages(&offsets, binding.stage_flags, handles.t);
                 };
                 if content.contains(DescriptorContent::UAV) {
+                    // If this binding is used by the graphics pipeline and is a UAV, it belongs to the "Output Merger"
+                    // stage, so we only put them in the fragment stage to save redundant descriptor allocations.
+                    let stage_flags = if binding.stage_flags.intersects(pso::ShaderStageFlags::ALL - pso::ShaderStageFlags::COMPUTE) {
+                        let mut stage_flags = pso::ShaderStageFlags::FRAGMENT;
+                        stage_flags.set(pso::ShaderStageFlags::COMPUTE, binding.stage_flags.contains(pso::ShaderStageFlags::COMPUTE));
+                        stage_flags
+                    } else {
+                        binding.stage_flags
+                    };
+
                     let offsets = mapping.map_other(|map| map.u);
                     write
                         .set
-                        .assign_stages(&offsets, binding.stage_flags, handles.u);
+                        .assign_stages(&offsets, stage_flags, handles.u);
                 };
                 if content.contains(DescriptorContent::SAMPLER) {
                     let offsets = mapping.map_other(|map| map.s);

@@ -1262,7 +1262,7 @@ impl RenderPassCache {
 
 bitflags! {
     struct DirtyStateFlag : u32 {
-        const RENDER_TARGETS = (1 << 1);
+        const RENDER_TARGETS_AND_UAVS = (1 << 1);
         const VERTEX_BUFFERS = (1 << 2);
         const GRAPHICS_PIPELINE = (1 << 3);
         const PIPELINE_GS = (1 << 4);
@@ -1279,6 +1279,8 @@ pub struct CommandBufferState {
 
     render_target_len: u32,
     render_targets: [*mut d3d11::ID3D11RenderTargetView; 8],
+    uav_len: u32,
+    uavs: [*mut d3d11::ID3D11UnorderedAccessView; d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as _],
     depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
     readonly_depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
     depth_target_read_only: bool,
@@ -1316,6 +1318,8 @@ impl CommandBufferState {
             dirty_flag: DirtyStateFlag::empty(),
             render_target_len: 0,
             render_targets: [ptr::null_mut(); 8],
+            uav_len: 0,
+            uavs: [ptr::null_mut(); 8],
             depth_target: None,
             readonly_depth_target: None,
             depth_target_read_only: false,
@@ -1337,6 +1341,7 @@ impl CommandBufferState {
 
     fn clear(&mut self) {
         self.render_target_len = 0;
+        self.uav_len = 0;
         self.depth_target = None;
         self.readonly_depth_target = None;
         self.depth_target_read_only = false;
@@ -1375,6 +1380,10 @@ impl CommandBufferState {
     }
 
     pub fn bind_vertex_buffers(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if !self.dirty_flag.contains(DirtyStateFlag::VERTEX_BUFFERS) {
+            return;
+        }
+
         if let Some(binding_count) = self.max_bindings {
             if self.vertex_buffers.len() >= binding_count as usize
                 && self.vertex_strides.len() >= binding_count as usize
@@ -1402,6 +1411,10 @@ impl CommandBufferState {
     }
 
     pub fn bind_viewports(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if !self.dirty_flag.contains(DirtyStateFlag::VIEWPORTS) {
+            return;
+        }
+
         if let Some(ref pipeline) = self.graphics_pipeline {
             if let Some(ref viewport) = pipeline.baked_states.viewport {
                 unsafe {
@@ -1435,25 +1448,43 @@ impl CommandBufferState {
         self.depth_target = depth_target;
         self.readonly_depth_target = readonly_depth_target;
 
-        self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS);
+        self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
     }
 
     pub fn bind_render_targets(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if !self.dirty_flag.contains(DirtyStateFlag::RENDER_TARGETS_AND_UAVS) {
+            return;
+        }
+
         let depth_target = if self.depth_target_read_only {
             self.readonly_depth_target
         } else {
             self.depth_target
         }.unwrap_or(ptr::null_mut());
 
+        let uav_start_index = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - self.uav_len;
+
         unsafe {
-            context.OMSetRenderTargets(
-                self.render_target_len,
-                self.render_targets.as_ptr(),
-                depth_target,
-            );
+            if self.uav_len > 0 {
+                context.OMSetRenderTargetsAndUnorderedAccessViews(
+                    self.render_target_len,
+                    self.render_targets.as_ptr(),
+                    depth_target,
+                    uav_start_index,
+                    self.uav_len,
+                    &self.uavs[uav_start_index as usize] as *const *mut _,
+                    ptr::null(),
+                )
+            } else {
+                context.OMSetRenderTargets(
+                    self.render_target_len,
+                    self.render_targets.as_ptr(),
+                    depth_target,
+                )
+            };
         }
 
-        self.dirty_flag.remove(DirtyStateFlag::RENDER_TARGETS);
+        self.dirty_flag.remove(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
     }
 
     pub fn set_blend_factor(&mut self, factor: [f32; 4]) {
@@ -1519,7 +1550,7 @@ impl CommandBufferState {
 
         if self.depth_target_read_only != depth_target_read_only {
             self.depth_target_read_only = depth_target_read_only;
-            self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS);
+            self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
         }
 
         self.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE);
@@ -1528,6 +1559,10 @@ impl CommandBufferState {
     }
 
     pub fn bind_graphics_pipeline(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if !self.dirty_flag.contains(DirtyStateFlag::GRAPHICS_PIPELINE) {
+            return;
+        }
+
         if let Some(ref pipeline) = self.graphics_pipeline {
             self.vertex_strides.clear();
             self.vertex_strides.extend(&pipeline.strides);
@@ -1596,21 +1631,10 @@ impl CommandBufferState {
     }
 
     pub fn bind(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
-        if self.dirty_flag.contains(DirtyStateFlag::RENDER_TARGETS) {
-            self.bind_render_targets(context);
-        }
-
-        if self.dirty_flag.contains(DirtyStateFlag::GRAPHICS_PIPELINE) {
-            self.bind_graphics_pipeline(context);
-        }
-
-        if self.dirty_flag.contains(DirtyStateFlag::VERTEX_BUFFERS) {
-            self.bind_vertex_buffers(context);
-        }
-
-        if self.dirty_flag.contains(DirtyStateFlag::VIEWPORTS) {
-            self.bind_viewports(context);
-        }
+        self.bind_render_targets(context);
+        self.bind_graphics_pipeline(context);
+        self.bind_vertex_buffers(context);
+        self.bind_viewports(context);
     }
 }
 
@@ -2083,7 +2107,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 DirtyStateFlag::GRAPHICS_PIPELINE
                     | DirtyStateFlag::PIPELINE_PS
                     | DirtyStateFlag::VIEWPORTS
-                    | DirtyStateFlag::RENDER_TARGETS,
+                    | DirtyStateFlag::RENDER_TARGETS_AND_UAVS,
             );
             self.internal
                 .clear_attachments(&self.context, clears, rects, pass);
@@ -2387,7 +2411,22 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     set.handles.offset(rd.pool_offset as isize) as *const *mut _,
                 );
             }
+
+            // UAVs going to the graphics pipeline are always treated as pixel shader bindings.
+            if let Some(rd) = info.registers.ps.u.as_some() {
+            	// We bind UAVs in inverse order from the top to prevent invalidation
+            	// when the render target count changes.
+                for idx in (0..(rd.count)).rev() {
+                    let ptr = (*set.handles.offset(rd.pool_offset as isize + idx as isize)).0;
+                    let uav_register = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - 1 - rd.res_index as u32 - idx as u32;
+                    self.cache.uavs[uav_register as usize] = ptr as *mut _;
+                }
+                self.cache.uav_len = (rd.res_index + rd.count) as u32;
+                self.cache.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
+            }
         }
+
+        self.cache.bind_render_targets(&self.context);
     }
 
     unsafe fn bind_compute_pipeline(&mut self, pipeline: &ComputePipeline) {
@@ -3701,7 +3740,7 @@ impl CoherentBuffers {
 
 /// Newtype around a common interface that all bindable resources inherit from.
 #[derive(Debug, Copy, Clone)]
-#[repr(C)]
+#[repr(transparent)]
 struct Descriptor(*mut d3d11::ID3D11DeviceChild);
 
 bitflags! {
@@ -3735,13 +3774,10 @@ impl From<pso::DescriptorType> for DescriptorContent {
                     with_sampler: false,
                 },
             }
-            | Dt::Image {
-                ty: Idt::Storage { read_only: true },
-            }
             | Dt::InputAttachment => DescriptorContent::SRV,
             Dt::Image {
-                ty: Idt::Storage { read_only: false },
-            } => DescriptorContent::SRV | DescriptorContent::UAV,
+                ty: Idt::Storage { .. },
+            } => DescriptorContent::UAV,
             Dt::Buffer {
                 ty: Bdt::Uniform,
                 format:
@@ -3765,7 +3801,7 @@ impl From<pso::DescriptorType> for DescriptorContent {
                     Bdf::Structured {
                         dynamic_offset: true,
                     },
-            } => DescriptorContent::SRV | DescriptorContent::UAV | DescriptorContent::DYNAMIC,
+            } => DescriptorContent::UAV | DescriptorContent::DYNAMIC,
             Dt::Buffer {
                 ty: Bdt::Storage { read_only: true },
                 ..
@@ -3773,7 +3809,7 @@ impl From<pso::DescriptorType> for DescriptorContent {
             Dt::Buffer {
                 ty: Bdt::Storage { read_only: false },
                 ..
-            } => DescriptorContent::SRV | DescriptorContent::UAV,
+            } => DescriptorContent::UAV,
         }
     }
 }
