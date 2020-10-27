@@ -2759,7 +2759,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _max_draw_count: u32,
         _stride: u32,
     ) {
-        unimplemented!()
+        panic!("DX11 doesn't support DRAW_INDIRECT_COUNT")
     }
 
     unsafe fn draw_indexed_indirect_count(
@@ -2771,11 +2771,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _max_draw_count: u32,
         _stride: u32,
     ) {
-        unimplemented!()
+        panic!("DX11 doesn't support DRAW_INDIRECT_COUNT")
     }
 
     unsafe fn draw_mesh_tasks(&mut self, _: TaskCount, _: TaskCount) {
-        unimplemented!()
+        panic!("DX11 doesn't support MESH_SHADERS")
     }
 
     unsafe fn draw_mesh_tasks_indirect(
@@ -2785,7 +2785,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: hal::DrawCount,
         _: u32,
     ) {
-        unimplemented!()
+        panic!("DX11 doesn't support MESH_SHADERS")
     }
 
     unsafe fn draw_mesh_tasks_indirect_count(
@@ -2797,7 +2797,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: hal::DrawCount,
         _: u32,
     ) {
-        unimplemented!()
+        panic!("DX11 doesn't support MESH_SHADERS")
     }
 
     unsafe fn set_event(&mut self, _: &(), _: pso::PipelineStage) {
