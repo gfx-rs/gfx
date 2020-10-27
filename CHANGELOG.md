@@ -1,5 +1,14 @@
 # Change Log
 
+### backend-dx11-0.6.11 (27-10-2020)
+  - implement push constants
+  - implement indirect rendering
+  - fix error messages when performing unsupported draws
+  - fix memory invalidation and mapping
+  - actually set stencil reference value
+  - validate shader registers are in range
+  - improve limits
+
 ### backend-dx11-0.6.10 (26-10-2020)
   - fix dynamic offsets in compute shaders with command list emulation
   - fix creation of multisampled depth-stencil views
