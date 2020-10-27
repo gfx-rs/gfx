@@ -1,5 +1,10 @@
 # Change Log
 
+### backend-dx11-0.6.10 (26-10-2020)
+  - fix dynamic offsets in compute shaders with command list emulation
+  - fix creation of multisampled depth-stencil views
+  - fix binding of read/write storage buffers/images when rendering to a output attachment
+
 ### backend-metal-0.6.4, backend-dx12-0.6.11, backend-dx11-0.6.9 (26-10-2020)
   - fix entry point selection to choose the correct entry point (instead of a default) when multiple entry points exist
 
