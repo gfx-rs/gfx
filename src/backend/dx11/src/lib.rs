@@ -20,8 +20,6 @@ of continuous descriptor ranges (per type, per shader stage).
 extern crate bitflags;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate winapi;
 
 use auxil::ShaderStage;
 use hal::{
@@ -29,7 +27,10 @@ use hal::{
     IndexCount, InstanceCount, Limits, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
 };
 use range_alloc::RangeAllocator;
-use crate::device::DepthStencilState;
+use crate::{
+    device::DepthStencilState,
+    debug::set_debug_name,
+};
 
 use winapi::{shared::{
     dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT_ALLOW_TEARING},
@@ -68,7 +69,7 @@ macro_rules! debug_marker {
         {
             $crate::debug::debug_marker(
                 $context,
-                format_args!($($arg)+),
+                &format!($($arg)+),
             );
         }
     });
@@ -968,6 +969,7 @@ impl window::PresentationSurface<Backend> for Surface {
                 &mut resource as *mut *mut _ as *mut *mut _,
             )
         );
+        set_debug_name(&*resource, "Swapchain Image");
 
         let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
         let format = conv::map_format(config.format).unwrap();
@@ -983,6 +985,7 @@ impl window::PresentationSurface<Backend> for Surface {
             layers: 0..1,
         };
         let view = device.view_image_as_render_target(&view_info).unwrap();
+        set_debug_name(&view, "Swapchain Image View");
 
         self.presentation = Some(Presentation {
             swapchain,
@@ -1004,6 +1007,7 @@ impl window::PresentationSurface<Backend> for Surface {
                     unordered_access_views: Vec::new(),
                     depth_stencil_views: Vec::new(),
                     render_target_views: Vec::new(),
+                    debug_name: None,
                 },
                 bind: conv::map_image_usage(config.image_usage, config.format.surface_desc()),
                 requirements: memory::Requirements {
@@ -1750,6 +1754,9 @@ pub struct CommandBuffer {
     cache: CommandBufferState,
 
     one_time_submit: bool,
+
+    debug_name: Option<String>,
+    debug_scopes: Vec<Option<debug::DebugScope>>,
 }
 
 impl fmt::Debug for CommandBuffer {
@@ -1784,6 +1791,8 @@ impl CommandBuffer {
             render_pass_cache: None,
             cache: CommandBufferState::new(),
             one_time_submit: false,
+            debug_name: None,
+            debug_scopes: Vec::new(),
         }
     }
 
@@ -1830,6 +1839,7 @@ impl CommandBuffer {
         self.invalidate_coherent_memory.clear();
         self.render_pass_cache = None;
         self.cache.clear();
+        self.debug_scopes.clear();
     }
 }
 
@@ -1844,11 +1854,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn finish(&mut self) {
-        let mut list = ptr::null_mut();
+        let mut list: *mut d3d11::ID3D11CommandList = ptr::null_mut();
         let hr = self
             .context
-            .FinishCommandList(FALSE, &mut list as *mut *mut _ as *mut *mut _);
+            .FinishCommandList(FALSE, &mut list as *mut *mut _);
         assert_eq!(hr, winerror::S_OK);
+
+        if let Some(ref name) = self.debug_name {
+            set_debug_name(&*list, name);
+        }
 
         self.list.replace(Some(ComPtr::from_raw(list)));
     }
@@ -2738,14 +2752,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn insert_debug_marker(&mut self, _name: &str, _color: u32) {
-        //TODO
+    unsafe fn insert_debug_marker(&mut self, name: &str, _color: u32) {
+        debug::debug_marker(&self.context, &format!("{}", name))
     }
     unsafe fn begin_debug_marker(&mut self, _name: &str, _color: u32) {
-        //TODO
+        // TODO: This causes everything after this to be part of this scope, why?
+        // self.debug_scopes.push(debug::DebugScope::with_name(&self.context, format_args!("{}", name)))
     }
     unsafe fn end_debug_marker(&mut self) {
-        //TODO
+        // self.debug_scopes.pop();
     }
 }
 
@@ -3090,6 +3105,7 @@ pub struct InternalBuffer {
     srv: Option<*mut d3d11::ID3D11ShaderResourceView>,
     uav: Option<*mut d3d11::ID3D11UnorderedAccessView>,
     usage: buffer::Usage,
+    debug_name: Option<String>,
 }
 
 pub struct Buffer {
@@ -3144,6 +3160,8 @@ pub struct InternalImage {
 
     /// Contains RTVs for all subresources
     render_target_views: Vec<ComPtr<d3d11::ID3D11RenderTargetView>>,
+
+    debug_name: Option<String>
 }
 
 impl fmt::Debug for InternalImage {
@@ -3317,10 +3335,6 @@ impl RegisterData<DescriptorIndex> {
         if content.contains(DescriptorContent::SAMPLER) {
             self.s += many;
         }
-    }
-
-    fn add_content(&mut self, content: DescriptorContent) {
-        self.add_content_many(content, 1)
     }
 
     fn sum(&self) -> DescriptorIndex {

@@ -644,10 +644,9 @@ fn map_blend_targets(
     targets
 }
 
-pub(crate) fn map_blend_desc(desc: &BlendDesc) -> D3D11_BLEND_DESC {
+pub(crate) fn map_blend_desc(desc: &BlendDesc, multisampling: &Option<Multisampling>) -> D3D11_BLEND_DESC {
     D3D11_BLEND_DESC {
-        // TODO: msaa
-        AlphaToCoverageEnable: FALSE,
+        AlphaToCoverageEnable: multisampling.as_ref().map_or(false, |m| m.alpha_coverage) as _,
         IndependentBlendEnable: TRUE,
         RenderTarget: map_blend_targets(&desc.targets),
     }
