@@ -20,8 +20,6 @@ of continuous descriptor ranges (per type, per shader stage).
 extern crate bitflags;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate winapi;
 
 use auxil::ShaderStage;
 use hal::{
@@ -29,7 +27,10 @@ use hal::{
     IndexCount, InstanceCount, Limits, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
 };
 use range_alloc::RangeAllocator;
-use crate::device::DepthStencilState;
+use crate::{
+    device::DepthStencilState,
+    debug::set_debug_name,
+};
 
 use winapi::{shared::{
     dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT_ALLOW_TEARING},
@@ -42,9 +43,9 @@ use winapi::{shared::{
 use wio::com::ComPtr;
 
 use arrayvec::ArrayVec;
-use parking_lot::{Condvar, Mutex};
+use parking_lot::{Condvar, Mutex, RwLock};
 
-use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, os::raw::c_void, ptr, sync::Arc};
+use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, os::raw::c_void, ptr, sync::{Arc, Weak}};
 
 macro_rules! debug_scope {
     ($context:expr, $($arg:tt)+) => ({
@@ -68,14 +69,13 @@ macro_rules! debug_marker {
         {
             $crate::debug::debug_marker(
                 $context,
-                format_args!($($arg)+),
+                &format!($($arg)+),
             );
         }
     });
 }
 
 mod conv;
-#[cfg(debug_assertions)]
 mod debug;
 mod device;
 mod dxgi;
@@ -651,7 +651,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             let create_flags = 0;
 
             // TODO: request debug device only on debug config?
-            let mut device = ptr::null_mut();
+            let mut device: *mut d3d11::ID3D11Device = ptr::null_mut();
             let mut cxt = ptr::null_mut();
             let hr = func(
                 self.adapter.as_raw() as *mut _,
@@ -678,8 +678,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             (ComPtr::from_raw(device), ComPtr::from_raw(cxt))
         };
 
+        let device1 = device.cast::<d3d11_1::ID3D11Device1>().ok();
+
         let device = device::Device::new(
             device,
+            device1,
             cxt,
             requested_features,
             self.memory_properties.clone(),
@@ -968,6 +971,7 @@ impl window::PresentationSurface<Backend> for Surface {
                 &mut resource as *mut *mut _ as *mut *mut _,
             )
         );
+        set_debug_name(&*resource, "Swapchain Image");
 
         let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
         let format = conv::map_format(config.format).unwrap();
@@ -983,6 +987,7 @@ impl window::PresentationSurface<Backend> for Surface {
             layers: 0..1,
         };
         let view = device.view_image_as_render_target(&view_info).unwrap();
+        set_debug_name(&view, "Swapchain Image View");
 
         self.presentation = Some(Presentation {
             swapchain,
@@ -1004,6 +1009,7 @@ impl window::PresentationSurface<Backend> for Surface {
                     unordered_access_views: Vec::new(),
                     depth_stencil_views: Vec::new(),
                     render_target_views: Vec::new(),
+                    debug_name: None,
                 },
                 bind: conv::map_image_usage(config.image_usage, config.format.surface_desc()),
                 requirements: memory::Requirements {
@@ -1256,7 +1262,7 @@ impl RenderPassCache {
 
 bitflags! {
     struct DirtyStateFlag : u32 {
-        const RENDER_TARGETS = (1 << 1);
+        const RENDER_TARGETS_AND_UAVS = (1 << 1);
         const VERTEX_BUFFERS = (1 << 2);
         const GRAPHICS_PIPELINE = (1 << 3);
         const PIPELINE_GS = (1 << 4);
@@ -1273,6 +1279,8 @@ pub struct CommandBufferState {
 
     render_target_len: u32,
     render_targets: [*mut d3d11::ID3D11RenderTargetView; 8],
+    uav_len: u32,
+    uavs: [*mut d3d11::ID3D11UnorderedAccessView; d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as _],
     depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
     readonly_depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
     depth_target_read_only: bool,
@@ -1310,6 +1318,8 @@ impl CommandBufferState {
             dirty_flag: DirtyStateFlag::empty(),
             render_target_len: 0,
             render_targets: [ptr::null_mut(); 8],
+            uav_len: 0,
+            uavs: [ptr::null_mut(); 8],
             depth_target: None,
             readonly_depth_target: None,
             depth_target_read_only: false,
@@ -1331,6 +1341,7 @@ impl CommandBufferState {
 
     fn clear(&mut self) {
         self.render_target_len = 0;
+        self.uav_len = 0;
         self.depth_target = None;
         self.readonly_depth_target = None;
         self.depth_target_read_only = false;
@@ -1369,6 +1380,10 @@ impl CommandBufferState {
     }
 
     pub fn bind_vertex_buffers(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if !self.dirty_flag.contains(DirtyStateFlag::VERTEX_BUFFERS) {
+            return;
+        }
+
         if let Some(binding_count) = self.max_bindings {
             if self.vertex_buffers.len() >= binding_count as usize
                 && self.vertex_strides.len() >= binding_count as usize
@@ -1396,6 +1411,10 @@ impl CommandBufferState {
     }
 
     pub fn bind_viewports(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if !self.dirty_flag.contains(DirtyStateFlag::VIEWPORTS) {
+            return;
+        }
+
         if let Some(ref pipeline) = self.graphics_pipeline {
             if let Some(ref viewport) = pipeline.baked_states.viewport {
                 unsafe {
@@ -1429,25 +1448,43 @@ impl CommandBufferState {
         self.depth_target = depth_target;
         self.readonly_depth_target = readonly_depth_target;
 
-        self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS);
+        self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
     }
 
     pub fn bind_render_targets(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if !self.dirty_flag.contains(DirtyStateFlag::RENDER_TARGETS_AND_UAVS) {
+            return;
+        }
+
         let depth_target = if self.depth_target_read_only {
             self.readonly_depth_target
         } else {
             self.depth_target
         }.unwrap_or(ptr::null_mut());
 
+        let uav_start_index = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - self.uav_len;
+
         unsafe {
-            context.OMSetRenderTargets(
-                self.render_target_len,
-                self.render_targets.as_ptr(),
-                depth_target,
-            );
+            if self.uav_len > 0 {
+                context.OMSetRenderTargetsAndUnorderedAccessViews(
+                    self.render_target_len,
+                    self.render_targets.as_ptr(),
+                    depth_target,
+                    uav_start_index,
+                    self.uav_len,
+                    &self.uavs[uav_start_index as usize] as *const *mut _,
+                    ptr::null(),
+                )
+            } else {
+                context.OMSetRenderTargets(
+                    self.render_target_len,
+                    self.render_targets.as_ptr(),
+                    depth_target,
+                )
+            };
         }
 
-        self.dirty_flag.remove(DirtyStateFlag::RENDER_TARGETS);
+        self.dirty_flag.remove(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
     }
 
     pub fn set_blend_factor(&mut self, factor: [f32; 4]) {
@@ -1513,7 +1550,7 @@ impl CommandBufferState {
 
         if self.depth_target_read_only != depth_target_read_only {
             self.depth_target_read_only = depth_target_read_only;
-            self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS);
+            self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
         }
 
         self.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE);
@@ -1522,6 +1559,10 @@ impl CommandBufferState {
     }
 
     pub fn bind_graphics_pipeline(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if !self.dirty_flag.contains(DirtyStateFlag::GRAPHICS_PIPELINE) {
+            return;
+        }
+
         if let Some(ref pipeline) = self.graphics_pipeline {
             self.vertex_strides.clear();
             self.vertex_strides.extend(&pipeline.strides);
@@ -1590,21 +1631,10 @@ impl CommandBufferState {
     }
 
     pub fn bind(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
-        if self.dirty_flag.contains(DirtyStateFlag::RENDER_TARGETS) {
-            self.bind_render_targets(context);
-        }
-
-        if self.dirty_flag.contains(DirtyStateFlag::GRAPHICS_PIPELINE) {
-            self.bind_graphics_pipeline(context);
-        }
-
-        if self.dirty_flag.contains(DirtyStateFlag::VERTEX_BUFFERS) {
-            self.bind_vertex_buffers(context);
-        }
-
-        if self.dirty_flag.contains(DirtyStateFlag::VIEWPORTS) {
-            self.bind_viewports(context);
-        }
+        self.bind_render_targets(context);
+        self.bind_graphics_pipeline(context);
+        self.bind_vertex_buffers(context);
+        self.bind_viewports(context);
     }
 }
 
@@ -1668,7 +1698,7 @@ fn generate_graphics_dynamic_constant_buffer_offsets<'a>(
         }
     }
 
-    if exists_dynamic_constant_buffer && context1_some {
+    if exists_dynamic_constant_buffer && !context1_some {
         warn!("D3D11.1 runtime required for dynamic offsets into constant buffers. Offsets will be ignored.");
     }
 
@@ -1725,7 +1755,7 @@ fn generate_compute_dynamic_constant_buffer_offsets<'a>(
         }
     }
 
-    if exists_dynamic_constant_buffer && context1_some {
+    if exists_dynamic_constant_buffer && !context1_some {
         warn!("D3D11.1 runtime required for dynamic offsets into constant buffers. Offsets will be ignored.");
     }
 
@@ -1750,6 +1780,9 @@ pub struct CommandBuffer {
     cache: CommandBufferState,
 
     one_time_submit: bool,
+
+    debug_name: Option<String>,
+    debug_scopes: Vec<Option<debug::DebugScope>>,
 }
 
 impl fmt::Debug for CommandBuffer {
@@ -1763,16 +1796,30 @@ unsafe impl Sync for CommandBuffer {}
 
 impl CommandBuffer {
     fn create_deferred(
-        device: ComPtr<d3d11::ID3D11Device>,
+        device: &d3d11::ID3D11Device,
+        device1: Option<&d3d11_1::ID3D11Device1>,
         internal: Arc<internal::Internal>,
     ) -> Self {
-        let mut context: *mut d3d11::ID3D11DeviceContext = ptr::null_mut();
-        let hr =
-            unsafe { device.CreateDeferredContext(0, &mut context as *mut *mut _ as *mut *mut _) };
-        assert_eq!(hr, winerror::S_OK);
+        let (context, context1) = if let Some(device1) = device1 {
+            let mut context1: *mut d3d11_1::ID3D11DeviceContext1 = ptr::null_mut();
+            let hr =
+                unsafe { device1.CreateDeferredContext1(0, &mut context1 as *mut *mut _) };
+            assert_eq!(hr, winerror::S_OK);
 
-        let context = unsafe { ComPtr::from_raw(context) };
-        let context1 = context.cast::<d3d11_1::ID3D11DeviceContext1>().ok();
+            let context1 = unsafe { ComPtr::from_raw(context1) };
+            let context = context1.cast::<d3d11::ID3D11DeviceContext>().unwrap();
+
+            (context, Some(context1))
+        } else {
+            let mut context: *mut d3d11::ID3D11DeviceContext = ptr::null_mut();
+            let hr =
+                unsafe { device.CreateDeferredContext(0, &mut context as *mut *mut _) };
+            assert_eq!(hr, winerror::S_OK);
+
+            let context = unsafe { ComPtr::from_raw(context) };
+
+            (context, None)
+        };
 
         CommandBuffer {
             internal,
@@ -1784,6 +1831,8 @@ impl CommandBuffer {
             render_pass_cache: None,
             cache: CommandBufferState::new(),
             one_time_submit: false,
+            debug_name: None,
+            debug_scopes: Vec::new(),
         }
     }
 
@@ -1830,6 +1879,7 @@ impl CommandBuffer {
         self.invalidate_coherent_memory.clear();
         self.render_pass_cache = None;
         self.cache.clear();
+        self.debug_scopes.clear();
     }
 }
 
@@ -1844,11 +1894,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn finish(&mut self) {
-        let mut list = ptr::null_mut();
+        let mut list: *mut d3d11::ID3D11CommandList = ptr::null_mut();
         let hr = self
             .context
-            .FinishCommandList(FALSE, &mut list as *mut *mut _ as *mut *mut _);
+            .FinishCommandList(FALSE, &mut list as *mut *mut _);
         assert_eq!(hr, winerror::S_OK);
+
+        if let Some(ref name) = self.debug_name {
+            set_debug_name(&*list, name);
+        }
 
         self.list.replace(Some(ComPtr::from_raw(list)));
     }
@@ -2053,7 +2107,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 DirtyStateFlag::GRAPHICS_PIPELINE
                     | DirtyStateFlag::PIPELINE_PS
                     | DirtyStateFlag::VIEWPORTS
-                    | DirtyStateFlag::RENDER_TARGETS,
+                    | DirtyStateFlag::RENDER_TARGETS_AND_UAVS,
             );
             self.internal
                 .clear_attachments(&self.context, clears, rects, pass);
@@ -2271,6 +2325,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 let num_buffers = rd.count as u32;
                 let constant_buffers = set.handles.offset(rd.pool_offset as isize);
                 if let Some(ref context1) = self.context1 {
+                    // This call with offsets won't work right with command list emulation
+                    // unless we reset the first and last constant buffers to null.
+                    if self.internal.command_list_emulation {
+                        let null_cbuf = [ptr::null_mut::<d3d11::ID3D11Buffer>()];
+                        context1.VSSetConstantBuffers(start_slot, 1, &null_cbuf as *const _);
+                        if num_buffers > 1 {
+                            context1.VSSetConstantBuffers(start_slot + num_buffers - 1, 1, &null_cbuf as *const _);
+                        }
+                    }
+
                     // TODO: This should be the actual buffer length for RBA purposes,
                     //       but that information isn't easily accessible here.
                     context1.VSSetConstantBuffers1(
@@ -2308,6 +2372,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 let num_buffers = rd.count as u32;
                 let constant_buffers = set.handles.offset(rd.pool_offset as isize);
                 if let Some(ref context1) = self.context1 {
+                    // This call with offsets won't work right with command list emulation
+                    // unless we reset the first and last constant buffers to null.
+                    if self.internal.command_list_emulation {
+                        let null_cbuf = [ptr::null_mut::<d3d11::ID3D11Buffer>()];
+                        context1.PSSetConstantBuffers(start_slot, 1, &null_cbuf as *const _);
+                        if num_buffers > 1 {
+                            context1.PSSetConstantBuffers(start_slot + num_buffers - 1, 1, &null_cbuf as *const _);
+                        }
+                    }
+
                     context1.PSSetConstantBuffers1(
                         start_slot,
                         num_buffers,
@@ -2337,7 +2411,22 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     set.handles.offset(rd.pool_offset as isize) as *const *mut _,
                 );
             }
+
+            // UAVs going to the graphics pipeline are always treated as pixel shader bindings.
+            if let Some(rd) = info.registers.ps.u.as_some() {
+            	// We bind UAVs in inverse order from the top to prevent invalidation
+            	// when the render target count changes.
+                for idx in (0..(rd.count)).rev() {
+                    let ptr = (*set.handles.offset(rd.pool_offset as isize + idx as isize)).0;
+                    let uav_register = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - 1 - rd.res_index as u32 - idx as u32;
+                    self.cache.uavs[uav_register as usize] = ptr as *mut _;
+                }
+                self.cache.uav_len = (rd.res_index + rd.count) as u32;
+                self.cache.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
+            }
         }
+
+        self.cache.bind_render_targets(&self.context);
     }
 
     unsafe fn bind_compute_pipeline(&mut self, pipeline: &ComputePipeline) {
@@ -2416,6 +2505,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 let num_buffers = rd.count as u32;
                 let constant_buffers = set.handles.offset(rd.pool_offset as isize);
                 if let Some(ref context1) = self.context1 {
+                    // This call with offsets won't work right with command list emulation
+                    // unless we reset the first and last constant buffers to null.
+                    if self.internal.command_list_emulation {
+                        let null_cbuf = [ptr::null_mut::<d3d11::ID3D11Buffer>()];
+                        context1.CSSetConstantBuffers(start_slot, 1, &null_cbuf as *const _);
+                        if num_buffers > 1 {
+                            context1.CSSetConstantBuffers(start_slot + num_buffers - 1, 1, &null_cbuf as *const _);
+                        }
+                    }
+
                     // TODO: This should be the actual buffer length for RBA purposes,
                     //       but that information isn't easily accessible here.
                     context1.CSSetConstantBuffers1(
@@ -2738,14 +2837,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn insert_debug_marker(&mut self, _name: &str, _color: u32) {
-        //TODO
+    unsafe fn insert_debug_marker(&mut self, name: &str, _color: u32) {
+        debug::debug_marker(&self.context, &format!("{}", name))
     }
     unsafe fn begin_debug_marker(&mut self, _name: &str, _color: u32) {
-        //TODO
+        // TODO: This causes everything after this to be part of this scope, why?
+        // self.debug_scopes.push(debug::DebugScope::with_name(&self.context, format_args!("{}", name)))
     }
     unsafe fn end_debug_marker(&mut self) {
-        //TODO
+        // self.debug_scopes.pop();
     }
 }
 
@@ -2895,7 +2995,9 @@ impl MemoryInvalidate {
     }
 }
 
-// Since we dont have any heaps to work with directly, everytime we bind a
+type LocalResourceArena<T> = thunderdome::Arena<(Range<u64>, T)>;
+
+// Since we dont have any heaps to work with directly, Beverytime we bind a
 // buffer/image to memory we allocate a dx11 resource and assign it a range.
 //
 // `HOST_VISIBLE` memory gets a `Vec<u8>` which covers the entire memory
@@ -2910,10 +3012,7 @@ pub struct Memory {
     host_ptr: *mut u8,
 
     // list of all buffers bound to this memory
-    local_buffers: RefCell<Vec<(Range<u64>, InternalBuffer)>>,
-
-    // list of all images bound to this memory
-    _local_images: RefCell<Vec<(Range<u64>, InternalImage)>>,
+    local_buffers: Arc<RwLock<LocalResourceArena<InternalBuffer>>>,
 }
 
 impl fmt::Debug for Memory {
@@ -2930,14 +3029,15 @@ impl Memory {
         segment.offset..segment.size.map_or(self.size, |s| segment.offset + s)
     }
 
-    pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) {
-        self.local_buffers.borrow_mut().push((range, buffer));
+    pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) -> thunderdome::Index {
+        let mut local_buffers = self.local_buffers.write();
+        local_buffers.insert((range, buffer))
     }
 
     pub fn flush(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, range: Range<u64>) {
         use buffer::Usage;
 
-        for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
+        for (_, &(ref buffer_range, ref buffer)) in self.local_buffers.read().iter() {
             let range = match intersection(&range, &buffer_range) {
                 Some(r) => r,
                 None => continue,
@@ -2992,7 +3092,7 @@ impl Memory {
         working_buffer: ComPtr<d3d11::ID3D11Buffer>,
         working_buffer_size: u64,
     ) {
-        for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
+        for (_, &(ref buffer_range, ref buffer)) in self.local_buffers.read().iter() {
             if let Some(range) = intersection(&range, &buffer_range) {
                 MemoryInvalidate {
                     working_buffer: Some(working_buffer.clone()),
@@ -3010,6 +3110,7 @@ impl Memory {
 #[derive(Debug)]
 pub struct CommandPool {
     device: ComPtr<d3d11::ID3D11Device>,
+    device1: Option<ComPtr<d3d11_1::ID3D11Device1>>,
     internal: Arc<internal::Internal>,
 }
 
@@ -3022,7 +3123,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
     }
 
     unsafe fn allocate_one(&mut self, _level: command::Level) -> CommandBuffer {
-        CommandBuffer::create_deferred(self.device.clone(), Arc::clone(&self.internal))
+        CommandBuffer::create_deferred(&self.device, self.device1.as_deref(), Arc::clone(&self.internal))
     }
 
     unsafe fn free<I>(&mut self, _cbufs: I)
@@ -3090,6 +3191,19 @@ pub struct InternalBuffer {
     srv: Option<*mut d3d11::ID3D11ShaderResourceView>,
     uav: Option<*mut d3d11::ID3D11UnorderedAccessView>,
     usage: buffer::Usage,
+    debug_name: Option<String>,
+}
+
+impl InternalBuffer {
+    unsafe fn release_resources(&mut self) {
+        (&*self.raw).Release();
+        self.raw = ptr::null_mut();
+        self.disjoint_cb.take().map(|cb| (&*cb).Release());
+        self.uav.take().map(|uav| (&*uav).Release());
+        self.srv.take().map(|srv| (&*srv).Release());
+        self.usage = buffer::Usage::empty();
+        self.debug_name = None;
+    }
 }
 
 pub struct Buffer {
@@ -3097,6 +3211,12 @@ pub struct Buffer {
     is_coherent: bool,
     memory_ptr: *mut u8,     // null if unbound or non-cpu-visible
     bound_range: Range<u64>, // 0 if unbound
+    /// Handle to the Memory arena storing this buffer.
+    local_memory_arena: Weak<RwLock<LocalResourceArena<InternalBuffer>>>,
+    /// Index into the above memory arena.
+    ///
+    /// Once memory is bound to a buffer, this should never be None.
+    memory_index: Option<thunderdome::Index>,
     requirements: memory::Requirements,
     bind: d3d11::D3D11_BIND_FLAG,
 }
@@ -3144,6 +3264,19 @@ pub struct InternalImage {
 
     /// Contains RTVs for all subresources
     render_target_views: Vec<ComPtr<d3d11::ID3D11RenderTargetView>>,
+
+    debug_name: Option<String>
+}
+
+impl InternalImage {
+    unsafe fn release_resources(&mut self) {
+        (&*self.raw).Release();
+        self.copy_srv = None;
+        self.srv = None;
+        self.unordered_access_views.clear();
+        self.depth_stencil_views.clear();
+        self.render_target_views.clear();
+    }
 }
 
 impl fmt::Debug for InternalImage {
@@ -3317,10 +3450,6 @@ impl RegisterData<DescriptorIndex> {
         if content.contains(DescriptorContent::SAMPLER) {
             self.s += many;
         }
-    }
-
-    fn add_content(&mut self, content: DescriptorContent) {
-        self.add_content_many(content, 1)
     }
 
     fn sum(&self) -> DescriptorIndex {
@@ -3611,7 +3740,7 @@ impl CoherentBuffers {
 
 /// Newtype around a common interface that all bindable resources inherit from.
 #[derive(Debug, Copy, Clone)]
-#[repr(C)]
+#[repr(transparent)]
 struct Descriptor(*mut d3d11::ID3D11DeviceChild);
 
 bitflags! {
@@ -3645,13 +3774,10 @@ impl From<pso::DescriptorType> for DescriptorContent {
                     with_sampler: false,
                 },
             }
-            | Dt::Image {
-                ty: Idt::Storage { read_only: true },
-            }
             | Dt::InputAttachment => DescriptorContent::SRV,
             Dt::Image {
-                ty: Idt::Storage { read_only: false },
-            } => DescriptorContent::SRV | DescriptorContent::UAV,
+                ty: Idt::Storage { .. },
+            } => DescriptorContent::UAV,
             Dt::Buffer {
                 ty: Bdt::Uniform,
                 format:
@@ -3675,7 +3801,7 @@ impl From<pso::DescriptorType> for DescriptorContent {
                     Bdf::Structured {
                         dynamic_offset: true,
                     },
-            } => DescriptorContent::SRV | DescriptorContent::UAV | DescriptorContent::DYNAMIC,
+            } => DescriptorContent::UAV | DescriptorContent::DYNAMIC,
             Dt::Buffer {
                 ty: Bdt::Storage { read_only: true },
                 ..
@@ -3683,7 +3809,7 @@ impl From<pso::DescriptorType> for DescriptorContent {
             Dt::Buffer {
                 ty: Bdt::Storage { read_only: false },
                 ..
-            } => DescriptorContent::SRV | DescriptorContent::UAV,
+            } => DescriptorContent::UAV,
         }
     }
 }

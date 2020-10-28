@@ -4,7 +4,7 @@ use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 
 use winapi::{
     shared::winerror,
-    um::{d3dcommon, d3dcompiler},
+    um::{d3d11, d3dcommon, d3dcompiler},
 };
 use wio::com::ComPtr;
 
@@ -46,9 +46,9 @@ pub(crate) fn compile_spirv_entrypoint(
     let shader_model = hlsl::ShaderModel::V5_0;
     let shader_code = translate_spirv(&mut ast, shader_model, layout, stage, features, source.entry)?;
     log::debug!(
-        "Generated {:?} shader:\n{:?}",
+        "Generated {:?} shader:\n{}",
         stage,
-        shader_code.replace("\n", "\r\n")
+        shader_code,
     );
 
     let real_name = ast
@@ -191,12 +191,27 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(storage_buffer.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
+        // In order to find out of the buffer is read-only, we must ask if the first member of its base type is read only.
+        let read_only = ast
+            .get_member_decoration(storage_buffer.base_type_id, 0, spirv::Decoration::NonWritable)
+            .map_err(gen_query_error)? != 0;
         let (_content, res_index) = layout.sets[set].find_register(stage, binding);
+
+        let index = if read_only {
+            // Read only storage buffers are SRVs
+            res_index.t as u32
+        }
+        // Compute uses bottom up stack, all other stages use top down.
+        else if stage == ShaderStage::Compute {
+            res_index.u as u32
+        } else {
+            d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - 1 - res_index.u as u32
+        };
 
         ast.set_decoration(
             storage_buffer.id,
             spirv::Decoration::Binding,
-            res_index.u as u32, //TODO: also decorate `res_index.t`
+            index,
         )
         .map_err(gen_unexpected_error)?;
     }
@@ -210,10 +225,19 @@ fn patch_spirv_resources(
             .map_err(gen_query_error)?;
         let (_content, res_index) = layout.sets[set].find_register(stage, binding);
 
+        // Read only storage images are generated as UAVs by spirv-cross.
+        //
+        // Compute uses bottom up stack, all other stages use top down.
+        let index = if stage == ShaderStage::Compute {
+            res_index.u as u32
+        } else {
+            d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - 1 - res_index.u as u32
+        };
+
         ast.set_decoration(
             image.id,
             spirv::Decoration::Binding,
-            res_index.u as u32, //TODO: also decorate `res_index.t`
+            index,
         )
         .map_err(gen_unexpected_error)?;
     }

@@ -6,14 +6,14 @@ use hal::{
 
 use winapi::{
     shared::{dxgi, dxgiformat, dxgitype, minwindef::TRUE, windef::HWND, winerror},
-    um::{d3d11, d3d11sdklayers, d3dcommon},
+    um::{d3d11, d3d11_1, d3d11sdklayers, d3dcommon},
 };
 
 use wio::com::ComPtr;
 
-use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, ptr, sync::Arc};
+use std::{borrow::Borrow, fmt, mem, ops::Range, ptr, sync::{Arc, Weak}};
 
-use parking_lot::{Condvar, Mutex};
+use parking_lot::{Condvar, Mutex, RwLock};
 
 use crate::{
     conv, internal, shader, Backend, Buffer, BufferView, CommandBuffer, CommandPool,
@@ -22,6 +22,7 @@ use crate::{
     InternalBuffer, InternalImage, Memory, MultiStageData, PipelineLayout, QueryPool, RawFence,
     RegisterAccumulator, RegisterData, RenderPass, ResourceIndex, Sampler, Semaphore, ShaderModule,
     SubpassDesc, ViewInfo,
+    debug::{set_debug_name_with_suffix, set_debug_name, verify_debug_ascii},
 };
 
 //TODO: expose coherent type 0x2 when it's properly supported
@@ -44,6 +45,7 @@ pub struct DepthStencilState {
 
 pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
+    raw1: Option<ComPtr<d3d11_1::ID3D11Device1>>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     features: hal::Features,
     memory_properties: MemoryProperties,
@@ -72,6 +74,7 @@ unsafe impl Sync for Device {}
 impl Device {
     pub fn new(
         device: ComPtr<d3d11::ID3D11Device>,
+        device1: Option<ComPtr<d3d11_1::ID3D11Device1>>,
         context: ComPtr<d3d11::ID3D11DeviceContext>,
         features: hal::Features,
         memory_properties: MemoryProperties,
@@ -79,6 +82,7 @@ impl Device {
         Device {
             internal: Arc::new(internal::Internal::new(&device)),
             raw: device,
+            raw1: device1,
             context,
             features,
             memory_properties,
@@ -112,9 +116,10 @@ impl Device {
     fn create_blend_state(
         &self,
         blend_desc: &pso::BlendDesc,
+        multisampling: &Option<pso::Multisampling>,
     ) -> Result<ComPtr<d3d11::ID3D11BlendState>, pso::CreationError> {
         let mut blend = ptr::null_mut();
-        let desc = conv::map_blend_desc(blend_desc);
+        let desc = conv::map_blend_desc(blend_desc, multisampling);
 
         let hr = unsafe {
             self.raw
@@ -187,7 +192,6 @@ impl Device {
                     Some(buffer_desc) => buffer_desc,
                     None => {
                         // TODO:
-                        // L
                         // error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
                         return Some(Err(pso::CreationError::Other));
                     }
@@ -557,6 +561,8 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(uav) })
         } else {
+            error!("CreateUnorderedAccessView failed: 0x{:x}", hr);
+
             Err(image::ViewCreationError::Unsupported)
         }
     }
@@ -589,36 +595,28 @@ impl Device {
                 }
             }
             image::ViewKind::D2 => {
-                match info.kind {
-                    image::Kind::D2(_, _, _, 1) => {
-                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
-                        *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV { MipSlice }
-                    }
-                    image::Kind::D2(_, _, _, _) => {
-                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMS;
-                        *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_RTV { UnusedField_NothingToDefine: 0 }
-                    }
-                    _ => unreachable!(),
+                if info.kind.num_samples() > 1 {
+                    desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMS;
+                    *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_RTV { UnusedField_NothingToDefine: 0 }
+                } else {
+                    desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
+                    *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV { MipSlice }
                 }
             }
             image::ViewKind::D2Array => {
-                match info.kind {
-                    image::Kind::D2(_, _, _, 1) => {
-                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
-                        *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_RTV {
-                            MipSlice,
-                            FirstArraySlice,
-                            ArraySize,
-                        }
+                if info.kind.num_samples() > 1 {
+                    desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
+                    *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_RTV {
+                        FirstArraySlice,
+                        ArraySize,
                     }
-                    image::Kind::D2(_, _, _, _) => {
-                        desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
-                        *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_RTV {
-                            FirstArraySlice,
-                            ArraySize,
-                        }
+                } else {
+                    desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+                    *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_RTV {
+                        MipSlice,
+                        FirstArraySlice,
+                        ArraySize,
                     }
-                    _ => unreachable!(),
                 }
             }
             image::ViewKind::D3 => {
@@ -644,6 +642,8 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(rtv) })
         } else {
+            error!("CreateRenderTargetView failed: 0x{:x}", hr);
+
             Err(image::ViewCreationError::Unsupported)
         }
     }
@@ -673,15 +673,30 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D2 => {
-                desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2D;
-                *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_DSV { MipSlice }
+                if info.kind.num_samples() > 1 {
+                    desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DMS;
+                    *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_DSV {
+                        UnusedField_NothingToDefine: 0,
+                    }
+                } else {
+                    desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2D;
+                    *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_DSV { MipSlice }
+                }
             }
             image::ViewKind::D2Array => {
-                desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
-                *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_DSV {
-                    MipSlice,
-                    FirstArraySlice,
-                    ArraySize,
+                if info.kind.num_samples() > 1 {
+                    desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
+                    *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_DSV {
+                        FirstArraySlice,
+                        ArraySize,
+                    }
+                } else {
+                    desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+                    *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_DSV {
+                        MipSlice,
+                        FirstArraySlice,
+                        ArraySize,
+                    }
                 }
             }
             _ => unimplemented!(),
@@ -699,6 +714,8 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(dsv) })
         } else {
+            error!("CreateDepthStencilView failed: 0x{:x}", hr);
+
             Err(image::ViewCreationError::Unsupported)
         }
     }
@@ -730,7 +747,6 @@ impl Device {
                 ScanlineOrdering: dxgitype::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
                 Scaling: dxgitype::DXGI_MODE_SCALING_UNSPECIFIED,
             },
-            // TODO: msaa on backbuffer?
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: 1,
                 Quality: 0,
@@ -785,8 +801,7 @@ impl device::Device<Backend> for Device {
             properties,
             size,
             host_ptr,
-            local_buffers: RefCell::new(Vec::new()),
-            _local_images: RefCell::new(Vec::new()),
+            local_buffers: Arc::new(RwLock::new(thunderdome::Arena::new())),
         })
     }
 
@@ -798,6 +813,7 @@ impl device::Device<Backend> for Device {
         // TODO:
         Ok(CommandPool {
             device: self.raw.clone(),
+            device1: self.raw1.clone(),
             internal: Arc::clone(&self.internal),
         })
     }
@@ -967,7 +983,7 @@ impl device::Device<Backend> for Device {
         };
 
         let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer, &desc.multisampling)?;
-        let blend_state = self.create_blend_state(&desc.blender)?;
+        let blend_state = self.create_blend_state(&desc.blender, &desc.multisampling)?;
         let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
 
         Ok(GraphicsPipeline {
@@ -1097,8 +1113,11 @@ impl device::Device<Backend> for Device {
                 srv: None,
                 uav: None,
                 usage,
+                debug_name: None,
             },
             bound_range: 0..0,
+            local_memory_arena: Weak::new(),
+            memory_index: None,
             is_coherent: false,
             memory_ptr: ptr::null_mut(),
             bind,
@@ -1162,18 +1181,22 @@ impl device::Device<Backend> for Device {
                 },
             };
 
-            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let mut raw: *mut d3d11::ID3D11Buffer = ptr::null_mut();
             let hr = self.raw.CreateBuffer(
                 &desc,
                 initial_data.as_ref().map_or(ptr::null_mut(), |id| id),
-                &mut buffer as *mut *mut _ as *mut *mut _,
+                &mut raw as *mut *mut _ as *mut *mut _,
             );
 
             if !winerror::SUCCEEDED(hr) {
                 return Err(device::BindError::WrongMemory);
             }
 
-            ComPtr::from_raw(buffer)
+            if let Some(ref mut name) = buffer.internal.debug_name {
+                set_debug_name(&*raw, name);
+            }
+
+            ComPtr::from_raw(raw)
         };
 
         let disjoint_cb = if buffer.internal.disjoint_cb.is_some() {
@@ -1186,18 +1209,22 @@ impl device::Device<Backend> for Device {
                 StructureByteStride: 0,
             };
 
-            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let mut disjoint_raw: *mut d3d11::ID3D11Buffer = ptr::null_mut();
             let hr = self.raw.CreateBuffer(
                 &desc,
                 initial_data.as_ref().map_or(ptr::null_mut(), |id| id),
-                &mut buffer as *mut *mut _ as *mut *mut _,
+                &mut disjoint_raw as *mut *mut _ as *mut *mut _,
             );
 
             if !winerror::SUCCEEDED(hr) {
                 return Err(device::BindError::WrongMemory);
             }
 
-            Some(buffer)
+            if let Some(ref mut name) = buffer.internal.debug_name {
+                set_debug_name_with_suffix(&*disjoint_raw, name, " -- Constant Buffer");
+            }
+
+            Some(disjoint_raw)
         } else {
             None
         };
@@ -1212,7 +1239,7 @@ impl device::Device<Backend> for Device {
                 Flags: d3d11::D3D11_BUFFEREX_SRV_FLAG_RAW,
             };
 
-            let mut srv = ptr::null_mut();
+            let mut srv: *mut d3d11::ID3D11ShaderResourceView = ptr::null_mut();
             let hr = self.raw.CreateShaderResourceView(
                 raw.as_raw() as *mut _,
                 &desc,
@@ -1223,6 +1250,10 @@ impl device::Device<Backend> for Device {
                 error!("CreateShaderResourceView failed: 0x{:x}", hr);
 
                 return Err(device::BindError::WrongMemory);
+            }
+
+            if let Some(ref mut name) = buffer.internal.debug_name {
+                set_debug_name_with_suffix(&*srv, name, " -- SRV");
             }
 
             Some(srv)
@@ -1240,7 +1271,7 @@ impl device::Device<Backend> for Device {
                 Flags: d3d11::D3D11_BUFFER_UAV_FLAG_RAW,
             };
 
-            let mut uav = ptr::null_mut();
+            let mut uav: *mut d3d11::ID3D11UnorderedAccessView = ptr::null_mut();
             let hr = self.raw.CreateUnorderedAccessView(
                 raw.as_raw() as *mut _,
                 &desc,
@@ -1251,6 +1282,10 @@ impl device::Device<Backend> for Device {
                 error!("CreateUnorderedAccessView failed: 0x{:x}", hr);
 
                 return Err(device::BindError::WrongMemory);
+            }
+
+            if let Some(ref mut name) = buffer.internal.debug_name {
+                set_debug_name_with_suffix(&*uav, name, " -- UAV");
             }
 
             Some(uav)
@@ -1264,10 +1299,11 @@ impl device::Device<Backend> for Device {
             srv,
             uav,
             usage: buffer.internal.usage,
+            debug_name: buffer.internal.debug_name.take()
         };
         let range = offset..offset + buffer.requirements.size;
 
-        memory.bind_buffer(range.clone(), internal.clone());
+        let memory_index = memory.bind_buffer(range.clone(), internal.clone());
 
         buffer.internal = internal;
         buffer.is_coherent = memory
@@ -1275,6 +1311,8 @@ impl device::Device<Backend> for Device {
             .contains(hal::memory::Properties::COHERENT);
         buffer.memory_ptr = memory.host_ptr;
         buffer.bound_range = range;
+        buffer.local_memory_arena = Arc::downgrade(&memory.local_buffers);
+        buffer.memory_index = Some(memory_index);
 
         Ok(())
     }
@@ -1313,6 +1351,7 @@ impl device::Device<Backend> for Device {
                 unordered_access_views: Vec::new(),
                 depth_stencil_views: Vec::new(),
                 render_target_views: Vec::new(),
+                debug_name: None,
             },
             decomposed_format: conv::DecomposedDxgiFormat::UNKNOWN,
             kind,
@@ -1493,10 +1532,15 @@ impl device::Device<Backend> for Device {
                     layers: 0..image.kind.num_layers(),
                 };
 
-                unordered_access_views.push(
-                    self.view_image_as_unordered_access(&view)
-                        .map_err(|_| device::BindError::WrongMemory)?,
-                );
+                let uav = self
+                    .view_image_as_unordered_access(&view)
+                    .map_err(|_| device::BindError::WrongMemory)?;
+
+                if let Some(ref name) = image.internal.debug_name {
+                    set_debug_name(&uav, &format!("{} -- UAV Mip {}", name, mip));
+                }
+
+                unordered_access_views.push(uav);
             }
         }
 
@@ -1546,7 +1590,7 @@ impl device::Device<Backend> for Device {
             for layer in 0..image.kind.num_layers() {
                 for mip in 0..image.mip_levels {
                     let view = ViewInfo {
-                        resource: resource,
+                        resource,
                         kind: image.kind,
                         caps: image::ViewCapabilities::empty(),
                         view_kind,
@@ -1555,10 +1599,15 @@ impl device::Device<Backend> for Device {
                         layers: layer..(layer + 1),
                     };
 
-                    render_target_views.push(
-                        self.view_image_as_render_target(&view)
-                            .map_err(|_| device::BindError::WrongMemory)?,
-                    );
+                    let rtv = self
+                        .view_image_as_render_target(&view)
+                        .map_err(|_| device::BindError::WrongMemory)?;
+
+                    if let Some(ref name) = image.internal.debug_name {
+                        set_debug_name(&rtv, &format!("{} -- RTV Mip {} Layer {}", name, mip, layer));
+                    }
+
+                    render_target_views.push(rtv);
                 }
             }
         };
@@ -1569,7 +1618,7 @@ impl device::Device<Backend> for Device {
             for layer in 0..image.kind.num_layers() {
                 for mip in 0..image.mip_levels {
                     let view = ViewInfo {
-                        resource: resource,
+                        resource,
                         kind: image.kind,
                         caps: image::ViewCapabilities::empty(),
                         view_kind,
@@ -1578,11 +1627,26 @@ impl device::Device<Backend> for Device {
                         layers: layer..(layer + 1),
                     };
 
-                    depth_stencil_views.push(
-                        self.view_image_as_depth_stencil(&view, None)
-                            .map_err(|_| device::BindError::WrongMemory)?,
-                    );
+                    let dsv = self
+                            .view_image_as_depth_stencil(&view, None)
+                            .map_err(|_| device::BindError::WrongMemory)?;
+
+                    if let Some(ref name) = image.internal.debug_name {
+                        set_debug_name(&dsv, &format!("{} -- DSV Mip {} Layer {}", name, mip, layer));
+                    }
+
+                    depth_stencil_views.push(dsv);
                 }
+            }
+        }
+
+        if let Some(ref mut name) = image.internal.debug_name {
+            set_debug_name(&*resource, name);
+            if let Some(ref copy_srv) = copy_srv {
+                set_debug_name_with_suffix(copy_srv, name, " -- Copy SRV");
+            }
+            if let Some(ref srv) = srv {
+                set_debug_name_with_suffix(srv, name, " -- SRV");
             }
         }
 
@@ -1593,6 +1657,7 @@ impl device::Device<Backend> for Device {
             unordered_access_views,
             depth_stencil_views,
             render_target_views,
+            debug_name: image.internal.debug_name.take()
         };
 
         image.decomposed_format = decomposed;
@@ -1635,31 +1700,64 @@ impl device::Device<Backend> for Device {
             ..info.clone()
         };
 
+        let mut debug_name = image.internal.debug_name.clone();
+
         Ok(ImageView {
             subresource: d3d11::D3D11CalcSubresource(0, range.layer_start as _, range.level_start as _),
             format,
             srv_handle: if image.usage.intersects(image::Usage::SAMPLED) {
-                Some(self.view_image_as_shader_resource(&srv_info)?)
+                let srv = self.view_image_as_shader_resource(&srv_info)?;
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&srv, name, " -- SRV");
+                }
+
+                Some(srv)
             } else {
                 None
             },
             rtv_handle: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
-                Some(self.view_image_as_render_target(&info)?)
+                let rtv = self.view_image_as_render_target(&info)?;
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&rtv, name, " -- RTV");
+                }
+
+                Some(rtv)
             } else {
                 None
             },
             uav_handle: if image.usage.contains(image::Usage::STORAGE) {
-                Some(self.view_image_as_unordered_access(&info)?)
+                let uav = self.view_image_as_unordered_access(&info)?;
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&uav, name, " -- UAV");
+                }
+
+                Some(uav)
             } else {
                 None
             },
             dsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(&info, None)?)
+                let dsv = self.view_image_as_depth_stencil(&info, None)?;
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&dsv, name, " -- DSV");
+                }
+
+                Some(dsv)
             } else {
                 None
             },
             rodsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(&info, Some(image.format.is_stencil()))?)
+                let rodsv = self.view_image_as_depth_stencil(&info, Some(image.format.is_stencil()))?;
+
+
+                if let Some(ref mut name) = debug_name {
+                    set_debug_name_with_suffix(&rodsv, name, " -- DSV");
+                }
+
+                Some(rodsv)
             } else {
                 None
             },
@@ -1749,7 +1847,18 @@ impl device::Device<Backend> for Device {
 
         for binding in bindings.iter() {
             let content = DescriptorContent::from(binding.ty);
-            total.add_content_many(content, binding.stage_flags, binding.count as _);
+            // If this binding is used by the graphics pipeline and is a UAV, it belongs to the "Output Merger"
+            // stage, so we only put them in the fragment stage to save redundant descriptor allocations.
+            let stage_flags =
+                if content.contains(DescriptorContent::UAV)
+                    && binding.stage_flags.intersects(pso::ShaderStageFlags::ALL - pso::ShaderStageFlags::COMPUTE) {
+                let mut stage_flags = pso::ShaderStageFlags::FRAGMENT;
+                stage_flags.set(pso::ShaderStageFlags::COMPUTE, binding.stage_flags.contains(pso::ShaderStageFlags::COMPUTE));
+                stage_flags
+            } else {
+                binding.stage_flags
+            };
+            total.add_content_many(content, stage_flags, binding.count as _);
         }
 
         bindings.sort_by_key(|a| a.binding);
@@ -1871,10 +1980,20 @@ impl device::Device<Backend> for Device {
                         .assign_stages(&offsets, binding.stage_flags, handles.t);
                 };
                 if content.contains(DescriptorContent::UAV) {
+                    // If this binding is used by the graphics pipeline and is a UAV, it belongs to the "Output Merger"
+                    // stage, so we only put them in the fragment stage to save redundant descriptor allocations.
+                    let stage_flags = if binding.stage_flags.intersects(pso::ShaderStageFlags::ALL - pso::ShaderStageFlags::COMPUTE) {
+                        let mut stage_flags = pso::ShaderStageFlags::FRAGMENT;
+                        stage_flags.set(pso::ShaderStageFlags::COMPUTE, binding.stage_flags.contains(pso::ShaderStageFlags::COMPUTE));
+                        stage_flags
+                    } else {
+                        binding.stage_flags
+                    };
+
                     let offsets = mapping.map_other(|map| map.u);
                     write
                         .set
-                        .assign_stages(&offsets, binding.stage_flags, handles.u);
+                        .assign_stages(&offsets, stage_flags, handles.u);
                 };
                 if content.contains(DescriptorContent::SAMPLER) {
                     let offsets = mapping.map_other(|map| map.s);
@@ -2075,11 +2194,8 @@ impl device::Device<Backend> for Device {
             // let it drop
             memory.host_ptr = ptr::null_mut();
         }
-        for (_range, internal) in memory.local_buffers.borrow_mut().drain(..) {
-            (*internal.raw).Release();
-            if let Some(srv) = internal.srv {
-                (*srv).Release();
-            }
+        for (_, (_range, mut internal)) in memory.local_buffers.write().drain() {
+            internal.release_resources()
         }
     }
 
@@ -2122,14 +2238,34 @@ impl device::Device<Backend> for Device {
 
     unsafe fn destroy_framebuffer(&self, _fb: Framebuffer) {}
 
-    unsafe fn destroy_buffer(&self, _buffer: Buffer) {}
+    unsafe fn destroy_buffer(&self, buffer: Buffer) {
+        let mut internal = buffer.internal;
+
+        if internal.raw.is_null() {
+            return;
+        }
+
+        let arena_arc = match buffer.local_memory_arena.upgrade() {
+            Some(arena) => arena,
+            // Memory is destroyed before the buffer, we've already been destroyed.
+            None => return,
+        };
+        let mut arena = arena_arc.write();
+
+        let memory_index = buffer.memory_index.expect("Buffer's memory index unset");
+        // Drop the internal stored by the arena on the floor, it owns nothing.
+        let _ = arena.remove(memory_index);
+
+        // Release all memory owned by this buffer
+        internal.release_resources();
+    }
 
     unsafe fn destroy_buffer_view(&self, _view: BufferView) {
         //unimplemented!()
     }
 
-    unsafe fn destroy_image(&self, _image: Image) {
-        //unimplemented!()
+    unsafe fn destroy_image(&self, mut image: Image) {
+        image.internal.release_resources();
     }
 
     unsafe fn destroy_image_view(&self, _view: ImageView) {
@@ -2163,16 +2299,28 @@ impl device::Device<Backend> for Device {
         // unimplemented!()
     }
 
-    unsafe fn set_image_name(&self, _image: &mut Image, _name: &str) {
-        // TODO
+    unsafe fn set_image_name(&self, image: &mut Image, name: &str) {
+        if !verify_debug_ascii(name) {
+            return;
+        }
+
+        image.internal.debug_name = Some(name.to_string());
     }
 
-    unsafe fn set_buffer_name(&self, _buffer: &mut Buffer, _name: &str) {
-        // TODO
+    unsafe fn set_buffer_name(&self, buffer: &mut Buffer, name: &str) {
+        if !verify_debug_ascii(name) {
+            return;
+        }
+
+        buffer.internal.debug_name = Some(name.to_string());
     }
 
-    unsafe fn set_command_buffer_name(&self, _command_buffer: &mut CommandBuffer, _name: &str) {
-        // TODO
+    unsafe fn set_command_buffer_name(&self, command_buffer: &mut CommandBuffer, name: &str) {
+        if !verify_debug_ascii(name) {
+            return;
+        }
+
+        command_buffer.debug_name = Some(name.to_string());
     }
 
     unsafe fn set_semaphore_name(&self, _semaphore: &mut Semaphore, _name: &str) {
@@ -2217,9 +2365,20 @@ impl device::Device<Backend> for Device {
 
     unsafe fn set_graphics_pipeline_name(
         &self,
-        _graphics_pipeline: &mut GraphicsPipeline,
-        _name: &str,
+        graphics_pipeline: &mut GraphicsPipeline,
+        name: &str,
     ) {
-        // TODO
+        if !verify_debug_ascii(name) {
+            return;
+        }
+
+        let mut name = name.to_string();
+
+        set_debug_name_with_suffix(&graphics_pipeline.blend_state, &mut name, " -- Blend State");
+        set_debug_name_with_suffix(&graphics_pipeline.rasterizer_state, &mut name, " -- Rasterizer State");
+        set_debug_name_with_suffix(&graphics_pipeline.input_layout, &mut name, " -- Input Layout");
+        if let Some(ref dss) = graphics_pipeline.depth_stencil_state {
+            set_debug_name_with_suffix(&dss.raw, &mut name, " -- Depth Stencil State");
+        }
     }
 }
