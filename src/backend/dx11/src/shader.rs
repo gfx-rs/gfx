@@ -32,6 +32,54 @@ fn gen_query_error(err: SpirvErrorCode) -> device::ShaderError {
     device::ShaderError::CompilationFailed(msg)
 }
 
+/// Introspects the input attributes of given SPIR-V shader and returns an optional vertex semantic remapping.
+///
+/// The returned hashmap has attribute location as a key and an Optional remapping to a two part semantic.
+///
+/// eg.
+/// `2 -> None` means use default semantic `TEXCOORD2`
+/// `2 -> Some((0, 2))` means use two part semantic `TEXCOORD0_2`. This is how matrices are represented by spirv-cross.
+///
+/// This is a temporary workaround for https://github.com/KhronosGroup/SPIRV-Cross/issues/1512.
+///
+/// This workaround also exists under the same name in the DX12 backend.
+pub(crate) fn introspect_spirv_vertex_semantic_remapping(raw_data: &[u32]) -> Result<auxil::FastHashMap<u32, Option<(u32, u32)>>, device::ShaderError> {
+    // This is inefficient as we already parse it once before. This is a temporary workaround only called
+    // on vertex shaders. If this becomes permanent or shows up in profiles, deduplicate these as first course of action.
+    let ast = parse_spirv(raw_data)?;
+
+    let mut map = auxil::FastHashMap::default();
+
+    let inputs = ast.get_shader_resources().map_err(gen_query_error)?.stage_inputs;
+    for input in inputs {
+        let idx = ast.get_decoration(input.id, spirv::Decoration::Location).map_err(gen_query_error)?;
+
+        let ty = ast.get_type(input.type_id).map_err(gen_query_error)?;
+
+        match ty {
+            spirv::Type::Boolean { columns, .. }
+                | spirv::Type::Int { columns, .. }
+                | spirv::Type::UInt { columns, .. }
+                | spirv::Type::Half { columns, .. }
+                | spirv::Type::Float { columns, .. }
+                | spirv::Type::Double { columns, .. } if columns > 1 => {
+                for col in 0..columns {
+                    if let Some(_) = map.insert(idx + col, Some((idx, col))) {
+                        return Err(device::ShaderError::CompilationFailed(format!("Shader has overlapping input attachments at location {}", idx)))
+                    }
+                }
+            }
+            _ => {
+                if let Some(_) = map.insert(idx, None) {
+                    return Err(device::ShaderError::CompilationFailed(format!("Shader has overlapping input attachments at location {}", idx)))
+                }
+            }
+        }
+    }
+
+    Ok(map)
+}
+
 pub(crate) fn compile_spirv_entrypoint(
     raw_data: &[u32],
     stage: ShaderStage,

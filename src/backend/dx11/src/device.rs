@@ -165,6 +165,7 @@ impl Device {
         vertex_buffers: &[pso::VertexBufferDesc],
         attributes: &[pso::AttributeDesc],
         input_assembler: &pso::InputAssemblerDesc,
+        vertex_semantic_remapping: auxil::FastHashMap<u32, Option<(u32, u32)>>,
     ) -> Result<InputLayout, pso::CreationError> {
         let mut layout = ptr::null_mut();
 
@@ -182,9 +183,26 @@ impl Device {
             vertex_strides[buffer.binding as usize] = buffer.stride;
         }
 
+        // See [`shader::introspect_spirv_vertex_semantic_remapping`] for details of why this is needed.
+        let semantics: Vec<_> = attributes.iter().map(|attrib| {
+            match vertex_semantic_remapping.get(&attrib.location).unwrap() {
+                Some((major, minor)) => {
+                    let name = std::borrow::Cow::Owned(format!("TEXCOORD{}_\0", major));
+                    let location = *minor;
+                    (name, location)
+                }
+                None => {
+                    let name = std::borrow::Cow::Borrowed("TEXCOORD\0");
+                    let location = attrib.location;
+                    (name, location)
+                }
+            }
+        }).collect();
+
         let input_elements = attributes
             .iter()
-            .filter_map(|attrib| {
+            .zip(semantics.iter())
+            .filter_map(|(attrib, (semantic_name, semantic_index))| {
                 let buffer_desc = match vertex_buffers
                     .iter()
                     .find(|buffer_desc| buffer_desc.binding == attrib.binding)
@@ -206,8 +224,8 @@ impl Device {
                 let format = attrib.element.format;
 
                 Some(Ok(d3d11::D3D11_INPUT_ELEMENT_DESC {
-                    SemanticName: "TEXCOORD\0".as_ptr() as *const _, // Semantic name used by SPIRV-Cross
-                    SemanticIndex: attrib.location,
+                    SemanticName: semantic_name.as_ptr() as *const _, // Semantic name used by SPIRV-Cross
+                    SemanticIndex: *semantic_index,
                     Format: match conv::map_format(format) {
                         Some(fm) => fm,
                         None => {
@@ -972,11 +990,19 @@ impl device::Device<Backend> for Device {
                 ref tessellation,
                 ref geometry,
             } => {
+                let vertex_semantic_remapping = match vertex.module {
+                    ShaderModule::Spirv(spirv) => {
+                        shader::introspect_spirv_vertex_semantic_remapping(spirv)
+                            .map_err(|err| pso::CreationError::Shader(err))?
+                    }
+                    _ => unimplemented!(),
+                };
+
                 let vs = build_shader(ShaderStage::Vertex, Some(&vertex))?.unwrap();
                 let gs = build_shader(ShaderStage::Geometry, geometry.as_ref())?;
 
                 let layout =
-                    self.create_input_layout(vs.clone(), buffers, attributes, input_assembler)?;
+                    self.create_input_layout(vs.clone(), buffers, attributes, input_assembler, vertex_semantic_remapping)?;
 
                 let vs = self.create_vertex_shader(vs)?;
                 let gs = if let Some(blob) = gs {
