@@ -265,6 +265,54 @@ impl Device {
         })
     }
 
+    /// Introspects the input attributes of given SPIR-V shader and returns an optional vertex semantic remapping.
+    ///
+    /// The returned hashmap has attribute location as a key and an Optional remapping to a two part semantic.
+    ///
+    /// eg.
+    /// `2 -> None` means use default semantic `TEXCOORD2`
+    /// `2 -> Some((0, 2))` means use two part semantic `TEXCOORD0_2`. This is how matrices are represented by spirv-cross.
+    ///
+    /// This is a temporary workaround for https://github.com/KhronosGroup/SPIRV-Cross/issues/1512.
+    ///
+    /// This workaround also exists under the same name in the DX11 backend.
+    pub(crate) fn introspect_spirv_vertex_semantic_remapping(raw_data: &[u32]) -> Result<auxil::FastHashMap<u32, Option<(u32, u32)>>, hal::device::ShaderError> {
+        // This is inefficient as we already parse it once before. This is a temporary workaround only called
+        // on vertex shaders. If this becomes permanent or shows up in profiles, deduplicate these as first course of action.
+        let ast = Self::parse_spirv(raw_data)?;
+
+        let mut map = auxil::FastHashMap::default();
+
+        let inputs = ast.get_shader_resources().map_err(gen_query_error)?.stage_inputs;
+        for input in inputs {
+            let idx = ast.get_decoration(input.id, spirv::Decoration::Location).map_err(gen_query_error)?;
+
+            let ty = ast.get_type(input.type_id).map_err(gen_query_error)?;
+
+            match ty {
+                spirv::Type::Boolean { columns, .. }
+                | spirv::Type::Int { columns, .. }
+                | spirv::Type::UInt { columns, .. }
+                | spirv::Type::Half { columns, .. }
+                | spirv::Type::Float { columns, .. }
+                | spirv::Type::Double { columns, .. } if columns > 1 => {
+                    for col in 0..columns {
+                        if let Some(_) = map.insert(idx + col, Some((idx, col))) {
+                            return Err(hal::device::ShaderError::CompilationFailed(format!("Shader has overlapping input attachments at location {}", idx)))
+                        }
+                    }
+                }
+                _ => {
+                    if let Some(_) = map.insert(idx, None) {
+                        return Err(hal::device::ShaderError::CompilationFailed(format!("Shader has overlapping input attachments at location {}", idx)))
+                    }
+                }
+            }
+        }
+
+        Ok(map)
+    }
+
     fn patch_spirv_resources(
         ast: &mut spirv::Ast<hlsl::Target>,
         layout: &r::PipelineLayout,
@@ -1841,6 +1889,19 @@ impl d::Device<B> for Device {
                 ),
             };
 
+        let vertex_semantic_remapping = if let Some(ref vs) = vs {
+            // If we have a pre-compiled shader, we've lost the information we need to recover
+            // this information, so just pretend like this workaround never existed and hope
+            // for the best.
+            if let crate::resource::ShaderModule::Spirv(ref spv) = vs.module {
+                Some(Self::introspect_spirv_vertex_semantic_remapping(spv).map_err(pso::CreationError::Shader)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let vs = build_shader(ShaderStage::Vertex, vs)?;
         let gs = build_shader(ShaderStage::Geometry, gs)?;
         let hs = build_shader(ShaderStage::Domain, hs)?;
@@ -1867,10 +1928,34 @@ impl d::Device<B> for Device {
             }
         }
 
+        // See [`introspect_spirv_vertex_semantic_remapping`] for details of why this is needed.
+        let semantics: Vec<_> = attributes.iter().map(|attrib| {
+            let semantics = vertex_semantic_remapping
+                .as_ref()
+                .and_then(|map| {
+                    *map
+                        .get(&attrib.location)
+                        .unwrap()
+                });
+            match semantics {
+                Some((major, minor)) => {
+                    let name = std::borrow::Cow::Owned(format!("TEXCOORD{}_\0", major));
+                    let location = minor;
+                    (name, location)
+                }
+                None => {
+                    let name = std::borrow::Cow::Borrowed("TEXCOORD\0");
+                    let location = attrib.location;
+                    (name, location)
+                }
+            }
+        }).collect();
+
         // Define input element descriptions
         let input_element_descs = attributes
             .iter()
-            .filter_map(|attrib| {
+            .zip(semantics.iter())
+            .filter_map(|(attrib, (semantic_name, semantic_index))| {
                 let buffer_desc = match vertex_buffers
                     .iter()
                     .find(|buffer_desc| buffer_desc.binding == attrib.binding)
@@ -1917,8 +2002,8 @@ impl d::Device<B> for Device {
                 };
 
                 Some(Ok(d3d12::D3D12_INPUT_ELEMENT_DESC {
-                    SemanticName: "TEXCOORD\0".as_ptr() as *const _, // Semantic name used by SPIRV-Cross
-                    SemanticIndex: attrib.location,
+                    SemanticName: semantic_name.as_ptr() as *const _, // Semantic name used by SPIRV-Cross
+                    SemanticIndex: *semantic_index,
                     Format: match conv::map_format(format) {
                         Some(fm) => fm,
                         None => {
