@@ -1,5 +1,11 @@
 # Change Log
 
+### backend-dx12-unreleased
+  - fix matrix vertex inputs
+
+### backend-dx11-unreleased
+  - fix matrix vertex inputs
+
 ### backend-dx11-0.6.11 (27-10-2020)
   - implement push constants
   - implement indirect rendering
