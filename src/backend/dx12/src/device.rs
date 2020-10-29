@@ -469,33 +469,25 @@ impl Device {
                 spirv_cross_specialize_ast(&mut ast, &source.specialization)?;
                 Self::patch_spirv_resources(&mut ast, layout)?;
 
+                let execution_model = conv::map_stage(stage);
                 let shader_model = hlsl::ShaderModel::V5_1;
                 let shader_code =
                     Self::translate_spirv(&mut ast, shader_model, layout, stage, features, source.entry)?;
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
                 let real_name = ast
-                    .get_cleansed_entry_point_name(source.entry, conv::map_stage(stage))
+                    .get_cleansed_entry_point_name(source.entry, execution_model)
                     .map_err(gen_query_error)?;
-                // TODO: opt: don't query *all* entry points.
-                let entry_points = ast.get_entry_points().map_err(gen_query_error)?;
-                match entry_points
-                    .iter()
-                    .find(|entry_point| entry_point.name == real_name)
-                {
-                    Some(entry_point) => {
-                        let stage = conv::map_execution_model(entry_point.execution_model);
-                        let shader = compile_shader(
-                            stage,
-                            shader_model,
-                            features,
-                            &entry_point.name,
-                            shader_code.as_bytes(),
-                        )?;
-                        Ok((shader, true))
-                    }
-                    None => Err(d::ShaderError::MissingEntryPoint(source.entry.into())),
-                }
+
+                let stage = conv::map_execution_model(execution_model);
+                let shader = compile_shader(
+                    stage,
+                    shader_model,
+                    features,
+                    &real_name,
+                    shader_code.as_bytes(),
+                )?;
+                Ok((shader, true))
             }
         }
     }

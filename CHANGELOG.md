@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-unreleased
+  - fix SPIR-V entry point selection
+
 ### backend-vulkan-0.6.5 (15-10-2020)
   - support different types of descriptors in a single `DescriptorSetWrite`
 
@@ -52,7 +55,6 @@
 
 ### backend-dx11-0.6.1 (02-09-2020)
   - force zero initialization for shader variables
->>>>>>> 0f207ed5... [vk] fix support for writing descriptor arrays
 
 ### backend-metal-0.6.1 (23-08-2020)
   - fix layer checks in `clear_image`
