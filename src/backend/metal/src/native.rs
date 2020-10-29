@@ -32,26 +32,17 @@ pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
 /// An index of a resource within descriptor pool.
 pub type PoolResourceIndex = u32;
 
-/// Shader module can be compiled in advance if it's resource bindings do not
-/// depend on pipeline layout, in which case the value would become `Compiled`.
-pub enum ShaderModule {
-    Compiled(ModuleInfo),
-    Raw(Vec<u32>),
+pub struct ShaderModule {
+    pub(crate) spv: Vec<u32>,
+    #[cfg(feature = "naga")]
+    pub(crate) naga: Option<naga::Module>,
 }
 
 impl fmt::Debug for ShaderModule {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ShaderModule::Compiled(_) => write!(formatter, "ShaderModule::Compiled(..)"),
-            ShaderModule::Raw(ref vec) => {
-                write!(formatter, "ShaderModule::Raw(length = {})", vec.len())
-            }
-        }
+        write!(formatter, "ShaderModule(words = {})", self.spv.len())
     }
 }
-
-unsafe impl Send for ShaderModule {}
-unsafe impl Sync for ShaderModule {}
 
 bitflags! {
     /// Subpass attachment operations.
@@ -196,6 +187,8 @@ pub struct PushConstantInfo {
 pub struct PipelineLayout {
     pub(crate) shader_compiler_options: msl::CompilerOptions,
     pub(crate) shader_compiler_options_point: msl::CompilerOptions,
+    #[cfg(feature = "naga")]
+    pub(crate) naga_options: naga::back::msl::Options,
     pub(crate) infos: Vec<DescriptorSetInfo>,
     pub(crate) total: MultiStageResourceCounters,
     pub(crate) push_constants: MultiStageData<Option<PushConstantInfo>>,

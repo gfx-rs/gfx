@@ -40,6 +40,13 @@ storage-map = "0.3"
 lazy_static = "1"
 raw-window-handle = "0.3"
 
+[dependencies.naga]
+#path = "../../../../naga"
+git = "https://github.com/gfx-rs/naga"
+rev = "587dc01a2cc43fdf4637f1bf6d2b75b703e9f681"
+features = ["spv-in", "msl-out"]
+optional = true
+
 # This forces docs.rs to build the crate on mac, otherwise the build fails
 # and we get no docs at all.
 [package.metadata.docs.rs]
