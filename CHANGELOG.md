@@ -2,6 +2,7 @@
 
 ### backend-dx12-unreleased
   - fix matrix vertex inputs
+  - fix SPIR-V entry point selection
 
 ### backend-dx11-unreleased
   - fix matrix vertex inputs
