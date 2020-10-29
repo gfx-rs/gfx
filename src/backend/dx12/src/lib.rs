@@ -1,3 +1,23 @@
+/*!
+# D3D12 backend internals.
+
+## Resource transitions
+
+Vulkan semantics for resource states doesn't exactly match D3D12.
+
+For regular images, whenever there is a specific layout used,
+we map it to a corresponding D3D12 resource state.
+
+For the swapchain images, we consider them to be in COMMON state
+everywhere except for render passes, where it's forcefully
+transitioned into the render state. When transfers to/from are
+requested, we transition them into and from the COPY_ states.
+
+For buffers and images in General layout, we the best effort of guessing
+the single mutable state based on the access flags. We can't reliably
+handle a case where multiple mutable access flags are used.
+*/
+
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
@@ -832,6 +852,10 @@ impl hal::Instance<Backend> for Instance {
                 if hr == winerror::DXGI_ERROR_NOT_FOUND {
                     break;
                 }
+                if !winerror::SUCCEEDED(hr) {
+                    error!("Failed enumerating adapters: 0x{:x}", hr);
+                    break;
+                }
 
                 adapter2
             } else {
@@ -847,7 +871,7 @@ impl hal::Instance<Backend> for Instance {
 
                 let (adapter2, hr2) = unsafe { adapter1.cast::<dxgi1_2::IDXGIAdapter2>() };
                 if !winerror::SUCCEEDED(hr2) {
-                    error!("Failed casting to Adapter2");
+                    error!("Failed casting to Adapter2: 0x{:x}", hr2);
                     break;
                 }
 

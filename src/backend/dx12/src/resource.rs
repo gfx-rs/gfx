@@ -406,6 +406,13 @@ impl ImageView {
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
         mip_level + (layer * self.num_levels as UINT)
     }
+
+    pub fn is_swapchain(&self) -> bool {
+        match self.handle_rtv {
+            RenderTargetHandle::Swapchain(_) => true,
+            _ => false,
+        }
+    }
 }
 
 pub struct Sampler {

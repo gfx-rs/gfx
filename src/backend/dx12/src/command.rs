@@ -389,63 +389,66 @@ pub struct CommandBuffer {
     pool_shared: Arc<PoolShared>,
     begin_flags: com::CommandBufferFlags,
 
-    // Cache renderpasses for graphics operations
+    /// Cache renderpasses for graphics operations
     pass_cache: Option<RenderPassCache>,
     cur_subpass: pass::SubpassId,
 
-    // Cache current graphics root signature and pipeline to minimize rebinding and support two
-    // bindpoints.
+    /// Cache current graphics root signature and pipeline to minimize rebinding and support two
+    /// bindpoints.
     gr_pipeline: PipelineCache,
-    // Primitive topology of the currently bound graphics pipeline.
-    // Caching required for internal graphics pipelines.
+    /// Primitive topology of the currently bound graphics pipeline.
+    /// Caching required for internal graphics pipelines.
     primitive_topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
-    // Cache current compute root signature and pipeline.
+    /// Cache current compute root signature and pipeline.
     comp_pipeline: PipelineCache,
-    // D3D12 only has one slot for both bindpoints. Need to rebind everything if we want to switch
-    // between different bind points (ie. calling draw or dispatch).
+    /// D3D12 only has one slot for both bindpoints. Need to rebind everything if we want to switch
+    /// between different bind points (ie. calling draw or dispatch).
     active_bindpoint: BindPoint,
-    // Current descriptor heaps heaps (CBV/SRV/UAV and Sampler).
-    // Required for resetting due to internal descriptor heaps.
+    /// Current descriptor heaps heaps (CBV/SRV/UAV and Sampler).
+    /// Required for resetting due to internal descriptor heaps.
     active_descriptor_heaps: [native::DescriptorHeap; 2],
 
-    // Active queries in the command buffer.
-    // Queries must begin and end in the same command buffer, which allows us to track them.
-    // The query pool type on `begin_query` must differ from all currently active queries.
-    // Therefore, only one query per query type can be active at the same time. Binary and precise
-    // occlusion queries share one queue type in Vulkan.
+    /// Active queries in the command buffer.
+    /// Queries must begin and end in the same command buffer, which allows us to track them.
+    /// The query pool type on `begin_query` must differ from all currently active queries.
+    /// Therefore, only one query per query type can be active at the same time. Binary and precise
+    /// occlusion queries share one queue type in Vulkan.
     occlusion_query: Option<OcclusionQuery>,
     pipeline_stats_query: Option<minwindef::UINT>,
 
-    // Cached vertex buffer views to bind.
-    // `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
-    // inside the pipeline state.
+    /// Cached vertex buffer views to bind.
+    /// `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
+    /// inside the pipeline state.
     vertex_bindings_remap: [Option<r::VertexBinding>; MAX_VERTEX_BUFFERS],
 
     vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
 
-    // Re-using allocation for the image-buffer copies.
+    /// Re-using allocation for the image-buffer copies.
     copies: Vec<Copy>,
 
-    // D3D12 only allows setting all viewports or all scissors at once, not partial updates.
-    // So we must cache the implied state for these partial updates.
-    viewport_cache: SmallVec<
+    /// D3D12 only allows setting all viewports or all scissors at once, not partial updates.
+    /// So we must cache the implied state for these partial updates.
+    viewport_cache: ArrayVec<
         [d3d12::D3D12_VIEWPORT;
             d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize],
     >,
-    scissor_cache: SmallVec<
+    scissor_cache: ArrayVec<
         [d3d12::D3D12_RECT;
             d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize],
     >,
 
-    // HACK: renderdoc workaround for temporary RTVs
+    /// HACK: renderdoc workaround for temporary RTVs
     rtv_pools: Vec<native::DescriptorHeap>,
-    // Temporary gpu descriptor heaps (internal).
+    /// Temporary gpu descriptor heaps (internal).
     temporary_gpu_heaps: Vec<native::DescriptorHeap>,
-    // Resources that need to be alive till the end of the GPU execution.
+    /// Resources that need to be alive till the end of the GPU execution.
     retained_resources: Vec<native::Resource>,
 
-    // Temporary wide string for the marker
+    /// Temporary wide string for the marker.
     temp_marker: Vec<u16>,
+
+    /// Temporary transition barriers.
+    barriers: Vec<d3d12::D3D12_RESOURCE_BARRIER>,
 }
 
 impl fmt::Debug for CommandBuffer {
@@ -486,12 +489,13 @@ impl CommandBuffer {
             vertex_bindings_remap: [None; MAX_VERTEX_BUFFERS],
             vertex_buffer_views: [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
             copies: Vec::new(),
-            viewport_cache: SmallVec::new(),
-            scissor_cache: SmallVec::new(),
+            viewport_cache: ArrayVec::new(),
+            scissor_cache: ArrayVec::new(),
             rtv_pools: Vec::new(),
             temporary_gpu_heaps: Vec::new(),
             retained_resources: Vec::new(),
             temp_marker: Vec::new(),
+            barriers: Vec::new(),
         }
     }
 
@@ -559,7 +563,7 @@ impl CommandBuffer {
         }
     }
 
-    fn insert_subpass_barriers(&self, insertion: BarrierPoint) {
+    unsafe fn insert_subpass_barriers(&mut self, insertion: BarrierPoint) {
         let state = self.pass_cache.as_ref().unwrap();
         let proto_barriers = match state.render_pass.subpasses.get(self.cur_subpass as usize) {
             Some(subpass) => match insertion {
@@ -569,36 +573,27 @@ impl CommandBuffer {
             None => &state.render_pass.post_barriers,
         };
 
-        let transition_barriers = proto_barriers
-            .iter()
-            .map(|barrier| {
-                let mut resource_barrier = d3d12::D3D12_RESOURCE_BARRIER {
-                    Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-                    Flags: barrier.flags,
-                    u: unsafe { mem::zeroed() },
-                };
+        self.barriers.clear();
+        for barrier in proto_barriers {
+            let mut resource_barrier = d3d12::D3D12_RESOURCE_BARRIER {
+                Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                Flags: barrier.flags,
+                u: mem::zeroed(),
+            };
 
-                *unsafe { resource_barrier.u.Transition_mut() } =
-                    d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
-                        pResource: state.framebuffer.attachments[barrier.attachment_id]
-                            .resource
-                            .as_mut_ptr(),
-                        Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                        StateBefore: barrier.states.start,
-                        StateAfter: barrier.states.end,
-                    };
+            *resource_barrier.u.Transition_mut() = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                pResource: state.framebuffer.attachments[barrier.attachment_id]
+                    .resource
+                    .as_mut_ptr(),
+                Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                StateBefore: barrier.states.start,
+                StateAfter: barrier.states.end,
+            };
 
-                resource_barrier
-            })
-            .collect::<Vec<_>>();
-
-        if !transition_barriers.is_empty() {
-            unsafe {
-                self.raw
-                    .clone()
-                    .ResourceBarrier(transition_barriers.len() as _, transition_barriers.as_ptr());
-            }
+            self.barriers.push(resource_barrier);
         }
+
+        self.flush_barriers();
     }
 
     fn bind_targets(&mut self) {
@@ -840,6 +835,27 @@ impl CommandBuffer {
         barrier
     }
 
+    fn dual_transition_barriers(
+        resource: native::Resource,
+        sub: u32,
+        states: Range<u32>,
+    ) -> (d3d12::D3D12_RESOURCE_BARRIER, d3d12::D3D12_RESOURCE_BARRIER) {
+        (
+            Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                pResource: resource.as_mut_ptr(),
+                Subresource: sub,
+                StateBefore: states.start,
+                StateAfter: states.end,
+            }),
+            Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                pResource: resource.as_mut_ptr(),
+                Subresource: sub,
+                StateBefore: states.end,
+                StateAfter: states.start,
+            }),
+        )
+    }
+
     fn split_buffer_copy(copies: &mut Vec<Copy>, r: &com::BufferImageCopy, image: &r::ImageBound) {
         let buffer_width = if r.buffer_width == 0 {
             r.image_extent.width
@@ -1067,7 +1083,7 @@ impl CommandBuffer {
                         }
                     })
                 })
-                .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
+                .collect::<ArrayVec<[_; MAX_VERTEX_BUFFERS]>>();
 
             if buffers.is_empty() {
                 last_end_slot = start_slot + 1;
@@ -1085,12 +1101,40 @@ impl CommandBuffer {
         }
     }
 
+    fn flip_barriers(&mut self) {
+        for barrier in self.barriers.iter_mut() {
+            if barrier.Type == d3d12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION {
+                let transition = unsafe { barrier.u.Transition_mut() };
+                mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
+            }
+        }
+    }
+
+    fn _set_buffer_barrier(
+        &mut self,
+        target: &r::BufferBound,
+        state: d3d12::D3D12_RESOURCE_STATES,
+    ) {
+        let barrier = Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+            pResource: target.resource.as_mut_ptr(),
+            Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            StateBefore: d3d12::D3D12_RESOURCE_STATE_COMMON,
+            StateAfter: state,
+        });
+        self.barriers.clear();
+        self.barriers.push(barrier);
+    }
+
     fn fill_texture_barries(
+        &mut self,
         target: &r::ImageBound,
         states: Range<d3d12::D3D12_RESOURCE_STATES>,
         range: &image::SubresourceRange,
-        list: &mut impl Extend<d3d12::D3D12_RESOURCE_BARRIER>,
     ) {
+        if states.start == states.end {
+            return;
+        }
+
         let mut bar = Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
             pResource: target.resource.as_mut_ptr(),
             Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -1106,7 +1150,7 @@ impl CommandBuffer {
 
         if *range == full_range {
             // Only one barrier if it affects the whole image.
-            list.extend(iter::once(bar));
+            self.barriers.push(bar);
         } else {
             // Generate barrier for each layer/level combination.
             for rel_level in 0..num_levels {
@@ -1119,7 +1163,7 @@ impl CommandBuffer {
                             0,
                         );
                     }
-                    list.extend(iter::once(bar));
+                    self.barriers.push(bar);
                 }
             }
         }
@@ -1133,6 +1177,13 @@ impl CommandBuffer {
             self.temp_marker.as_ptr() as *const _,
             self.temp_marker.len() as u32 * 2,
         )
+    }
+
+    unsafe fn flush_barriers(&self) {
+        if !self.barriers.is_empty() {
+            self.raw
+                .ResourceBarrier(self.barriers.len() as _, self.barriers.as_ptr());
+        }
     }
 }
 
@@ -1230,38 +1281,56 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 .BeginEvent(0, n.as_ptr() as *const _, n.len() as u32 * 2);
         }
 
+        self.barriers.clear();
         let mut clear_iter = clear_values.into_iter();
-        let attachment_clears = render_pass
+        let mut attachment_clears = Vec::new();
+        for (i, (view, attachment)) in framebuffer
             .attachments
             .iter()
+            .zip(render_pass.attachments.iter())
             .enumerate()
-            .map(|(i, attachment)| {
-                let cv = if attachment.has_clears() {
-                    Some(*clear_iter.next().unwrap().borrow())
+        {
+            // for swapchain views, we consider the initial layout to always be `General`
+            if view.is_swapchain() {
+                let state = conv::map_image_resource_state(
+                    image::Access::empty(),
+                    attachment.layouts.start,
+                );
+                let barrier = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                    pResource: view.resource.as_mut_ptr(),
+                    Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    StateBefore: d3d12::D3D12_RESOURCE_STATE_COMMON,
+                    StateAfter: state,
+                };
+                self.barriers.push(Self::transition_barrier(barrier));
+            }
+
+            let cv = if attachment.has_clears() {
+                Some(*clear_iter.next().unwrap().borrow())
+            } else {
+                None
+            };
+
+            attachment_clears.push(AttachmentClear {
+                subpass_id: render_pass
+                    .subpasses
+                    .iter()
+                    .position(|sp| sp.is_using(i))
+                    .map(|i| i as pass::SubpassId),
+                value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
+                    assert!(cv.is_some());
+                    cv
                 } else {
                     None
-                };
-
-                AttachmentClear {
-                    subpass_id: render_pass
-                        .subpasses
-                        .iter()
-                        .position(|sp| sp.is_using(i))
-                        .map(|i| i as pass::SubpassId),
-                    value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                        assert!(cv.is_some());
-                        cv
-                    } else {
-                        None
-                    },
-                    stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(cv.unwrap().depth_stencil.stencil)
-                    } else {
-                        None
-                    },
-                }
-            })
-            .collect();
+                },
+                stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                    Some(cv.unwrap().depth_stencil.stencil)
+                } else {
+                    None
+                },
+            });
+        }
+        self.flush_barriers();
 
         self.pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
@@ -1290,7 +1359,30 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         self.cur_subpass = !0;
         self.insert_subpass_barriers(BarrierPoint::Pre);
+
         let pc = self.pass_cache.take().unwrap();
+        self.barriers.clear();
+        for (view, attachment) in pc
+            .framebuffer
+            .attachments
+            .iter()
+            .zip(pc.render_pass.attachments.iter())
+        {
+            // for swapchain views, we consider the initial layout to always be `General`
+            if view.is_swapchain() {
+                let state =
+                    conv::map_image_resource_state(image::Access::empty(), attachment.layouts.end);
+                let barrier = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                    pResource: view.resource.as_mut_ptr(),
+                    Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    StateBefore: state,
+                    StateAfter: d3d12::D3D12_RESOURCE_STATE_COMMON,
+                };
+                self.barriers.push(Self::transition_barrier(barrier));
+            }
+        }
+        self.flush_barriers();
+
         if pc.has_name {
             self.raw.EndEvent();
         }
@@ -1298,14 +1390,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
-        _stages: Range<pso::PipelineStage>,
+        stages: Range<pso::PipelineStage>,
         _dependencies: memory::Dependencies,
         barriers: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        let mut raw_barriers = SmallVec::<[_; 4]>::new();
+        self.barriers.clear();
 
         // transition barriers
         for barrier in barriers {
@@ -1322,13 +1414,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     *bar.u.UAV_mut() = d3d12::D3D12_RESOURCE_UAV_BARRIER {
                         pResource: ptr::null_mut(),
                     };
-                    raw_barriers.push(bar);
+                    self.barriers.push(bar);
                 }
                 memory::Barrier::Buffer {
                     ref states,
                     target,
                     ref families,
-                    ..
+                    range: _,
                 } => {
                     // TODO: Implement queue family ownership transitions for dx12
                     if let Some(f) = families {
@@ -1336,6 +1428,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             unimplemented!("Queue family resource ownership transitions are not implemented for DX12 (attempted transition from queue family {} to {}", f.start.0, f.end.0);
                         }
                     }
+
                     let state_src = conv::map_buffer_resource_state(states.start);
                     let state_dst = conv::map_buffer_resource_state(states.end);
 
@@ -1351,7 +1444,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         StateAfter: state_dst,
                     });
 
-                    raw_barriers.push(bar);
+                    self.barriers.push(bar);
                 }
                 memory::Barrier::Image {
                     ref states,
@@ -1365,30 +1458,35 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             unimplemented!("Queue family resource ownership transitions are not implemented for DX12 (attempted transition from queue family {} to {}", f.start.0, f.end.0);
                         }
                     }
+
                     let state_src = conv::map_image_resource_state(states.start.0, states.start.1);
                     let state_dst = conv::map_image_resource_state(states.end.0, states.end.1);
 
-                    if state_src == state_dst {
-                        continue;
-                    }
-
                     let target = target.expect_bound();
-                    Self::fill_texture_barries(
-                        target,
-                        state_src..state_dst,
-                        range,
-                        &mut raw_barriers,
-                    );
+
+                    match target.place {
+                        r::Place::Heap { .. } => {
+                            self.fill_texture_barries(target, state_src..state_dst, range);
+                        }
+                        r::Place::Swapchain { .. } => {} //ignore
+                    }
                 }
             }
         }
+
+        let all_shader_stages = pso::PipelineStage::VERTEX_SHADER
+            | pso::PipelineStage::FRAGMENT_SHADER
+            | pso::PipelineStage::COMPUTE_SHADER
+            | pso::PipelineStage::GEOMETRY_SHADER
+            | pso::PipelineStage::HULL_SHADER
+            | pso::PipelineStage::DOMAIN_SHADER;
 
         // UAV barriers
         //
         // TODO: Currently always add a global UAV barrier.
         //       WAR only requires an execution barrier but D3D12 seems to need
         //       a UAV barrier for this according to docs. Can we make this better?
-        {
+        if (stages.start & stages.end).intersects(all_shader_stages) {
             let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
                 Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                 Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -1397,13 +1495,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             *barrier.u.UAV_mut() = d3d12::D3D12_RESOURCE_UAV_BARRIER {
                 pResource: ptr::null_mut(),
             };
-            raw_barriers.push(barrier);
+            self.barriers.push(barrier);
         }
 
         // Alias barriers
         //
         // TODO: Optimize, don't always add an alias barrier
-        {
+        if false {
             let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
                 Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_ALIASING,
                 Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -1413,11 +1511,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 pResourceBefore: ptr::null_mut(),
                 pResourceAfter: ptr::null_mut(),
             };
-            raw_barriers.push(barrier);
+            self.barriers.push(barrier);
         }
 
-        self.raw
-            .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
+        self.flush_barriers();
     }
 
     unsafe fn clear_image<T>(
@@ -1432,7 +1529,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     {
         let image = image.expect_bound();
         let base_state = conv::map_image_resource_state(image::Access::TRANSFER_WRITE, layout);
-        let mut raw_barriers = SmallVec::<[_; 4]>::new();
 
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
@@ -1445,12 +1541,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE
             };
 
-            // Transition into a renderable state. We don't expect `*AttachmentOptimal`
-            // here since this would be invalid.
-            raw_barriers.clear();
-            Self::fill_texture_barries(image, base_state..target_state, sub, &mut raw_barriers);
-            self.raw
-                .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
+            self.barriers.clear();
+            self.fill_texture_barries(image, base_state..target_state, sub);
+            self.flush_barriers();
 
             for rel_layer in 0..sub.resolve_layer_count(image.kind.num_layers()) {
                 let layer = (sub.layer_start + rel_layer) as usize;
@@ -1473,11 +1566,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 }
             }
 
-            // Transition back into the old state.
-            raw_barriers.clear();
-            Self::fill_texture_barries(image, target_state..base_state, sub, &mut raw_barriers);
-            self.raw
-                .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
+            self.flip_barriers();
+            self.flush_barriers();
         }
     }
 
@@ -2138,14 +2228,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             bottom: 1,
         };
 
-        // Insert barrier for `COPY_DEST` to `UNORDERED_ACCESS` as we use
-        // `TRANSFER_WRITE` for all clear commands.
-        let pre_barrier = Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
-            pResource: buffer.resource.as_mut_ptr(),
-            Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-            StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
-            StateAfter: d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-        });
+        let (pre_barrier, post_barrier) = Self::dual_transition_barriers(
+            buffer.resource,
+            d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            d3d12::D3D12_RESOURCE_STATE_COPY_DEST..d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        );
         self.raw.ResourceBarrier(1, &pre_barrier);
 
         // Descriptor heap for the current blit, only storing the src image
@@ -2190,12 +2277,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             &rect as *const _,
         );
 
-        let post_barrier = Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
-            pResource: buffer.resource.as_mut_ptr(),
-            Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-            StateBefore: d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-            StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
-        });
         self.raw.ResourceBarrier(1, &post_barrier);
     }
 
@@ -2210,6 +2291,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     {
         let src = src.expect_bound();
         let dst = dst.expect_bound();
+
+        /*
+        let (pre_barrier, post_barrier) = Self::dual_transition_barriers(
+            dst.resource,
+            d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+        );
+        self.raw.ResourceBarrier(1, &pre_barrier);
+        */
+
+        // TODO: Optimization: Copy whole resource if possible
         // copy each region
         for region in regions {
             let region = region.borrow();
@@ -2222,7 +2314,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             );
         }
 
-        // TODO: Optimization: Copy whole resource if possible
+        //self.raw.ResourceBarrier(1, &post_barrier);
     }
 
     unsafe fn copy_image<T>(
