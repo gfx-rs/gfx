@@ -776,11 +776,7 @@ impl Device {
             Windowed: TRUE,
             // TODO:
             SwapEffect: dxgi::DXGI_SWAP_EFFECT_DISCARD,
-            Flags: if config.present_mode == window::PresentMode::IMMEDIATE {
-                dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
-            } else {
-                0
-            },
+            Flags: 0,
         };
 
         let dxgi_swapchain = {
