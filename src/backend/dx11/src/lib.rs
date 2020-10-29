@@ -33,7 +33,7 @@ use crate::{
 };
 
 use winapi::{shared::{
-    dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT_ALLOW_TEARING},
+    dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain},
     dxgiformat,
     minwindef::{FALSE, HMODULE, UINT},
     windef::{HWND, RECT},
@@ -888,7 +888,6 @@ impl window::Surface<Backend> for Surface {
         // TODO: _DISCARD swap effects can only have one image?
         window::SurfaceCapabilities {
             present_modes: window::PresentMode::IMMEDIATE
-                | window::PresentMode::MAILBOX
                 | window::PresentMode::FIFO,
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
             image_count: 1..=16,                                       // TODO:
@@ -1139,10 +1138,10 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
         let mut presentation = surface.presentation.as_mut().unwrap();
         let (interval, flags) = match presentation.mode {
-            window::PresentMode::IMMEDIATE => (0, DXGI_PRESENT_ALLOW_TEARING),
+            window::PresentMode::IMMEDIATE => (0, 0),
             //Note: this ends up not presenting anything for some reason
             //window::PresentMode::MAILBOX if !presentation.is_init => (1, DXGI_PRESENT_DO_NOT_SEQUENCE),
-            window::PresentMode::MAILBOX | window::PresentMode::FIFO => (1, 0),
+            window::PresentMode::FIFO => (1, 0),
             _ => (0, 0),
         };
         presentation.is_init = false;
