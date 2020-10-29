@@ -185,13 +185,13 @@ impl Device {
 
         // See [`shader::introspect_spirv_vertex_semantic_remapping`] for details of why this is needed.
         let semantics: Vec<_> = attributes.iter().map(|attrib| {
-            match vertex_semantic_remapping.get(&attrib.location).unwrap() {
-                Some((major, minor)) => {
+            match vertex_semantic_remapping.get(&attrib.location) {
+                Some(Some((major, minor))) => {
                     let name = std::borrow::Cow::Owned(format!("TEXCOORD{}_\0", major));
                     let location = *minor;
                     (name, location)
                 }
-                None => {
+                _ => {
                     let name = std::borrow::Cow::Borrowed("TEXCOORD\0");
                     let location = attrib.location;
                     (name, location)
