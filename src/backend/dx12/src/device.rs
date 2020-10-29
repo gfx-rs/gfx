@@ -1933,17 +1933,15 @@ impl d::Device<B> for Device {
             let semantics = vertex_semantic_remapping
                 .as_ref()
                 .and_then(|map| {
-                    *map
-                        .get(&attrib.location)
-                        .unwrap()
+                    map.get(&attrib.location)
                 });
             match semantics {
-                Some((major, minor)) => {
+                Some(Some((major, minor))) => {
                     let name = std::borrow::Cow::Owned(format!("TEXCOORD{}_\0", major));
-                    let location = minor;
+                    let location = *minor;
                     (name, location)
                 }
-                None => {
+                _ => {
                     let name = std::borrow::Cow::Borrowed("TEXCOORD\0");
                     let location = attrib.location;
                     (name, location)
