@@ -2523,14 +2523,19 @@ impl d::Device<B> for Device {
 
         let alloc_info = self.raw.clone().GetResourceAllocationInfo(0, 1, &desc);
 
-        // Image usages which require RT/DS heap due to internal implementation.
         let target_usage = image::Usage::COLOR_ATTACHMENT
-            | image::Usage::DEPTH_STENCIL_ATTACHMENT
-            | image::Usage::TRANSFER_DST;
+            | image::Usage::DEPTH_STENCIL_ATTACHMENT;
+
+        let target_features = format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
+
+        // Image usages which require RT/DS heap due to internal implementation.
+        let needs_target_usage =
+            usage.intersects(target_usage)
+                || (usage.contains(image::Usage::TRANSFER_DST) && features.intersects(target_features));
 
         let type_mask_shift = if self.private_caps.heterogeneous_resource_heaps {
             MEM_TYPE_UNIVERSAL_SHIFT
-        } else if usage.intersects(target_usage) {
+        } else if needs_target_usage {
             MEM_TYPE_TARGET_SHIFT
         } else {
             MEM_TYPE_IMAGE_SHIFT

@@ -3,6 +3,7 @@
 ### backend-dx12-unreleased
   - fix matrix vertex inputs
   - fix SPIR-V entry point selection
+  - fix heap selection for non-renderable textures
 
 ### backend-dx11-unreleased
   - fix matrix vertex inputs
