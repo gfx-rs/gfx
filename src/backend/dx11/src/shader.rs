@@ -239,18 +239,29 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(storage_buffer.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        // In order to find out of the buffer is read-only, we must ask if the first member of its base type is read only.
-        let read_only = ast
-            .get_member_decoration(storage_buffer.base_type_id, 0, spirv::Decoration::NonWritable)
-            .map_err(gen_query_error)? != 0;
         let (_content, res_index) = layout.sets[set].find_register(stage, binding);
 
-        let index = if read_only {
-            // Read only storage buffers are SRVs
-            res_index.t as u32
+        let read_only = match layout.sets[set].bindings[binding as usize].ty {
+            pso::DescriptorType::Buffer {
+                ty: pso::BufferDescriptorType::Storage {
+                    read_only
+                },
+                ..
+            } => {
+                read_only
+            }
+            _ => unreachable!()
+        };
+
+        // If the binding is read/write, we need to generate a UAV here.
+        if !read_only {
+            ast.set_member_decoration(storage_buffer.type_id, 0, spirv::Decoration::NonWritable, 0)
+                .map_err(gen_unexpected_error)?;
         }
-        // Compute uses bottom up stack, all other stages use top down.
-        else if stage == ShaderStage::Compute {
+
+        let index = if read_only {
+            res_index.t as u32
+        } else if stage == ShaderStage::Compute {
             res_index.u as u32
         } else {
             d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - 1 - res_index.u as u32
