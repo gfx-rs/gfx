@@ -1176,7 +1176,7 @@ impl Internal {
                     unsafe {
                         context.OMSetRenderTargets(
                             1,
-                            [attachment.rtv_handle.clone().unwrap().as_raw()].as_ptr(),
+                            [attachment.rtv_handle.unwrap()].as_ptr(),
                             ptr::null_mut(),
                         );
                     }
@@ -1265,7 +1265,7 @@ impl Internal {
                         context.OMSetRenderTargets(
                             0,
                             ptr::null_mut(),
-                            attachment.dsv_handle.clone().unwrap().as_raw(),
+                            attachment.dsv_handle.unwrap(),
                         );
                         context.PSSetShader(
                             self.ps_partial_clear_depth.as_raw(),
