@@ -995,11 +995,12 @@ impl window::PresentationSurface<Backend> for Surface {
         let image_view = ImageView {
             subresource: d3d11::D3D11CalcSubresource(0, 0, 1),
             format: present.format,
-            rtv_handle: Some(present.view.clone()),
+            rtv_handle: Some(present.view.as_raw()),
             dsv_handle: None,
             srv_handle: None,
             uav_handle: None,
             rodsv_handle: None,
+            owned: false,
         };
         Ok((image_view, None))
     }
@@ -1157,9 +1158,7 @@ impl RenderPassCache {
             .map(|&(id, _)| {
                 self.framebuffer.attachments[id]
                     .rtv_handle
-                    .clone()
                     .unwrap()
-                    .as_raw()
             })
             .collect::<Vec<_>>();
         let (ds_view, rods_view) = match subpass.depth_stencil_attachment {
@@ -1167,15 +1166,11 @@ impl RenderPassCache {
                 let attachment = &self.framebuffer.attachments[id];
                 let ds_view = attachment
                     .dsv_handle
-                    .clone()
-                    .unwrap()
-                    .as_raw();
+                    .unwrap();
 
                 let rods_view = attachment
                     .rodsv_handle
-                    .clone()
-                    .unwrap()
-                    .as_raw();
+                    .unwrap();
 
                 (Some(ds_view), Some(rods_view))
             },
@@ -1201,8 +1196,8 @@ impl RenderPassCache {
             let mut resolve_resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
 
             unsafe {
-                color_framebuffer.rtv_handle.as_ref().expect("Framebuffer must have COLOR_ATTACHMENT usage").GetResource(&mut color_resource as *mut *mut _);
-                resolve_framebuffer.rtv_handle.as_ref().expect("Resolve texture must have COLOR_ATTACHMENT usage").GetResource(&mut resolve_resource as *mut *mut _);
+                (&*color_framebuffer.rtv_handle.expect("Framebuffer must have COLOR_ATTACHMENT usage")).GetResource(&mut color_resource as *mut *mut _);
+                (&*resolve_framebuffer.rtv_handle.expect("Resolve texture must have COLOR_ATTACHMENT usage")).GetResource(&mut resolve_resource as *mut *mut _);
 
                 context.ResolveSubresource(
                     resolve_resource,
@@ -1211,6 +1206,9 @@ impl RenderPassCache {
                     color_framebuffer.subresource,
                     conv::map_format(color_framebuffer.format).unwrap()
                 );
+
+                (&*color_resource).Release();
+                (&*resolve_resource).Release();
             }
         }
     }
@@ -3411,15 +3409,52 @@ impl Image {
     }
 }
 
-#[derive(Clone)]
 pub struct ImageView {
     subresource: UINT,
     format: format::Format,
-    rtv_handle: Option<ComPtr<d3d11::ID3D11RenderTargetView>>,
-    srv_handle: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
-    dsv_handle: Option<ComPtr<d3d11::ID3D11DepthStencilView>>,
-    rodsv_handle: Option<ComPtr<d3d11::ID3D11DepthStencilView>>,
-    uav_handle: Option<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
+    rtv_handle: Option<*mut d3d11::ID3D11RenderTargetView>,
+    srv_handle: Option<*mut d3d11::ID3D11ShaderResourceView>,
+    dsv_handle: Option<*mut d3d11::ID3D11DepthStencilView>,
+    rodsv_handle: Option<*mut d3d11::ID3D11DepthStencilView>,
+    uav_handle: Option<*mut d3d11::ID3D11UnorderedAccessView>,
+    owned: bool,
+}
+
+impl Clone for ImageView {
+    fn clone(&self) -> Self {
+        Self {
+            subresource: self.subresource,
+            format: self.format,
+            rtv_handle: self.rtv_handle.clone(),
+            srv_handle: self.srv_handle.clone(),
+            dsv_handle: self.dsv_handle.clone(),
+            rodsv_handle: self.rodsv_handle.clone(),
+            uav_handle: self.uav_handle.clone(),
+            owned: false
+        }
+    }
+}
+
+impl Drop for ImageView {
+    fn drop(&mut self) {
+        if self.owned {
+            if let Some(rtv) = self.rtv_handle.take() {
+                unsafe { (&*rtv).Release() };
+            }
+            if let Some(srv) = self.srv_handle.take() {
+                unsafe { (&*srv).Release() };
+            }
+            if let Some(dsv) = self.dsv_handle.take() {
+                unsafe { (&*dsv).Release() };
+            }
+            if let Some(rodsv) = self.rodsv_handle.take() {
+                unsafe { (&*rodsv).Release() };
+            }
+            if let Some(uav) = self.uav_handle.take() {
+                unsafe { (&*uav).Release() };
+            }
+        }
+    }
 }
 
 impl fmt::Debug for ImageView {

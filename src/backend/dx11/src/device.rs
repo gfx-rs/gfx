@@ -1792,7 +1792,7 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&srv, name, " -- SRV");
                 }
 
-                Some(srv)
+                Some(srv.into_raw())
             } else {
                 None
             },
@@ -1803,7 +1803,7 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&rtv, name, " -- RTV");
                 }
 
-                Some(rtv)
+                Some(rtv.into_raw())
             } else {
                 None
             },
@@ -1814,7 +1814,7 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&uav, name, " -- UAV");
                 }
 
-                Some(uav)
+                Some(uav.into_raw())
             } else {
                 None
             },
@@ -1825,7 +1825,7 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&dsv, name, " -- DSV");
                 }
 
-                Some(dsv)
+                Some(dsv.into_raw())
             } else {
                 None
             },
@@ -1837,10 +1837,11 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&rodsv, name, " -- DSV");
                 }
 
-                Some(rodsv)
+                Some(rodsv.into_raw())
             } else {
                 None
             },
+            owned: true,
         })
     }
 
@@ -2015,12 +2016,10 @@ impl device::Device<Backend> for Device {
                         c: ptr::null_mut(),
                         t: image
                             .srv_handle
-                            .clone()
-                            .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                            .map_or(ptr::null_mut(), |h| h as *mut _),
                         u: image
                             .uav_handle
-                            .clone()
-                            .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                            .map_or(ptr::null_mut(), |h| h as *mut _),
                         s: ptr::null_mut(),
                     },
                     pso::Descriptor::Sampler(sampler) => RegisterData {
@@ -2034,12 +2033,10 @@ impl device::Device<Backend> for Device {
                             c: ptr::null_mut(),
                             t: image
                                 .srv_handle
-                                .clone()
-                                .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                                .map_or(ptr::null_mut(), |h| h as *mut _),
                             u: image
                                 .uav_handle
-                                .clone()
-                                .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                                .map_or(ptr::null_mut(), |h| h as *mut _),
                             s: sampler.sampler_handle.as_raw() as *mut _,
                         }
                     }
