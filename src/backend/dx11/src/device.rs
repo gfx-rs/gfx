@@ -456,11 +456,24 @@ impl Device {
                     ArraySize,
                 }
             }
+            image::ViewKind::D2 if info.kind.num_samples() > 1 => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_SRV {
+                    UnusedField_NothingToDefine: 0,
+                }
+            }
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_SRV {
                     MostDetailedMip,
                     MipLevels,
+                }
+            }
+            image::ViewKind::D2Array if info.kind.num_samples() > 1 => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY;
+                *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_SRV {
+                    FirstArraySlice,
+                    ArraySize,
                 }
             }
             image::ViewKind::D2Array => {
