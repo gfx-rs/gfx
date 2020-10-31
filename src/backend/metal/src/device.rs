@@ -1846,7 +1846,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(n::ShaderModule {
             spv: raw_data.to_vec(),
             #[cfg(feature = "naga")]
-            naga: match naga::front::spv::Parser::new(raw_data.iter().cloned()).parse() {
+            naga: match naga::front::spv::Parser::new(raw_data.iter().cloned(), &Default::default()).parse() {
                 Ok(module) => match naga::proc::Validator::new().validate(&module) {
                     Ok(()) => Some(module),
                     Err(e) => {
