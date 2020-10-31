@@ -5,8 +5,13 @@
   - fix SPIR-V entry point selection
   - fix heap selection for non-renderable textures
 
-### backend-dx11-unreleased
+### backend-dx11-0.6.12 (30-10-2020)
   - fix matrix vertex inputs
+  - fix `readonly` buffers in shaders with read/write bindings
+  - fix `Immediate` presentation mode
+  - stop exposing `Mailbox` presentation mode
+  - fix `surface in use` error on swapchain recreation
+  - allow creation of multisampled SRVs
 
 ### backend-dx11-0.6.11 (27-10-2020)
   - implement push constants

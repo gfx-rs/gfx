@@ -185,13 +185,13 @@ impl Device {
 
         // See [`shader::introspect_spirv_vertex_semantic_remapping`] for details of why this is needed.
         let semantics: Vec<_> = attributes.iter().map(|attrib| {
-            match vertex_semantic_remapping.get(&attrib.location).unwrap() {
-                Some((major, minor)) => {
+            match vertex_semantic_remapping.get(&attrib.location) {
+                Some(Some((major, minor))) => {
                     let name = std::borrow::Cow::Owned(format!("TEXCOORD{}_\0", major));
                     let location = *minor;
                     (name, location)
                 }
-                None => {
+                _ => {
                     let name = std::borrow::Cow::Borrowed("TEXCOORD\0");
                     let location = attrib.location;
                     (name, location)
@@ -456,11 +456,24 @@ impl Device {
                     ArraySize,
                 }
             }
+            image::ViewKind::D2 if info.kind.num_samples() > 1 => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2DMS;
+                *unsafe { desc.u.Texture2DMS_mut() } = d3d11::D3D11_TEX2DMS_SRV {
+                    UnusedField_NothingToDefine: 0,
+                }
+            }
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_SRV {
                     MostDetailedMip,
                     MipLevels,
+                }
+            }
+            image::ViewKind::D2Array if info.kind.num_samples() > 1 => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2DMSARRAY;
+                *unsafe { desc.u.Texture2DMSArray_mut() } = d3d11::D3D11_TEX2DMS_ARRAY_SRV {
+                    FirstArraySlice,
+                    ArraySize,
                 }
             }
             image::ViewKind::D2Array => {
@@ -776,11 +789,7 @@ impl Device {
             Windowed: TRUE,
             // TODO:
             SwapEffect: dxgi::DXGI_SWAP_EFFECT_DISCARD,
-            Flags: if config.present_mode == window::PresentMode::IMMEDIATE {
-                dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
-            } else {
-                0
-            },
+            Flags: 0,
         };
 
         let dxgi_swapchain = {
@@ -1796,7 +1805,7 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&srv, name, " -- SRV");
                 }
 
-                Some(srv)
+                Some(srv.into_raw())
             } else {
                 None
             },
@@ -1807,7 +1816,7 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&rtv, name, " -- RTV");
                 }
 
-                Some(rtv)
+                Some(rtv.into_raw())
             } else {
                 None
             },
@@ -1818,7 +1827,7 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&uav, name, " -- UAV");
                 }
 
-                Some(uav)
+                Some(uav.into_raw())
             } else {
                 None
             },
@@ -1829,7 +1838,7 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&dsv, name, " -- DSV");
                 }
 
-                Some(dsv)
+                Some(dsv.into_raw())
             } else {
                 None
             },
@@ -1841,10 +1850,11 @@ impl device::Device<Backend> for Device {
                     set_debug_name_with_suffix(&rodsv, name, " -- DSV");
                 }
 
-                Some(rodsv)
+                Some(rodsv.into_raw())
             } else {
                 None
             },
+            owned: true,
         })
     }
 
@@ -2019,12 +2029,10 @@ impl device::Device<Backend> for Device {
                         c: ptr::null_mut(),
                         t: image
                             .srv_handle
-                            .clone()
-                            .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                            .map_or(ptr::null_mut(), |h| h as *mut _),
                         u: image
                             .uav_handle
-                            .clone()
-                            .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                            .map_or(ptr::null_mut(), |h| h as *mut _),
                         s: ptr::null_mut(),
                     },
                     pso::Descriptor::Sampler(sampler) => RegisterData {
@@ -2038,12 +2046,10 @@ impl device::Device<Backend> for Device {
                             c: ptr::null_mut(),
                             t: image
                                 .srv_handle
-                                .clone()
-                                .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                                .map_or(ptr::null_mut(), |h| h as *mut _),
                             u: image
                                 .uav_handle
-                                .clone()
-                                .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                                .map_or(ptr::null_mut(), |h| h as *mut _),
                             s: sampler.sampler_handle.as_raw() as *mut _,
                         }
                     }
