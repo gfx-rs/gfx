@@ -4,6 +4,9 @@
   - fix matrix vertex inputs
   - fix SPIR-V entry point selection
   - fix heap selection for non-renderable textures
+  
+### backend-dx11-0.6.13 (31-10-2020)
+  - fix depth-stencil to depth-stencil copies
 
 ### backend-dx11-0.6.12 (30-10-2020)
   - fix matrix vertex inputs
