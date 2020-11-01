@@ -708,7 +708,45 @@ impl Internal {
         } else {
             // Default copy path
             for region in regions.into_iter() {
-                let info = region.borrow();
+                let info: &command::ImageCopy = region.borrow();
+
+                assert_eq!(
+                    src.decomposed_format.typeless,
+                    dst.decomposed_format.typeless,
+                    "DX11 backend cannot copy between underlying image formats: {} to {}.",
+                    src.decomposed_format.typeless,
+                    dst.decomposed_format.typeless,
+                );
+
+                // Formats are the same per above assert, only need to do it for one of the formats
+                let full_copy_only = src.format.is_depth() || src.format.is_stencil() || src.kind.num_samples() > 1;
+
+                let copy_box = if full_copy_only {
+                    let offset_zero =
+                        info.src_offset.x == 0
+                            && info.src_offset.y == 0
+                            && info.src_offset.z == 0
+                            && info.dst_offset.x == 0
+                            && info.dst_offset.y == 0
+                            && info.dst_offset.z == 0;
+
+                    let full_extent = info.extent == src.kind.extent();
+
+                    if !offset_zero || !full_extent {
+                        warn!("image to image copies of depth-stencil or multisampled textures must copy the whole resource. Ignoring non-zero offset or non-full extent.");
+                    }
+
+                    None
+                } else {
+                    Some(d3d11::D3D11_BOX {
+                        left: info.src_offset.x as _,
+                        top: info.src_offset.y as _,
+                        front: info.src_offset.z as _,
+                        right: info.src_offset.x as u32 + info.extent.width as u32,
+                        bottom: info.src_offset.y as u32 + info.extent.height as u32,
+                        back: info.src_offset.z as u32 + info.extent.depth as u32,
+                    })
+                };
 
                 // TODO: layer subresources
                 unsafe {
@@ -720,14 +758,7 @@ impl Internal {
                         info.dst_offset.z as _,
                         src.internal.raw,
                         dst.calc_subresource(info.dst_subresource.level as _, 0),
-                        &d3d11::D3D11_BOX {
-                            left: info.src_offset.x as _,
-                            top: info.src_offset.y as _,
-                            front: info.src_offset.z as _,
-                            right: info.src_offset.x as u32 + info.extent.width as u32,
-                            bottom: info.src_offset.y as u32 + info.extent.height as u32,
-                            back: info.src_offset.z as u32 + info.extent.depth as u32,
-                        },
+                        copy_box.map_or_else(ptr::null, |b| &b),
                     );
                 }
             }
