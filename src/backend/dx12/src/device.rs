@@ -471,8 +471,14 @@ impl Device {
 
                 let execution_model = conv::map_stage(stage);
                 let shader_model = hlsl::ShaderModel::V5_1;
-                let shader_code =
-                    Self::translate_spirv(&mut ast, shader_model, layout, stage, features, source.entry)?;
+                let shader_code = Self::translate_spirv(
+                    &mut ast,
+                    shader_model,
+                    layout,
+                    stage,
+                    features,
+                    source.entry,
+                )?;
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
                 let real_name = ast
