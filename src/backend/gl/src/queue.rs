@@ -4,7 +4,6 @@ use crate::{
 };
 
 use glow::HasContext;
-use parking_lot::Mutex;
 use smallvec::SmallVec;
 
 use std::{borrow::Borrow, mem, slice};

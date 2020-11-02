@@ -17,8 +17,8 @@ build = "build.rs"
 name = "gfx_backend_gl"
 
 [features]
-default = []
-#surfman-x11 = ["surfman/sm-x11"]
+default = ["surfman"]
+surfman-x11 = ["surfman/sm-x11"]
 
 [dependencies]
 arrayvec = "0.5"
@@ -33,9 +33,9 @@ spirv_cross = { version = "0.22", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
 
-#[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
+[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
 # TODO: Update to released version when it comes out
-#surfman = { git = "https://github.com/servo/surfman.git", rev = "41ac1ee", features = ["sm-raw-window-handle"], optional = true }
+surfman = { git = "https://github.com/servo/surfman.git", rev = "41ac1ee", features = ["sm-raw-window-handle"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3.6"

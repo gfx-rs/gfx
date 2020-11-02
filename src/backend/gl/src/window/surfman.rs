@@ -21,7 +21,7 @@ pub struct Swapchain {
     ///
     pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
     /// Renderbuffer
-    pub(crate) renderbuffer: native::Renderbuffer
+    pub(crate) renderbuffer: native::Renderbuffer,
 }
 
 thread_local! {
@@ -175,28 +175,7 @@ impl hal::Instance<B> for Instance {
         Ok(self.create_surface_from_rwh(has_handle.raw_window_handle()))
     }
 
-    unsafe fn destroy_surface(&self, surface: Surface) {
-        // Unbind and get the underlying surface from the context
-        let raw_surface = self
-            .device
-            .read()
-            .unbind_surface_from_context(&mut surface.surface_context.write())
-            .expect("TODO");
-
-        if let Some(mut raw_surface) = raw_surface {
-            // Destroy the underlying surface
-            self.device
-                .read()
-                .destroy_surface(&mut surface.surface_context.write(), &mut raw_surface)
-                .expect("TODO");
-        }
-
-        // Destroy the backing context
-        self.device
-            .read()
-            .destroy_context(&mut surface.surface_context.write())
-            .expect("TODO");
-    }
+    unsafe fn destroy_surface(&self, _surface: Surface) {}
 }
 
 #[derive(Debug)]
@@ -212,7 +191,7 @@ impl Surface {
     pub fn make_context_current(&self) {
         self.device
             .write()
-            .make_context_current(&self.context.read())
+            .make_context_current(&self.surface_context.read())
             .expect("TODO");
     }
 
@@ -233,21 +212,21 @@ impl Drop for Surface {
         let surface = self
             .device
             .read()
-            .unbind_surface_from_context(&mut self.context.write())
+            .unbind_surface_from_context(&mut self.surface_context.write())
             .expect("TODO");
 
         if let Some(mut surface) = surface {
             // Destroy the underlying surface
             self.device
                 .read()
-                .destroy_surface(&mut self.context.write(), &mut surface)
+                .destroy_surface(&mut self.surface_context.write(), &mut surface)
                 .expect("TODO");
         }
 
         // Destroy the backing context
         self.device
             .read()
-            .destroy_context(&mut self.context.write())
+            .destroy_context(&mut self.surface_context.write())
             .expect("TODO");
     }
 }
