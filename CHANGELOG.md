@@ -1,5 +1,10 @@
 # Change Log
 
+### backend-gl-0.6.0 (2-11-2020)
+  - re-enable the GL backend for Linux, Mac, and Web
+  - migrate GL backend to use context sharing in `surfman`
+  - remove WGL and Glutin GL backends
+
 ### backend-dx12-unreleased
   - fix matrix vertex inputs
   - fix SPIR-V entry point selection
