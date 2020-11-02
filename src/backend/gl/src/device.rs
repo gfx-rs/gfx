@@ -1,15 +1,12 @@
-use parking_lot::{Mutex, RwLock};
-use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
-use std::borrow::Borrow;
-use std::cell::Cell;
-use std::ops::Range;
-use std::slice;
-use std::sync::Arc;
-
-use glow::HasContext;
+use crate::{
+    command as cmd, conv,
+    info::LegacyFeatures,
+    native as n,
+    pool::{BufferMemory, CommandPool, OwnedBuffer},
+    state, Backend as B, GlContainer, GlContext, MemoryUsage, Share, Starc,
+};
 
 use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
-
 use hal::{
     buffer, device as d,
     format::{Format, Swizzle},
@@ -18,13 +15,11 @@ use hal::{
     pso, query, queue,
 };
 
-use crate::{
-    command as cmd, conv,
-    info::LegacyFeatures,
-    native as n,
-    pool::{BufferMemory, CommandPool, OwnedBuffer},
-    state, Backend as B, GlContainer, GlContext, MemoryUsage, Share, Starc,
-};
+use glow::HasContext;
+use parking_lot::{Mutex, RwLock};
+use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
+
+use std::{borrow::Borrow, cell::Cell, ops::Range, slice, sync::Arc};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -117,39 +112,65 @@ impl Device {
             n::ImageView::Renderbuffer(rb) => unsafe {
                 gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
             },
-            n::ImageView::Texture(texture, textype, level) => unsafe {
-                gl.bind_texture(textype, Some(texture));
-                gl.framebuffer_texture_2d(point, attachment, textype, Some(texture), level as _);
+            n::ImageView::Texture {
+                target,
+                raw,
+                ref sub,
+                is_3d: false,
+            } => unsafe {
+                gl.bind_texture(target, Some(raw));
+                gl.framebuffer_texture_2d(
+                    point,
+                    attachment,
+                    target,
+                    Some(raw),
+                    sub.level_start as _,
+                );
             },
-            n::ImageView::TextureLayer(texture, textype, level, layer) => unsafe {
-                gl.bind_texture(textype, Some(texture));
+            n::ImageView::Texture {
+                target,
+                raw,
+                ref sub,
+                is_3d: true,
+            } => unsafe {
+                gl.bind_texture(target, Some(raw));
                 gl.framebuffer_texture_3d(
                     point,
                     attachment,
-                    textype,
-                    Some(texture),
-                    level as _,
-                    layer as _,
+                    target,
+                    Some(raw),
+                    sub.level_start as _,
+                    sub.layer_start as _,
                 );
             },
         }
     }
 
-    fn bind_target(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
+    pub(crate) fn bind_target(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
         match *view {
             n::ImageView::Renderbuffer(rb) => unsafe {
                 gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
             },
-            n::ImageView::Texture(texture, _, level) => unsafe {
-                gl.framebuffer_texture(point, attachment, Some(texture), level as _);
+            n::ImageView::Texture {
+                target: _,
+                raw,
+                ref sub,
+                is_3d: false,
+            } => unsafe {
+                gl.framebuffer_texture(point, attachment, Some(raw), sub.level_start as _);
             },
-            n::ImageView::TextureLayer(texture, _, level, layer) => unsafe {
+            n::ImageView::Texture {
+                target: _,
+                raw,
+                ref sub,
+                is_3d: true,
+            } => unsafe {
                 gl.framebuffer_texture_layer(
                     point,
                     attachment,
-                    Some(texture),
-                    level as _,
-                    layer as _,
+                    Some(raw),
+                    sub.level_start as _,
+                    sub.layer_start as _,
                 );
             },
         }
@@ -1412,10 +1433,12 @@ impl d::Device<B> for Device {
                 _ => unimplemented!(),
             };
             n::ImageKind::Texture {
-                texture: name,
                 target,
+                raw: name,
                 format: desc.tex_external,
                 pixel_type: desc.data_type,
+                layer_count: kind.num_layers(),
+                level_count: num_levels,
             }
         } else {
             let name = gl.create_renderbuffer().unwrap();
@@ -1427,7 +1450,7 @@ impl d::Device<B> for Device {
                 _ => unimplemented!(),
             };
             n::ImageKind::Renderbuffer {
-                renderbuffer: name,
+                raw: name,
                 format: desc.tex_external,
             }
         };
@@ -1482,22 +1505,18 @@ impl d::Device<B> for Device {
     unsafe fn create_image_view(
         &self,
         image: &n::Image,
-        _kind: i::ViewKind,
-        _format: Format,
+        kind: i::ViewKind,
+        view_format: Format,
         swizzle: Swizzle,
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewCreationError> {
-        //TODO: check if `layers.end` covers all the layers
-        let level = range.level_start;
-        let num_layers = range.resolve_layer_count(image.num_layers);
         assert_eq!(range.resolve_level_count(image.num_levels), 1);
-        //assert_eq!(format, image.format);
         assert_eq!(swizzle, Swizzle::NO);
-        //TODO: check format
         match image.kind {
-            n::ImageKind::Renderbuffer { renderbuffer, .. } => {
+            n::ImageKind::Renderbuffer { raw, .. } => {
+                let level = range.level_start;
                 if range.level_start == 0 && range.layer_start == 0 {
-                    Ok(n::ImageView::Renderbuffer(renderbuffer))
+                    Ok(n::ImageView::Renderbuffer(raw))
                 } else if level != 0 {
                     Err(i::ViewCreationError::Level(level)) //TODO
                 } else {
@@ -1505,21 +1524,35 @@ impl d::Device<B> for Device {
                 }
             }
             n::ImageKind::Texture {
-                texture, target, ..
+                target,
+                raw,
+                format,
+                ..
             } => {
-                //TODO: check that `level` exists
-                if range.layer_start == 0 {
-                    Ok(n::ImageView::Texture(texture, target, level))
-                } else if num_layers == 1 {
-                    Ok(n::ImageView::TextureLayer(
-                        texture,
-                        target,
-                        level,
-                        range.layer_start,
-                    ))
-                } else {
-                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds))
+                let is_3d = match kind {
+                    i::ViewKind::D1 | i::ViewKind::D2 => false,
+                    _ => true,
+                };
+                match conv::describe_format(view_format) {
+                    Some(description) => {
+                        let raw_view_format = description.tex_internal;
+                        if format != raw_view_format {
+                            warn!(
+                                "View format {:?} is different from base {:?}",
+                                raw_view_format, format
+                            );
+                        }
+                    }
+                    None => {
+                        warn!("View format {:?} is not supported", view_format);
+                    }
                 }
+                Ok(n::ImageView::Texture {
+                    target,
+                    raw,
+                    is_3d,
+                    sub: range,
+                })
             }
         }
     }
@@ -1564,7 +1597,7 @@ impl d::Device<B> for Device {
             let binding = write.binding;
 
             for descriptor in write.descriptors {
-                match descriptor.borrow() {
+                match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref sub) => {
                         let (raw_buffer, buffer_range) = buffer.as_bound();
                         let range = crate::resolve_sub_range(sub, buffer_range);
@@ -1591,35 +1624,33 @@ impl d::Device<B> for Device {
                         });
                     }
                     pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
-                        match view {
-                            n::ImageView::Texture(tex, textype, _)
-                            | n::ImageView::TextureLayer(tex, textype, _, _) => {
-                                bindings.push(n::DescSetBindings::Texture(binding, *tex, *textype))
+                        match *view {
+                            n::ImageView::Texture { target, raw, .. } => {
+                                bindings.push(n::DescSetBindings::Texture(binding, raw, target))
                             }
                             n::ImageView::Renderbuffer(_) => unimplemented!(),
                         }
-                        match sampler {
+                        match *sampler {
                             n::FatSampler::Sampler(sampler) => {
-                                bindings.push(n::DescSetBindings::Sampler(binding, *sampler))
+                                bindings.push(n::DescSetBindings::Sampler(binding, sampler))
                             }
-                            n::FatSampler::Info(info) => bindings
+                            n::FatSampler::Info(ref info) => bindings
                                 .push(n::DescSetBindings::SamplerDesc(binding, info.clone())),
                         }
                     }
-                    pso::Descriptor::Image(view, _layout) => match view {
-                        n::ImageView::Texture(tex, textype, _)
-                        | n::ImageView::TextureLayer(tex, textype, _, _) => {
-                            bindings.push(n::DescSetBindings::Texture(binding, *tex, *textype))
+                    pso::Descriptor::Image(view, _layout) => match *view {
+                        n::ImageView::Texture { target, raw, .. } => {
+                            bindings.push(n::DescSetBindings::Texture(binding, raw, target))
                         }
                         n::ImageView::Renderbuffer(_) => panic!(
                             "Texture was created with only render target usage which is invalid."
                         ),
                     },
-                    pso::Descriptor::Sampler(sampler) => match sampler {
+                    pso::Descriptor::Sampler(sampler) => match *sampler {
                         n::FatSampler::Sampler(sampler) => {
-                            bindings.push(n::DescSetBindings::Sampler(binding, *sampler))
+                            bindings.push(n::DescSetBindings::Sampler(binding, sampler))
                         }
-                        n::FatSampler::Info(info) => {
+                        n::FatSampler::Info(ref info) => {
                             bindings.push(n::DescSetBindings::SamplerDesc(binding, info.clone()))
                         }
                     },
@@ -1866,8 +1897,8 @@ impl d::Device<B> for Device {
     unsafe fn destroy_image(&self, image: n::Image) {
         let gl = &self.share.context;
         match image.kind {
-            n::ImageKind::Renderbuffer { renderbuffer, .. } => gl.delete_renderbuffer(renderbuffer),
-            n::ImageKind::Texture { texture, .. } => gl.delete_texture(texture),
+            n::ImageKind::Renderbuffer { raw, .. } => gl.delete_renderbuffer(raw),
+            n::ImageKind::Texture { raw, .. } => gl.delete_texture(raw),
         }
     }
 

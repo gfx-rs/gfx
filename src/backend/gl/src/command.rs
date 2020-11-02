@@ -2,19 +2,21 @@
 
 use crate::GlContext;
 
-use hal::format::ChannelType;
-use hal::{self, buffer, command, image, memory, pass, pso, query};
+use hal::{
+    self, buffer, command,
+    format::{Aspects, ChannelType},
+    image, memory, pass, pso, query,
+};
 
-use crate::info;
-use crate::pool::{self, BufferMemory};
-use crate::{native as n, Backend, ColorSlot};
+use crate::{
+    info, native as n,
+    pool::{self, BufferMemory},
+    Backend, ColorSlot,
+};
 
 use parking_lot::Mutex;
-use std::borrow::Borrow;
-use std::iter;
-use std::ops::Range;
-use std::sync::Arc;
-use std::{mem, slice};
+
+use std::{borrow::Borrow, iter, mem, ops::Range, slice, sync::Arc};
 
 // Command buffer implementation details:
 //
@@ -792,13 +794,27 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 // TODO: reset color mask
                 // 2. ClearBuffer
                 let view = match image.kind {
-                    n::ImageKind::Renderbuffer { renderbuffer, .. } => {
-                        n::ImageView::Renderbuffer(renderbuffer)
-                    }
+                    n::ImageKind::Renderbuffer { raw, .. } => n::ImageView::Renderbuffer(raw),
                     n::ImageKind::Texture {
-                        texture, target, ..
+                        target,
+                        raw,
+                        level_count,
+                        layer_count,
+                        ..
                     } => {
-                        n::ImageView::Texture(texture, target, 0) //TODO
+                        let is_3d = layer_count == 1; //TODO?
+                        n::ImageView::Texture {
+                            target,
+                            raw,
+                            is_3d,
+                            sub: image::SubresourceRange {
+                                aspects: Aspects::COLOR,
+                                layer_start: 0,
+                                layer_count: Some(layer_count),
+                                level_start: 0,
+                                level_count: Some(level_count),
+                            },
+                        }
                     }
                 };
                 self.data
@@ -841,9 +857,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             None => {
                 // 1. glClear
                 let (tex, target) = match image.kind {
-                    n::ImageKind::Texture {
-                        texture, target, ..
-                    } => (texture, target), //TODO
+                    n::ImageKind::Texture { target, raw, .. } => (raw, target), //TODO
                     n::ImageKind::Renderbuffer { .. } => unimplemented!(),
                 };
 
@@ -1288,18 +1302,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             let r = region.borrow().clone();
             let cmd = match dst.kind {
-                n::ImageKind::Renderbuffer {
-                    renderbuffer,
-                    format,
-                } => Command::CopyImageToRenderbuffer {
+                n::ImageKind::Renderbuffer { raw, format } => Command::CopyImageToRenderbuffer {
                     src_image: src.kind,
-                    dst_renderbuffer: renderbuffer,
+                    dst_renderbuffer: raw,
                     dst_format: format,
                     data: r,
                 },
-                n::ImageKind::Texture {
-                    texture, target, ..
-                } => Command::CopyImageToTexture(src.kind, texture, target, r),
+                n::ImageKind::Texture { raw, target, .. } => {
+                    Command::CopyImageToTexture(src.kind, raw, target, r)
+                }
             };
             self.data.push_cmd(cmd);
         }
@@ -1326,17 +1337,18 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             let mut r = region.borrow().clone();
             r.buffer_offset += src_range.start;
             let cmd = match dst.kind {
-                n::ImageKind::Renderbuffer { renderbuffer, .. } => {
-                    Command::CopyBufferToRenderbuffer(src_raw, renderbuffer, r)
+                n::ImageKind::Renderbuffer { raw, .. } => {
+                    Command::CopyBufferToRenderbuffer(src_raw, raw, r)
                 }
                 n::ImageKind::Texture {
-                    texture,
+                    raw,
                     target,
                     format,
                     pixel_type,
+                    ..
                 } => Command::CopyBufferToTexture {
                     src_buffer: src_raw,
-                    dst_texture: texture,
+                    dst_texture: raw,
                     texture_target: target,
                     texture_format: format,
                     pixel_type,
@@ -1368,16 +1380,17 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             let mut r = region.borrow().clone();
             r.buffer_offset += dst_range.start;
             let cmd = match src.kind {
-                n::ImageKind::Renderbuffer { renderbuffer, .. } => {
-                    Command::CopyRenderbufferToBuffer(renderbuffer, dst_raw, r)
+                n::ImageKind::Renderbuffer { raw, .. } => {
+                    Command::CopyRenderbufferToBuffer(raw, dst_raw, r)
                 }
                 n::ImageKind::Texture {
-                    texture,
+                    raw,
                     target,
                     format,
                     pixel_type,
+                    ..
                 } => Command::CopyTextureToBuffer {
-                    src_texture: texture,
+                    src_texture: raw,
                     texture_target: target,
                     texture_format: format,
                     pixel_type: pixel_type,
