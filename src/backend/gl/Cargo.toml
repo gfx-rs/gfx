@@ -31,6 +31,8 @@ parking_lot = "0.11"
 spirv_cross = { version = "0.22", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 surfman = { version = "0.3", features = ["sm-raw-window-handle"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

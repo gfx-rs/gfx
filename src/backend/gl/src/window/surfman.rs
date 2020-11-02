@@ -100,12 +100,14 @@ impl Instance {
             .make_context_current(&context)
             .expect("TODO");
 
+        drop(device);
+
         // Create a surface with the given context
         Surface {
             renderbuffer: None,
             swapchain: None,
             surface_context: Starc::new(RwLock::new(context)),
-            device: Starc::new(RwLock::new(device)),
+            device: self.device.clone(),
         }
     }
 }
@@ -173,21 +175,21 @@ impl hal::Instance<B> for Instance {
         let raw_surface = self
             .device
             .read()
-            .unbind_surface_from_context(&mut surface.context.write())
+            .unbind_surface_from_context(&mut surface.surface_context.write())
             .expect("TODO");
 
         if let Some(mut raw_surface) = raw_surface {
             // Destroy the underlying surface
             self.device
                 .read()
-                .destroy_surface(&mut surface.context.write(), &mut raw_surface)
+                .destroy_surface(&mut surface.surface_context.write(), &mut raw_surface)
                 .expect("TODO");
         }
 
         // Destroy the backing context
         self.device
             .read()
-            .destroy_context(&mut surface.context.write())
+            .destroy_context(&mut surface.surface_context.write())
             .expect("TODO");
     }
 }

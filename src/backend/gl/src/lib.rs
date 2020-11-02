@@ -36,7 +36,7 @@ mod window;
 
 // Web implementation
 #[cfg(wasm)]
-pub use window::web::Surface;
+pub use window::web::{Surface, Swapchain};
 
 // Surfman implementation
 #[cfg(surfman)]

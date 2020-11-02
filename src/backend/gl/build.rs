@@ -8,7 +8,7 @@ fn main() {
         ios: { target_os = "ios" },
         linux: { target_os = "linux" },
         // Backends
-        surfman: { all(unix, feature = "surfman", not(ios)) },
+        surfman: { all(unix, not(ios)) },
         dummy: { not(any(wasm, surfman)) },
     }
 

@@ -61,7 +61,7 @@ pub struct CommandQueue {
     features: hal::Features,
     vao: Option<native::VertexArray>,
     state: State,
-    presentation_fence: Starc<<glow::Context as glow::HasContext>::Fence>,
+    presentation_fence: Starc<Option<<glow::Context as glow::HasContext>::Fence>>,
 }
 
 impl CommandQueue {
@@ -76,7 +76,7 @@ impl CommandQueue {
             features,
             vao,
             state: State::new(),
-            presentation_fence: Starc::new(std::ptr::null_mut()),
+            presentation_fence: Starc::new(None),
         }
     }
 
@@ -188,7 +188,7 @@ impl CommandQueue {
 
         // Wait for rendering to finish
         unsafe {
-            gl.wait_sync(*self.presentation_fence, 0, glow::TIMEOUT_IGNORED);
+            gl.wait_sync(self.presentation_fence.unwrap(), 0, glow::TIMEOUT_IGNORED);
         }
 
         #[cfg(wgl)]
@@ -211,15 +211,22 @@ impl CommandQueue {
             .framebuffer_object;
 
         unsafe {
+            #[cfg(surfman)]
             let tmp_read_fbo = gl.context.create_framebuffer().expect("TODO");
-            gl.context
-                .bind_framebuffer(glow::READ_FRAMEBUFFER, Some(tmp_read_fbo));
-            gl.context.framebuffer_renderbuffer(
-                glow::READ_FRAMEBUFFER,
-                glow::COLOR_ATTACHMENT0,
-                glow::RENDERBUFFER,
-                Some(swapchain.renderbuffer),
-            );
+            #[cfg(surfman)]
+            {
+                gl.context
+                    .bind_framebuffer(glow::READ_FRAMEBUFFER, Some(tmp_read_fbo));
+                gl.context.framebuffer_renderbuffer(
+                    glow::READ_FRAMEBUFFER,
+                    glow::COLOR_ATTACHMENT0,
+                    glow::RENDERBUFFER,
+                    Some(swapchain.renderbuffer),
+                );
+            }
+
+            #[cfg(web)]
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.fbos[index as usize]));
 
             gl.context.bind_framebuffer(
                 glow::DRAW_FRAMEBUFFER,
@@ -244,6 +251,7 @@ impl CommandQueue {
                 glow::LINEAR,
             );
 
+            #[cfg(surfman)]
             gl.context.delete_framebuffer(tmp_read_fbo);
         }
 
@@ -1187,12 +1195,12 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
 
         // Create a fence used to synchronize the finish of the rendering and
         // the blit used to present on the surface.
-        self.presentation_fence = Starc::new(
+        self.presentation_fence = Starc::new(Some(
             self.share
                 .context
                 .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
                 .unwrap(),
-        );
+        ));
 
         if let Some(fence) = fence {
             if self.share.private_caps.sync {
