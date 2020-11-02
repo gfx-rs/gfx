@@ -27,7 +27,7 @@ log = { version = "0.4" }
 gfx-hal = { path = "../../hal", version = "0.6" }
 auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
 smallvec = "1.0"
-glow = "0.4"
+glow = "0.6.1"
 parking_lot = "0.11"
 spirv_cross = { version = "0.22", features = ["glsl"] }
 lazy_static = "1"

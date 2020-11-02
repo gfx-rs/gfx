@@ -24,6 +24,8 @@ pub struct Swapchain {
     pub(crate) raw_format: native::TextureFormat,
     ///
     pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
+    /// Renderbuffer
+    pub(crate) renderbuffer: native::Renderbuffer
 }
 
 thread_local! {
@@ -104,7 +106,7 @@ impl Instance {
         Surface {
             renderbuffer: None,
             swapchain: None,
-            context: Starc::new(RwLock::new(context)),
+            surface_context: Starc::new(RwLock::new(context)),
         }
     }
 }
@@ -172,21 +174,21 @@ impl hal::Instance<B> for Instance {
         let raw_surface = self
             .device
             .read()
-            .unbind_surface_from_context(&mut surface.context.write())
+            .unbind_surface_from_context(&mut surface.surface_context.write())
             .expect("TODO");
 
         if let Some(mut raw_surface) = raw_surface {
             // Destroy the underlying surface
             self.device
                 .read()
-                .destroy_surface(&mut surface.context.write(), &mut raw_surface)
+                .destroy_surface(&mut surface.surface_context.write(), &mut raw_surface)
                 .expect("TODO");
         }
 
         // Destroy the backing context
         self.device
             .read()
-            .destroy_context(&mut surface.context.write())
+            .destroy_context(&mut surface.surface_context.write())
             .expect("TODO");
     }
 }
@@ -194,13 +196,13 @@ impl hal::Instance<B> for Instance {
 #[derive(Debug)]
 pub struct Surface {
     pub(crate) swapchain: Option<Swapchain>,
-    pub(crate) context: Starc<RwLock<sm::Context>>,
+    pub(crate) surface_context: Starc<RwLock<sm::Context>>,
     renderbuffer: Option<native::Renderbuffer>,
 }
 
 impl Surface {
     pub fn context(&self) -> Starc<RwLock<sm::Context>> {
-        self.context.clone()
+        self.surface_context.clone()
     }
 
     fn swapchain_formats(&self) -> Vec<f::Format> {
@@ -239,7 +241,6 @@ impl window::PresentationSurface<B> for Surface {
             config.extent.height as i32,
         );
 
-        // let fbo = surface_info.framebuffer_object;
         let fbo = gl.create_framebuffer().unwrap();
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(fbo));
         gl.framebuffer_renderbuffer(
@@ -249,12 +250,12 @@ impl window::PresentationSurface<B> for Surface {
             self.renderbuffer,
         );
         self.swapchain = Some(Swapchain {
-            context: self.context.clone(),
+            context: self.surface_context.clone(),
             extent: config.extent,
             channel: config.format.base_format().1,
             raw_format: desc.tex_external,
             fbos: iter::once(fbo).collect(),
-            // out_fbo: Some(surface_info.framebuffer_object),
+            renderbuffer: self.renderbuffer.unwrap(),
         });
 
         Ok(())
