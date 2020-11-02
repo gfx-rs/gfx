@@ -3807,6 +3807,36 @@ impl DescriptorSetInfo {
         }
         panic!("Unable to find binding {:?}", binding_index);
     }
+
+    fn find_uav_register(
+        &self,
+        stage: ShaderStage,
+        binding_index: pso::DescriptorBinding,
+    ) -> (DescriptorContent, RegisterData<ResourceIndex>) {
+        // Look only where uavs are stored for that stage.
+        let register_stage = if stage == ShaderStage::Compute {
+            stage
+        } else {
+            ShaderStage::Fragment
+        };
+
+        let mut res_offsets = self
+            .registers
+            .map_register(|info| info.res_index as DescriptorIndex)
+            .select(register_stage);
+        for binding in self.bindings.iter() {
+            // We don't care what stage they're in, only if they are UAVs or not.
+            let content = DescriptorContent::from(binding.ty);
+            if !content.contains(DescriptorContent::UAV) {
+                continue;
+            }
+            if binding.binding == binding_index {
+                return (content, res_offsets.map(|offset| *offset as ResourceIndex));
+            }
+            res_offsets.add_content_many(content, 1);
+        }
+        panic!("Unable to find binding {:?}", binding_index);
+    }
 }
 
 /// The pipeline layout holds optimized (less api calls) ranges of objects for all descriptor sets
