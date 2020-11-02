@@ -5,6 +5,10 @@
   - fix SPIR-V entry point selection
   - fix heap selection for non-renderable textures
   
+### backend-dx11-0.6.14 (01-11-2020)
+  - Fix push constants with non-zero offsets
+  - Fix UAVs in non-fragment shaders
+  
 ### backend-dx11-0.6.13 (31-10-2020)
   - fix depth-stencil to depth-stencil copies
 
