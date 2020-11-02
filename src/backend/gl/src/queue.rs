@@ -1,14 +1,12 @@
-use std::borrow::Borrow;
-use std::{mem, slice};
-
-use glow::HasContext;
-use parking_lot::Mutex;
-use smallvec::SmallVec;
-
 use crate::{
-    command as com, device, info::LegacyFeatures, native, state, Backend, Error, GlContext, Share,
+    command as com, device, info::LegacyFeatures, native, state, Backend, Device, GlContext, Share,
     Starc, Surface, Swapchain,
 };
+
+use glow::HasContext;
+use smallvec::SmallVec;
+
+use std::{borrow::Borrow, mem, slice};
 
 // State caching system for command queue.
 //
@@ -161,29 +159,7 @@ impl CommandQueue {
     */
 
     fn bind_target(&mut self, point: u32, attachment: u32, view: &native::ImageView) {
-        let gl = &self.share.context;
-        match view {
-            &native::ImageView::Renderbuffer(renderbuffer) => unsafe {
-                gl.framebuffer_renderbuffer(
-                    point,
-                    attachment,
-                    glow::RENDERBUFFER,
-                    Some(renderbuffer),
-                );
-            },
-            &native::ImageView::Texture(texture, _, level) => unsafe {
-                gl.framebuffer_texture(point, attachment, Some(texture), level as i32);
-            },
-            &native::ImageView::TextureLayer(texture, _, level, layer) => unsafe {
-                gl.framebuffer_texture_layer(
-                    point,
-                    attachment,
-                    Some(texture),
-                    level as i32,
-                    layer as i32,
-                );
-            },
-        }
+        Device::bind_target(&self.share.context, point, attachment, view)
     }
 
     fn _unbind_target(&mut self, point: u32, attachment: u32) {
@@ -615,8 +591,8 @@ impl CommandQueue {
                     error!("Tried to bind FBO without FBO support!");
                 }
             }
-            com::Command::BindTargetView(point, attachment, view) => {
-                self.bind_target(point, attachment, &view)
+            com::Command::BindTargetView(point, attachment, ref view) => {
+                self.bind_target(point, attachment, view)
             }
             com::Command::SetDrawColorBuffers(num) => {
                 state::bind_draw_color_buffers(&self.share.context, num);
@@ -810,7 +786,7 @@ impl CommandQueue {
                 match src_image {
                     native::ImageKind::Texture { .. } => unimplemented!(),
                     native::ImageKind::Renderbuffer {
-                        renderbuffer: src_renderbuffer,
+                        raw: src_renderbuffer,
                         format: src_format,
                     } => {
                         if src_format != dst_format {

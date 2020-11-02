@@ -23,8 +23,8 @@ x11 = ["surfman/sm-x11"]
 [dependencies]
 arrayvec = "0.5"
 bitflags = "1"
-log = { version = "0.4" }
-gfx-hal = { path = "../../hal", version = "0.6" }
+log = "0.4"
+hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
 auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
 smallvec = "1.0"
 glow = "0.6.1"

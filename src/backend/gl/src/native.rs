@@ -1,11 +1,15 @@
-use parking_lot::{Mutex, RwLock};
-use std::{borrow::Borrow, cell::Cell, ops::Range, sync::Arc};
+use crate::{Backend, GlContext};
 
 use auxil::FastHashMap;
-use hal::memory::{Properties, Requirements};
-use hal::{buffer, format, image as i, pass, pso};
+use hal::{
+    buffer, format, image as i,
+    memory::{Properties, Requirements},
+    pass, pso,
+};
 
-use crate::{Backend, GlContext};
+use parking_lot::{Mutex, RwLock};
+
+use std::{borrow::Borrow, cell::Cell, ops::Range, sync::Arc};
 
 pub type TextureTarget = u32;
 pub type TextureFormat = u32;
@@ -177,12 +181,14 @@ pub struct Image {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageKind {
     Renderbuffer {
-        renderbuffer: Renderbuffer,
+        raw: Renderbuffer,
         format: TextureFormat,
     },
     Texture {
-        texture: Texture,
         target: TextureTarget,
+        raw: Texture,
+        level_count: i::Level,
+        layer_count: i::Layer,
         format: TextureFormat,
         pixel_type: DataType,
     },
@@ -196,11 +202,15 @@ pub enum FatSampler {
     Info(i::SamplerDesc),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageView {
     Renderbuffer(Renderbuffer),
-    Texture(Texture, TextureTarget, i::Level),
-    TextureLayer(Texture, TextureTarget, i::Level, i::Layer),
+    Texture {
+        target: TextureTarget,
+        raw: Texture,
+        is_3d: bool,
+        sub: i::SubresourceRange,
+    },
 }
 
 #[derive(Debug)]
@@ -231,7 +241,7 @@ impl SwapchainImage {
         SwapchainImage {
             image: Image {
                 kind: ImageKind::Renderbuffer {
-                    renderbuffer,
+                    raw: renderbuffer,
                     format,
                 },
                 channel,

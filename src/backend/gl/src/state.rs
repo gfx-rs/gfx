@@ -1,5 +1,3 @@
-#![allow(dead_code)] //TODO: remove
-
 use crate::{ColorSlot, GlContainer};
 use glow::HasContext;
 use hal::pso;
@@ -26,6 +24,7 @@ pub fn map_comparison(cmp: pso::Comparison) -> u32 {
     }
 }
 
+#[allow(dead_code)]
 fn map_operation(op: pso::StencilOp) -> u32 {
     use hal::pso::StencilOp::*;
     match op {
@@ -40,6 +39,7 @@ fn map_operation(op: pso::StencilOp) -> u32 {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn bind_stencil(gl: &GlContainer, stencil: &Option<pso::StencilTest>, cull: pso::Face) {
     fn bind_side(
         gl: &GlContainer,
@@ -179,7 +179,7 @@ pub(crate) fn set_blend_slot(
     };
 }
 
-pub(crate) fn unlock_color_mask(gl: &GlContainer) {
+pub(crate) fn _unlock_color_mask(gl: &GlContainer) {
     unsafe { gl.color_mask(true, true, true, true) };
 }
 

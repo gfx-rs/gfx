@@ -25,7 +25,7 @@ pub struct Swapchain {
     ///
     pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
     /// Renderbuffer
-    pub(crate) renderbuffer: native::Renderbuffer
+    pub(crate) renderbuffer: native::Renderbuffer,
 }
 
 thread_local! {
