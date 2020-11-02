@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx11-0.5.3 gfx-backend-metal-0.5.7 (02-11-2020)
+  - update `parking_lot` to 0.11
+
 ### backend-dx12-0.5.10 (16-08-2020)
   - fix binding of dynamic uniform buffers
 
