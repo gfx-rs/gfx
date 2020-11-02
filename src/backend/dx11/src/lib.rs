@@ -2909,7 +2909,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         offset: u32,
         constants: &[u32],
     ) {
-        let start = offset as usize;
+        let start = (offset / 4) as usize;
         let end = start + constants.len();
 
         self.push_constant_data[start..end].copy_from_slice(constants);
@@ -2930,7 +2930,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         offset: u32,
         constants: &[u32],
     ) {
-        let start = offset as usize;
+        let start = (offset / 4) as usize;
         let end = start + constants.len();
 
         self.push_constant_data[start..end].copy_from_slice(constants);
