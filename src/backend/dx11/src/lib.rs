@@ -295,7 +295,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         non_coherent_atom_size: 1, // TODO
         max_sampler_anisotropy: 16.,
         optimal_buffer_copy_offset_alignment: 1, // TODO
-        optimal_buffer_copy_pitch_alignment: 1,  // TODO
+        optimal_buffer_copy_pitch_alignment: 4,
         min_vertex_input_binding_stride_alignment: 1,
         max_push_constants_size: MAX_PUSH_CONSTANT_SIZE,
         max_uniform_buffer_range: 1 << 16,
