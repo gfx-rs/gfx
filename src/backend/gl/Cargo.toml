@@ -17,9 +17,7 @@ build = "build.rs"
 name = "gfx_backend_gl"
 
 [features]
-#default = ["wgl", "surfman", "surfman-x11"]
 default = []
-wgl = ["winapi"]
 #surfman-x11 = ["surfman/sm-x11"]
 
 [dependencies]
@@ -34,8 +32,6 @@ parking_lot = "0.11"
 spirv_cross = { version = "0.22", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
-# disable this for now, the versions of glutin are jumping too fast
-#glutin = { version = "0.24", optional = true }
 
 #[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
 # TODO: Update to released version when it comes out
@@ -65,9 +61,5 @@ features = [
     "Window",
 ]
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["libloaderapi", "windef", "wingdi", "winuser"], optional = true }
-
 [build-dependencies]
-gl_generator = "0.11"
 cfg_aliases = "0.1.0"

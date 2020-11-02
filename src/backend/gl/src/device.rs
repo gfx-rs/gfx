@@ -212,12 +212,19 @@ impl Device {
         };
         compile_options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
         compile_options.force_zero_initialized_variables = true;
-        compile_options.entry_point = Some((entry_point.to_string(), match stage {
-            ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
-            ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
-            ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
-            _ => return Err(d::ShaderError::CompilationFailed("Unsupported execution model".into())),
-        }));
+        compile_options.entry_point = Some((
+            entry_point.to_string(),
+            match stage {
+                ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
+                ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
+                ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
+                _ => {
+                    return Err(d::ShaderError::CompilationFailed(
+                        "Unsupported execution model".into(),
+                    ))
+                }
+            },
+        ));
         debug!("SPIR-V options {:?}", compile_options);
 
         ast.set_compiler_options(&compile_options)

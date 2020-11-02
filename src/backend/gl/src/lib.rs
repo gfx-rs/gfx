@@ -37,24 +37,12 @@ mod window;
 #[cfg(wasm)]
 pub use window::web::Surface;
 
-// Glutin implementation
-#[cfg(glutin)]
-pub use crate::window::glutin::{config_context, Headless, Instance, Surface, Swapchain};
-#[cfg(glutin)]
-pub use glutin;
-
 // Surfman implementation
 #[cfg(surfman)]
 pub use crate::window::surfman::{Instance, Surface, Swapchain};
 // Helps windows detect discrete GPUs
 #[cfg(surfman)]
 surfman::declare_surfman!();
-
-// WGL implementation
-#[cfg(wgl)]
-pub use crate::window::wgl::{Instance, Surface, Swapchain};
-#[cfg(wgl)]
-use window::wgl::DeviceContext;
 
 // Catch-all dummy implementation
 #[cfg(dummy)]

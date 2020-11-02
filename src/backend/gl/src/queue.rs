@@ -270,12 +270,6 @@ impl CommandQueue {
                 .bind_surface_to_context(&mut swapchain.context.write(), surface)
                 .expect("TODO")
         }
-
-        #[cfg(glutin)]
-        swapchain.context.swap_buffers().unwrap();
-
-        #[cfg(wgl)]
-        swapchain.swap_buffers();
     }
 
     // Reset the state to match our _expected_ state before executing
