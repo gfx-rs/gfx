@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-dx11"
-version = "0.6.13"
+version = "0.6.14"
 description = "DirectX-11 API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
