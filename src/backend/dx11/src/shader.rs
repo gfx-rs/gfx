@@ -239,7 +239,6 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(storage_buffer.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        let (_content, res_index) = layout.sets[set].find_register(stage, binding);
 
         let read_only = match layout.sets[set].bindings[binding as usize].ty {
             pso::DescriptorType::Buffer {
@@ -251,6 +250,12 @@ fn patch_spirv_resources(
                 read_only
             }
             _ => unreachable!()
+        };
+
+        let (_content, res_index) = if read_only {
+            layout.sets[set].find_register(stage, binding)
+        } else {
+            layout.sets[set].find_uav_register(stage, binding)
         };
 
         // If the binding is read/write, we need to generate a UAV here.
@@ -282,7 +287,7 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(image.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        let (_content, res_index) = layout.sets[set].find_register(stage, binding);
+        let (_content, res_index) = layout.sets[set].find_uav_register(stage, binding);
 
         // Read only storage images are generated as UAVs by spirv-cross.
         //
