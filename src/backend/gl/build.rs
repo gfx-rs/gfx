@@ -9,7 +9,6 @@ fn main() {
         linux: { target_os = "linux" },
         // Backends
         surfman: { all(unix, feature = "surfman", not(ios)) },
-        glutin: { all(feature = "glutin", not(any(wasm, surfman))) },
         dummy: { not(any(wasm, glutin, surfman)) },
     }
 

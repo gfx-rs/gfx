@@ -266,9 +266,6 @@ impl CommandQueue {
                 .expect("TODO")
         }
 
-        #[cfg(glutin)]
-        swapchain.context.swap_buffers().unwrap();
-
         #[cfg(wgl)]
         swapchain.swap_buffers();
     }

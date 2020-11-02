@@ -38,12 +38,6 @@ mod window;
 #[cfg(wasm)]
 pub use window::web::Surface;
 
-// Glutin implementation
-#[cfg(glutin)]
-pub use crate::window::glutin::{config_context, Headless, Instance, Surface, Swapchain};
-#[cfg(glutin)]
-pub use glutin;
-
 // Surfman implementation
 #[cfg(surfman)]
 pub use crate::window::surfman::{Instance, Surface, Swapchain};

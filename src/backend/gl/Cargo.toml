@@ -32,9 +32,6 @@ parking_lot = "0.11"
 spirv_cross = { version = "0.22", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
-# disable this for now, the versions of glutin are jumping too fast.
-# Also, surfman is the new default backend for Linux.
-#glutin = { version = "0.24", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
 surfman = { version = "0.3", features = ["sm-raw-window-handle"], optional = true }
