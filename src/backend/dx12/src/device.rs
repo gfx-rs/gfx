@@ -952,7 +952,11 @@ impl Device {
         info: &ViewInfo,
     ) -> Result<descriptors_cpu::Handle, image::ViewCreationError> {
         #![allow(non_snake_case)]
-        assert_eq!(info.levels.start + 1, info.levels.end);
+
+        // Cannot make a storage image over multiple mips
+        if info.levels.start + 1 != info.levels.end {
+            return Err(image::ViewCreationError::Unsupported);
+        }
 
         let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
             Format: info.format,
