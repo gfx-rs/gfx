@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.6.13 (03-11-2020)
+  - fix panic when creating unused multi-mip storage view
+
 ### backend-dx12-0.6.12 (02-11-2020)
   - fix matrix vertex inputs
   - fix SPIR-V entry point selection
