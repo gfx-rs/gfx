@@ -1,9 +1,7 @@
 use crate::{Error, GlContainer};
-use hal::{Features, Hints, Limits};
-use std::collections::HashSet;
-use std::{fmt, str};
-
 use glow::HasContext;
+use hal::{Features, Hints, Limits};
+use std::{collections::HashSet, fmt, str};
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]

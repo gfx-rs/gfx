@@ -1,7 +1,7 @@
-use crate::command::{self, Command, CommandBuffer};
-use crate::info;
-use crate::native as n;
-use crate::Backend;
+use crate::{
+    command::{self, Command, CommandBuffer},
+    info, native as n, Backend,
+};
 
 use auxil::FastHashMap;
 use parking_lot::Mutex;

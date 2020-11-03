@@ -7,16 +7,17 @@
 extern crate bitflags;
 #[macro_use]
 extern crate log;
-extern crate gfx_hal as hal;
 
 #[cfg(surfman)]
 use parking_lot::RwLock;
 
-use std::cell::Cell;
-use std::fmt;
-use std::ops::{Deref, Range};
-use std::sync::{Arc, Weak};
-use std::thread::{self, ThreadId};
+use std::{
+    cell::Cell,
+    fmt,
+    ops::{Deref, Range},
+    sync::{Arc, Weak},
+    thread,
+};
 
 use hal::{adapter, buffer, image, memory, pso, queue as q};
 
@@ -35,13 +36,7 @@ mod window;
 
 // Web implementation
 #[cfg(wasm)]
-pub use window::web::Surface;
-
-// Glutin implementation
-#[cfg(glutin)]
-pub use crate::window::glutin::{config_context, Headless, Instance, Surface, Swapchain};
-#[cfg(glutin)]
-pub use glutin;
+pub use window::web::{Surface, Swapchain};
 
 // Surfman implementation
 #[cfg(surfman)]
@@ -49,12 +44,6 @@ pub use crate::window::surfman::{Instance, Surface, Swapchain};
 // Helps windows detect discrete GPUs
 #[cfg(surfman)]
 surfman::declare_surfman!();
-
-// WGL implementation
-#[cfg(wgl)]
-pub use crate::window::wgl::{Instance, Surface, Swapchain};
-#[cfg(wgl)]
-use window::wgl::DeviceContext;
 
 // Catch-all dummy implementation
 #[cfg(dummy)]
@@ -78,9 +67,11 @@ pub(crate) struct GlContainer {
 impl GlContainer {
     #[cfg(not(wasm))]
     fn make_current(&self) {
-        // TODO:
-        // NOTE: Beware, calling this on dereference breaks the surfman backend
-        // I'm not sure if there would be similar concequences with other backends.
+        #[cfg(surfman)]
+        self.surfman_device
+            .write()
+            .make_context_current(&self.surfman_context.read())
+            .expect("TODO");
     }
 
     #[cfg(any(glutin, wgl))]
@@ -101,7 +92,7 @@ impl GlContainer {
     where
         F: FnMut(&str) -> *const std::os::raw::c_void,
     {
-        let context = glow::Context::from_loader_function(fn_proc);
+        let context = unsafe { glow::Context::from_loader_function(fn_proc) };
         GlContainer {
             context,
             surfman_device,
@@ -362,7 +353,7 @@ impl Share {
 /// Yet internal data cannot be accessed outside of the thread where it was created.
 pub struct Starc<T: ?Sized> {
     arc: Arc<T>,
-    thread: ThreadId,
+    thread: thread::ThreadId,
 }
 
 impl<T: ?Sized> Clone for Starc<T> {
@@ -433,7 +424,7 @@ impl<T: ?Sized> Deref for Starc<T> {
 /// Yet internal data cannot be accessed outside of the thread where it was created.
 pub struct Wstarc<T: ?Sized> {
     weak: Weak<T>,
-    thread: ThreadId,
+    thread: thread::ThreadId,
 }
 impl<T> Wstarc<T> {
     pub fn upgrade(&self) -> Option<Starc<T>> {
@@ -501,9 +492,7 @@ impl PhysicalDevice {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
                 heap_index: CPU_VISIBLE_HEAP,
             });
-        }
-
-        if private_caps.map || private_caps.emulate_map {
+        } else if private_caps.map || private_caps.emulate_map {
             add_memory_type(adapter::MemoryType {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
                 heap_index: CPU_VISIBLE_HEAP,

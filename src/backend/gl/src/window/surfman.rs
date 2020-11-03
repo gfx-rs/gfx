@@ -20,6 +20,8 @@ pub struct Swapchain {
     pub(crate) extent: window::Extent2D,
     ///
     pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
+    /// Renderbuffer
+    pub(crate) renderbuffer: native::Renderbuffer,
 }
 
 thread_local! {
@@ -29,12 +31,9 @@ thread_local! {
 }
 
 pub struct Instance {
-    hardware_adapter: sm::Adapter,
-    // TODO: We're not using these yet, but leave them here for later
-    #[allow(dead_code)]
-    low_power_adapter: sm::Adapter,
-    #[allow(dead_code)]
-    software_adapter: sm::Adapter,
+    // The root context with which all other context share resources
+    root_context: Starc<RwLock<sm::Context>>,
+    device: Starc<RwLock<sm::Device>>,
 }
 
 impl fmt::Debug for Instance {
@@ -57,14 +56,14 @@ impl Instance {
         &self,
         raw_handle: raw_window_handle::RawWindowHandle,
     ) -> Surface {
+        // Get write access to the device
+        let mut device = self.device.write();
+
         // Get context attributes
         let context_attributes = Self::get_default_context_attributes();
 
-        // Open a device for the surface
-        // TODO: Assume hardware adapter
-        let mut device = SM_CONN
-            .with(|c| c.borrow().create_device(&self.hardware_adapter))
-            .expect("TODO");
+        // Share the context with the root context
+        let root_ctx = &*self.root_context.read();
 
         // Create context descriptor
         let context_descriptor = device
@@ -72,7 +71,9 @@ impl Instance {
             .expect("TODO");
 
         // Create context
-        let mut context = device.create_context(&context_descriptor).expect("TODO");
+        let mut context = device
+            .create_context(&context_descriptor, Some(root_ctx))
+            .expect("TODO");
 
         // Create the surface with the context
         let surface = device
@@ -95,75 +96,71 @@ impl Instance {
             .bind_surface_to_context(&mut context, surface)
             .expect("TODO");
 
-        device.make_context_current(&context).expect("TODO");
+        device
+            .make_context_current(&context)
+            .expect("TODO");
+
+        drop(device);
 
         // Create a surface with the given context
         Surface {
             renderbuffer: None,
             swapchain: None,
-            context: Starc::new(RwLock::new(context)),
-            device: Starc::new(RwLock::new(device)),
+            surface_context: Starc::new(RwLock::new(context)),
+            device: self.device.clone(),
         }
     }
 }
 
 impl hal::Instance<B> for Instance {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        // Create adapter, device, and root context
+        let (device, root_context) = SM_CONN.with(|c| {
+            let conn = c.borrow();
+            // TODO: Assume hardware adapter. We should also be able to create
+            // low-power and software adapters.
+            let adapter = conn.create_hardware_adapter().expect("TODO");
+            let mut device = conn.create_device(&adapter).expect("TODO");
+            let context_descriptor = device
+                .create_context_descriptor(&Self::get_default_context_attributes())
+                .expect("TODO");
+            let context = device
+                .create_context(&context_descriptor, None)
+                .expect("TODO");
+
+            (
+                Starc::new(RwLock::new(device)),
+                Starc::new(RwLock::new(context)),
+            )
+        });
+
         Ok(Instance {
-            hardware_adapter: SM_CONN.with(|c| c.borrow().create_hardware_adapter().expect("TODO")),
-            low_power_adapter: SM_CONN
-                .with(|c| c.borrow().create_low_power_adapter().expect("TODO")),
-            software_adapter: SM_CONN.with(|c| c.borrow().create_software_adapter().expect("TODO")),
+            device,
+            root_context,
         })
     }
 
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
-        let mut adapters = Vec::with_capacity(3);
+        // Make context current
+        self.device
+            .read()
+            .make_context_current(&self.root_context.read())
+            .expect("TODO");
 
-        let context_attributes = Self::get_default_context_attributes();
+        // Create gl container
+        let gl = GlContainer::from_fn_proc(
+            |symbol_name| {
+                self.device
+                    .write()
+                    .get_proc_address(&self.root_context.read(), symbol_name)
+                    as *const _
+            },
+            self.device.clone(),
+            self.root_context.clone(),
+        );
 
-        for surfman_adapter in &[
-            &self.hardware_adapter,
-            &self.low_power_adapter,
-            &self.software_adapter,
-        ] {
-            // Create a surfman device
-            let mut device =
-                SM_CONN.with(|c| c.borrow().create_device(surfman_adapter).expect("TODO"));
-
-            // Create context descriptor
-            let context_descriptor = device
-                .create_context_descriptor(&context_attributes)
-                .expect("TODO");
-
-            // Create context
-            let context = device.create_context(&context_descriptor).expect("TODO");
-            // Make context current
-            device.make_context_current(&context).expect("TODO");
-
-            // Wrap in Starc<RwLock<T>>
-            let context = Starc::new(RwLock::new(context));
-            let context_ = context.clone();
-            let device = Starc::new(RwLock::new(device));
-            let device_ = device.clone();
-
-            // Create gl container
-            let gl = GlContainer::from_fn_proc(
-                |symbol_name| {
-                    device_
-                        .write()
-                        .get_proc_address(&context_.read(), symbol_name)
-                        as *const _
-                },
-                device,
-                context,
-            );
-
-            // Create physical device
-            adapters.push(PhysicalDevice::new_adapter((), gl));
-        }
-
-        adapters
+        // Create physical device
+        vec![PhysicalDevice::new_adapter((), gl)]
     }
 
     unsafe fn create_surface(
@@ -173,13 +170,34 @@ impl hal::Instance<B> for Instance {
         Ok(self.create_surface_from_rwh(has_handle.raw_window_handle()))
     }
 
-    unsafe fn destroy_surface(&self, _surface: Surface) {}
+    unsafe fn destroy_surface(&self, surface: Surface) {
+        // Unbind and get the underlying surface from the context
+        let raw_surface = self
+            .device
+            .read()
+            .unbind_surface_from_context(&mut surface.surface_context.write())
+            .expect("TODO");
+
+        if let Some(mut raw_surface) = raw_surface {
+            // Destroy the underlying surface
+            self.device
+                .read()
+                .destroy_surface(&mut surface.surface_context.write(), &mut raw_surface)
+                .expect("TODO");
+        }
+
+        // Destroy the backing context
+        self.device
+            .read()
+            .destroy_context(&mut surface.surface_context.write())
+            .expect("TODO");
+    }
 }
 
 #[derive(Debug)]
 pub struct Surface {
     pub(crate) swapchain: Option<Swapchain>,
-    pub(crate) context: Starc<RwLock<sm::Context>>,
+    pub(crate) surface_context: Starc<RwLock<sm::Context>>,
     device: Starc<RwLock<sm::Device>>,
     renderbuffer: Option<native::Renderbuffer>,
 }
@@ -189,16 +207,16 @@ impl Surface {
     pub fn make_context_current(&self) {
         self.device
             .write()
-            .make_context_current(&self.context.read())
+            .make_context_current(&self.surface_context.read())
             .expect("TODO");
     }
 
     pub fn context(&self) -> Starc<RwLock<sm::Context>> {
-        self.context.clone()
+        self.surface_context.clone()
     }
 
     fn swapchain_formats(&self) -> Vec<f::Format> {
-        // TODO: Make sure this is correct. I believe it is. Reference:
+        // TODO: Make sure this is correct. I ( @zicklag ) believe it is. Reference:
         // https://github.com/pcwalton/surfman/blob/master/surfman/src/context.rs#L34-L37
         vec![f::Format::Rgba8Srgb, f::Format::Bgra8Srgb]
     }
@@ -210,21 +228,21 @@ impl Drop for Surface {
         let surface = self
             .device
             .read()
-            .unbind_surface_from_context(&mut self.context.write())
+            .unbind_surface_from_context(&mut self.surface_context.write())
             .expect("TODO");
 
         if let Some(mut surface) = surface {
             // Destroy the underlying surface
             self.device
                 .read()
-                .destroy_surface(&mut self.context.write(), &mut surface)
+                .destroy_surface(&mut self.surface_context.write(), &mut surface)
                 .expect("TODO");
         }
 
         // Destroy the backing context
         self.device
             .read()
-            .destroy_context(&mut self.context.write())
+            .destroy_context(&mut self.surface_context.write())
             .expect("TODO");
     }
 }
@@ -258,7 +276,6 @@ impl window::PresentationSurface<B> for Surface {
             config.extent.height as i32,
         );
 
-        // let fbo = surface_info.framebuffer_object;
         let fbo = gl.create_framebuffer().unwrap();
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(fbo));
         gl.framebuffer_renderbuffer(
@@ -268,10 +285,10 @@ impl window::PresentationSurface<B> for Surface {
             self.renderbuffer,
         );
         self.swapchain = Some(Swapchain {
-            context: self.context.clone(),
+            context: self.surface_context.clone(),
             extent: config.extent,
             fbos: iter::once(fbo).collect(),
-            // out_fbo: Some(surface_info.framebuffer_object),
+            renderbuffer: self.renderbuffer.unwrap(),
         });
 
         Ok(())
@@ -300,7 +317,6 @@ impl window::PresentationSurface<B> for Surface {
 
 impl window::Surface<B> for Surface {
     fn supports_queue_family(&self, _: &QueueFamily) -> bool {
-        self.make_context_current();
         true
     }
 
