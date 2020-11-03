@@ -324,7 +324,7 @@ impl Device {
                 .mutable_bindings
                 .contains(&binding)
             {
-                ast.set_decoration(storage_buffer.id, spirv::Decoration::NonWritable, 0)
+                ast.set_decoration(storage_buffer.id, spirv::Decoration::NonWritable, 1)
                     .map_err(gen_unexpected_error)?
             }
         }
@@ -348,7 +348,7 @@ impl Device {
                 .mutable_bindings
                 .contains(&binding)
             {
-                ast.set_decoration(image.id, spirv::Decoration::NonWritable, 0)
+                ast.set_decoration(image.id, spirv::Decoration::NonWritable, 1)
                     .map_err(gen_unexpected_error)?
             }
         }
@@ -410,6 +410,7 @@ impl Device {
         compile_options.shader_model = shader_model;
         compile_options.vertex.invert_y = !features.contains(hal::Features::NDC_Y_UP);
         compile_options.force_zero_initialized_variables = true;
+        compile_options.nonwritable_uav_texture_as_srv = true;
         // these are technically incorrect, but better than panicking
         compile_options.point_size_compat = true;
         compile_options.point_coord_compat = true;
