@@ -41,6 +41,8 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # Prevent sudden announcement of a new advisory from failing ci:
+    continue-on-error: ${{ matrix.checks == 'advisories' }}
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +80,9 @@ jobs:
             name: Windows Nightly
             channel: nightly
             additional_command:
+        checks:
+          - advisories
+          - bans licenses sources
     steps:
       - uses: actions/checkout@v2
       - if: matrix.channel == 'nightly'
@@ -93,6 +98,11 @@ jobs:
       #  run: rustup component add clippy
         # build with no features first
       - run: make all
+      # Lint dependencies
+      - if: matrix.os == 'ubuntu-18.04' # Container action only runs on Linux
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          command: check ${{ matrix.checks }}
       - if: matrix.additional_command != ''
         name: Check extra features
         run: ${{ matrix.additional_command }}
