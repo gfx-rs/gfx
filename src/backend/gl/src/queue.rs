@@ -61,7 +61,7 @@ pub struct CommandQueue {
     features: hal::Features,
     vao: Option<native::VertexArray>,
     state: State,
-    presentation_fence: Starc<<glow::Context as glow::HasContext>::Fence>,
+    presentation_fence: Starc<Option<<glow::Context as glow::HasContext>::Fence>>,
 }
 
 impl CommandQueue {
@@ -76,7 +76,7 @@ impl CommandQueue {
             features,
             vao,
             state: State::new(),
-            presentation_fence: Starc::new(std::ptr::null_mut()),
+            presentation_fence: Starc::new(None),
         }
     }
 
@@ -187,8 +187,10 @@ impl CommandQueue {
         let extent = swapchain.extent;
 
         // Wait for rendering to finish
-        unsafe {
-            gl.wait_sync(*self.presentation_fence, 0, glow::TIMEOUT_IGNORED);
+        if let Some(fence) = *self.presentation_fence {
+            unsafe {
+                gl.wait_sync(fence, 0, glow::TIMEOUT_IGNORED);
+            }
         }
 
         #[cfg(wgl)]
@@ -1189,12 +1191,16 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
 
         // Create a fence used to synchronize the finish of the rendering and
         // the blit used to present on the surface.
-        self.presentation_fence = Starc::new(
-            self.share
-                .context
-                .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
-                .unwrap(),
-        );
+        self.presentation_fence = Starc::new(if self.share.private_caps.sync {
+            Some(
+                self.share
+                    .context
+                    .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
+                    .unwrap(),
+            )
+        } else {
+            None
+        });
 
         if let Some(fence) = fence {
             if self.share.private_caps.sync {
