@@ -1,6 +1,5 @@
 use crate::native::VertexAttribFunction;
-use hal::format::Format;
-use hal::{image as i, pso};
+use hal::{format::Format, image as i, pso};
 
 /*
 pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {

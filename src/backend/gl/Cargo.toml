@@ -23,8 +23,8 @@ x11 = ["surfman/sm-x11"]
 [dependencies]
 arrayvec = "0.5"
 bitflags = "1"
-log = { version = "0.4" }
-gfx-hal = { path = "../../hal", version = "0.6" }
+log = "0.4"
+hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
 auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
 smallvec = "1.0"
 glow = "0.6.1"
@@ -32,9 +32,6 @@ parking_lot = "0.11"
 spirv_cross = { version = "0.22", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
-# disable this for now, the versions of glutin are jumping too fast.
-# Also, surfman is the new default backend for Linux.
-#glutin = { version = "0.24", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
 surfman = { version = "0.3", features = ["sm-raw-window-handle"], optional = true }

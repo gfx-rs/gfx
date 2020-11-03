@@ -7,16 +7,17 @@
 extern crate bitflags;
 #[macro_use]
 extern crate log;
-extern crate gfx_hal as hal;
 
 #[cfg(surfman)]
 use parking_lot::RwLock;
 
-use std::cell::Cell;
-use std::fmt;
-use std::ops::{Deref, Range};
-use std::sync::{Arc, Weak};
-use std::thread::{self, ThreadId};
+use std::{
+    cell::Cell,
+    fmt,
+    ops::{Deref, Range},
+    sync::{Arc, Weak},
+    thread,
+};
 
 use hal::{adapter, buffer, image, memory, pso, queue as q};
 
@@ -36,12 +37,6 @@ mod window;
 // Web implementation
 #[cfg(wasm)]
 pub use window::web::Surface;
-
-// Glutin implementation
-#[cfg(glutin)]
-pub use crate::window::glutin::{config_context, Headless, Instance, Surface, Swapchain};
-#[cfg(glutin)]
-pub use glutin;
 
 // Surfman implementation
 #[cfg(surfman)]
@@ -358,7 +353,7 @@ impl Share {
 /// Yet internal data cannot be accessed outside of the thread where it was created.
 pub struct Starc<T: ?Sized> {
     arc: Arc<T>,
-    thread: ThreadId,
+    thread: thread::ThreadId,
 }
 
 impl<T: ?Sized> Clone for Starc<T> {
@@ -429,7 +424,7 @@ impl<T: ?Sized> Deref for Starc<T> {
 /// Yet internal data cannot be accessed outside of the thread where it was created.
 pub struct Wstarc<T: ?Sized> {
     weak: Weak<T>,
-    thread: ThreadId,
+    thread: thread::ThreadId,
 }
 impl<T> Wstarc<T> {
     pub fn upgrade(&self) -> Option<Starc<T>> {
@@ -497,9 +492,7 @@ impl PhysicalDevice {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
                 heap_index: CPU_VISIBLE_HEAP,
             });
-        }
-
-        if private_caps.map || private_caps.emulate_map {
+        } else if private_caps.map || private_caps.emulate_map {
             add_memory_type(adapter::MemoryType {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
                 heap_index: CPU_VISIBLE_HEAP,
