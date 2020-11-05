@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-gl"
-version = "0.6.0"
+version = "0.6.1"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -32,7 +32,7 @@ spirv_cross = { version = "0.22", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
 surfman = { version = "0.3", features = ["sm-raw-window-handle"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

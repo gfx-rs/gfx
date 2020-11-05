@@ -1,5 +1,10 @@
 # Change Log
 
+### backend-gl-0.6.1 (05-11-2020)
+  - fix descriptor writes
+  - fall back from persistent to emulated mapping
+  - support multi-sampled renderbuffers, multi-level views
+
 ### backend-dx12-0.6.13 (03-11-2020)
   - fix panic when creating unused multi-mip storage view
 
