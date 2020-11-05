@@ -1144,8 +1144,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         for desc_set in sets {
             let desc_set = desc_set.borrow();
             let bindings = desc_set.bindings.lock();
-            for new_binding in &*bindings {
-                match new_binding {
+            for new_binding in bindings.iter() {
+                match *new_binding {
                     n::DescSetBindings::Buffer {
                         ty: btype,
                         binding,
@@ -1158,45 +1158,45 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                             n::BindingTypes::StorageBuffers => glow::SHADER_STORAGE_BUFFER,
                             n::BindingTypes::Images => panic!("Wrong desc set binding"),
                         };
-                        for binding in drd.get_binding(*btype, set, *binding).unwrap() {
+                        for binding in drd.get_binding(btype, set, binding).unwrap() {
                             self.data.push_cmd(Command::BindBufferRange(
                                 glow_btype,
                                 *binding,
-                                *buffer,
-                                *offset as i32,
-                                *size as i32,
+                                buffer,
+                                offset as i32,
+                                size as i32,
                             ))
                         }
                     }
                     n::DescSetBindings::Texture(binding, texture, textype) => {
                         for binding in drd
-                            .get_binding(n::BindingTypes::Images, set, *binding)
+                            .get_binding(n::BindingTypes::Images, set, binding)
                             .unwrap()
                         {
                             self.data
-                                .push_cmd(Command::BindTexture(*binding, *texture, *textype))
+                                .push_cmd(Command::BindTexture(*binding, texture, textype))
                         }
                     }
                     n::DescSetBindings::Sampler(binding, sampler) => {
                         for binding in drd
-                            .get_binding(n::BindingTypes::Images, set, *binding)
+                            .get_binding(n::BindingTypes::Images, set, binding)
                             .unwrap()
                         {
-                            self.data.push_cmd(Command::BindSampler(*binding, *sampler))
+                            self.data.push_cmd(Command::BindSampler(*binding, sampler))
                         }
                     }
-                    n::DescSetBindings::SamplerDesc(binding, sinfo) => {
+                    n::DescSetBindings::SamplerDesc(binding, ref sinfo) => {
                         let mut all_txts = drd
-                            .get_binding(n::BindingTypes::Images, set, *binding)
+                            .get_binding(n::BindingTypes::Images, set, binding)
                             .unwrap()
                             .into_iter()
                             .flat_map(|binding| {
                                 bindings.iter().filter_map(move |b| {
-                                    if let n::DescSetBindings::Texture(b, t, ttype) = b {
+                                    if let n::DescSetBindings::Texture(b, t, ttype) = *b {
                                         let nbs =
-                                            drd.get_binding(n::BindingTypes::Images, set, *b)?;
+                                            drd.get_binding(n::BindingTypes::Images, set, b)?;
                                         if nbs.contains(binding) {
-                                            Some((*binding, *t, *ttype))
+                                            Some((*binding, t, ttype))
                                         } else {
                                             None
                                         }

@@ -26,7 +26,7 @@ pub type Sampler = <GlContext as glow::HasContext>::Sampler;
 // TODO: UniformLocation was copy in glow 0.3, but in 0.4 it isn't. Wrap it in a Starc for now
 // to make it `Sync + Send` instead.
 pub type UniformLocation = crate::Starc<<GlContext as glow::HasContext>::UniformLocation>;
-pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
+pub type DescriptorSetLayout = Arc<Vec<pso::DescriptorSetLayoutBinding>>;
 
 pub type RawFrameBuffer = <GlContext as glow::HasContext>::Framebuffer;
 
@@ -287,7 +287,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         layout: &DescriptorSetLayout,
     ) -> Result<DescriptorSet, pso::AllocationError> {
         Ok(DescriptorSet {
-            layout: layout.clone(),
+            layout: Arc::clone(layout),
             bindings: Arc::new(Mutex::new(Vec::new())),
         })
     }

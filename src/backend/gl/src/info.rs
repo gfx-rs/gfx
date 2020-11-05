@@ -192,6 +192,8 @@ pub struct PrivateCaps {
     /// when it is not available:
     /// - In OpenGL ES 2 it may be available behind optional extensions
     /// - In WebGL 1 and WebGL 2 it is never available
+    /// - In OpenGL, currently required to get copies from/to buffers working:
+    /// https://github.com/gfx-rs/gfx/issues/3453
     pub emulate_map: bool,
     /// Whether f64 precision is supported for depth ranges
     pub depth_range_f64_precision: bool,
@@ -485,7 +487,9 @@ pub(crate) fn query_all(
         hints |= Hints::BASE_VERTEX_INSTANCE_DRAWING;
     }
 
-    let emulate_map = info.version.is_embedded;
+    let buffer_storage = info.is_supported(&[Core(4, 4), Ext("GL_ARB_buffer_storage")]);
+    //Temporary due to https://github.com/gfx-rs/gfx/issues/3453
+    let emulate_map = info.version.is_embedded || !buffer_storage;
 
     let private = PrivateCaps {
         vertex_array: info.is_supported(&[Core(3, 0), Es(3, 0), Ext("GL_ARB_vertex_array_object")]),
@@ -495,13 +499,13 @@ pub(crate) fn query_all(
         framebuffer_texture: info.is_supported(&[Core(3, 0)]), //TODO: double check
         index_buffer_role_change: !info.is_webgl(),
         image_storage: info.is_supported(&[Core(4, 2), Ext("GL_ARB_texture_storage")]),
-        buffer_storage: info.is_supported(&[Core(4, 4), Ext("GL_ARB_buffer_storage")]),
+        buffer_storage,
         clear_buffer: info.is_supported(&[Core(3, 0), Es(3, 0)]),
         program_interface: info.is_supported(&[Core(4, 3), Ext("GL_ARB_program_interface_query")]),
         frag_data_location: !info.version.is_embedded,
         sync: !info.is_webgl() && info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]), // TODO
         map: !info.version.is_embedded, //TODO: OES extension
-        emulate_map,                    // TODO
+        emulate_map,
         depth_range_f64_precision: !info.version.is_embedded, // TODO
         draw_buffers: info.is_supported(&[Core(2, 0), Es(3, 0)]),
     };
