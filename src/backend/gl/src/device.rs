@@ -1348,10 +1348,7 @@ impl d::Device<B> for Device {
         let desc = conv::describe_format(format).unwrap();
         let channel = format.base_format().1;
 
-        let image = if num_levels > 1
-            || usage.contains(i::Usage::STORAGE)
-            || usage.contains(i::Usage::SAMPLED)
-        {
+        let image = if num_levels > 1 || usage.intersects(i::Usage::STORAGE | i::Usage::SAMPLED) {
             let name = gl.create_texture().unwrap();
             let target = match kind {
                 i::Kind::D2(w, h, 1, 1) => {
@@ -1440,10 +1437,19 @@ impl d::Device<B> for Device {
             }
         } else {
             let name = gl.create_renderbuffer().unwrap();
+            gl.bind_renderbuffer(glow::RENDERBUFFER, Some(name));
             match kind {
                 i::Kind::D2(w, h, 1, 1) => {
-                    gl.bind_renderbuffer(glow::RENDERBUFFER, Some(name));
                     gl.renderbuffer_storage(glow::RENDERBUFFER, desc.tex_internal, w as _, h as _);
+                }
+                i::Kind::D2(w, h, 1, samples) => {
+                    gl.renderbuffer_storage_multisample(
+                        glow::RENDERBUFFER,
+                        samples as _,
+                        desc.tex_internal,
+                        w as _,
+                        h as _,
+                    );
                 }
                 _ => unimplemented!(),
             };
@@ -1508,7 +1514,6 @@ impl d::Device<B> for Device {
         swizzle: Swizzle,
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewCreationError> {
-        assert_eq!(range.resolve_level_count(image.num_levels), 1);
         assert_eq!(swizzle, Swizzle::NO);
         match image.kind {
             n::ImageKind::Renderbuffer { raw, .. } => {
