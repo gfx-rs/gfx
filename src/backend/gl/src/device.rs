@@ -1350,10 +1350,7 @@ impl d::Device<B> for Device {
         let desc = conv::describe_format(format).unwrap();
         let channel = format.base_format().1;
 
-        let image = if num_levels > 1
-            || usage.contains(i::Usage::STORAGE)
-            || usage.contains(i::Usage::SAMPLED)
-        {
+        let image = if num_levels > 1 || usage.intersects(i::Usage::STORAGE | i::Usage::SAMPLED) {
             let name = gl.create_texture().unwrap();
             let target = match kind {
                 i::Kind::D2(w, h, 1, 1) => {
@@ -1442,10 +1439,19 @@ impl d::Device<B> for Device {
             }
         } else {
             let name = gl.create_renderbuffer().unwrap();
+            gl.bind_renderbuffer(glow::RENDERBUFFER, Some(name));
             match kind {
                 i::Kind::D2(w, h, 1, 1) => {
-                    gl.bind_renderbuffer(glow::RENDERBUFFER, Some(name));
                     gl.renderbuffer_storage(glow::RENDERBUFFER, desc.tex_internal, w as _, h as _);
+                }
+                i::Kind::D2(w, h, 1, samples) => {
+                    gl.renderbuffer_storage_multisample(
+                        glow::RENDERBUFFER,
+                        samples as _,
+                        desc.tex_internal,
+                        w as _,
+                        h as _,
+                    );
                 }
                 _ => unimplemented!(),
             };
@@ -1510,7 +1516,6 @@ impl d::Device<B> for Device {
         swizzle: Swizzle,
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewCreationError> {
-        assert_eq!(range.resolve_level_count(image.num_levels), 1);
         assert_eq!(swizzle, Swizzle::NO);
         match image.kind {
             n::ImageKind::Renderbuffer { raw, .. } => {
@@ -1581,8 +1586,13 @@ impl d::Device<B> for Device {
         J: IntoIterator,
         J::Item: Borrow<n::FatSampler>,
     {
-        // Just return it
-        Ok(layout.into_iter().map(|l| l.borrow().clone()).collect())
+        let mut bindings = layout
+            .into_iter()
+            .map(|l| l.borrow().clone())
+            .collect::<Vec<_>>();
+        // all operations rely on the ascending bindings order
+        bindings.sort_by_key(|b| b.binding);
+        Ok(Arc::new(bindings))
     }
 
     unsafe fn write_descriptor_sets<'a, I, J>(&self, writes: I)
@@ -1591,19 +1601,24 @@ impl d::Device<B> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        for mut write in writes {
-            let set = &mut write.set;
-            let mut bindings = set.bindings.lock();
-            let binding = write.binding;
+        for write in writes {
+            let mut bindings = write.set.bindings.lock();
+            let mut layout_index = write
+                .set
+                .layout
+                .binary_search_by_key(&write.binding, |b| b.binding)
+                .unwrap();
+            let mut array_offset = write.array_offset;
 
             for descriptor in write.descriptors {
+                let binding_layout = &write.set.layout[layout_index];
+                let binding = binding_layout.binding;
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref sub) => {
                         let (raw_buffer, buffer_range) = buffer.as_bound();
                         let range = crate::resolve_sub_range(sub, buffer_range);
 
-                        let ty = set.layout[binding as usize].ty;
-                        let ty = match ty {
+                        let ty = match binding_layout.ty {
                             pso::DescriptorType::Buffer { ty, .. } => match ty {
                                 pso::BufferDescriptorType::Uniform => {
                                     n::BindingTypes::UniformBuffers
@@ -1612,7 +1627,9 @@ impl d::Device<B> for Device {
                                     n::BindingTypes::StorageBuffers
                                 }
                             },
-                            _ => panic!("Can't write buffer into descriptor of type {:?}", ty),
+                            other => {
+                                panic!("Can't write buffer into descriptor of type {:?}", other)
+                            }
                         };
 
                         bindings.push(n::DescSetBindings::Buffer {
@@ -1628,7 +1645,9 @@ impl d::Device<B> for Device {
                             n::ImageView::Texture { target, raw, .. } => {
                                 bindings.push(n::DescSetBindings::Texture(binding, raw, target))
                             }
-                            n::ImageView::Renderbuffer(_) => unimplemented!(),
+                            n::ImageView::Renderbuffer(_) => {
+                                panic!("Texture doesn't support shader binding")
+                            }
                         }
                         match *sampler {
                             n::FatSampler::Sampler(sampler) => {
@@ -1642,9 +1661,9 @@ impl d::Device<B> for Device {
                         n::ImageView::Texture { target, raw, .. } => {
                             bindings.push(n::DescSetBindings::Texture(binding, raw, target))
                         }
-                        n::ImageView::Renderbuffer(_) => panic!(
-                            "Texture was created with only render target usage which is invalid."
-                        ),
+                        n::ImageView::Renderbuffer(_) => {
+                            panic!("Texture doesn't support shader binding")
+                        }
                     },
                     pso::Descriptor::Sampler(sampler) => match *sampler {
                         n::FatSampler::Sampler(sampler) => {
@@ -1655,6 +1674,12 @@ impl d::Device<B> for Device {
                         }
                     },
                     pso::Descriptor::TexelBuffer(_view) => unimplemented!(),
+                }
+
+                array_offset += 1;
+                if array_offset == binding_layout.count {
+                    array_offset = 0;
+                    layout_index += 1;
                 }
             }
         }

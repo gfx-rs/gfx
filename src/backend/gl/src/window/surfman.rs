@@ -96,9 +96,7 @@ impl Instance {
             .bind_surface_to_context(&mut context, surface)
             .expect("TODO");
 
-        device
-            .make_context_current(&context)
-            .expect("TODO");
+        device.make_context_current(&context).expect("TODO");
 
         drop(device);
 

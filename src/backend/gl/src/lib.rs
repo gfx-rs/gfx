@@ -453,6 +453,7 @@ impl PhysicalDevice {
         info!("Shading Language: {:?}", info.shading_language);
         info!("Supported Features: {:?}", supported_features);
         info!("Legacy Features: {:?}", legacy_features);
+        debug!("Private capabilities: {:#?}", private_caps);
         debug!("Loaded Extensions:");
         for extension in info.extensions.iter() {
             debug!("- {}", *extension);
