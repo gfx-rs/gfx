@@ -1,4 +1,5 @@
 status = [
+  "Dependency Check",
   "iOS Stable",
   "MacOS Stable",
   "MacOS Nightly",
@@ -8,5 +9,3 @@ status = [
   "Windows Stable",
   "Windows Nightly",
 ]
-
-timeout_sec = 18000 # 5 hours
