@@ -8,9 +8,6 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 
-#[cfg(surfman)]
-use parking_lot::RwLock;
-
 use std::{
     cell::Cell,
     fmt,
@@ -35,19 +32,11 @@ mod state;
 mod window;
 
 // Web implementation
-#[cfg(wasm)]
-pub use window::web::Surface;
+#[cfg(target_arch = "wasm32")]
+pub use window::web::{Surface, Swapchain};
 
-// Surfman implementation
-#[cfg(surfman)]
-pub use crate::window::surfman::{Instance, Surface, Swapchain};
-// Helps windows detect discrete GPUs
-#[cfg(surfman)]
-surfman::declare_surfman!();
-
-// Catch-all dummy implementation
-#[cfg(dummy)]
-pub use window::dummy::{Instance, Surface, Swapchain};
+#[cfg(not(target_arch = "wasm32"))]
+pub use crate::window::egl::{Instance, Surface, Swapchain};
 
 pub use glow::Context as GlContext;
 use glow::HasContext;
@@ -56,26 +45,11 @@ type ColorSlot = u8;
 
 pub(crate) struct GlContainer {
     context: GlContext,
-
-    #[cfg(surfman)]
-    surfman_device: Starc<RwLock<surfman::Device>>,
-
-    #[cfg(surfman)]
-    surfman_context: Starc<RwLock<surfman::Context>>,
 }
 
 impl GlContainer {
-    #[cfg(not(wasm))]
-    fn make_current(&self) {
-        #[cfg(surfman)]
-        self.surfman_device
-            .write()
-            .make_context_current(&self.surfman_context.read())
-            .expect("TODO");
-    }
-
-    #[cfg(any(glutin, wgl))]
-    fn from_fn_proc<F>(fn_proc: F) -> GlContainer
+    #[cfg(not(target_arch = "wasm32"))]
+    unsafe fn from_fn_proc<F>(fn_proc: F) -> GlContainer
     where
         F: FnMut(&str) -> *const std::os::raw::c_void,
     {
@@ -83,24 +57,7 @@ impl GlContainer {
         GlContainer { context }
     }
 
-    #[cfg(surfman)]
-    fn from_fn_proc<F>(
-        fn_proc: F,
-        surfman_device: Starc<RwLock<surfman::Device>>,
-        surfman_context: Starc<RwLock<surfman::Context>>,
-    ) -> GlContainer
-    where
-        F: FnMut(&str) -> *const std::os::raw::c_void,
-    {
-        let context = unsafe { glow::Context::from_loader_function(fn_proc) };
-        GlContainer {
-            context,
-            surfman_device,
-            surfman_context,
-        }
-    }
-
-    #[cfg(wasm)]
+    #[cfg(target_arch = "wasm32")]
     fn from_canvas(canvas: &web_sys::HtmlCanvasElement) -> GlContainer {
         let context = {
             use wasm_bindgen::JsCast;
@@ -136,20 +93,7 @@ impl GlContainer {
 impl Deref for GlContainer {
     type Target = GlContext;
     fn deref(&self) -> &GlContext {
-        #[cfg(not(wasm))]
-        self.make_current();
         &self.context
-    }
-}
-
-#[cfg(surfman)]
-impl Drop for GlContainer {
-    fn drop(&mut self) {
-        // Contexts must be manually destroyed to prevent a panic
-        self.surfman_device
-            .read()
-            .destroy_context(&mut self.surfman_context.write())
-            .expect("TODO");
     }
 }
 
@@ -157,10 +101,10 @@ impl Drop for GlContainer {
 pub enum Backend {}
 
 impl hal::Backend for Backend {
-    #[cfg(not(wasm))]
+    #[cfg(not(target_arch = "wasm32"))]
     type Instance = Instance;
 
-    #[cfg(wasm)]
+    #[cfg(target_arch = "wasm32")]
     type Instance = Surface;
 
     type PhysicalDevice = PhysicalDevice;
@@ -223,7 +167,6 @@ impl Error {
     }
 }
 
-#[cfg(not(wasm))]
 fn debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {
     let source_str = match source {
         glow::DEBUG_SOURCE_API => "API",
@@ -280,14 +223,6 @@ enum MemoryUsage {
 /// Internal struct of shared data between the physical and logical device.
 struct Share {
     context: GlContainer,
-
-    /// Context associated with an instance.
-    ///
-    /// Parenting context for all device contexts shared with it.
-    /// Used for querying basic information and spawning shared contexts.
-    #[allow(unused)]
-    instance_context: DeviceContext,
-
     info: Info,
     supported_features: hal::Features,
     legacy_features: info::LegacyFeatures,
@@ -438,12 +373,8 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 #[derive(Debug)]
 pub struct PhysicalDevice(Starc<Share>);
 
-#[cfg(not(wgl))]
-type DeviceContext = ();
-
 impl PhysicalDevice {
-    #[allow(unused)]
-    fn new_adapter(instance_context: DeviceContext, gl: GlContainer) -> adapter::Adapter<Backend> {
+    fn new_adapter(gl: GlContainer) -> adapter::Adapter<Backend> {
         // query information
         let (info, supported_features, legacy_features, hints, limits, private_caps) =
             info::query_all(&gl);
@@ -521,7 +452,6 @@ impl PhysicalDevice {
         // create the shared context
         let share = Share {
             context: gl,
-            instance_context,
             info,
             supported_features,
             legacy_features,
@@ -635,12 +565,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         // initialize permanent states
         let gl = &self.0.context;
 
-        #[cfg(not(wasm))]
-        {
-            if cfg!(debug_assertions) && gl.supports_debug() {
-                gl.enable(glow::DEBUG_OUTPUT);
-                gl.debug_message_callback(debug_message_callback);
-            }
+        if cfg!(debug_assertions) && !cfg!(target_arch = "wasm32") && gl.supports_debug() {
+            gl.enable(glow::DEBUG_OUTPUT);
+            gl.debug_message_callback(debug_message_callback);
         }
 
         if self

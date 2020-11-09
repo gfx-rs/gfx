@@ -1,9 +1,10 @@
 #![cfg_attr(
     not(any(
         feature = "vulkan",
+        feature = "gl",
         feature = "dx11",
         feature = "dx12",
-        feature = "metal"
+        feature = "metal",
     )),
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
@@ -12,6 +13,8 @@
 extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
+#[cfg(feature = "gl")]
+extern crate gfx_backend_gl as back;
 #[cfg(feature = "metal")]
 extern crate gfx_backend_metal as back;
 #[cfg(feature = "vulkan")]
@@ -23,9 +26,10 @@ use hal::{adapter::MemoryType, buffer, command, memory, pool, prelude::*, pso};
 
 #[cfg(any(
     feature = "vulkan",
+    feature = "gl",
     feature = "dx11",
     feature = "dx12",
-    feature = "metal"
+    feature = "metal",
 ))]
 fn main() {
     env_logger::init();
@@ -288,6 +292,7 @@ unsafe fn create_buffer<B: hal::Backend>(
 
 #[cfg(not(any(
     feature = "vulkan",
+    feature = "gl",
     feature = "dx11",
     feature = "dx12",
     feature = "metal"

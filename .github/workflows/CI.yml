@@ -36,7 +36,8 @@ jobs:
       - name: Check
         run: |
           cargo check --manifest-path src/backend/vulkan/Cargo.toml --target ${{ env.TARGET }}
-          cargo check --manifest-path src/backend/gl/Cargo.toml --target ${{ env.TARGET }}
+          # see https://github.com/timothee-haudebourg/khronos-egl/issues/6
+          #cargo check --manifest-path src/backend/gl/Cargo.toml --target ${{ env.TARGET }}
 
   build:
     name: ${{ matrix.name }}
@@ -94,6 +95,11 @@ jobs:
       - if: matrix.os == 'windows-2019'
         name: Install make
         run: choco install make
+      - if: matrix.os == 'ubuntu-18.04'
+        name: Install EGL Mesa
+        run: |
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq libegl1-mesa-dev 
       #- if: matrix.channel == 'stable'
       #  run: rustup component add clippy
         # build with no features first

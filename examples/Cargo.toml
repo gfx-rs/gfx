@@ -56,7 +56,7 @@ path = "../src/backend/vulkan"
 version = "0.6"
 optional = true
 
-[target.'cfg(unix)'.dependencies.gfx-backend-gl]
+[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos"), not(target_os = "android")))'.dependencies.gfx-backend-gl]
 path = "../src/backend/gl"
 version = "0.6"
 features = ["x11"]

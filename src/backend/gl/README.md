@@ -2,6 +2,8 @@
 
 [OpenGL](https://www.khronos.org/opengl/) backend for gfx.
 
+Can only be used on non-Apple Unix systems. The WSI is hard-coded to EGL.
+
 ## Normalized Coordinates
 
 Render | Depth | Texture
