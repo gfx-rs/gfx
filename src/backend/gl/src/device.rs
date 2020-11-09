@@ -1777,7 +1777,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    #[cfg(wasm)]
+    #[cfg(target_arch = "wasm32")]
     unsafe fn wait_for_fences<I>(
         &self,
         fences: I,

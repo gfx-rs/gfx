@@ -256,22 +256,23 @@ pub enum Requirement<'a> {
     Ext(&'a str),
 }
 
+const IS_WEBGL: bool = cfg!(target_arch = "wasm32");
+
 impl Info {
     fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
         let version = Version::parse(get_string(gl, glow::VERSION).unwrap_or_default()).unwrap();
-        #[cfg(not(wasm))]
-        let shading_language =
+        let shading_language = if IS_WEBGL {
+            Version::new_embedded(3, 0, String::from(""))
+        } else {
             Version::parse(get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_default())
-                .unwrap();
-        #[cfg(wasm)]
-        let shading_language = Version::new_embedded(3, 0, String::from(""));
+                .unwrap()
+        };
         // TODO: Use separate path for WebGL extensions in `glow` somehow
         // Perhaps automatic fallback for NUM_EXTENSIONS to EXTENSIONS on native
-        #[cfg(wasm)]
-        let extensions = HashSet::new();
-        #[cfg(not(wasm))]
-        let extensions = if version >= Version::new(3, 0, None, String::from("")) {
+        let extensions = if IS_WEBGL {
+            HashSet::new()
+        } else if version >= Version::new(3, 0, None, String::from("")) {
             let num_exts = get_usize(gl, glow::NUM_EXTENSIONS).unwrap();
             (0..num_exts)
                 .map(|i| unsafe { gl.get_parameter_indexed_string(glow::EXTENSIONS, i as u32) })
@@ -328,8 +329,6 @@ impl Info {
         IS_WEBGL
     }
 }
-
-const IS_WEBGL: bool = cfg!(wasm);
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.

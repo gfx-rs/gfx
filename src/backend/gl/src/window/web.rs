@@ -155,7 +155,8 @@ impl hal::Instance<B> for Surface {
     }
 
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
-        let adapter = PhysicalDevice::new_adapter((), GlContainer::from_canvas(&self.canvas)); // TODO: Move to `self` like native/window
+        // TODO: Move to `self` like native/window
+        let adapter = PhysicalDevice::new_adapter(GlContainer::from_canvas(&self.canvas));
         vec![adapter]
     }
 

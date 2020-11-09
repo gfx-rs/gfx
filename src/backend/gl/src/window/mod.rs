@@ -1,8 +1,5 @@
-#[cfg(wasm)]
+#[cfg(target_arch = "wasm32")]
 pub mod web;
 
-#[cfg(surfman)]
-pub mod surfman;
-
-#[cfg(dummy)]
-pub mod dummy;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod egl;

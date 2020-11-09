@@ -26,19 +26,18 @@ else
 	UNAME_S:=$(shell uname -s)
 	EXCLUDES+= --exclude gfx-backend-dx12
 	EXCLUDES+= --exclude gfx-backend-dx11
-	ifeq ($(UNAME_S),Linux)
-		EXCLUDES+= --exclude gfx-backend-metal
-		FEATURES_HAL=vulkan
-	endif
 	ifeq ($(TARGET),aarch64-apple-ios)
-		EXCLUDES+= --exclude gfx-backend-vulkan --exclude gfx-backend-gl
+		EXCLUDES+= --exclude gfx-backend-vulkan
 	else ifeq ($(TARGET),x86_64-apple-ios)
-		EXCLUDES+= --exclude gfx-backend-vulkan --exclude gfx-backend-gl
-	else
-		FEATURES_GL=gl
+		EXCLUDES+= --exclude gfx-backend-vulkan
 	endif
 	ifeq ($(UNAME_S),Darwin)
+		EXCLUDES+= --exclude gfx-backend-gl
 		FEATURES_HAL=metal
+	else
+		EXCLUDES+= --exclude gfx-backend-metal
+		FEATURES_HAL=vulkan
+		FEATURES_GL=gl
 	endif
 endif
 
