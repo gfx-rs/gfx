@@ -352,7 +352,7 @@ where
         };
 
         // Image
-        let img_data = include_bytes!("data/logo.png");
+        let img_data = include_bytes!("./data/logo.png");
 
         let img = image::load(Cursor::new(&img_data[..]), image::ImageFormat::Png)
             .unwrap()
@@ -634,7 +634,7 @@ where
         let pipeline = {
             let vs_module = {
                 let spirv =
-                    auxil::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..]))
+                    auxil::read_spirv(Cursor::new(&include_bytes!("./data/quad.vert.spv")[..]))
                         .unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };

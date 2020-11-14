@@ -43,7 +43,7 @@ env_logger = "0.7"
 glsl-to-spirv = "0.1.4"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.55"
+wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1.6"
 console_log = "0.1.2"
 
@@ -60,6 +60,11 @@ optional = true
 path = "../src/backend/gl"
 version = "0.6"
 features = ["x11"]
+optional = true
+
+[target.'cfg(all(target_arch = "wasm32"))'.dependencies.gfx-backend-gl]
+path = "../src/backend/gl"
+version = "0.6"
 optional = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.gfx-backend-metal]
