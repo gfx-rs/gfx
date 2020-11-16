@@ -1291,16 +1291,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .enumerate()
         {
             // for swapchain views, we consider the initial layout to always be `General`
-            if view.is_swapchain() {
-                let state = conv::map_image_resource_state(
-                    image::Access::empty(),
-                    attachment.layouts.start,
-                );
+            let pass_start_state =
+                conv::map_image_resource_state(image::Access::empty(), attachment.layouts.start);
+            if view.is_swapchain() && pass_start_state != d3d12::D3D12_RESOURCE_STATE_COMMON {
                 let barrier = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                     pResource: view.resource.as_mut_ptr(),
                     Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
                     StateBefore: d3d12::D3D12_RESOURCE_STATE_COMMON,
-                    StateAfter: state,
+                    StateAfter: pass_start_state,
                 };
                 self.barriers.push(Self::transition_barrier(barrier));
             }
@@ -1369,13 +1367,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .zip(pc.render_pass.attachments.iter())
         {
             // for swapchain views, we consider the initial layout to always be `General`
-            if view.is_swapchain() {
-                let state =
-                    conv::map_image_resource_state(image::Access::empty(), attachment.layouts.end);
+            let pass_end_state =
+                conv::map_image_resource_state(image::Access::empty(), attachment.layouts.end);
+            if view.is_swapchain() && pass_end_state != d3d12::D3D12_RESOURCE_STATE_COMMON {
                 let barrier = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                     pResource: view.resource.as_mut_ptr(),
                     Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                    StateBefore: state,
+                    StateBefore: pass_end_state,
                     StateAfter: d3d12::D3D12_RESOURCE_STATE_COMMON,
                 };
                 self.barriers.push(Self::transition_barrier(barrier));
