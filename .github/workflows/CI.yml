@@ -14,23 +14,27 @@ jobs:
       TARGET: aarch64-apple-ios
     steps:
       - uses: actions/checkout@v2
-      - run: rustup target add ${{ env.TARGET }}
-      - name: Check
-        run: cargo check --manifest-path src/backend/metal/Cargo.toml --target ${{ env.TARGET }}
+      - name: Prepare Rust
+        run: rustup target add ${{ env.TARGET }}
+      - run: cargo check --manifest-path src/backend/metal/Cargo.toml --target ${{ env.TARGET }}
 
   android_build:
     name: Android Stable
     runs-on: ubuntu-18.04
     env:
       TARGET: aarch64-linux-android
+      PKG_CONFIG_ALLOW_CROSS: 1
     steps:
       - uses: actions/checkout@v2
-      - run: rustup target add ${{ env.TARGET }}
-      - name: Check
+      - name: Prepare Rust
+        run: rustup target add ${{ env.TARGET }}
+      - run: cargo check --manifest-path src/backend/vulkan/Cargo.toml --target ${{ env.TARGET }}
+      - name: Prepare EGL
         run: |
-          cargo check --manifest-path src/backend/vulkan/Cargo.toml --target ${{ env.TARGET }}
-          # see https://github.com/timothee-haudebourg/khronos-egl/issues/6
-          #cargo check --manifest-path src/backend/gl/Cargo.toml --target ${{ env.TARGET }}
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq libegl1-mesa-dev
+          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+      - run: cargo check --manifest-path src/backend/gl/Cargo.toml --target ${{ env.TARGET }}
 
   check-advisories:
     name: Advisory Check
@@ -108,7 +112,6 @@ jobs:
           sudo apt-get install -y -qq libegl1-mesa-dev
       #- if: matrix.channel == 'stable'
       #  run: rustup component add clippy
-        # build with no features first
       - run: make all
       - if: matrix.additional_command != ''
         name: Check extra features
