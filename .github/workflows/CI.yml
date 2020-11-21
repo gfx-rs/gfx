@@ -66,6 +66,7 @@ jobs:
             MacOS Nightly,
             Ubuntu Stable,
             Ubuntu Nightly,
+            Web Assembly,
             Windows Stable,
             Windows Nightly,
           ]
@@ -85,6 +86,11 @@ jobs:
           - os: ubuntu-18.04
             name: Ubuntu Nightly
             channel: nightly
+            additional_command:
+          - os: ubuntu-18.04
+            name: Web Assembly
+            channel: nightly
+            target: wasm32-unknown-unknown
             additional_command:
           - os: windows-2019
             name: Windows Stable
