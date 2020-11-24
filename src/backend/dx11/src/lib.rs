@@ -21,31 +21,41 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 
+use crate::{debug::set_debug_name, device::DepthStencilState};
 use auxil::ShaderStage;
 use hal::{
     adapter, buffer, command, format, image, memory, pass, pso, query, queue, window, DrawCount,
-    IndexCount, InstanceCount, Limits, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
+    IndexCount, IndexType, InstanceCount, Limits, TaskCount, VertexCount, VertexOffset,
+    WorkGroupCount,
 };
 use range_alloc::RangeAllocator;
-use crate::{
-    device::DepthStencilState,
-    debug::set_debug_name,
-};
 
-use winapi::{shared::{
-    dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain},
-    dxgiformat,
-    minwindef::{FALSE, HMODULE, UINT},
-    windef::{HWND, RECT},
-    winerror,
-}, um::{d3d11, d3d11_1, d3dcommon, winuser::GetClientRect}, Interface as _};
+use winapi::{
+    shared::{
+        dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain},
+        dxgiformat,
+        minwindef::{FALSE, HMODULE, UINT},
+        windef::{HWND, RECT},
+        winerror,
+    },
+    um::{d3d11, d3d11_1, d3dcommon, winuser::GetClientRect},
+    Interface as _,
+};
 
 use wio::com::ComPtr;
 
 use arrayvec::ArrayVec;
 use parking_lot::{Condvar, Mutex, RwLock};
 
-use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, os::raw::c_void, ptr, sync::{Arc, Weak}};
+use std::{
+    borrow::Borrow,
+    cell::RefCell,
+    fmt, mem,
+    ops::Range,
+    os::raw::c_void,
+    ptr,
+    sync::{Arc, Weak},
+};
 
 macro_rules! debug_scope {
     ($context:expr, $($arg:tt)+) => ({
@@ -150,28 +160,28 @@ fn get_features(
 
     features.set(
         hal::Features::TEXTURE_DESCRIPTOR_ARRAY
-        | hal::Features::FULL_DRAW_INDEX_U32
-        | hal::Features::GEOMETRY_SHADER,
-        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_0
+            | hal::Features::FULL_DRAW_INDEX_U32
+            | hal::Features::GEOMETRY_SHADER,
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_0,
     );
 
     features.set(
         hal::Features::IMAGE_CUBE_ARRAY,
-        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_1
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_1,
     );
 
     features.set(
         hal::Features::VERTEX_STORES_AND_ATOMICS
-        | hal::Features::FRAGMENT_STORES_AND_ATOMICS
-        | hal::Features::FORMAT_BC
-        | hal::Features::TESSELLATION_SHADER
-        | hal::Features::DRAW_INDIRECT_FIRST_INSTANCE,
-        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_0
+            | hal::Features::FRAGMENT_STORES_AND_ATOMICS
+            | hal::Features::FORMAT_BC
+            | hal::Features::TESSELLATION_SHADER
+            | hal::Features::DRAW_INDIRECT_FIRST_INSTANCE,
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_0,
     );
 
     features.set(
         hal::Features::LOGIC_OP, // TODO: Optional at 10_0 -> 11_0
-        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_1
+        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_1,
     );
 
     features
@@ -199,8 +209,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
     };
 
     let max_texture_cube_dimension = match feature_level {
-        d3dcommon::D3D_FEATURE_LEVEL_9_1
-        | d3dcommon::D3D_FEATURE_LEVEL_9_2 => 512,
+        d3dcommon::D3D_FEATURE_LEVEL_9_1 | d3dcommon::D3D_FEATURE_LEVEL_9_2 => 512,
         _ => max_texture_uv_dimension,
     };
 
@@ -237,9 +246,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         | d3dcommon::D3D_FEATURE_LEVEL_9_3
         | d3dcommon::D3D_FEATURE_LEVEL_10_0 => 0b0001, // Conservative, MSAA isn't required.
         d3dcommon::D3D_FEATURE_LEVEL_10_1 => 0b0101, // Optimistic, 4xMSAA is required on all formats _but_ RGBA32.
-        d3dcommon::D3D_FEATURE_LEVEL_11_0
-        | d3dcommon::D3D_FEATURE_LEVEL_11_1
-        | _ => 0b1101, // Optimistic, 8xMSAA and 4xMSAA is required on all formats _but_ RGBA32 which requires 4x.
+        d3dcommon::D3D_FEATURE_LEVEL_11_0 | d3dcommon::D3D_FEATURE_LEVEL_11_1 | _ => 0b1101, // Optimistic, 8xMSAA and 4xMSAA is required on all formats _but_ RGBA32 which requires 4x.
     };
 
     let max_constant_buffers = d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1;
@@ -255,7 +262,8 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         max_per_stage_descriptor_uniform_buffers: max_constant_buffers as _,
         max_per_stage_descriptor_storage_buffers: max_buffer_uav,
         max_per_stage_descriptor_storage_images: max_image_uav,
-        max_per_stage_descriptor_sampled_images: d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
+        max_per_stage_descriptor_sampled_images:
+            d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
         max_descriptor_set_uniform_buffers_dynamic: max_constant_buffers as _,
         max_descriptor_set_storage_buffers_dynamic: 0, // TODO: Implement dynamic offsets for storage buffers
         max_texel_elements: max_texture_uv_dimension as _, //TODO
@@ -281,10 +289,11 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         ], // TODO
         max_vertex_input_attribute_offset: 255, // TODO
         max_vertex_input_attributes: max_input_slots,
-        max_vertex_input_binding_stride: d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
+        max_vertex_input_binding_stride: d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES
+            as _,
         max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
-        max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
-        min_texel_buffer_offset_alignment: 1,                                     // TODO
+        max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _,         // TODO
+        min_texel_buffer_offset_alignment: 1,                                             // TODO
         min_uniform_buffer_offset_alignment: 16,
         min_storage_buffer_offset_alignment: 16, // TODO
         framebuffer_color_sample_counts: max_samples,
@@ -684,7 +693,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 return Err(hal::device::CreationError::InitializationFailed);
             }
 
-            info!("feature level={:x}=FL{}_{}", feature_level, feature_level >> 12, feature_level >> 8 & 0xF);
+            info!(
+                "feature level={:x}=FL{}_{}",
+                feature_level,
+                feature_level >> 12,
+                feature_level >> 8 & 0xF
+            );
 
             (ComPtr::from_raw(device), ComPtr::from_raw(cxt))
         };
@@ -889,8 +903,7 @@ impl window::Surface<Backend> for Surface {
         // NOTE: some swap effects affect msaa capabilities..
         // TODO: _DISCARD swap effects can only have one image?
         window::SurfaceCapabilities {
-            present_modes: window::PresentMode::IMMEDIATE
-                | window::PresentMode::FIFO,
+            present_modes: window::PresentMode::IMMEDIATE | window::PresentMode::FIFO,
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
             image_count: 1..=16,                                       // TODO:
             current_extent,
@@ -975,7 +988,10 @@ impl window::PresentationSurface<Backend> for Surface {
         // Disable automatic Alt+Enter handling by DXGI.
         const DXGI_MWA_NO_WINDOW_CHANGES: u32 = 1;
         const DXGI_MWA_NO_ALT_ENTER: u32 = 2;
-        self.factory.MakeWindowAssociation(self.wnd_handle, DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER);
+        self.factory.MakeWindowAssociation(
+            self.wnd_handle,
+            DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
+        );
 
         let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
         assert_eq!(
@@ -1213,25 +1229,17 @@ impl RenderPassCache {
         let color_views = subpass
             .color_attachments
             .iter()
-            .map(|&(id, _)| {
-                self.framebuffer.attachments[id]
-                    .rtv_handle
-                    .unwrap()
-            })
+            .map(|&(id, _)| self.framebuffer.attachments[id].rtv_handle.unwrap())
             .collect::<Vec<_>>();
         let (ds_view, rods_view) = match subpass.depth_stencil_attachment {
             Some((id, _)) => {
                 let attachment = &self.framebuffer.attachments[id];
-                let ds_view = attachment
-                    .dsv_handle
-                    .unwrap();
+                let ds_view = attachment.dsv_handle.unwrap();
 
-                let rods_view = attachment
-                    .rodsv_handle
-                    .unwrap();
+                let rods_view = attachment.rodsv_handle.unwrap();
 
                 (Some(ds_view), Some(rods_view))
-            },
+            }
             None => (None, None),
         };
 
@@ -1242,7 +1250,11 @@ impl RenderPassCache {
     fn resolve_msaa(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
         let subpass: &SubpassDesc = &self.render_pass.subpasses[self.current_subpass as usize];
 
-        for (&(color_id, _), &(resolve_id, _)) in subpass.color_attachments.iter().zip(subpass.resolve_attachments.iter()) {
+        for (&(color_id, _), &(resolve_id, _)) in subpass
+            .color_attachments
+            .iter()
+            .zip(subpass.resolve_attachments.iter())
+        {
             if color_id == pass::ATTACHMENT_UNUSED || resolve_id == pass::ATTACHMENT_UNUSED {
                 continue;
             }
@@ -1254,15 +1266,21 @@ impl RenderPassCache {
             let mut resolve_resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
 
             unsafe {
-                (&*color_framebuffer.rtv_handle.expect("Framebuffer must have COLOR_ATTACHMENT usage")).GetResource(&mut color_resource as *mut *mut _);
-                (&*resolve_framebuffer.rtv_handle.expect("Resolve texture must have COLOR_ATTACHMENT usage")).GetResource(&mut resolve_resource as *mut *mut _);
+                (&*color_framebuffer
+                    .rtv_handle
+                    .expect("Framebuffer must have COLOR_ATTACHMENT usage"))
+                    .GetResource(&mut color_resource as *mut *mut _);
+                (&*resolve_framebuffer
+                    .rtv_handle
+                    .expect("Resolve texture must have COLOR_ATTACHMENT usage"))
+                    .GetResource(&mut resolve_resource as *mut *mut _);
 
                 context.ResolveSubresource(
                     resolve_resource,
                     resolve_framebuffer.subresource,
                     color_resource,
                     color_framebuffer.subresource,
-                    conv::map_format(color_framebuffer.format).unwrap()
+                    conv::map_format(color_framebuffer.format).unwrap(),
                 );
 
                 (&*color_resource).Release();
@@ -1456,7 +1474,7 @@ impl CommandBufferState {
         &mut self,
         render_targets: &[*mut d3d11::ID3D11RenderTargetView],
         depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
-        readonly_depth_target: Option<*mut d3d11::ID3D11DepthStencilView>
+        readonly_depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
     ) {
         for (idx, &rt) in render_targets.iter().enumerate() {
             self.render_targets[idx] = rt;
@@ -1466,11 +1484,15 @@ impl CommandBufferState {
         self.depth_target = depth_target;
         self.readonly_depth_target = readonly_depth_target;
 
-        self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
+        self.dirty_flag
+            .insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
     }
 
     pub fn bind_render_targets(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
-        if !self.dirty_flag.contains(DirtyStateFlag::RENDER_TARGETS_AND_UAVS) {
+        if !self
+            .dirty_flag
+            .contains(DirtyStateFlag::RENDER_TARGETS_AND_UAVS)
+        {
             return;
         }
 
@@ -1478,7 +1500,8 @@ impl CommandBufferState {
             self.readonly_depth_target
         } else {
             self.depth_target
-        }.unwrap_or(ptr::null_mut());
+        }
+        .unwrap_or(ptr::null_mut());
 
         let uav_start_index = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - self.uav_len;
 
@@ -1502,7 +1525,8 @@ impl CommandBufferState {
             };
         }
 
-        self.dirty_flag.remove(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
+        self.dirty_flag
+            .remove(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
     }
 
     pub fn set_blend_factor(&mut self, factor: [f32; 4]) {
@@ -1538,7 +1562,10 @@ impl CommandBufferState {
     }
 
     pub fn bind_depth_stencil_state(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
-        if !self.dirty_flag.contains(DirtyStateFlag::DEPTH_STENCIL_STATE) {
+        if !self
+            .dirty_flag
+            .contains(DirtyStateFlag::DEPTH_STENCIL_STATE)
+        {
             return;
         }
 
@@ -1586,18 +1613,19 @@ impl CommandBufferState {
         }
 
         // If we don't have depth stencil state, we use the old value, so we don't bother changing anything.
-        let depth_target_read_only =
-            pipeline
-                .depth_stencil_state
-                .as_ref()
-                .map_or(self.depth_target_read_only, |ds| ds.read_only);
+        let depth_target_read_only = pipeline
+            .depth_stencil_state
+            .as_ref()
+            .map_or(self.depth_target_read_only, |ds| ds.read_only);
 
         if self.depth_target_read_only != depth_target_read_only {
             self.depth_target_read_only = depth_target_read_only;
-            self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
+            self.dirty_flag
+                .insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
         }
 
-        self.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::DEPTH_STENCIL_STATE);
+        self.dirty_flag
+            .insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::DEPTH_STENCIL_STATE);
 
         self.graphics_pipeline = Some(pipeline);
     }
@@ -1625,28 +1653,40 @@ impl CommandBufferState {
                 context.VSSetShader(pipeline.vs.as_raw(), ptr::null_mut(), 0);
 
                 if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_PS) {
-                    let ps = pipeline.ps.as_ref().map_or(ptr::null_mut(), |ps| ps.as_raw());
+                    let ps = pipeline
+                        .ps
+                        .as_ref()
+                        .map_or(ptr::null_mut(), |ps| ps.as_raw());
                     context.PSSetShader(ps, ptr::null_mut(), 0);
 
                     self.dirty_flag.remove(DirtyStateFlag::PIPELINE_PS)
                 }
 
                 if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_GS) {
-                    let gs = pipeline.gs.as_ref().map_or(ptr::null_mut(), |gs| gs.as_raw());
+                    let gs = pipeline
+                        .gs
+                        .as_ref()
+                        .map_or(ptr::null_mut(), |gs| gs.as_raw());
                     context.GSSetShader(gs, ptr::null_mut(), 0);
 
                     self.dirty_flag.remove(DirtyStateFlag::PIPELINE_GS)
                 }
 
                 if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_HS) {
-                    let hs = pipeline.hs.as_ref().map_or(ptr::null_mut(), |hs| hs.as_raw());
+                    let hs = pipeline
+                        .hs
+                        .as_ref()
+                        .map_or(ptr::null_mut(), |hs| hs.as_raw());
                     context.HSSetShader(hs, ptr::null_mut(), 0);
 
                     self.dirty_flag.remove(DirtyStateFlag::PIPELINE_HS)
                 }
 
                 if self.dirty_flag.contains(DirtyStateFlag::PIPELINE_DS) {
-                    let ds = pipeline.ds.as_ref().map_or(ptr::null_mut(), |ds| ds.as_raw());
+                    let ds = pipeline
+                        .ds
+                        .as_ref()
+                        .map_or(ptr::null_mut(), |ds| ds.as_raw());
                     context.DSSetShader(ds, ptr::null_mut(), 0);
 
                     self.dirty_flag.remove(DirtyStateFlag::PIPELINE_DS)
@@ -1678,7 +1718,8 @@ impl CommandBufferState {
     }
 }
 
-type PerConstantBufferVec<T> = ArrayVec<[T; d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _]>;
+type PerConstantBufferVec<T> =
+    ArrayVec<[T; d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _]>;
 
 fn generate_graphics_dynamic_constant_buffer_offsets<'a>(
     bindings: impl IntoIterator<Item = &'a pso::DescriptorSetLayoutBinding>,
@@ -1693,9 +1734,10 @@ fn generate_graphics_dynamic_constant_buffer_offsets<'a>(
     for binding in bindings.into_iter() {
         match binding.ty {
             pso::DescriptorType::Buffer {
-                format: pso::BufferDescriptorFormat::Structured {
-                    dynamic_offset: true
-                },
+                format:
+                    pso::BufferDescriptorFormat::Structured {
+                        dynamic_offset: true,
+                    },
                 ty: pso::BufferDescriptorType::Uniform,
             } => {
                 let offset = offset_iter.next().unwrap();
@@ -1704,30 +1746,38 @@ fn generate_graphics_dynamic_constant_buffer_offsets<'a>(
                     vs_offsets.push(offset / 16)
                 };
 
-                if binding.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
+                if binding
+                    .stage_flags
+                    .contains(pso::ShaderStageFlags::FRAGMENT)
+                {
                     fs_offsets.push(offset / 16)
                 };
                 exists_dynamic_constant_buffer = true;
             }
             pso::DescriptorType::Buffer {
-                format: pso::BufferDescriptorFormat::Structured {
-                    dynamic_offset: false
-                },
+                format:
+                    pso::BufferDescriptorFormat::Structured {
+                        dynamic_offset: false,
+                    },
                 ty: pso::BufferDescriptorType::Uniform,
             } => {
                 if binding.stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
                     vs_offsets.push(0)
                 };
 
-                if binding.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
+                if binding
+                    .stage_flags
+                    .contains(pso::ShaderStageFlags::FRAGMENT)
+                {
                     fs_offsets.push(0)
                 };
             }
             pso::DescriptorType::Buffer {
                 ty: pso::BufferDescriptorType::Storage { .. },
-                format: pso::BufferDescriptorFormat::Structured {
-                    dynamic_offset: true
-                },
+                format:
+                    pso::BufferDescriptorFormat::Structured {
+                        dynamic_offset: true,
+                    },
             } => {
                 // TODO: Storage buffer offsets require new buffer views with correct sizes.
                 //       Might also require D3D11_BUFFEREX_SRV to act like RBA is happening.
@@ -1757,9 +1807,10 @@ fn generate_compute_dynamic_constant_buffer_offsets<'a>(
     for binding in bindings.into_iter() {
         match binding.ty {
             pso::DescriptorType::Buffer {
-                format: pso::BufferDescriptorFormat::Structured {
-                    dynamic_offset: true
-                },
+                format:
+                    pso::BufferDescriptorFormat::Structured {
+                        dynamic_offset: true,
+                    },
                 ty: pso::BufferDescriptorType::Uniform,
             } => {
                 let offset = offset_iter.next().unwrap();
@@ -1771,9 +1822,10 @@ fn generate_compute_dynamic_constant_buffer_offsets<'a>(
                 exists_dynamic_constant_buffer = true;
             }
             pso::DescriptorType::Buffer {
-                format: pso::BufferDescriptorFormat::Structured {
-                    dynamic_offset: false
-                },
+                format:
+                    pso::BufferDescriptorFormat::Structured {
+                        dynamic_offset: false,
+                    },
                 ty: pso::BufferDescriptorType::Uniform,
             } => {
                 if binding.stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
@@ -1782,9 +1834,10 @@ fn generate_compute_dynamic_constant_buffer_offsets<'a>(
             }
             pso::DescriptorType::Buffer {
                 ty: pso::BufferDescriptorType::Storage { .. },
-                format: pso::BufferDescriptorFormat::Structured {
-                    dynamic_offset: true
-                },
+                format:
+                    pso::BufferDescriptorFormat::Structured {
+                        dynamic_offset: true,
+                    },
             } => {
                 // TODO: Storage buffer offsets require new buffer views with correct sizes.
                 //       Might also require D3D11_BUFFEREX_SRV to act like RBA is happening.
@@ -1846,8 +1899,7 @@ impl CommandBuffer {
     ) -> Self {
         let (context, context1) = if let Some(device1) = device1 {
             let mut context1: *mut d3d11_1::ID3D11DeviceContext1 = ptr::null_mut();
-            let hr =
-                unsafe { device1.CreateDeferredContext1(0, &mut context1 as *mut *mut _) };
+            let hr = unsafe { device1.CreateDeferredContext1(0, &mut context1 as *mut *mut _) };
             assert_eq!(hr, winerror::S_OK);
 
             let context1 = unsafe { ComPtr::from_raw(context1) };
@@ -1856,8 +1908,7 @@ impl CommandBuffer {
             (context, Some(context1))
         } else {
             let mut context: *mut d3d11::ID3D11DeviceContext = ptr::null_mut();
-            let hr =
-                unsafe { device.CreateDeferredContext(0, &mut context as *mut *mut _) };
+            let hr = unsafe { device.CreateDeferredContext(0, &mut context as *mut *mut _) };
             assert_eq!(hr, winerror::S_OK);
 
             let context = unsafe { ComPtr::from_raw(context) };
@@ -1966,17 +2017,17 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         self.context.VSSetConstantBuffers(
             d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1,
             1,
-            &raw_push_constant_buffer as *const _
+            &raw_push_constant_buffer as *const _,
         );
         self.context.PSSetConstantBuffers(
             d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1,
             1,
-            &raw_push_constant_buffer as *const _
+            &raw_push_constant_buffer as *const _,
         );
         self.context.CSSetConstantBuffers(
             d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1,
             1,
-            &raw_push_constant_buffer as *const _
+            &raw_push_constant_buffer as *const _,
         );
     }
 
@@ -2241,11 +2292,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         self.cache.bind(&self.context);
     }
 
-    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(&mut self, buffer: &Buffer, sub: buffer::SubRange, ty: IndexType) {
         self.context.IASetIndexBuffer(
-            ibv.buffer.internal.raw,
-            conv::map_index_type(ibv.index_type),
-            ibv.range.offset as u32,
+            buffer.internal.raw,
+            conv::map_index_type(ty),
+            sub.offset as u32,
         );
     }
 
@@ -2407,7 +2458,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             let (vs_offsets, fs_offsets) = generate_graphics_dynamic_constant_buffer_offsets(
                 &*set.layout.bindings,
                 &mut offset_iter,
-                self.context1.is_some()
+                self.context1.is_some(),
             );
 
             if let Some(rd) = info.registers.vs.c.as_some() {
@@ -2421,7 +2472,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                         let null_cbuf = [ptr::null_mut::<d3d11::ID3D11Buffer>()];
                         context1.VSSetConstantBuffers(start_slot, 1, &null_cbuf as *const _);
                         if num_buffers > 1 {
-                            context1.VSSetConstantBuffers(start_slot + num_buffers - 1, 1, &null_cbuf as *const _);
+                            context1.VSSetConstantBuffers(
+                                start_slot + num_buffers - 1,
+                                1,
+                                &null_cbuf as *const _,
+                            );
                         }
                     }
 
@@ -2438,7 +2493,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     self.context.VSSetConstantBuffers(
                         start_slot,
                         num_buffers,
-                        constant_buffers as *const *mut _
+                        constant_buffers as *const *mut _,
                     );
                 }
             }
@@ -2468,7 +2523,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                         let null_cbuf = [ptr::null_mut::<d3d11::ID3D11Buffer>()];
                         context1.PSSetConstantBuffers(start_slot, 1, &null_cbuf as *const _);
                         if num_buffers > 1 {
-                            context1.PSSetConstantBuffers(start_slot + num_buffers - 1, 1, &null_cbuf as *const _);
+                            context1.PSSetConstantBuffers(
+                                start_slot + num_buffers - 1,
+                                1,
+                                &null_cbuf as *const _,
+                            );
                         }
                     }
 
@@ -2483,7 +2542,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     self.context.PSSetConstantBuffers(
                         start_slot,
                         num_buffers,
-                        constant_buffers as *const *mut _
+                        constant_buffers as *const *mut _,
                     );
                 }
             }
@@ -2504,15 +2563,20 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
             // UAVs going to the graphics pipeline are always treated as pixel shader bindings.
             if let Some(rd) = info.registers.ps.u.as_some() {
-            	// We bind UAVs in inverse order from the top to prevent invalidation
-            	// when the render target count changes.
+                // We bind UAVs in inverse order from the top to prevent invalidation
+                // when the render target count changes.
                 for idx in (0..(rd.count)).rev() {
                     let ptr = (*set.handles.offset(rd.pool_offset as isize + idx as isize)).0;
-                    let uav_register = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - 1 - rd.res_index as u32 - idx as u32;
+                    let uav_register = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT
+                        - 1
+                        - rd.res_index as u32
+                        - idx as u32;
                     self.cache.uavs[uav_register as usize] = ptr as *mut _;
                 }
                 self.cache.uav_len = (rd.res_index + rd.count) as u32;
-                self.cache.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
+                self.cache
+                    .dirty_flag
+                    .insert(DirtyStateFlag::RENDER_TARGETS_AND_UAVS);
             }
         }
 
@@ -2588,7 +2652,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             let cs_offsets = generate_compute_dynamic_constant_buffer_offsets(
                 &*set.layout.bindings,
                 &mut offset_iter,
-                self.context1.is_some()
+                self.context1.is_some(),
             );
 
             if let Some(rd) = info.registers.cs.c.as_some() {
@@ -2602,7 +2666,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                         let null_cbuf = [ptr::null_mut::<d3d11::ID3D11Buffer>()];
                         context1.CSSetConstantBuffers(start_slot, 1, &null_cbuf as *const _);
                         if num_buffers > 1 {
-                            context1.CSSetConstantBuffers(start_slot + num_buffers - 1, 1, &null_cbuf as *const _);
+                            context1.CSSetConstantBuffers(
+                                start_slot + num_buffers - 1,
+                                1,
+                                &null_cbuf as *const _,
+                            );
                         }
                     }
 
@@ -2619,7 +2687,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     self.context.CSSetConstantBuffers(
                         start_slot,
                         num_buffers,
-                        constant_buffers as *const *mut _
+                        constant_buffers as *const *mut _,
                     );
                 }
             }
@@ -2793,10 +2861,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _stride: u32,
     ) {
         assert_eq!(draw_count, 1, "DX11 doesn't support MULTI_DRAW_INDIRECT");
-        self.context.DrawInstancedIndirect(
-            buffer.internal.raw,
-            offset as _,
-        );
+        self.context
+            .DrawInstancedIndirect(buffer.internal.raw, offset as _);
     }
 
     unsafe fn draw_indexed_indirect(
@@ -2807,10 +2873,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _stride: u32,
     ) {
         assert_eq!(draw_count, 1, "DX11 doesn't support MULTI_DRAW_INDIRECT");
-        self.context.DrawIndexedInstancedIndirect(
-            buffer.internal.raw,
-            offset as _,
-        );
+        self.context
+            .DrawIndexedInstancedIndirect(buffer.internal.raw, offset as _);
     }
 
     unsafe fn draw_indirect_count(
@@ -3045,10 +3109,13 @@ impl MemoryInvalidate {
         context: &ComPtr<d3d11::ID3D11DeviceContext>,
         buffer: *mut d3d11::ID3D11Buffer,
         host_range: Range<u64>,
-        buffer_range: Range<u64>
+        buffer_range: Range<u64>,
     ) {
         // Range<u64> doesn't impl `len` for some bizzare reason relating to underflow
-        debug_assert_eq!(host_range.end - host_range.start, buffer_range.end - buffer_range.start);
+        debug_assert_eq!(
+            host_range.end - host_range.start,
+            buffer_range.end - buffer_range.start
+        );
 
         unsafe {
             context.CopySubresourceRegion(
@@ -3266,7 +3333,11 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
     }
 
     unsafe fn allocate_one(&mut self, _level: command::Level) -> CommandBuffer {
-        CommandBuffer::create_deferred(&self.device, self.device1.as_deref(), Arc::clone(&self.internal))
+        CommandBuffer::create_deferred(
+            &self.device,
+            self.device1.as_deref(),
+            Arc::clone(&self.internal),
+        )
     }
 
     unsafe fn free<I>(&mut self, _cbufs: I)
@@ -3408,7 +3479,7 @@ pub struct InternalImage {
     /// Contains RTVs for all subresources
     render_target_views: Vec<ComPtr<d3d11::ID3D11RenderTargetView>>,
 
-    debug_name: Option<String>
+    debug_name: Option<String>,
 }
 
 impl InternalImage {
@@ -3496,7 +3567,7 @@ impl Clone for ImageView {
             dsv_handle: self.dsv_handle.clone(),
             rodsv_handle: self.rodsv_handle.clone(),
             uav_handle: self.uav_handle.clone(),
-            owned: false
+            owned: false,
         }
     }
 }
@@ -3674,7 +3745,12 @@ impl<T> MultiStageData<RegisterData<T>> {
 }
 
 impl MultiStageData<RegisterData<DescriptorIndex>> {
-    fn add_content_many(&mut self, content: DescriptorContent, stages: pso::ShaderStageFlags, count: DescriptorIndex) {
+    fn add_content_many(
+        &mut self,
+        content: DescriptorContent,
+        stages: pso::ShaderStageFlags,
+        count: DescriptorIndex,
+    ) {
         if stages.contains(pso::ShaderStageFlags::VERTEX) {
             self.vs.add_content_many(content, count);
         }

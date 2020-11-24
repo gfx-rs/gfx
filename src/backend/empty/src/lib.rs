@@ -728,7 +728,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn bind_index_buffer(&mut self, _: hal::buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(
+        &mut self,
+        _: &Buffer,
+        _: hal::buffer::SubRange,
+        _: hal::IndexType,
+    ) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 

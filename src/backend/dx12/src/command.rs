@@ -1954,16 +1954,21 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
-        let buffer = ibv.buffer.expect_bound();
-        let format = match ibv.index_type {
+    unsafe fn bind_index_buffer(
+        &mut self,
+        buffer: &r::Buffer,
+        sub: buffer::SubRange,
+        ty: IndexType,
+    ) {
+        let buffer = buffer.expect_bound();
+        let format = match ty {
             IndexType::U16 => dxgiformat::DXGI_FORMAT_R16_UINT,
             IndexType::U32 => dxgiformat::DXGI_FORMAT_R32_UINT,
         };
         let location = buffer.resource.gpu_virtual_address();
         self.raw.set_index_buffer(
-            location + ibv.range.offset,
-            ibv.range.size_to(buffer.requirements.size) as u32,
+            location + sub.offset,
+            sub.size_to(buffer.requirements.size) as u32,
             format,
         );
     }

@@ -906,11 +906,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
-        let (raw_buffer, range) = ibv.buffer.as_bound();
+    unsafe fn bind_index_buffer(
+        &mut self,
+        buffer: &n::Buffer,
+        sub: buffer::SubRange,
+        ty: hal::IndexType,
+    ) {
+        let (raw_buffer, parent_range) = buffer.as_bound();
 
-        self.cache.index_type_range =
-            Some((ibv.index_type, crate::resolve_sub_range(&ibv.range, range)));
+        self.cache.index_type_range = Some((ty, crate::resolve_sub_range(&sub, parent_range)));
         self.data.push_cmd(Command::BindIndexBuffer(raw_buffer));
     }
 

@@ -13,7 +13,8 @@ use hal::{
     pso, query,
     queue::Submission,
     window::{PresentError, PresentationSurface, Suboptimal, SwapImageIndex},
-    DrawCount, IndexCount, InstanceCount, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
+    DrawCount, IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset,
+    WorkGroupCount,
 };
 
 use crate::Backend;
@@ -192,7 +193,12 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         todo!()
     }
 
-    unsafe fn bind_index_buffer(&mut self, _view: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(
+        &mut self,
+        _buffer: &<Backend as hal::Backend>::Buffer,
+        _sub: buffer::SubRange,
+        _ty: IndexType,
+    ) {
         todo!()
     }
 

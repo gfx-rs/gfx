@@ -4,8 +4,8 @@ use hal::{
     image,
     pso::{
         BlendDesc, BlendOp, ColorBlendDesc, Comparison, DepthBias, DepthStencilDesc, Face, Factor,
-        FrontFace, InputAssemblerDesc, Multisampling, PolygonMode, Rasterizer, Rect, Sided, State, StencilFace,
-        StencilOp, StencilValue, Viewport
+        FrontFace, InputAssemblerDesc, Multisampling, PolygonMode, Rasterizer, Rect, Sided, State,
+        StencilFace, StencilOp, StencilValue, Viewport,
     },
     IndexType,
 };
@@ -510,7 +510,10 @@ fn map_cull_mode(mode: Face) -> D3D11_CULL_MODE {
     }
 }
 
-pub(crate) fn map_rasterizer_desc(desc: &Rasterizer, multisampling_desc: &Option<Multisampling>) -> D3D11_RASTERIZER_DESC {
+pub(crate) fn map_rasterizer_desc(
+    desc: &Rasterizer,
+    multisampling_desc: &Option<Multisampling>,
+) -> D3D11_RASTERIZER_DESC {
     let bias = match desc.depth_bias {
         //TODO: support dynamic depth bias
         Some(State::Static(db)) => db,
@@ -644,7 +647,10 @@ fn map_blend_targets(
     targets
 }
 
-pub(crate) fn map_blend_desc(desc: &BlendDesc, multisampling: &Option<Multisampling>) -> D3D11_BLEND_DESC {
+pub(crate) fn map_blend_desc(
+    desc: &BlendDesc,
+    multisampling: &Option<Multisampling>,
+) -> D3D11_BLEND_DESC {
     D3D11_BLEND_DESC {
         AlphaToCoverageEnable: multisampling.as_ref().map_or(false, |m| m.alpha_coverage) as _,
         IndependentBlendEnable: TRUE,
@@ -728,8 +734,8 @@ pub(crate) fn map_depth_stencil_desc(
         None => unsafe { mem::zeroed() },
     };
 
-    let stencil_read_only = write_mask == 0 ||
-        (front.StencilDepthFailOp == D3D11_STENCIL_OP_KEEP
+    let stencil_read_only = write_mask == 0
+        || (front.StencilDepthFailOp == D3D11_STENCIL_OP_KEEP
             && front.StencilFailOp == D3D11_STENCIL_OP_KEEP
             && front.StencilPassOp == D3D11_STENCIL_OP_KEEP
             && back.StencilDepthFailOp == D3D11_STENCIL_OP_KEEP
@@ -753,7 +759,7 @@ pub(crate) fn map_depth_stencil_desc(
             BackFace: back,
         },
         stencil_ref,
-        read_only
+        read_only,
     )
 }
 
