@@ -1,11 +1,6 @@
-use ash::version::DeviceV1_0;
-use ash::vk;
+use ash::{version::DeviceV1_0, vk};
 use smallvec::SmallVec;
-use std::borrow::Borrow;
-use std::ffi::CString;
-use std::ops::Range;
-use std::sync::Arc;
-use std::{mem, slice};
+use std::{borrow::Borrow, ffi::CString, mem, ops::Range, slice, sync::Arc};
 
 use inplace_it::inplace_or_alloc_array;
 
@@ -14,8 +9,8 @@ use hal::{
     buffer, command as com,
     format::Aspects,
     image::{Filter, Layout, SubresourceRange},
-    memory, pso, query, DrawCount, IndexCount, InstanceCount, TaskCount, VertexCount, VertexOffset,
-    WorkGroupCount,
+    memory, pso, query, DrawCount, IndexCount, IndexType, InstanceCount, TaskCount, VertexCount,
+    VertexOffset, WorkGroupCount,
 };
 
 #[derive(Debug)]
@@ -525,12 +520,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         });
     }
 
-    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(
+        &mut self,
+        buffer: &n::Buffer,
+        sub: buffer::SubRange,
+        ty: IndexType,
+    ) {
         self.device.raw.cmd_bind_index_buffer(
             self.raw,
-            ibv.buffer.raw,
-            ibv.range.offset,
-            conv::map_index_type(ibv.index_type),
+            buffer.raw,
+            sub.offset,
+            conv::map_index_type(ty),
         );
     }
 

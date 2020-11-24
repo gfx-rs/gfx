@@ -1314,16 +1314,16 @@ impl<B: hal::Backend> Scene<B> {
                                     ref range,
                                     index_type,
                                 } => {
-                                    let view = b::IndexBufferView {
-                                        buffer: &resources
-                                            .buffers
-                                            .get(buffer)
-                                            .expect(&format!("Missing index buffer: {}", buffer))
-                                            .handle,
-                                        range: range.clone(),
+                                    let buffer = &resources
+                                        .buffers
+                                        .get(buffer)
+                                        .expect(&format!("Missing index buffer: {}", buffer))
+                                        .handle;
+                                    command_buf.bind_index_buffer(
+                                        buffer,
+                                        range.clone(),
                                         index_type,
-                                    };
-                                    command_buf.bind_index_buffer(view);
+                                    );
                                 }
                                 Dc::BindVertexBuffers(ref buffers) => {
                                     let buffers_raw = buffers.iter().map(|&(ref name, ref sub)| {

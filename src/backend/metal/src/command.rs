@@ -3380,13 +3380,18 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         retained_textures.extend(dst_cubish);
     }
 
-    unsafe fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
-        let (raw, range) = view.buffer.as_bound();
-        assert!(range.start + view.range.offset + view.range.size.unwrap_or(0) <= range.end); // conservative
+    unsafe fn bind_index_buffer(
+        &mut self,
+        buffer: &native::Buffer,
+        sub: buffer::SubRange,
+        ty: IndexType,
+    ) {
+        let (raw, range) = buffer.as_bound();
+        assert!(range.start + sub.offset + sub.size.unwrap_or(0) <= range.end); // conservative
         self.state.index_buffer = Some(IndexBuffer {
             buffer: AsNative::from(raw),
-            offset: (range.start + view.range.offset) as _,
-            stride: match view.index_type {
+            offset: (range.start + sub.offset) as _,
+            stride: match ty {
                 IndexType::U16 => 2,
                 IndexType::U32 => 4,
             },

@@ -176,7 +176,10 @@ impl w::PresentationSurface<Backend> for Surface {
         // Disable automatic Alt+Enter handling by DXGI.
         const DXGI_MWA_NO_WINDOW_CHANGES: u32 = 1;
         const DXGI_MWA_NO_ALT_ENTER: u32 = 2;
-        self.factory.MakeWindowAssociation(self.wnd_handle, DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER);
+        self.factory.MakeWindowAssociation(
+            self.wnd_handle,
+            DXGI_MWA_NO_WINDOW_CHANGES | DXGI_MWA_NO_ALT_ENTER,
+        );
 
         self.presentation = Some(Presentation {
             swapchain: device.wrap_swapchain(swapchain, &config),
