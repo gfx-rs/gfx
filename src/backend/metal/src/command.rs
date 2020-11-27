@@ -3456,7 +3456,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let sin = self.state.pending_subpasses.pop().unwrap();
 
         self.state.render_pso_is_compatible = match self.state.render_pso {
-            Some(ref ps) => ps.formats == sin.formats,
+            Some(ref ps) => {
+                ps.formats == sin.formats && self.state.target.samples == sin.sample_count
+            }
             None => false,
         };
         self.state.target_aspects = sin.combined_aspects;
@@ -3514,8 +3516,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        self.state.render_pso_is_compatible =
-            pipeline.attachment_formats == self.state.target_formats;
+        self.state.render_pso_is_compatible = pipeline.attachment_formats
+            == self.state.target_formats
+            && self.state.target_samples == pipeline.samples;
         let set_pipeline = match self.state.render_pso {
             Some(ref ps) if ps.raw.as_ptr() == pipeline.raw.as_ptr() => false,
             Some(ref mut ps) => {
