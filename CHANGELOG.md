@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx11-0.6.16 (27-11-2020)
+  - expose proper max bound descriptor set limit 
+
 ### backend-metal-0.6.5 (27-11-2020)
   - fix render pass compatibility with multi-sampled formats
 
