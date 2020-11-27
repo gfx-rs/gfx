@@ -1094,7 +1094,7 @@ impl d::Device<B> for Device {
             if let Err(err) = self.share.check() {
                 //TODO: attachments have been consumed
                 panic!(
-                    "Error creating FBO: {:?} for {:?}", /* with attachments {:?}"*/
+                    "Error creating FBO: {:?} for {:?}", /* with attachments */
                     err, pass /*, attachments*/
                 );
             }

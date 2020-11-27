@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.6.5 (27-11-2020)
+  - fix render pass compatibility with multi-sampled formats
+
 ### backend-gl-0.6.1 (05-11-2020)
   - fix descriptor writes
   - fall back from persistent to emulated mapping

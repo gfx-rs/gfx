@@ -279,16 +279,23 @@ impl Device {
     /// This is a temporary workaround for https://github.com/KhronosGroup/SPIRV-Cross/issues/1512.
     ///
     /// This workaround also exists under the same name in the DX11 backend.
-    pub(crate) fn introspect_spirv_vertex_semantic_remapping(raw_data: &[u32]) -> Result<auxil::FastHashMap<u32, Option<(u32, u32)>>, hal::device::ShaderError> {
+    pub(crate) fn introspect_spirv_vertex_semantic_remapping(
+        raw_data: &[u32],
+    ) -> Result<auxil::FastHashMap<u32, Option<(u32, u32)>>, hal::device::ShaderError> {
         // This is inefficient as we already parse it once before. This is a temporary workaround only called
         // on vertex shaders. If this becomes permanent or shows up in profiles, deduplicate these as first course of action.
         let ast = Self::parse_spirv(raw_data)?;
 
         let mut map = auxil::FastHashMap::default();
 
-        let inputs = ast.get_shader_resources().map_err(gen_query_error)?.stage_inputs;
+        let inputs = ast
+            .get_shader_resources()
+            .map_err(gen_query_error)?
+            .stage_inputs;
         for input in inputs {
-            let idx = ast.get_decoration(input.id, spirv::Decoration::Location).map_err(gen_query_error)?;
+            let idx = ast
+                .get_decoration(input.id, spirv::Decoration::Location)
+                .map_err(gen_query_error)?;
 
             let ty = ast.get_type(input.type_id).map_err(gen_query_error)?;
 
@@ -298,16 +305,24 @@ impl Device {
                 | spirv::Type::UInt { columns, .. }
                 | spirv::Type::Half { columns, .. }
                 | spirv::Type::Float { columns, .. }
-                | spirv::Type::Double { columns, .. } if columns > 1 => {
+                | spirv::Type::Double { columns, .. }
+                    if columns > 1 =>
+                {
                     for col in 0..columns {
                         if let Some(_) = map.insert(idx + col, Some((idx, col))) {
-                            return Err(hal::device::ShaderError::CompilationFailed(format!("Shader has overlapping input attachments at location {}", idx)))
+                            return Err(hal::device::ShaderError::CompilationFailed(format!(
+                                "Shader has overlapping input attachments at location {}",
+                                idx
+                            )));
                         }
                     }
                 }
                 _ => {
                     if let Some(_) = map.insert(idx, None) {
-                        return Err(hal::device::ShaderError::CompilationFailed(format!("Shader has overlapping input attachments at location {}", idx)))
+                        return Err(hal::device::ShaderError::CompilationFailed(format!(
+                            "Shader has overlapping input attachments at location {}",
+                            idx
+                        )));
                     }
                 }
             }
@@ -520,8 +535,14 @@ impl Device {
 
                 let execution_model = conv::map_stage(stage);
                 let shader_model = hlsl::ShaderModel::V5_1;
-                let shader_code =
-                    Self::translate_spirv(&mut ast, shader_model, layout, stage, features, source.entry)?;
+                let shader_code = Self::translate_spirv(
+                    &mut ast,
+                    shader_model,
+                    layout,
+                    stage,
+                    features,
+                    source.entry,
+                )?;
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
                 let real_name = ast
@@ -1903,7 +1924,10 @@ impl d::Device<B> for Device {
             // this information, so just pretend like this workaround never existed and hope
             // for the best.
             if let crate::resource::ShaderModule::Spirv(ref spv) = vs.module {
-                Some(Self::introspect_spirv_vertex_semantic_remapping(spv).map_err(pso::CreationError::Shader)?)
+                Some(
+                    Self::introspect_spirv_vertex_semantic_remapping(spv)
+                        .map_err(pso::CreationError::Shader)?,
+                )
             } else {
                 None
             }
@@ -1938,25 +1962,26 @@ impl d::Device<B> for Device {
         }
 
         // See [`introspect_spirv_vertex_semantic_remapping`] for details of why this is needed.
-        let semantics: Vec<_> = attributes.iter().map(|attrib| {
-            let semantics = vertex_semantic_remapping
-                .as_ref()
-                .and_then(|map| {
-                    map.get(&attrib.location)
-                });
-            match semantics {
-                Some(Some((major, minor))) => {
-                    let name = std::borrow::Cow::Owned(format!("TEXCOORD{}_\0", major));
-                    let location = *minor;
-                    (name, location)
+        let semantics: Vec<_> = attributes
+            .iter()
+            .map(|attrib| {
+                let semantics = vertex_semantic_remapping
+                    .as_ref()
+                    .and_then(|map| map.get(&attrib.location));
+                match semantics {
+                    Some(Some((major, minor))) => {
+                        let name = std::borrow::Cow::Owned(format!("TEXCOORD{}_\0", major));
+                        let location = *minor;
+                        (name, location)
+                    }
+                    _ => {
+                        let name = std::borrow::Cow::Borrowed("TEXCOORD\0");
+                        let location = attrib.location;
+                        (name, location)
+                    }
                 }
-                _ => {
-                    let name = std::borrow::Cow::Borrowed("TEXCOORD\0");
-                    let location = attrib.location;
-                    (name, location)
-                }
-            }
-        }).collect();
+            })
+            .collect();
 
         // Define input element descriptions
         let input_element_descs = attributes
@@ -2526,15 +2551,14 @@ impl d::Device<B> for Device {
 
         let alloc_info = self.raw.clone().GetResourceAllocationInfo(0, 1, &desc);
 
-        let target_usage = image::Usage::COLOR_ATTACHMENT
-            | image::Usage::DEPTH_STENCIL_ATTACHMENT;
+        let target_usage = image::Usage::COLOR_ATTACHMENT | image::Usage::DEPTH_STENCIL_ATTACHMENT;
 
-        let target_features = format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
+        let target_features =
+            format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
 
         // Image usages which require RT/DS heap due to internal implementation.
-        let needs_target_usage =
-            usage.intersects(target_usage)
-                || (usage.contains(image::Usage::TRANSFER_DST) && features.intersects(target_features));
+        let needs_target_usage = usage.intersects(target_usage)
+            || (usage.contains(image::Usage::TRANSFER_DST) && features.intersects(target_features));
 
         let type_mask_shift = if self.private_caps.heterogeneous_resource_heaps {
             MEM_TYPE_UNIVERSAL_SHIFT
