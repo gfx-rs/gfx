@@ -266,6 +266,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
             d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
         max_descriptor_set_uniform_buffers_dynamic: max_constant_buffers as _,
         max_descriptor_set_storage_buffers_dynamic: 0, // TODO: Implement dynamic offsets for storage buffers
+        max_bound_descriptor_sets: pso::DescriptorSetIndex::MAX,
         max_texel_elements: max_texture_uv_dimension as _, //TODO
         max_patch_size: d3d11::D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT as _,
         max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
