@@ -262,6 +262,7 @@ pub struct GraphicsPipeline {
     pub(crate) vertex_buffers: VertexBufferVec,
     /// Tracked attachment formats
     pub(crate) attachment_formats: SubpassFormats,
+    pub(crate) samples: image::NumSamples,
 }
 
 unsafe impl Send for GraphicsPipeline {}
