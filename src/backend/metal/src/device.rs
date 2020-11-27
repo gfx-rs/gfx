@@ -714,15 +714,20 @@ impl Device {
             n::ShaderModule::Compiled(ref info) => info,
             n::ShaderModule::Raw(ref data) => {
                 let compiler_options = &mut match primitive_class {
-                    MTLPrimitiveTopologyClass::Point => layout.shader_compiler_options_point.clone(),
+                    MTLPrimitiveTopologyClass::Point => {
+                        layout.shader_compiler_options_point.clone()
+                    }
                     _ => layout.shader_compiler_options.clone(),
                 };
-                compiler_options.entry_point = Some((ep.entry.to_string(), match stage {
-                    ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
-                    ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
-                    ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
-                    _ => return Err(pso::CreationError::UnsupportedPipeline),
-                }));
+                compiler_options.entry_point = Some((
+                    ep.entry.to_string(),
+                    match stage {
+                        ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
+                        ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
+                        ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
+                        _ => return Err(pso::CreationError::UnsupportedPipeline),
+                    },
+                ));
                 match pipeline_cache {
                     Some(cache) => {
                         module_map = cache
@@ -1453,16 +1458,26 @@ impl hal::device::Device<Backend> for Device {
         }
 
         // Vertex shader
-        let (vs_lib, vs_function, _, enable_rasterization) =
-            self.load_shader(vs, pipeline_layout, primitive_class, cache, ShaderStage::Vertex)?;
+        let (vs_lib, vs_function, _, enable_rasterization) = self.load_shader(
+            vs,
+            pipeline_layout,
+            primitive_class,
+            cache,
+            ShaderStage::Vertex,
+        )?;
         pipeline.set_vertex_function(Some(&vs_function));
 
         // Fragment shader
         let fs_function;
         let fs_lib = match pipeline_desc.fragment {
             Some(ref ep) => {
-                let (lib, fun, _, _) =
-                    self.load_shader(ep, pipeline_layout, primitive_class, cache, ShaderStage::Fragment)?;
+                let (lib, fun, _, _) = self.load_shader(
+                    ep,
+                    pipeline_layout,
+                    primitive_class,
+                    cache,
+                    ShaderStage::Fragment,
+                )?;
                 fs_function = fun;
                 pipeline.set_fragment_function(Some(&fs_function));
                 Some(lib)
