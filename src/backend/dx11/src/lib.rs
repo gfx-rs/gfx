@@ -457,9 +457,7 @@ impl hal::Instance<Backend> for Instance {
                 }
             };
 
-        while let Ok((adapter, info)) =
-            dxgi::get_adapter(idx, self.factory.as_raw(), self.dxgi_version)
-        {
+        while let Ok(adapter) = dxgi::get_adapter(idx, self.factory.as_raw(), self.dxgi_version) {
             idx += 1;
 
             use hal::memory::Properties;
@@ -516,6 +514,7 @@ impl hal::Instance<Backend> for Instance {
                 memory_heaps: vec![!0, !0],
             };
 
+            let info = dxgi::get_adapter_desc(&adapter, &device, self.dxgi_version);
             let limits = get_limits(feature_level);
             let features = get_features(device.clone(), feature_level);
             let format_properties = get_format_properties(device.clone());

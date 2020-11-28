@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx11-0.6.17 (28-11-2020)
+  - determine GPU type when possible
+
 ### backend-dx11-0.6.16 (27-11-2020)
   - expose proper max bound descriptor set limit 
 
