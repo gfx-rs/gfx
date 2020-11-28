@@ -1085,6 +1085,11 @@ impl Device {
         //TODO: proper error type?
         let non_srgb_format = conv::map_format_nosrgb(config.format).unwrap();
 
+        let mut flags = dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+        if config.present_mode.contains(w::PresentMode::IMMEDIATE) {
+            flags |= dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+        }
+
         // TODO: double-check values
         let desc = dxgi1_2::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: dxgi1_2::DXGI_ALPHA_MODE_IGNORE,
@@ -1092,7 +1097,7 @@ impl Device {
             Width: config.extent.width,
             Height: config.extent.height,
             Format: non_srgb_format,
-            Flags: dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT,
+            Flags: flags,
             BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: 1,

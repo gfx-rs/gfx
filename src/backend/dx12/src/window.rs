@@ -2,7 +2,8 @@ use std::{borrow::Borrow, fmt, mem, os::raw::c_void};
 
 use winapi::{
     shared::{
-        dxgi, dxgi1_4, dxgitype,
+        dxgi, dxgi1_4, dxgi1_5, dxgitype,
+        minwindef::{BOOL, FALSE, TRUE},
         windef::{HWND, RECT},
         winerror,
     },
@@ -27,6 +28,7 @@ struct Presentation {
     swapchain: Swapchain,
     format: f::Format,
     size: w::Extent2D,
+    mode: w::PresentMode,
 }
 
 pub struct Surface {
@@ -60,7 +62,13 @@ impl Surface {
             return Err(w::PresentError::OutOfDate);
         }
 
-        sc.inner.Present(1, 0);
+        let (interval, flags) = match present.mode {
+            w::PresentMode::IMMEDIATE => (0, dxgi::DXGI_PRESENT_ALLOW_TEARING),
+            w::PresentMode::FIFO => (1, 0),
+            _ => (1, 0), // Surface was created with an unsupported present mode, fall back to FIFO
+        };
+
+        sc.inner.Present(interval, flags);
         Ok(())
     }
 }
@@ -85,8 +93,31 @@ impl w::Surface<Backend> for Surface {
             })
         };
 
+        let allow_tearing = unsafe {
+            let (f5, hr) = self.factory.cast::<dxgi1_5::IDXGIFactory5>();
+            if winerror::SUCCEEDED(hr) {
+                let mut allow_tearing: BOOL = FALSE;
+                let hr = f5.CheckFeatureSupport(
+                    dxgi1_5::DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+                    &mut allow_tearing as *mut _ as *mut _,
+                    mem::size_of::<BOOL>() as _,
+                );
+
+                f5.destroy();
+
+                winerror::SUCCEEDED(hr) && allow_tearing == TRUE
+            } else {
+                false
+            }
+        };
+
+        let mut present_modes = w::PresentMode::FIFO;
+        if allow_tearing {
+            present_modes |= w::PresentMode::IMMEDIATE;
+        }
+
         w::SurfaceCapabilities {
-            present_modes: w::PresentMode::FIFO,                  //TODO
+            present_modes,
             composite_alpha_modes: w::CompositeAlphaMode::OPAQUE, //TODO
             image_count: 2..=16, // we currently use a flip effect which supports 2..=16 buffers
             current_extent,
@@ -152,13 +183,18 @@ impl w::PresentationSurface<Backend> for Surface {
                 // can't have image resources in flight used by GPU
                 device.wait_idle().unwrap();
 
+                let mut flags = dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+                if config.present_mode.contains(w::PresentMode::IMMEDIATE) {
+                    flags |= dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+                }
+
                 let inner = present.swapchain.release_resources();
                 let result = inner.ResizeBuffers(
                     config.image_count,
                     config.extent.width,
                     config.extent.height,
                     conv::map_format_nosrgb(config.format).unwrap(),
-                    dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT,
+                    flags,
                 );
                 if result != winerror::S_OK {
                     error!("ResizeBuffers failed with 0x{:x}", result as u32);
@@ -185,6 +221,7 @@ impl w::PresentationSurface<Backend> for Surface {
             swapchain: device.wrap_swapchain(swapchain, &config),
             format: config.format,
             size: config.extent,
+            mode: config.present_mode,
         });
         Ok(())
     }
