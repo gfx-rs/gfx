@@ -1,11 +1,13 @@
+# temporary disabled Nightly checks due to
+# https://github.com/rust-lang/rust/issues/79560
 status = [
   "Dependency Check",
   "iOS Stable",
   "MacOS Stable",
-  "MacOS Nightly",
+  #"MacOS Nightly",
   "Android Stable",
   "Ubuntu Stable",
-  "Ubuntu Nightly",
+  #"Ubuntu Nightly",
   "Windows Stable",
-  "Windows Nightly",
+  #"Windows Nightly",
 ]
