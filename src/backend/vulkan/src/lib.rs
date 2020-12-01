@@ -62,7 +62,10 @@ lazy_static! {
             *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2,
         ]
     } else {
-        vec![*KHR_GET_PHYSICAL_DEVICE_PROPERTIES2]
+        vec![
+            DebugUtils::name(),
+            *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2,
+	]
     };
     static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![extensions::khr::Swapchain::name()];
     static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
@@ -131,19 +134,15 @@ pub enum DebugMessenger {
 impl Drop for RawInstance {
     fn drop(&mut self) {
         unsafe {
-            #[cfg(debug_assertions)]
-            {
-                match self.debug_messenger {
-                    Some(DebugMessenger::Utils(ref ext, callback)) => {
-                        ext.destroy_debug_utils_messenger(callback, None)
-                    }
-                    Some(DebugMessenger::Report(ref ext, callback)) => {
-                        ext.destroy_debug_report_callback(callback, None)
-                    }
-                    None => {}
+            match self.debug_messenger {
+                Some(DebugMessenger::Utils(ref ext, callback)) => {
+                    ext.destroy_debug_utils_messenger(callback, None)
                 }
+                Some(DebugMessenger::Report(ref ext, callback)) => {
+                    ext.destroy_debug_report_callback(callback, None)
+                }
+                None => {}
             }
-
             self.inner.destroy_instance(None);
         }
     }
@@ -437,7 +436,6 @@ impl hal::Instance<Backend> for Instance {
                 })
             });
 
-        #[cfg(debug_assertions)]
         let debug_messenger = {
             // make sure VK_EXT_debug_utils is available
             if instance_extensions.iter().any(|props| unsafe {
@@ -451,7 +449,7 @@ impl hal::Instance<Backend> for Instance {
                     .pfn_user_callback(Some(debug_utils_messenger_callback));
                 let handle = unsafe { ext.create_debug_utils_messenger(&info, None) }.unwrap();
                 Some(DebugMessenger::Utils(ext, handle))
-            } else if instance_extensions.iter().any(|props| unsafe {
+            } else if cfg!(debug_assertions) && instance_extensions.iter().any(|props| unsafe {
                 CStr::from_ptr(props.extension_name.as_ptr()) == DebugReport::name()
             }) {
                 let ext = DebugReport::new(entry, &instance);
@@ -464,8 +462,6 @@ impl hal::Instance<Backend> for Instance {
                 None
             }
         };
-        #[cfg(not(debug_assertions))]
-        let debug_messenger = None;
 
         Ok(Instance {
             raw: Arc::new(RawInstance {
