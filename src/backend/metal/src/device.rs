@@ -2141,7 +2141,7 @@ impl hal::device::Device<Backend> for Device {
             for set_layout_binding in binding_iter {
                 let slb = set_layout_binding.borrow();
                 let mut content = n::DescriptorContent::from(slb.ty);
-                total.add(content);
+                total.add_many(content, slb.count as _);
 
                 if slb.immutable_samplers {
                     tmp_samplers.extend(
