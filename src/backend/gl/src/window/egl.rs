@@ -63,21 +63,13 @@ impl hal::Instance<crate::Backend> for Instance {
         //TODO: EGL_SLOW_CONFIG
         let config_attributes = [
             egl::CONFORMANT,
-            egl::OPENGL_BIT,
+            egl::OPENGL_ES2_BIT,
             egl::RENDERABLE_TYPE,
-            egl::OPENGL_ES_BIT,
+            egl::OPENGL_ES2_BIT,
             egl::NATIVE_RENDERABLE,
             egl::TRUE as _,
             egl::SURFACE_TYPE,
             egl::WINDOW_BIT,
-            egl::RED_SIZE,
-            8,
-            egl::GREEN_SIZE,
-            8,
-            egl::BLUE_SIZE,
-            8,
-            egl::ALPHA_SIZE,
-            8,
             egl::NONE,
         ];
         let config = match egl::choose_first_config(display, &config_attributes) {
@@ -146,6 +138,8 @@ impl hal::Instance<crate::Backend> for Instance {
             other => panic!("Unsupported window: {:?}", other),
         };
         let attributes = [
+            egl::RENDER_BUFFER as usize,
+            egl::SINGLE_BUFFER as usize,
             // Always enable sRGB
             egl::GL_COLORSPACE as usize,
             egl::GL_COLORSPACE_SRGB as usize,
