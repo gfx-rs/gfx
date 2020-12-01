@@ -21,7 +21,7 @@ impl Version {
             major: major,
             minor: minor,
             revision: revision,
-            vendor_info: vendor_info,
+            vendor_info,
         }
     }
     /// Create a new OpenGL ES version number
@@ -55,7 +55,7 @@ impl Version {
     /// Note that this function is intentionally lenient in regards to parsing,
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
-    pub fn parse(mut src: String) -> Result<Version, String> {
+    pub fn parse(mut src: &str) -> Result<Version, &str> {
         // TODO: Parse version and optional vendor
         let webgl_sig = "WebGL ";
         let is_webgl = src.contains(webgl_sig);
@@ -72,21 +72,28 @@ impl Version {
         let es_sig = " ES ";
         let is_es = match src.rfind(es_sig) {
             Some(pos) => {
-                src = src[pos + es_sig.len()..].to_string();
+                src = &src[pos + es_sig.len()..];
                 true
             }
             None => false,
         };
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (src[..i].to_string(), src[i + 1..].to_string()),
-            None => (src.to_string(), String::from("")),
+            Some(i) => (&src[..i], src[i + 1..].to_string()),
+            None => (src, String::new()),
         };
 
         // TODO: make this even more lenient so that we can also accept
         // `<major> "." <minor> [<???>]`
         let mut it = version.split('.');
         let major = it.next().and_then(|s| s.parse().ok());
-        let minor = it.next().and_then(|s| s.parse().ok());
+        let minor = it.next().and_then(|s| {
+            let trimmed = if s.starts_with('0') {
+                "0"
+            } else {
+                s.trim_end_matches('0')
+            };
+            trimmed.parse().ok()
+        });
         let revision = it.next().and_then(|s| s.parse().ok());
 
         match (major, minor, revision) {
@@ -261,13 +268,16 @@ const IS_WEBGL: bool = cfg!(target_arch = "wasm32");
 impl Info {
     fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
-        let version = Version::parse(get_string(gl, glow::VERSION).unwrap_or_default()).unwrap();
+        let raw_version = get_string(gl, glow::VERSION).unwrap_or_default();
+        let version = Version::parse(&raw_version).unwrap();
+        let raw_shader_version;
         let shading_language = if IS_WEBGL {
             Version::new_embedded(3, 0, String::from(""))
         } else {
-            Version::parse(get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_default())
-                .unwrap()
+            raw_shader_version = get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_default();
+            Version::parse(&raw_shader_version).unwrap()
         };
+
         // TODO: Use separate path for WebGL extensions in `glow` somehow
         // Perhaps automatic fallback for NUM_EXTENSIONS to EXTENSIONS on native
         let extensions = if IS_WEBGL {
@@ -285,6 +295,7 @@ impl Info {
                 .map(|s| s.to_string())
                 .collect()
         };
+
         Info {
             platform_name,
             version,
@@ -518,55 +529,53 @@ mod tests {
 
     #[test]
     fn test_version_parse() {
-        assert_eq!(Version::parse("1".to_string()), Err("1".to_string()));
-        assert_eq!(Version::parse("1.".to_string()), Err("1.".to_string()));
+        assert_eq!(Version::parse("1"), Err("1"));
+        assert_eq!(Version::parse("1."), Err("1."));
+        assert_eq!(Version::parse("1 h3l1o. W0rld"), Err("1 h3l1o. W0rld"));
+        assert_eq!(Version::parse("1. h3l1o. W0rld"), Err("1. h3l1o. W0rld"));
         assert_eq!(
-            Version::parse("1 h3l1o. W0rld".to_string()),
-            Err("1 h3l1o. W0rld".to_string())
+            Version::parse("1.2.3"),
+            Ok(Version::new(1, 2, Some(3), String::new()))
         );
         assert_eq!(
-            Version::parse("1. h3l1o. W0rld".to_string()),
-            Err("1. h3l1o. W0rld".to_string())
+            Version::parse("1.2"),
+            Ok(Version::new(1, 2, None, String::new()))
         );
         assert_eq!(
-            Version::parse("1.2.3".to_string()),
-            Ok(Version::new(1, 2, Some(3), "".to_string()))
-        );
-        assert_eq!(
-            Version::parse("1.2".to_string()),
-            Ok(Version::new(1, 2, None, "".to_string()))
-        );
-        assert_eq!(
-            Version::parse("1.2 h3l1o. W0rld".to_string()),
+            Version::parse("1.2 h3l1o. W0rld"),
             Ok(Version::new(1, 2, None, "h3l1o. W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("1.2.h3l1o. W0rld".to_string()),
+            Version::parse("1.2.h3l1o. W0rld"),
             Ok(Version::new(1, 2, None, "W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("1.2. h3l1o. W0rld".to_string()),
+            Version::parse("1.2. h3l1o. W0rld"),
             Ok(Version::new(1, 2, None, "h3l1o. W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("1.2.3.h3l1o. W0rld".to_string()),
+            Version::parse("1.2.3.h3l1o. W0rld"),
             Ok(Version::new(1, 2, Some(3), "W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("1.2.3 h3l1o. W0rld".to_string()),
+            Version::parse("1.2.3 h3l1o. W0rld"),
             Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("OpenGL ES 3.1".to_string()),
-            Ok(Version::new_embedded(3, 1, "".to_string()))
+            Version::parse("OpenGL ES 3.1"),
+            Ok(Version::new_embedded(3, 1, String::new()))
         );
         assert_eq!(
-            Version::parse("OpenGL ES 2.0 Google Nexus".to_string()),
+            Version::parse("OpenGL ES 2.0 Google Nexus"),
             Ok(Version::new_embedded(2, 0, "Google Nexus".to_string()))
         );
         assert_eq!(
-            Version::parse("GLSL ES 1.1".to_string()),
-            Ok(Version::new_embedded(1, 1, "".to_string()))
+            Version::parse("GLSL ES 1.1"),
+            Ok(Version::new_embedded(1, 1, String::new()))
+        );
+        assert_eq!(
+            Version::parse("OpenGL ES GLSL ES 3.20"),
+            Ok(Version::new_embedded(3, 2, String::new()))
         );
     }
 }

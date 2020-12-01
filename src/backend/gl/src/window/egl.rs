@@ -20,6 +20,7 @@ pub struct Instance {
     version: (i32, i32),
     config: egl::Config,
     context: egl::Context,
+    supports_native_window: bool,
 }
 
 unsafe impl Send for Instance {}
@@ -50,40 +51,58 @@ impl hal::Instance<crate::Backend> for Instance {
         let display = egl::get_display(egl::DEFAULT_DISPLAY).unwrap();
 
         let version = egl::initialize(display).map_err(|_| hal::UnsupportedBackend)?;
+        let vendor = egl::query_string(Some(display), egl::VENDOR).unwrap();
         let display_extensions = egl::query_string(Some(display), egl::EXTENSIONS).unwrap();
         log::info!(
-            "Display version {:?}, extensions: {:?}",
+            "Display vendor {:?}, version {:?}, extensions: {:?}",
+            vendor,
             version,
             display_extensions
         );
         assert!(version >= (1, 4), "Unable to request GL context");
 
-        //Note: only GLES is supported here. This is required to be able to bind EGL PBuffers to textures.
+        {
+            debug!("Configurations:");
+            let mut configurations = Vec::with_capacity(100);
+            egl::get_configs(display, &mut configurations).unwrap();
+            for &config in configurations.iter() {
+                debug!("\tCONFORMANT=0x{:X}, RENDERABLE=0x{:X}, NATIVE_RENDERABLE=0x{:X}, SURFACE_TYPE=0x{:X}",
+                    egl::get_config_attrib(display, config, egl::CONFORMANT).unwrap(),
+                    egl::get_config_attrib(display, config, egl::RENDERABLE_TYPE).unwrap(),
+                    egl::get_config_attrib(display, config, egl::NATIVE_RENDERABLE).unwrap(),
+                    egl::get_config_attrib(display, config, egl::SURFACE_TYPE).unwrap(),
+                );
+            }
+        }
 
+        //Note: only GLES is supported here.
+        let mut supports_native_window = true;
         //TODO: EGL_SLOW_CONFIG
         let config_attributes = [
             egl::CONFORMANT,
-            egl::OPENGL_BIT,
+            egl::OPENGL_ES2_BIT,
             egl::RENDERABLE_TYPE,
-            egl::OPENGL_ES_BIT,
+            egl::OPENGL_ES2_BIT,
             egl::NATIVE_RENDERABLE,
             egl::TRUE as _,
             egl::SURFACE_TYPE,
             egl::WINDOW_BIT,
-            egl::RED_SIZE,
-            8,
-            egl::GREEN_SIZE,
-            8,
-            egl::BLUE_SIZE,
-            8,
-            egl::ALPHA_SIZE,
-            8,
             egl::NONE,
         ];
         let config = match egl::choose_first_config(display, &config_attributes) {
-            Ok(config) => config.unwrap(),
+            Ok(Some(config)) => config,
+            Ok(None) => {
+                log::warn!("no compatible EGL config found, trying off-screen");
+                supports_native_window = false;
+                let reduced_config_attributes =
+                    [egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT, egl::NONE];
+                match egl::choose_first_config(display, &reduced_config_attributes) {
+                    Ok(Some(config)) => config,
+                    _ => return Err(hal::UnsupportedBackend),
+                }
+            }
             Err(e) => {
-                log::error!("error in matching_config_count: {:?}", e);
+                log::error!("error in choose_first_config: {:?}", e);
                 return Err(hal::UnsupportedBackend);
             }
         };
@@ -91,20 +110,32 @@ impl hal::Instance<crate::Backend> for Instance {
         egl::bind_api(egl::OPENGL_ES_API).unwrap();
 
         //TODO: make it so `Device` == EGL Context
-        let mut context_attributes =
-            vec![egl::CONTEXT_MAJOR_VERSION, 3, egl::CONTEXT_MINOR_VERSION, 1];
+        let gles_version = (3, 1);
+        let mut context_attributes = vec![
+            egl::CONTEXT_MAJOR_VERSION,
+            gles_version.0,
+            egl::CONTEXT_MINOR_VERSION,
+            gles_version.1,
+        ];
         if cfg!(debug_assertions) {
             context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
             context_attributes.push(egl::TRUE as _);
         }
         context_attributes.push(egl::NONE as _);
-        let context = egl::create_context(display, config, None, &context_attributes).unwrap();
+        let context = match egl::create_context(display, config, None, &context_attributes) {
+            Ok(context) => context,
+            Err(e) => {
+                log::warn!("unable to create GLES {:?} context: {:?}", gles_version, e);
+                return Err(hal::UnsupportedBackend);
+            }
+        };
 
         Ok(Instance {
             display,
             version,
             config,
             context,
+            supports_native_window,
         })
     }
 
@@ -131,6 +162,8 @@ impl hal::Instance<crate::Backend> for Instance {
             other => panic!("Unsupported window: {:?}", other),
         };
         let attributes = [
+            egl::RENDER_BUFFER as usize,
+            egl::SINGLE_BUFFER as usize,
             // Always enable sRGB
             egl::GL_COLORSPACE as usize,
             egl::GL_COLORSPACE_SRGB as usize,
@@ -146,6 +179,7 @@ impl hal::Instance<crate::Backend> for Instance {
                 raw,
                 display: self.display,
                 context: self.context,
+                presentable: self.supports_native_window,
                 swapchain: None,
             }),
             Err(e) => {
@@ -176,6 +210,7 @@ pub struct Surface {
     raw: egl::Surface,
     display: egl::Display,
     context: egl::Context,
+    presentable: bool,
     pub(crate) swapchain: Option<Swapchain>,
 }
 
@@ -245,7 +280,7 @@ impl w::PresentationSurface<crate::Backend> for Surface {
 
 impl w::Surface<crate::Backend> for Surface {
     fn supports_queue_family(&self, _: &crate::QueueFamily) -> bool {
-        true
+        self.presentable
     }
 
     fn capabilities(&self, _physical_device: &PhysicalDevice) -> w::SurfaceCapabilities {

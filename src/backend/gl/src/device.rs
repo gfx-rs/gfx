@@ -209,7 +209,7 @@ impl Device {
             match version {
                 (3, 00) => glsl::Version::V3_00Es,
                 (1, 00) => glsl::Version::V1_00Es,
-                other if other > (3, 00) => glsl::Version::V3_00Es,
+                other if other > (3, 0) => glsl::Version::V3_00Es,
                 other => panic!("GLSL version is not recognized: {:?}", other),
             }
         } else {
@@ -1856,10 +1856,10 @@ impl d::Device<B> for Device {
 
     unsafe fn create_query_pool(
         &self,
-        _ty: query::Type,
+        ty: query::Type,
         _count: query::Id,
     ) -> Result<(), query::CreationError> {
-        unimplemented!()
+        Err(query::CreationError::Unsupported(ty))
     }
 
     unsafe fn destroy_query_pool(&self, _: ()) {
