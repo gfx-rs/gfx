@@ -58,7 +58,21 @@ impl hal::Instance<crate::Backend> for Instance {
         );
         assert!(version >= (1, 4), "Unable to request GL context");
 
-        //Note: only GLES is supported here. This is required to be able to bind EGL PBuffers to textures.
+        {
+            debug!("Configurations:");
+            let mut configurations = Vec::with_capacity(100);
+            egl::get_configs(display, &mut configurations).unwrap();
+            for &config in configurations.iter() {
+                debug!("\tCONFORMANT=0x{:X}, RENDERABLE=0x{:X}, NATIVE_RENDERABLE=0x{:X}, SURFACE_TYPE=0x{:X}",
+                    egl::get_config_attrib(display, config, egl::CONFORMANT).unwrap(),
+                    egl::get_config_attrib(display, config, egl::RENDERABLE_TYPE).unwrap(),
+                    egl::get_config_attrib(display, config, egl::NATIVE_RENDERABLE).unwrap(),
+                    egl::get_config_attrib(display, config, egl::SURFACE_TYPE).unwrap(),
+                );
+            }
+        }
+
+        //Note: only GLES is supported here.
 
         //TODO: EGL_SLOW_CONFIG
         let config_attributes = [
