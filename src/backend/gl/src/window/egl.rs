@@ -81,9 +81,13 @@ impl hal::Instance<crate::Backend> for Instance {
             egl::NONE,
         ];
         let config = match egl::choose_first_config(display, &config_attributes) {
-            Ok(config) => config.unwrap(),
+            Ok(Some(config)) => config,
+            Ok(None) => {
+                log::warn!("no compatible EGL config found");
+                return Err(hal::UnsupportedBackend);
+            }
             Err(e) => {
-                log::error!("error in matching_config_count: {:?}", e);
+                log::error!("error in choose_first_config: {:?}", e);
                 return Err(hal::UnsupportedBackend);
             }
         };
@@ -91,14 +95,25 @@ impl hal::Instance<crate::Backend> for Instance {
         egl::bind_api(egl::OPENGL_ES_API).unwrap();
 
         //TODO: make it so `Device` == EGL Context
-        let mut context_attributes =
-            vec![egl::CONTEXT_MAJOR_VERSION, 3, egl::CONTEXT_MINOR_VERSION, 1];
+        let gles_version = (3, 1);
+        let mut context_attributes = vec![
+            egl::CONTEXT_MAJOR_VERSION,
+            gles_version.0,
+            egl::CONTEXT_MINOR_VERSION,
+            gles_version.1,
+        ];
         if cfg!(debug_assertions) {
             context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
             context_attributes.push(egl::TRUE as _);
         }
         context_attributes.push(egl::NONE as _);
-        let context = egl::create_context(display, config, None, &context_attributes).unwrap();
+        let context = match egl::create_context(display, config, None, &context_attributes) {
+            Ok(context) => context,
+            Err(e) => {
+                log::warn!("unable to create GLES {:?} context: {:?}", gles_version, e);
+                return Err(hal::UnsupportedBackend);
+            }
+        };
 
         Ok(Instance {
             display,
