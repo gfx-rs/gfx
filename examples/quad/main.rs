@@ -233,7 +233,7 @@ where
             .find(|family| {
                 surface.supports_queue_family(family) && family.queue_type().supports_graphics()
             })
-            .unwrap();
+            .expect("No queue family supports presentation");
         let mut gpu = unsafe {
             adapter
                 .physical_device

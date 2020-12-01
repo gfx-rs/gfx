@@ -20,6 +20,7 @@ pub struct Instance {
     version: (i32, i32),
     config: egl::Config,
     context: egl::Context,
+    supports_native_window: bool,
 }
 
 unsafe impl Send for Instance {}
@@ -50,9 +51,11 @@ impl hal::Instance<crate::Backend> for Instance {
         let display = egl::get_display(egl::DEFAULT_DISPLAY).unwrap();
 
         let version = egl::initialize(display).map_err(|_| hal::UnsupportedBackend)?;
+        let vendor = egl::query_string(Some(display), egl::VENDOR).unwrap();
         let display_extensions = egl::query_string(Some(display), egl::EXTENSIONS).unwrap();
         log::info!(
-            "Display version {:?}, extensions: {:?}",
+            "Display vendor {:?}, version {:?}, extensions: {:?}",
+            vendor,
             version,
             display_extensions
         );
@@ -73,7 +76,7 @@ impl hal::Instance<crate::Backend> for Instance {
         }
 
         //Note: only GLES is supported here.
-
+        let mut supports_native_window = true;
         //TODO: EGL_SLOW_CONFIG
         let config_attributes = [
             egl::CONFORMANT,
@@ -89,8 +92,14 @@ impl hal::Instance<crate::Backend> for Instance {
         let config = match egl::choose_first_config(display, &config_attributes) {
             Ok(Some(config)) => config,
             Ok(None) => {
-                log::warn!("no compatible EGL config found");
-                return Err(hal::UnsupportedBackend);
+                log::warn!("no compatible EGL config found, trying off-screen");
+                supports_native_window = false;
+                let reduced_config_attributes =
+                    [egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT, egl::NONE];
+                match egl::choose_first_config(display, &reduced_config_attributes) {
+                    Ok(Some(config)) => config,
+                    _ => return Err(hal::UnsupportedBackend),
+                }
             }
             Err(e) => {
                 log::error!("error in choose_first_config: {:?}", e);
@@ -126,6 +135,7 @@ impl hal::Instance<crate::Backend> for Instance {
             version,
             config,
             context,
+            supports_native_window,
         })
     }
 
@@ -169,6 +179,7 @@ impl hal::Instance<crate::Backend> for Instance {
                 raw,
                 display: self.display,
                 context: self.context,
+                presentable: self.supports_native_window,
                 swapchain: None,
             }),
             Err(e) => {
@@ -199,6 +210,7 @@ pub struct Surface {
     raw: egl::Surface,
     display: egl::Display,
     context: egl::Context,
+    presentable: bool,
     pub(crate) swapchain: Option<Swapchain>,
 }
 
@@ -268,7 +280,7 @@ impl w::PresentationSurface<crate::Backend> for Surface {
 
 impl w::Surface<crate::Backend> for Surface {
     fn supports_queue_family(&self, _: &crate::QueueFamily) -> bool {
-        true
+        self.presentable
     }
 
     fn capabilities(&self, _physical_device: &PhysicalDevice) -> w::SurfaceCapabilities {
