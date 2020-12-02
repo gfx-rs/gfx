@@ -49,8 +49,8 @@ struct GraphicsPipelineInfoBuf {
     depth_stencil_state: vk::PipelineDepthStencilStateCreateInfo,
     color_blend_state: vk::PipelineColorBlendStateCreateInfo,
     pipeline_dynamic_state: vk::PipelineDynamicStateCreateInfo,
-    viewport: vk::Viewport,
-    scissor: vk::Rect2D,
+    viewports: [vk::Viewport; 1],
+    scissors: [vk::Rect2D; 1],
 }
 impl GraphicsPipelineInfoBuf {
     unsafe fn add_stage<'a>(
@@ -251,36 +251,30 @@ impl GraphicsPipelineInfoBuf {
         };
 
         this.viewport_state = {
-            let scissors = match desc.baked_states.scissor {
+            //Note: without `multiViewport` feature, there has to be
+            // the count of 1 for both viewports and scissors, even
+            // though the actual pointers are ignored.
+            match desc.baked_states.scissor {
                 Some(ref rect) => {
-                    this.scissor = conv::map_rect(rect);
-                    Some([this.scissor])
+                    this.scissors = [conv::map_rect(rect)];
                 }
                 None => {
                     this.dynamic_states.push(vk::DynamicState::SCISSOR);
-                    None
                 }
-            };
-            let viewports = match desc.baked_states.viewport {
+            }
+            match desc.baked_states.viewport {
                 Some(ref vp) => {
-                    this.viewport = device.shared.map_viewport(vp);
-                    Some([this.viewport])
+                    this.viewports = [device.shared.map_viewport(vp)];
                 }
                 None => {
                     this.dynamic_states.push(vk::DynamicState::VIEWPORT);
-                    None
                 }
-            };
-
-            let mut builder = vk::PipelineViewportStateCreateInfo::builder()
-                .flags(vk::PipelineViewportStateCreateFlags::empty());
-            if let Some(scissors) = &scissors {
-                builder = builder.scissors(scissors);
             }
-            if let Some(viewports) = &viewports {
-                builder = builder.viewports(viewports);
-            }
-            builder.build()
+            vk::PipelineViewportStateCreateInfo::builder()
+                .flags(vk::PipelineViewportStateCreateFlags::empty())
+                .scissors(&this.scissors)
+                .viewports(&this.viewports)
+                .build()
         };
 
         this.multisample_state = match desc.multisampling {

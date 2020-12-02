@@ -65,7 +65,7 @@ lazy_static! {
         vec![
             DebugUtils::name(),
             *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2,
-	]
+    ]
     };
     static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![extensions::khr::Swapchain::name()];
     static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
@@ -449,9 +449,11 @@ impl hal::Instance<Backend> for Instance {
                     .pfn_user_callback(Some(debug_utils_messenger_callback));
                 let handle = unsafe { ext.create_debug_utils_messenger(&info, None) }.unwrap();
                 Some(DebugMessenger::Utils(ext, handle))
-            } else if cfg!(debug_assertions) && instance_extensions.iter().any(|props| unsafe {
-                CStr::from_ptr(props.extension_name.as_ptr()) == DebugReport::name()
-            }) {
+            } else if cfg!(debug_assertions)
+                && instance_extensions.iter().any(|props| unsafe {
+                    CStr::from_ptr(props.extension_name.as_ptr()) == DebugReport::name()
+                })
+            {
                 let ext = DebugReport::new(entry, &instance);
                 let info = vk::DebugReportCallbackCreateInfoEXT::builder()
                     .flags(vk::DebugReportFlagsEXT::all())
