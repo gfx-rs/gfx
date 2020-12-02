@@ -1487,9 +1487,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
             wait_semaphore.0
         } else {
             let signals = &[ssc.semaphore.0];
-            let submit_info = vk::SubmitInfo::builder()
-                .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
-                .signal_semaphores(signals);
+            let submit_info = vk::SubmitInfo::builder().signal_semaphores(signals);
             self.device
                 .raw
                 .queue_submit(*self.raw, &[*submit_info], vk::Fence::null())
