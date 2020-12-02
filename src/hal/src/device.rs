@@ -396,6 +396,14 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// [graphics pipelines][crate::pso::GraphicsPipelineDesc].
     unsafe fn create_shader_module(&self, spirv: &[u32]) -> Result<B::ShaderModule, ShaderError>;
 
+    /// Create a new shader module from the `naga` module.
+    unsafe fn create_shader_module_from_naga(
+        &self,
+        _module: naga::Module,
+    ) -> Result<B::ShaderModule, ShaderError> {
+        Err(ShaderError::Unsupported)
+    }
+
     /// Destroy a shader module module
     ///
     /// A shader module can be destroyed while pipelines created using its shaders are still in use.

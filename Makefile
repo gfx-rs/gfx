@@ -58,6 +58,9 @@ check: check-backends
 
 check-backends:
 	cargo check --all $(CHECK_TARGET_FLAG) $(EXCLUDES) --exclude gfx-warden
+ifeq ($(UNAME_S),Darwin)
+	cargo check --manifest-path=src/backend/metal/Cargo.toml --all-features
+endif
 
 check-wasm:
 	cd src/backend/webgpu && RUSTFLAGS="--cfg=web_sys_unstable_apis" cargo check --target wasm32-unknown-unknown
