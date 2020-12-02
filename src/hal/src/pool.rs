@@ -1,10 +1,8 @@
 //! Command pools
 
-use crate::command::Level;
-use crate::{Backend, PseudoVec};
+use crate::{command::Level, Backend, PseudoVec};
 
-use std::any::Any;
-use std::fmt;
+use std::{any::Any, fmt};
 
 bitflags!(
     /// Command pool creation flags.

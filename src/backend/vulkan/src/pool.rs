@@ -1,11 +1,8 @@
-use ash::version::DeviceV1_0;
-use ash::vk;
+use ash::{version::DeviceV1_0, vk};
 use smallvec::SmallVec;
 use std::sync::Arc;
 
-use crate::command::CommandBuffer;
-use crate::conv;
-use crate::{Backend, RawDevice};
+use crate::{command::CommandBuffer, conv, Backend, RawDevice};
 use hal::{command, pool};
 
 #[derive(Debug)]

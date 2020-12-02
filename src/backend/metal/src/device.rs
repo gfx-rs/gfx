@@ -11,12 +11,7 @@ use cocoa_foundation::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use hal::{
-    adapter, buffer,
-    device::{
-        AllocationError, BindError, CreationError as DeviceCreationError, DeviceLost, MapError,
-        OomOrDeviceLost, OutOfMemory, ShaderError,
-    },
-    format, image, memory,
+    adapter, buffer, device as d, format, image, memory,
     memory::Properties,
     pass,
     pool::CommandPoolCreateFlags,
@@ -56,16 +51,6 @@ const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
 const SHADER_STAGE_COUNT: usize = 3;
-
-/// Emit error during shader module creation. Used if we don't expect an error
-/// but might panic due to an exception in SPIRV-Cross.
-fn gen_unexpected_error(err: SpirvErrorCode) -> ShaderError {
-    let msg = match err {
-        SpirvErrorCode::CompilationError(msg) => msg,
-        SpirvErrorCode::Unhandled => "Unexpected error".into(),
-    };
-    ShaderError::CompilationFailed(msg)
-}
 
 #[derive(Clone, Debug)]
 enum FunctionError {
@@ -263,7 +248,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         families: &[(&QueueFamily, &[QueuePriority])],
         requested_features: hal::Features,
-    ) -> Result<adapter::Gpu<Backend>, DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, d::CreationError> {
         use hal::queue::QueueFamily as _;
 
         // TODO: Query supported features by feature set rather than hard coding in the supported
@@ -273,7 +258,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 "Features missing: {:?}",
                 requested_features - self.features()
             );
-            return Err(DeviceCreationError::MissingFeature);
+            return Err(d::CreationError::MissingFeature);
         }
 
         let device = self.shared.device.lock();
@@ -586,34 +571,31 @@ impl Device {
         compiler_options: &msl::CompilerOptions,
         msl_version: MTLLanguageVersion,
         specialization: &pso::Specialization,
-    ) -> Result<n::ModuleInfo, ShaderError> {
+    ) -> Result<n::ModuleInfo, String> {
         let module = spirv::Module::from_words(raw_data);
 
         // now parse again using the new overrides
-        let mut ast = spirv::Ast::<msl::Target>::parse(&module).map_err(|err| {
-            ShaderError::CompilationFailed(match err {
-                SpirvErrorCode::CompilationError(msg) => msg,
-                SpirvErrorCode::Unhandled => "Unexpected parse error".into(),
-            })
+        let mut ast = spirv::Ast::<msl::Target>::parse(&module).map_err(|err| match err {
+            SpirvErrorCode::CompilationError(msg) => msg,
+            SpirvErrorCode::Unhandled => "Unexpected parse error".into(),
         })?;
 
         spirv_cross_specialize_ast(&mut ast, specialization)?;
 
         ast.set_compiler_options(compiler_options)
-            .map_err(gen_unexpected_error)?;
-
-        let entry_points = ast.get_entry_points().map_err(|err| {
-            ShaderError::CompilationFailed(match err {
+            .map_err(|err| match err {
                 SpirvErrorCode::CompilationError(msg) => msg,
-                SpirvErrorCode::Unhandled => "Unexpected entry point error".into(),
-            })
+                SpirvErrorCode::Unhandled => "Unexpected error".into(),
+            })?;
+
+        let entry_points = ast.get_entry_points().map_err(|err| match err {
+            SpirvErrorCode::CompilationError(msg) => msg,
+            SpirvErrorCode::Unhandled => "Unexpected entry point error".into(),
         })?;
 
-        let shader_code = ast.compile().map_err(|err| {
-            ShaderError::CompilationFailed(match err {
-                SpirvErrorCode::CompilationError(msg) => msg,
-                SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-            })
+        let shader_code = ast.compile().map_err(|err| match err {
+            SpirvErrorCode::CompilationError(msg) => msg,
+            SpirvErrorCode::Unhandled => "Unknown compile error".into(),
         })?;
 
         let mut entry_point_map = n::EntryPointMap::default();
@@ -621,11 +603,9 @@ impl Device {
             info!("Entry point {:?}", entry_point);
             let cleansed = ast
                 .get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
-                .map_err(|err| {
-                    ShaderError::CompilationFailed(match err {
-                        SpirvErrorCode::CompilationError(msg) => msg,
-                        SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-                    })
+                .map_err(|err| match err {
+                    SpirvErrorCode::CompilationError(msg) => msg,
+                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
                 })?;
             entry_point_map.insert(
                 entry_point.name,
@@ -638,7 +618,7 @@ impl Device {
 
         let rasterization_enabled = ast
             .is_rasterization_enabled()
-            .map_err(|_| ShaderError::CompilationFailed("Unknown compile error".into()))?;
+            .map_err(|_| "Unknown compile error".to_string())?;
 
         // done
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
@@ -649,7 +629,7 @@ impl Device {
         let library = device
             .lock()
             .new_library_with_source(shader_code.as_ref(), &options)
-            .map_err(|err| ShaderError::CompilationFailed(err.into()))?;
+            .map_err(|err| err.to_string())?;
 
         Ok(n::ModuleInfo {
             library,
@@ -663,9 +643,9 @@ impl Device {
         device: &Mutex<metal::Device>,
         module: &naga::Module,
         naga_options: &naga::back::msl::Options,
-    ) -> Result<n::ModuleInfo, ShaderError> {
+    ) -> Result<n::ModuleInfo, d::ShaderError> {
         let source = naga::back::msl::write_string(module, naga_options)
-            .map_err(|e| ShaderError::CompilationFailed(format!("{:?}", e)))?;
+            .map_err(|e| d::ShaderError::CompilationFailed(format!("{:?}", e)))?;
 
         let mut entry_point_map = n::EntryPointMap::default();
         for (&(stage, ref name), ep) in module.entry_points.iter() {
@@ -705,7 +685,7 @@ impl Device {
         let library = device
             .lock()
             .new_library_with_source(source.as_ref(), &options)
-            .map_err(|err| ShaderError::CompilationFailed(err.into()))?;
+            .map_err(|err| d::ShaderError::CompilationFailed(err.into()))?;
 
         Ok(n::ModuleInfo {
             library,
@@ -760,12 +740,12 @@ impl Device {
                 &*info_guard
             }
             None => {
-                let mut result = Err(ShaderError::CompilationFailed(String::new()));
+                let mut result = Err(d::ShaderError::CompilationFailed(String::new()));
                 #[cfg(feature = "naga")]
                 if let Some(ref module) = ep.module.naga {
                     result =
                         Self::compile_shader_library_naga(device, module, &layout.naga_options);
-                    if let Err(ShaderError::CompilationFailed(ref msg)) = result {
+                    if let Err(d::ShaderError::CompilationFailed(ref msg)) = result {
                         warn!("Naga: {:?}", msg);
                     }
                 }
@@ -776,7 +756,8 @@ impl Device {
                         compiler_options,
                         msl_version,
                         &ep.specialization,
-                    );
+                    )
+                    .map_err(d::ShaderError::CompilationFailed);
                 }
                 info_owned = result.map_err(|e| {
                     error!("Error compiling the shader {:?}", e);
@@ -959,7 +940,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         _family: QueueFamilyId,
         _flags: CommandPoolCreateFlags,
-    ) -> Result<command::CommandPool, OutOfMemory> {
+    ) -> Result<command::CommandPool, d::OutOfMemory> {
         Ok(command::CommandPool::new(
             &self.shared,
             self.online_recording.clone(),
@@ -976,7 +957,7 @@ impl hal::device::Device<Backend> for Device {
         attachments: IA,
         subpasses: IS,
         _dependencies: ID,
-    ) -> Result<n::RenderPass, OutOfMemory>
+    ) -> Result<n::RenderPass, d::OutOfMemory>
     where
         IA: IntoIterator,
         IA::Item: Borrow<pass::Attachment>,
@@ -1087,7 +1068,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         set_layouts: IS,
         push_constant_ranges: IR,
-    ) -> Result<n::PipelineLayout, OutOfMemory>
+    ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
         IS: IntoIterator,
         IS::Item: Borrow<n::DescriptorSetLayout>,
@@ -1395,7 +1376,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn create_pipeline_cache(
         &self,
         _data: Option<&[u8]>,
-    ) -> Result<n::PipelineCache, OutOfMemory> {
+    ) -> Result<n::PipelineCache, d::OutOfMemory> {
         Ok(n::PipelineCache {
             modules: FastStorageMap::default(),
         })
@@ -1404,7 +1385,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn get_pipeline_cache_data(
         &self,
         _cache: &n::PipelineCache,
-    ) -> Result<Vec<u8>, OutOfMemory> {
+    ) -> Result<Vec<u8>, d::OutOfMemory> {
         //empty
         Ok(Vec::new())
     }
@@ -1417,7 +1398,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         target: &n::PipelineCache,
         sources: I,
-    ) -> Result<(), OutOfMemory>
+    ) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::PipelineCache>,
@@ -1468,35 +1449,33 @@ impl hal::device::Device<Backend> for Device {
             (&main_pass.attachments, &main_pass.subpasses[index as usize])
         };
 
-        let (desc_vertex_buffers, attributes, input_assembler, vs, gs, hs, ds) =
+        let (desc_vertex_buffers, attributes, input_assembler, vs) =
             match pipeline_desc.primitive_assembler {
+                pso::PrimitiveAssemblerDesc::Vertex {
+                    tessellation: Some(_),
+                    ..
+                } => {
+                    error!("Tessellation is not supported");
+                    return Err(pso::CreationError::UnsupportedPipeline);
+                }
+                pso::PrimitiveAssemblerDesc::Vertex {
+                    geometry: Some(_), ..
+                } => {
+                    error!("Geometry shader is not supported");
+                    return Err(pso::CreationError::UnsupportedPipeline);
+                }
+                pso::PrimitiveAssemblerDesc::Mesh { .. } => {
+                    error!("Mesh shader is not supported");
+                    return Err(pso::CreationError::UnsupportedPipeline);
+                }
                 pso::PrimitiveAssemblerDesc::Vertex {
                     buffers,
                     attributes,
                     ref input_assembler,
                     ref vertex,
-                    ref tessellation,
-                    ref geometry,
-                } => {
-                    let (hs, ds) = if let Some(ts) = tessellation {
-                        (Some(&ts.0), Some(&ts.1))
-                    } else {
-                        (None, None)
-                    };
-
-                    (
-                        buffers,
-                        attributes,
-                        input_assembler,
-                        vertex,
-                        geometry,
-                        hs,
-                        ds,
-                    )
-                }
-                pso::PrimitiveAssemblerDesc::Mesh { .. } => {
-                    return Err(pso::CreationError::UnsupportedPipeline)
-                }
+                    tessellation: _,
+                    geometry: _,
+                } => (buffers, attributes, input_assembler, vertex),
             };
 
         let (primitive_class, primitive_type) = match input_assembler.primitive {
@@ -1560,23 +1539,6 @@ impl hal::device::Device<Backend> for Device {
                 None
             }
         };
-
-        // Other shaders
-        if hs.is_some() {
-            return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(
-                pso::ShaderStageFlags::HULL,
-            )));
-        }
-        if ds.is_some() {
-            return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(
-                pso::ShaderStageFlags::DOMAIN,
-            )));
-        }
-        if gs.is_some() {
-            return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(
-                pso::ShaderStageFlags::GEOMETRY,
-            )));
-        }
 
         pipeline.set_rasterization_enabled(enable_rasterization);
 
@@ -1828,7 +1790,7 @@ impl hal::device::Device<Backend> for Device {
         _render_pass: &n::RenderPass,
         attachments: I,
         extent: image::Extent,
-    ) -> Result<n::Framebuffer, OutOfMemory>
+    ) -> Result<n::Framebuffer, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::ImageView>,
@@ -1845,7 +1807,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn create_shader_module(
         &self,
         raw_data: &[u32],
-    ) -> Result<n::ShaderModule, ShaderError> {
+    ) -> Result<n::ShaderModule, d::ShaderError> {
         //TODO: we can probably at least parse here and save the `Ast`
         Ok(n::ShaderModule {
             spv: raw_data.to_vec(),
@@ -1871,7 +1833,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn create_sampler(
         &self,
         info: &image::SamplerDesc,
-    ) -> Result<n::Sampler, AllocationError> {
+    ) -> Result<n::Sampler, d::AllocationError> {
         Ok(n::Sampler {
             raw: match self.make_sampler_descriptor(&info) {
                 Some(ref descriptor) => Some(self.shared.device.lock().new_sampler(descriptor)),
@@ -1887,7 +1849,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         memory: &n::Memory,
         segment: memory::Segment,
-    ) -> Result<*mut u8, MapError> {
+    ) -> Result<*mut u8, d::MapError> {
         let range = memory.resolve(&segment);
         debug!("map_memory of size {} at {:?}", memory.size, range);
 
@@ -1902,7 +1864,7 @@ impl hal::device::Device<Backend> for Device {
         debug!("unmap_memory of size {}", memory.size);
     }
 
-    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
@@ -1931,7 +1893,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(())
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
@@ -1976,7 +1938,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(())
     }
 
-    fn create_semaphore(&self) -> Result<n::Semaphore, OutOfMemory> {
+    fn create_semaphore(&self) -> Result<n::Semaphore, d::OutOfMemory> {
         Ok(n::Semaphore {
             // Semaphore synchronization between command buffers of the same queue
             // is useless, don't bother even creating one.
@@ -1993,7 +1955,7 @@ impl hal::device::Device<Backend> for Device {
         max_sets: usize,
         descriptor_ranges: I,
         _flags: pso::DescriptorPoolCreateFlags,
-    ) -> Result<n::DescriptorPool, OutOfMemory>
+    ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
@@ -2046,7 +2008,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         binding_iter: I,
         immutable_samplers: J,
-    ) -> Result<n::DescriptorSetLayout, OutOfMemory>
+    ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
@@ -2392,7 +2354,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         memory_type: hal::MemoryTypeId,
         size: u64,
-    ) -> Result<n::Memory, AllocationError> {
+    ) -> Result<n::Memory, d::AllocationError> {
         let (storage, cache) = MemoryTypes::describe(memory_type.0);
         let device = self.shared.device.lock();
         debug!("allocate_memory type {:?} of size {}", memory_type, size);
@@ -2487,7 +2449,7 @@ impl hal::device::Device<Backend> for Device {
         memory: &n::Memory,
         offset: u64,
         buffer: &mut n::Buffer,
-    ) -> Result<(), BindError> {
+    ) -> Result<(), d::BindError> {
         let (size, name) = match buffer {
             n::Buffer::Unbound { size, name, .. } => (*size, name),
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
@@ -2818,7 +2780,7 @@ impl hal::device::Device<Backend> for Device {
         memory: &n::Memory,
         offset: u64,
         image: &mut n::Image,
-    ) -> Result<(), BindError> {
+    ) -> Result<(), d::BindError> {
         let like = {
             let (descriptor, mip_sizes, name) = match image.like {
                 n::ImageLike::Unbound {
@@ -2945,7 +2907,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn destroy_image_view(&self, _view: n::ImageView) {}
 
-    fn create_fence(&self, signaled: bool) -> Result<n::Fence, OutOfMemory> {
+    fn create_fence(&self, signaled: bool) -> Result<n::Fence, d::OutOfMemory> {
         let mutex = Mutex::new(n::FenceInner::Idle { signaled });
         debug!(
             "Creating fence ptr {:?} with signal={}",
@@ -2955,7 +2917,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(n::Fence(mutex))
     }
 
-    unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), d::OutOfMemory> {
         debug!("Resetting fence ptr {:?}", fence.0.raw() as *const _);
         *fence.0.lock() = n::FenceInner::Idle { signaled: false };
         Ok(())
@@ -2965,7 +2927,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         fence: &n::Fence,
         timeout_ns: u64,
-    ) -> Result<bool, OomOrDeviceLost> {
+    ) -> Result<bool, d::WaitError> {
         unsafe fn to_ns(duration: time::Duration) -> u64 {
             duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64
         }
@@ -3001,7 +2963,7 @@ impl hal::device::Device<Backend> for Device {
         }
     }
 
-    unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, DeviceLost> {
+    unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, d::DeviceLost> {
         Ok(match *fence.0.lock() {
             n::FenceInner::Idle { signaled } => signaled,
             n::FenceInner::PendingSubmission(ref cmd_buf) => match cmd_buf.status() {
@@ -3015,21 +2977,21 @@ impl hal::device::Device<Backend> for Device {
         //empty
     }
 
-    fn create_event(&self) -> Result<n::Event, OutOfMemory> {
+    fn create_event(&self) -> Result<n::Event, d::OutOfMemory> {
         Ok(n::Event(Arc::new(AtomicBool::new(false))))
     }
 
-    unsafe fn get_event_status(&self, event: &n::Event) -> Result<bool, OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, event: &n::Event) -> Result<bool, d::WaitError> {
         Ok(event.0.load(Ordering::Acquire))
     }
 
-    unsafe fn set_event(&self, event: &n::Event) -> Result<(), OutOfMemory> {
+    unsafe fn set_event(&self, event: &n::Event) -> Result<(), d::OutOfMemory> {
         event.0.store(true, Ordering::Release);
         self.shared.queue_blocker.lock().triage();
         Ok(())
     }
 
-    unsafe fn reset_event(&self, event: &n::Event) -> Result<(), OutOfMemory> {
+    unsafe fn reset_event(&self, event: &n::Event) -> Result<(), d::OutOfMemory> {
         Ok(event.0.store(false, Ordering::Release))
     }
 
@@ -3052,7 +3014,7 @@ impl hal::device::Device<Backend> for Device {
                     .allocate_range(count)
                     .map_err(|_| {
                         error!("Not enough space to allocate an occlusion query pool");
-                        OutOfMemory::Host
+                        d::OutOfMemory::Host
                     })?;
                 Ok(n::QueryPool::Occlusion(range))
             }
@@ -3080,7 +3042,7 @@ impl hal::device::Device<Backend> for Device {
         data: &mut [u8],
         stride: buffer::Offset,
         flags: query::ResultFlags,
-    ) -> Result<bool, OomOrDeviceLost> {
+    ) -> Result<bool, d::WaitError> {
         let is_ready = match *pool {
             n::QueryPool::Occlusion(ref pool_range) => {
                 let visibility = &self.shared.visibility;
@@ -3144,7 +3106,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(is_ready)
     }
 
-    fn wait_idle(&self) -> Result<(), OutOfMemory> {
+    fn wait_idle(&self) -> Result<(), d::OutOfMemory> {
         command::QueueInner::wait_idle(&self.shared.queue);
         Ok(())
     }

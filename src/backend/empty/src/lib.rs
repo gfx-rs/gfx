@@ -442,7 +442,7 @@ impl device::Device<Backend> for Device {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn get_event_status(&self, _: &()) -> Result<bool, device::OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, _: &()) -> Result<bool, device::WaitError> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
@@ -469,7 +469,7 @@ impl device::Device<Backend> for Device {
         _: &mut [u8],
         _: hal::buffer::Offset,
         _: query::ResultFlags,
-    ) -> Result<bool, device::OomOrDeviceLost> {
+    ) -> Result<bool, device::WaitError> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
@@ -596,7 +596,7 @@ impl device::Device<Backend> for Device {
         Ok(())
     }
 
-    unsafe fn wait_for_fence(&self, _: &(), _: u64) -> Result<bool, device::OomOrDeviceLost> {
+    unsafe fn wait_for_fence(&self, _: &(), _: u64) -> Result<bool, device::WaitError> {
         Ok(true)
     }
 }
@@ -1090,7 +1090,7 @@ impl window::PresentationSurface<Backend> for Surface {
         &mut self,
         _: &Device,
         _: window::SwapchainConfig,
-    ) -> Result<(), window::CreationError> {
+    ) -> Result<(), window::SwapchainError> {
         Ok(())
     }
 

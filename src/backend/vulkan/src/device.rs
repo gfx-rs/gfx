@@ -1,8 +1,9 @@
 use arrayvec::ArrayVec;
-use ash::extensions::khr;
-use ash::version::DeviceV1_0;
-use ash::vk;
-use ash::vk::Handle;
+use ash::{
+    extensions::khr,
+    version::DeviceV1_0,
+    vk::{self, Handle},
+};
 use smallvec::SmallVec;
 
 use hal::{
@@ -13,16 +14,20 @@ use hal::{
     {buffer, device as d, format, image, pass, pso, query, queue}, {Features, MemoryTypeId},
 };
 
-use std::borrow::Borrow;
-use std::ffi::{CStr, CString};
-use std::ops::Range;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::{mem, ptr};
+use std::{
+    borrow::Borrow,
+    ffi::{CStr, CString},
+    mem,
+    ops::Range,
+    pin::Pin,
+    ptr,
+    sync::Arc,
+};
 
-use crate::pool::RawCommandPool;
-use crate::{command as cmd, conv, native as n, window as w};
-use crate::{Backend as B, DebugMessenger, Device};
+use crate::{
+    command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B,
+    DebugMessenger, Device,
+};
 
 #[derive(Debug, Default)]
 struct GraphicsPipelineInfoBuf {
@@ -1846,7 +1851,7 @@ impl d::Device<B> for Device {
         fences: I,
         wait: d::WaitFor,
         timeout_ns: u64,
-    ) -> Result<bool, d::OomOrDeviceLost>
+    ) -> Result<bool, d::WaitError>
     where
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
@@ -1896,7 +1901,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn get_event_status(&self, event: &n::Event) -> Result<bool, d::OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, event: &n::Event) -> Result<bool, d::WaitError> {
         let result = self.shared.raw.get_event_status(event.0);
         match result {
             Ok(b) => Ok(b),
@@ -1974,7 +1979,7 @@ impl d::Device<B> for Device {
         data: &mut [u8],
         stride: buffer::Offset,
         flags: query::ResultFlags,
-    ) -> Result<bool, d::OomOrDeviceLost> {
+    ) -> Result<bool, d::WaitError> {
         let result = self.shared.raw.fp_v1_0().get_query_pool_results(
             self.shared.raw.handle(),
             pool.0,
@@ -2232,7 +2237,7 @@ impl Device {
         surface: &mut w::Surface,
         config: SwapchainConfig,
         provided_old_swapchain: Option<w::Swapchain>,
-    ) -> Result<(w::Swapchain, Vec<n::Image>), hal::window::CreationError> {
+    ) -> Result<(w::Swapchain, Vec<n::Image>), hal::window::SwapchainError> {
         let functor = khr::Swapchain::new(&surface.raw.instance.inner, &self.shared.raw);
 
         let old_swapchain = match provided_old_swapchain {
@@ -2274,8 +2279,10 @@ impl Device {
                 return Err(d::OutOfMemory::Device.into());
             }
             Err(vk::Result::ERROR_DEVICE_LOST) => return Err(d::DeviceLost.into()),
-            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => return Err(d::SurfaceLost.into()),
-            Err(vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR) => return Err(d::WindowInUse.into()),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => return Err(hal::window::SurfaceLost.into()),
+            Err(vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR) => {
+                return Err(hal::window::SwapchainError::WindowInUse)
+            }
             _ => unreachable!("Unexpected result - driver bug? {:?}", result),
         };
 

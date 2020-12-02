@@ -1,5 +1,9 @@
 # Change Log
 
+### hal-unreleased
+  - use `thiserror` for errors
+  - error variants and a few names are refactored
+
 ### backend-dx12-unreleased
   - fix SPIR-V entry point selection
 

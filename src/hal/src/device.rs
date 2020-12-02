@@ -11,11 +11,6 @@
 //! handle to that physical device that has the requested capabilities
 //! and is used to actually do things.
 
-use std::any::Any;
-use std::borrow::Borrow;
-use std::ops::Range;
-use std::{fmt, iter};
-
 use crate::{
     buffer, format, image,
     memory::{Requirements, Segment},
@@ -28,285 +23,111 @@ use crate::{
     Backend, MemoryTypeId,
 };
 
+use std::{any::Any, borrow::Borrow, fmt, iter, ops::Range};
+
 /// Error occurred caused device to be lost.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[error("Device lost")]
 pub struct DeviceLost;
 
-impl std::fmt::Display for DeviceLost {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt.write_str("Device lost")
-    }
-}
-
-impl std::error::Error for DeviceLost {}
-
-/// Error occurred caused surface to be lost.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SurfaceLost;
-
-impl std::fmt::Display for SurfaceLost {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt.write_str("Surface lost")
-    }
-}
-
-impl std::error::Error for SurfaceLost {}
-
-/// Native window is already in use by graphics API.
-#[derive(Clone, Debug, PartialEq)]
-pub struct WindowInUse;
-
-impl std::fmt::Display for WindowInUse {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fmt.write_str("Window is in use")
-    }
-}
-
-impl std::error::Error for WindowInUse {}
-
 /// Error allocating memory.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum OutOfMemory {
     /// Host memory exhausted.
+    #[error("Out of host memory")]
     Host,
     /// Device memory exhausted.
+    #[error("Out of device memory")]
     Device,
 }
 
-impl std::fmt::Display for OutOfMemory {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            OutOfMemory::Host => write!(fmt, "Out of host memory"),
-            OutOfMemory::Device => write!(fmt, "Out of device memory"),
-        }
-    }
-}
-
-impl std::error::Error for OutOfMemory {}
-
-/// Error occurred caused device to be lost
-/// or out of memory error.
-#[derive(Clone, Debug, PartialEq)]
-pub enum OomOrDeviceLost {
+/// Error occurring when waiting for fences or events.
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum WaitError {
     /// Out of either host or device memory.
-    OutOfMemory(OutOfMemory),
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
     /// Device is lost
-    DeviceLost(DeviceLost),
-}
-
-impl From<OutOfMemory> for OomOrDeviceLost {
-    fn from(error: OutOfMemory) -> Self {
-        OomOrDeviceLost::OutOfMemory(error)
-    }
-}
-
-impl From<DeviceLost> for OomOrDeviceLost {
-    fn from(error: DeviceLost) -> Self {
-        OomOrDeviceLost::DeviceLost(error)
-    }
-}
-
-impl std::fmt::Display for OomOrDeviceLost {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            OomOrDeviceLost::DeviceLost(err) => write!(fmt, "Failed querying device: {}", err),
-            OomOrDeviceLost::OutOfMemory(err) => write!(fmt, "Failed querying device: {}", err),
-        }
-    }
-}
-
-impl std::error::Error for OomOrDeviceLost {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            OomOrDeviceLost::DeviceLost(err) => Some(err),
-            OomOrDeviceLost::OutOfMemory(err) => Some(err),
-        }
-    }
+    #[error(transparent)]
+    DeviceLost(#[from] DeviceLost),
 }
 
 /// Possible cause of allocation failure.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum AllocationError {
     /// Out of either host or device memory.
-    OutOfMemory(OutOfMemory),
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
 
     /// Cannot create any more objects.
+    #[error("Too many objects")]
     TooManyObjects,
 }
 
-impl From<OutOfMemory> for AllocationError {
-    fn from(error: OutOfMemory) -> Self {
-        AllocationError::OutOfMemory(error)
-    }
-}
-
-impl std::fmt::Display for AllocationError {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AllocationError::OutOfMemory(err) => write!(fmt, "Failed to allocate object: {}", err),
-            AllocationError::TooManyObjects => {
-                write!(fmt, "Failed to allocate object: Too many objects")
-            }
-        }
-    }
-}
-
-impl std::error::Error for AllocationError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            AllocationError::OutOfMemory(err) => Some(err),
-            _ => None,
-        }
-    }
-}
-
 /// Device creation errors during `open`.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum CreationError {
     /// Out of either host or device memory.
-    OutOfMemory(OutOfMemory),
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
     /// Device initialization failed due to implementation specific errors.
+    #[error("Implementation specific error occurred")]
     InitializationFailed,
     /// At least one of the user requested extensions if not supported by the
     /// physical device.
+    #[error("Requested extension is missing")]
     MissingExtension,
     /// At least one of the user requested features if not supported by the
     /// physical device.
     ///
     /// Use [`features`](trait.PhysicalDevice.html#tymethod.features)
     /// for checking the supported features.
+    #[error("Requested feature is missing")]
     MissingFeature,
     /// Too many logical devices have been created from this physical device.
     ///
     /// The implementation may only support one logical device for each physical
     /// device or lacks resources to allocate a new device.
+    #[error("Too many objects")]
     TooManyObjects,
     /// The logical or physical device are lost during the device creation
     /// process.
     ///
     /// This may be caused by hardware failure, physical device removal,
     /// power outage, etc.
+    #[error("Logical or Physical device was lost during creation")]
     DeviceLost,
 }
 
-impl std::fmt::Display for CreationError {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CreationError::OutOfMemory(err) => write!(fmt, "Failed to create device: {}", err),
-            CreationError::InitializationFailed => write!(
-                fmt,
-                "Failed to create device: Implementation specific error occurred"
-            ),
-            CreationError::MissingExtension => write!(
-                fmt,
-                "Failed to create device: Requested extension is missing"
-            ),
-            CreationError::MissingFeature => {
-                write!(fmt, "Failed to create device: Requested feature is missing")
-            }
-            CreationError::TooManyObjects => {
-                write!(fmt, "Failed to create device: Too many objects")
-            }
-            CreationError::DeviceLost => write!(
-                fmt,
-                "Failed to create device: Logical or Physical device was lost during creation"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for CreationError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            CreationError::OutOfMemory(err) => Some(err),
-            _ => None,
-        }
-    }
-}
-
 /// Error accessing a mapping.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum MapError {
     /// Out of either host or device memory.
-    OutOfMemory(OutOfMemory),
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
     /// The requested mapping range is outside of the resource.
+    #[error("Requested range is outside the resource")]
     OutOfBounds,
-    /// Failed to allocate an appropriately sized contiguous virtual address range
+    /// Failed to allocate an appropriately sized contiguous virtual address range.
+    #[error("Unable to allocate an appropriately sized contiguous virtual address range")]
     MappingFailed,
-    /// Memory is not CPU visible
+    /// Memory is not CPU visible.
+    #[error("Memory is not CPU visible")]
     Access,
 }
 
-impl From<OutOfMemory> for MapError {
-    fn from(error: OutOfMemory) -> Self {
-        MapError::OutOfMemory(error)
-    }
-}
-
-impl std::fmt::Display for MapError {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MapError::OutOfMemory(err) => write!(fmt, "Failed to map memory: {}", err),
-            MapError::OutOfBounds => write!(fmt, "Failed to map memory: Requested range is outside the resource"),
-            MapError::MappingFailed => write!(
-                fmt,
-                "Failed to map memory: Unable to allocate an appropriately sized contiguous virtual address range"
-            ),
-            MapError::Access => write!(fmt, "Failed to map memory: Memory is not CPU visible"),
-        }
-    }
-}
-
-impl std::error::Error for MapError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            MapError::OutOfMemory(err) => Some(err),
-            _ => None,
-        }
-    }
-}
-
 /// Error binding a resource to memory allocation.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum BindError {
     /// Out of either host or device memory.
-    OutOfMemory(OutOfMemory),
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
     /// Requested binding to memory that doesn't support the required operations.
+    #[error("Wrong memory")]
     WrongMemory,
     /// Requested binding to an invalid memory.
+    #[error("Requested range is outside the resource")]
     OutOfBounds,
-}
-
-impl From<OutOfMemory> for BindError {
-    fn from(error: OutOfMemory) -> Self {
-        BindError::OutOfMemory(error)
-    }
-}
-
-impl std::fmt::Display for BindError {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BindError::OutOfMemory(err) => {
-                write!(fmt, "Failed to bind object to memory range: {}", err)
-            }
-            BindError::OutOfBounds => write!(
-                fmt,
-                "Failed to bind object to memory range: Requested range is outside the resource"
-            ),
-            BindError::WrongMemory => {
-                write!(fmt, "Failed to bind object to memory range: Wrong memory")
-            }
-        }
-    }
-}
-
-impl std::error::Error for BindError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            BindError::OutOfMemory(err) => Some(err),
-            _ => None,
-        }
-    }
 }
 
 /// Specifies the waiting targets.
@@ -320,53 +141,25 @@ pub enum WaitFor {
 }
 
 /// An error from creating a shader module.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum ShaderError {
-    /// The shader failed to compile.
+    /// Unsupported module.
+    #[error("Shader module is not supported")]
+    Unsupported,
+    /// Compilation failed.
+    #[error("Shader module failed to compile: {0:}")]
     CompilationFailed(String),
-    /// The shader is missing an entry point.
-    MissingEntryPoint(String),
-    /// The shader has a mismatch of interface (e.g missing push constants).
-    InterfaceMismatch(String),
-    /// The shader stage is not supported.
-    UnsupportedStage(pso::ShaderStageFlags),
-    /// Out of either host or device memory.
-    OutOfMemory(OutOfMemory),
+    /// Device ran out of memory.
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
 }
 
-impl From<OutOfMemory> for ShaderError {
-    fn from(error: OutOfMemory) -> Self {
-        ShaderError::OutOfMemory(error)
-    }
-}
-
-impl std::fmt::Display for ShaderError {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ShaderError::OutOfMemory(err) => write!(fmt, "Shader error: {}", err),
-            ShaderError::CompilationFailed(string) => {
-                write!(fmt, "Shader error: Compilation failed: {}", string)
-            }
-            ShaderError::MissingEntryPoint(string) => {
-                write!(fmt, "Shader error: Missing entry point: {}", string)
-            }
-            ShaderError::InterfaceMismatch(string) => {
-                write!(fmt, "Shader error: Interface mismatch: {}", string)
-            }
-            ShaderError::UnsupportedStage(stage) => {
-                write!(fmt, "Shader error: Unsupported stage: {:?}", stage)
-            }
-        }
-    }
-}
-
-impl std::error::Error for ShaderError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            ShaderError::OutOfMemory(err) => Some(err),
-            _ => None,
-        }
-    }
+/// Source shader code for a module.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum ShaderModuleDesc<'a> {
+    /// SPIR-V word array.
+    SpirV(&'a [u32]),
 }
 
 /// Logical device handle, responsible for creating and managing resources
@@ -601,10 +394,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// it contains can be used in pipeline shader stages of
     /// [compute pipelines][crate::pso::ComputePipelineDesc] and
     /// [graphics pipelines][crate::pso::GraphicsPipelineDesc].
-    unsafe fn create_shader_module(
-        &self,
-        spirv_data: &[u32],
-    ) -> Result<B::ShaderModule, ShaderError>;
+    unsafe fn create_shader_module(&self, spirv: &[u32]) -> Result<B::ShaderModule, ShaderError>;
 
     /// Destroy a shader module module
     ///
@@ -834,11 +624,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Blocks until the given fence is signaled.
     /// Returns true if the fence was signaled before the timeout.
-    unsafe fn wait_for_fence(
-        &self,
-        fence: &B::Fence,
-        timeout_ns: u64,
-    ) -> Result<bool, OomOrDeviceLost> {
+    unsafe fn wait_for_fence(&self, fence: &B::Fence, timeout_ns: u64) -> Result<bool, WaitError> {
         self.wait_for_fences(iter::once(fence), WaitFor::All, timeout_ns)
     }
 
@@ -849,7 +635,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         fences: I,
         wait: WaitFor,
         timeout_ns: u64,
-    ) -> Result<bool, OomOrDeviceLost>
+    ) -> Result<bool, WaitError>
     where
         I: IntoIterator,
         I::Item: Borrow<B::Fence>,
@@ -908,7 +694,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Query the status of an event.
     ///
     /// Returns `true` if the event is set, or `false` if it is reset.
-    unsafe fn get_event_status(&self, event: &B::Event) -> Result<bool, OomOrDeviceLost>;
+    unsafe fn get_event_status(&self, event: &B::Event) -> Result<bool, WaitError>;
 
     /// Sets an event.
     unsafe fn set_event(&self, event: &B::Event) -> Result<(), OutOfMemory>;
@@ -938,7 +724,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         data: &mut [u8],
         stride: buffer::Offset,
         flags: query::ResultFlags,
-    ) -> Result<bool, OomOrDeviceLost>;
+    ) -> Result<bool, WaitError>;
 
     /// Wait for all queues associated with this device to idle.
     ///

@@ -224,7 +224,7 @@ impl w::PresentationSurface<crate::Backend> for Surface {
         &mut self,
         device: &crate::Device,
         config: w::SwapchainConfig,
-    ) -> Result<(), w::CreationError> {
+    ) -> Result<(), w::SwapchainError> {
         self.unconfigure_swapchain(device);
 
         let desc = conv::describe_format(config.format).unwrap();

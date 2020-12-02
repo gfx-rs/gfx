@@ -230,7 +230,7 @@ impl<B: Backend> RendererState<B> {
         const IMAGE_LOGO: &'static [u8] = include_bytes!("data/logo.png");
         let img = image::load(Cursor::new(&IMAGE_LOGO[..]), image::ImageFormat::Png)
             .unwrap()
-            .to_rgba();
+            .to_rgba8();
 
         let mut staging_pool = device
             .borrow()

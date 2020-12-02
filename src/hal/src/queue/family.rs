@@ -1,10 +1,8 @@
 //! Queue family and groups.
 
-use crate::queue::QueueType;
-use crate::Backend;
+use crate::{queue::QueueType, Backend};
 
-use std::any::Any;
-use std::fmt::Debug;
+use std::{any::Any, fmt::Debug};
 
 /// General information about a queue family, available upon adapter discovery.
 ///

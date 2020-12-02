@@ -413,13 +413,12 @@ impl Device {
         source: &pso::EntryPoint<Backend>,
         layout: &PipelineLayout,
         features: &hal::Features,
-    ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, device::ShaderError> {
+    ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, pso::CreationError> {
         // TODO: entrypoint stuff
         match *source.module {
             ShaderModule::Dxbc(ref _shader) => {
-                unimplemented!()
-
-                // Ok(Some(shader))
+                error!("DXBC modules are not supported yet");
+                Err(pso::CreationError::Other)
             }
             ShaderModule::Spirv(ref raw_data) => Ok(shader::compile_spirv_entrypoint(
                 raw_data, stage, source, layout, features,
@@ -765,7 +764,7 @@ impl Device {
         config: &window::SwapchainConfig,
         window_handle: HWND,
         factory: ComPtr<dxgi::IDXGIFactory>,
-    ) -> Result<(ComPtr<dxgi::IDXGISwapChain>, dxgiformat::DXGI_FORMAT), window::CreationError>
+    ) -> Result<(ComPtr<dxgi::IDXGISwapChain>, dxgiformat::DXGI_FORMAT), window::SwapchainError>
     {
         // TODO: use IDXGIFactory2 for >=11.1
         // TODO: this function should be able to fail (Result)?
@@ -990,15 +989,11 @@ impl device::Device<Backend> for Device {
         _cache: Option<&()>,
     ) -> Result<GraphicsPipeline, pso::CreationError> {
         let features = &self.features;
-        let build_shader = |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, Backend>>| {
-            let source = match source {
-                Some(src) => src,
-                None => return Ok(None),
+        let build_shader =
+            |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, Backend>>| match source {
+                Some(src) => Self::extract_entry_point(stage, src, desc.layout, features),
+                None => Ok(None),
             };
-
-            Self::extract_entry_point(stage, source, desc.layout, features)
-                .map_err(|err| pso::CreationError::Shader(err))
-        };
 
         let (layout, vs, gs, hs, ds) = match desc.primitive_assembler {
             pso::PrimitiveAssemblerDesc::Vertex {
@@ -1011,8 +1006,7 @@ impl device::Device<Backend> for Device {
             } => {
                 let vertex_semantic_remapping = match vertex.module {
                     ShaderModule::Spirv(spirv) => {
-                        shader::introspect_spirv_vertex_semantic_remapping(spirv)
-                            .map_err(|err| pso::CreationError::Shader(err))?
+                        shader::introspect_spirv_vertex_semantic_remapping(spirv)?
                     }
                     _ => unimplemented!(),
                 };
@@ -1089,15 +1083,11 @@ impl device::Device<Backend> for Device {
         _cache: Option<&()>,
     ) -> Result<ComputePipeline, pso::CreationError> {
         let features = &self.features;
-        let build_shader = |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, Backend>>| {
-            let source = match source {
-                Some(src) => src,
-                None => return Ok(None),
+        let build_shader =
+            |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, Backend>>| match source {
+                Some(src) => Self::extract_entry_point(stage, src, desc.layout, features),
+                None => Ok(None),
             };
-
-            Self::extract_entry_point(stage, source, desc.layout, features)
-                .map_err(|err| pso::CreationError::Shader(err))
-        };
 
         let cs = build_shader(ShaderStage::Compute, Some(&desc.shader))?.unwrap();
         let cs = self.create_compute_shader(cs)?;
@@ -2229,7 +2219,7 @@ impl device::Device<Backend> for Device {
         &self,
         fence: &Fence,
         timeout_ns: u64,
-    ) -> Result<bool, device::OomOrDeviceLost> {
+    ) -> Result<bool, device::WaitError> {
         use std::time::{Duration, Instant};
 
         debug!("wait_for_fence {:?} for {} ns", fence, timeout_ns);
@@ -2268,7 +2258,7 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, device::OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, device::WaitError> {
         unimplemented!()
     }
 
@@ -2311,7 +2301,7 @@ impl device::Device<Backend> for Device {
         _data: &mut [u8],
         _stride: buffer::Offset,
         _flags: query::ResultFlags,
-    ) -> Result<bool, device::OomOrDeviceLost> {
+    ) -> Result<bool, device::WaitError> {
         unimplemented!()
     }
 

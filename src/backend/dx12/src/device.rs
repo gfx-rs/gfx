@@ -1,10 +1,5 @@
 use std::{
-    borrow::Borrow,
-    collections::{hash_map::Entry, BTreeMap},
-    ffi, iter, mem,
-    ops::Range,
-    ptr, slice,
-    sync::Arc,
+    borrow::Borrow, collections::hash_map::Entry, ffi, iter, mem, ops::Range, ptr, slice, sync::Arc,
 };
 
 use range_alloc::RangeAllocator;
@@ -62,21 +57,23 @@ fn wide_cstr(name: &str) -> Vec<u16> {
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
-fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
+fn gen_unexpected_error(err: SpirvErrorCode) -> pso::CreationError {
     let msg = match err {
         SpirvErrorCode::CompilationError(msg) => msg,
         SpirvErrorCode::Unhandled => "Unexpected error".into(),
     };
-    d::ShaderError::CompilationFailed(msg)
+    error!("SPIR-V unexpected error {:?}", msg);
+    pso::CreationError::Other
 }
 
 /// Emit error during shader module creation. Used if we execute an query command.
-fn gen_query_error(err: SpirvErrorCode) -> d::ShaderError {
+fn gen_query_error(err: SpirvErrorCode) -> pso::CreationError {
     let msg = match err {
         SpirvErrorCode::CompilationError(msg) => msg,
         SpirvErrorCode::Unhandled => "Unknown query error".into(),
     };
-    d::ShaderError::CompilationFailed(msg)
+    error!("SPIR-V query error {:?}", msg);
+    pso::CreationError::Other
 }
 
 #[derive(Clone, Debug)]
@@ -104,7 +101,7 @@ pub(crate) fn compile_shader(
     features: &hal::Features,
     entry: &str,
     code: &[u8],
-) -> Result<native::Blob, d::ShaderError> {
+) -> Result<native::Blob, pso::CreationError> {
     let stage_str = match stage {
         ShaderStage::Vertex => "vs",
         ShaderStage::Fragment => "ps",
@@ -145,7 +142,6 @@ pub(crate) fn compile_shader(
         )
     };
     if !winerror::SUCCEEDED(hr) {
-        error!("D3DCompile error {:x}", hr);
         let message = unsafe {
             let pointer = error.GetBufferPointer();
             let size = error.GetBufferSize();
@@ -155,7 +151,8 @@ pub(crate) fn compile_shader(
         unsafe {
             error.destroy();
         }
-        Err(d::ShaderError::CompilationFailed(message))
+        error!("D3DCompile error {:x}: {}", hr, message);
+        Err(pso::CreationError::Other)
     } else {
         Ok(shader_data)
     }
@@ -253,7 +250,7 @@ impl GraphicsPipelineStateSubobjectStream {
 }
 
 impl Device {
-    fn parse_spirv(raw_data: &[u32]) -> Result<spirv::Ast<hlsl::Target>, d::ShaderError> {
+    fn parse_spirv(raw_data: &[u32]) -> Result<spirv::Ast<hlsl::Target>, pso::CreationError> {
         let module = spirv::Module::from_words(raw_data);
 
         spirv::Ast::parse(&module).map_err(|err| {
@@ -261,7 +258,8 @@ impl Device {
                 SpirvErrorCode::CompilationError(msg) => msg,
                 SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
             };
-            d::ShaderError::CompilationFailed(msg)
+            error!("SPIR-V parsing failed: {:?}", msg);
+            pso::CreationError::Other
         })
     }
 
@@ -278,7 +276,7 @@ impl Device {
     /// This workaround also exists under the same name in the DX11 backend.
     pub(crate) fn introspect_spirv_vertex_semantic_remapping(
         raw_data: &[u32],
-    ) -> Result<auxil::FastHashMap<u32, Option<(u32, u32)>>, hal::device::ShaderError> {
+    ) -> Result<auxil::FastHashMap<u32, Option<(u32, u32)>>, pso::CreationError> {
         // This is inefficient as we already parse it once before. This is a temporary workaround only called
         // on vertex shaders. If this becomes permanent or shows up in profiles, deduplicate these as first course of action.
         let ast = Self::parse_spirv(raw_data)?;
@@ -307,19 +305,21 @@ impl Device {
                 {
                     for col in 0..columns {
                         if let Some(_) = map.insert(idx + col, Some((idx, col))) {
-                            return Err(hal::device::ShaderError::CompilationFailed(format!(
+                            error!(
                                 "Shader has overlapping input attachments at location {}",
                                 idx
-                            )));
+                            );
+                            return Err(pso::CreationError::Other);
                         }
                     }
                 }
                 _ => {
                     if let Some(_) = map.insert(idx, None) {
-                        return Err(hal::device::ShaderError::CompilationFailed(format!(
+                        error!(
                             "Shader has overlapping input attachments at location {}",
                             idx
-                        )));
+                        );
+                        return Err(pso::CreationError::Other);
                     }
                 }
             }
@@ -331,7 +331,7 @@ impl Device {
     fn patch_spirv_resources(
         ast: &mut spirv::Ast<hlsl::Target>,
         layout: &r::PipelineLayout,
-    ) -> Result<(), d::ShaderError> {
+    ) -> Result<(), pso::CreationError> {
         // Move the descriptor sets away to yield for the root constants at "space0".
         let space_offset = if layout.shared.constants.is_empty() {
             0
@@ -468,7 +468,7 @@ impl Device {
         stage: ShaderStage,
         features: &hal::Features,
         entry_point: &str,
-    ) -> Result<String, d::ShaderError> {
+    ) -> Result<String, pso::CreationError> {
         let mut compile_options = hlsl::CompilerOptions::default();
         compile_options.shader_model = shader_model;
         compile_options.vertex.invert_y = !features.contains(hal::Features::NDC_Y_UP);
@@ -506,7 +506,8 @@ impl Device {
                 SpirvErrorCode::CompilationError(msg) => msg,
                 SpirvErrorCode::Unhandled => "Unknown compile error".into(),
             };
-            d::ShaderError::CompilationFailed(msg)
+            error!("SPIR-V compile failed: {}", msg);
+            pso::CreationError::Other
         })
     }
 
@@ -518,7 +519,7 @@ impl Device {
         source: &pso::EntryPoint<B>,
         layout: &r::PipelineLayout,
         features: &hal::Features,
-    ) -> Result<(native::Blob, bool), d::ShaderError> {
+    ) -> Result<(native::Blob, bool), pso::CreationError> {
         match *source.module {
             r::ShaderModule::Compiled(ref shaders) => {
                 // TODO: do we need to check for specialization constants?
@@ -526,11 +527,12 @@ impl Device {
                 shaders
                     .get(source.entry)
                     .map(|src| (*src, false))
-                    .ok_or(d::ShaderError::MissingEntryPoint(source.entry.into()))
+                    .ok_or(pso::CreationError::MissingEntryPoint(source.entry.into()))
             }
             r::ShaderModule::Spirv(ref raw_data) => {
                 let mut ast = Self::parse_spirv(raw_data)?;
-                spirv_cross_specialize_ast(&mut ast, &source.specialization)?;
+                spirv_cross_specialize_ast(&mut ast, &source.specialization)
+                    .map_err(pso::CreationError::InvalidSpecialization)?;
                 Self::patch_spirv_resources(&mut ast, layout)?;
 
                 let execution_model = conv::map_stage(stage);
@@ -560,26 +562,6 @@ impl Device {
                 Ok((shader, true))
             }
         }
-    }
-
-    /// Create a shader module from HLSL with a single entry point
-    pub fn create_shader_module_from_source(
-        &self,
-        stage: ShaderStage,
-        hlsl_entry: &str,
-        entry_point: &str,
-        code: &[u8],
-    ) -> Result<r::ShaderModule, d::ShaderError> {
-        let mut shader_map = BTreeMap::new();
-        let blob = compile_shader(
-            stage,
-            hlsl::ShaderModel::V5_1,
-            &self.features,
-            hlsl_entry,
-            code,
-        )?;
-        shader_map.insert(entry_point.into(), blob);
-        Ok(r::ShaderModule::Compiled(shader_map))
     }
 
     pub(crate) fn create_command_signature(
@@ -1078,7 +1060,7 @@ impl Device {
             native::WeakPtr<dxgi1_4::IDXGISwapChain3>,
             dxgiformat::DXGI_FORMAT,
         ),
-        w::CreationError,
+        w::SwapchainError,
     > {
         let mut swap_chain1 = native::WeakPtr::<dxgi1_2::IDXGISwapChain1>::null();
 
@@ -1856,17 +1838,20 @@ impl d::Device<B> for Device {
             }
         }
 
-        let build_shader = |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, B>>| {
+        let build_shader = |stage: ShaderStage,
+                            source: Option<&pso::EntryPoint<'a, B>>|
+         -> Result<ShaderBc, pso::CreationError> {
             let source = match source {
                 Some(src) => src,
                 None => return Ok(ShaderBc::None),
             };
 
-            match Self::extract_entry_point(stage, source, desc.layout, features) {
-                Ok((shader, true)) => Ok(ShaderBc::Owned(shader)),
-                Ok((shader, false)) => Ok(ShaderBc::Borrowed(shader)),
-                Err(err) => Err(pso::CreationError::Shader(err)),
-            }
+            let (shader, owned) = Self::extract_entry_point(stage, source, desc.layout, features)?;
+            Ok(if owned {
+                ShaderBc::Owned(shader)
+            } else {
+                ShaderBc::Borrowed(shader)
+            })
         };
 
         let vertex_buffers: Vec<pso::VertexBufferDesc> = Vec::new();
@@ -1918,10 +1903,7 @@ impl d::Device<B> for Device {
             // this information, so just pretend like this workaround never existed and hope
             // for the best.
             if let crate::resource::ShaderModule::Spirv(ref spv) = vs.module {
-                Some(
-                    Self::introspect_spirv_vertex_semantic_remapping(spv)
-                        .map_err(pso::CreationError::Shader)?,
-                )
+                Some(Self::introspect_spirv_vertex_semantic_remapping(spv)?)
             } else {
                 None
             }
@@ -2213,8 +2195,7 @@ impl d::Device<B> for Device {
             &desc.shader,
             desc.layout,
             &self.features,
-        )
-        .map_err(|err| pso::CreationError::Shader(err))?;
+        )?;
 
         let (pipeline, hr) = self.raw.create_compute_pipeline_state(
             desc.layout.shared.signature,
@@ -3373,7 +3354,7 @@ impl d::Device<B> for Device {
         fences: I,
         wait: d::WaitFor,
         timeout_ns: u64,
-    ) -> Result<bool, d::OomOrDeviceLost>
+    ) -> Result<bool, d::WaitError>
     where
         I: IntoIterator,
         I::Item: Borrow<r::Fence>,
@@ -3438,7 +3419,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, d::OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, d::WaitError> {
         unimplemented!()
     }
 
@@ -3488,7 +3469,7 @@ impl d::Device<B> for Device {
         _data: &mut [u8],
         _stride: buffer::Offset,
         _flags: query::ResultFlags,
-    ) -> Result<bool, d::OomOrDeviceLost> {
+    ) -> Result<bool, d::WaitError> {
         unimplemented!()
     }
 

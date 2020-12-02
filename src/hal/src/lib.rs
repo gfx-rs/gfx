@@ -478,16 +478,9 @@ pub enum IndexType {
 
 /// Error creating an instance of a backend on the platform that
 /// doesn't support this backend.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, thiserror::Error)]
+#[error("Backend is not supported on this platform")]
 pub struct UnsupportedBackend;
-
-impl fmt::Display for UnsupportedBackend {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "UnsupportedBackend")
-    }
-}
-
-impl std::error::Error for UnsupportedBackend {}
 
 /// An instantiated backend.
 ///

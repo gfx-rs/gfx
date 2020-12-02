@@ -9,31 +9,36 @@ extern crate lazy_static;
 #[macro_use]
 extern crate objc;
 
-use ash::extensions::{
-    self,
-    ext::{DebugReport, DebugUtils},
-    khr::DrawIndirectCount,
+use ash::{
+    extensions::{
+        self,
+        ext::{DebugReport, DebugUtils},
+        khr::DrawIndirectCount,
+        khr::Swapchain,
+        nv::MeshShader,
+    },
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+    vk,
 };
-use ash::extensions::{khr::Swapchain, nv::MeshShader};
-use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
-use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
 
 use hal::{
     adapter,
-    device::{CreationError as DeviceCreationError, DeviceLost, OutOfMemory, SurfaceLost},
+    device::{CreationError as DeviceCreationError, DeviceLost, OutOfMemory},
     format, image, memory,
     pso::{PatchSize, PipelineStage},
     queue,
-    window::{PresentError, Suboptimal},
+    window::{OutOfDate, PresentError, Suboptimal, SurfaceLost},
     Features, Hints, Limits,
 };
 
-use std::borrow::{Borrow, Cow};
-use std::ffi::{CStr, CString};
-use std::sync::Arc;
-use std::{fmt, mem, slice};
+use std::{
+    borrow::{Borrow, Cow},
+    ffi::{CStr, CString},
+    fmt, mem, slice,
+    sync::Arc,
+};
 
 #[cfg(feature = "use-rtld-next")]
 use ash::{EntryCustom, LoadingError};
@@ -65,7 +70,7 @@ lazy_static! {
         vec![
             DebugUtils::name(),
             *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2,
-	]
+    ]
     };
     static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![extensions::khr::Swapchain::name()];
     static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
@@ -449,9 +454,11 @@ impl hal::Instance<Backend> for Instance {
                     .pfn_user_callback(Some(debug_utils_messenger_callback));
                 let handle = unsafe { ext.create_debug_utils_messenger(&info, None) }.unwrap();
                 Some(DebugMessenger::Utils(ext, handle))
-            } else if cfg!(debug_assertions) && instance_extensions.iter().any(|props| unsafe {
-                CStr::from_ptr(props.extension_name.as_ptr()) == DebugReport::name()
-            }) {
+            } else if cfg!(debug_assertions)
+                && instance_extensions.iter().any(|props| unsafe {
+                    CStr::from_ptr(props.extension_name.as_ptr()) == DebugReport::name()
+                })
+            {
                 let ext = DebugReport::new(entry, &instance);
                 let info = vk::DebugReportCallbackCreateInfoEXT::builder()
                     .flags(vk::DebugReportFlagsEXT::all())
@@ -1501,15 +1508,11 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         match self.swapchain_fn.queue_present(*self.raw, &present_info) {
             Ok(true) => Ok(None),
             Ok(false) => Ok(Some(Suboptimal)),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(PresentError::OutOfMemory(OutOfMemory::Host))
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(PresentError::OutOfMemory(OutOfMemory::Device))
-            }
-            Err(vk::Result::ERROR_DEVICE_LOST) => Err(PresentError::DeviceLost(DeviceLost)),
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(PresentError::OutOfDate),
-            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => Err(PresentError::SurfaceLost(SurfaceLost)),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device.into()),
+            Err(vk::Result::ERROR_DEVICE_LOST) => Err(DeviceLost.into()),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(OutOfDate.into()),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => Err(SurfaceLost.into()),
             _ => panic!("Failed to present frame"),
         }
     }
