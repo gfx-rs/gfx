@@ -16,11 +16,11 @@
 //! [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
 //! [`DescriptorSetCopy`]: struct.DescriptorSetWrite.html
 
-use std::{borrow::Borrow, fmt, iter};
-
 use crate::{
     buffer::SubRange, device::OutOfMemory, image::Layout, pso::ShaderStageFlags, Backend, PseudoVec,
 };
+
+use std::{borrow::Borrow, fmt, iter};
 
 ///
 pub type DescriptorSetIndex = u16;
@@ -137,46 +137,24 @@ pub struct DescriptorRangeDesc {
 }
 
 /// An error allocating descriptor sets from a pool.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum AllocationError {
     /// OutOfMemory::Host: Memory allocation on the host side failed.
     /// OutOfMemory::Device: Memory allocation on the device side failed.
     /// This could be caused by a lack of memory or pool fragmentation.
-    OutOfMemory(OutOfMemory),
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
     /// Memory allocation failed as there is not enough in the pool.
     /// This could be caused by too many descriptor sets being created.
+    #[error("Out of pool memory")]
     OutOfPoolMemory,
     /// Memory allocation failed due to pool fragmentation.
+    #[error("Pool is fragmented")]
     FragmentedPool,
     /// Descriptor set allocation failed as the layout is incompatible with the pool.
+    #[error("Incompatible layout")]
     IncompatibleLayout,
 }
-
-impl std::fmt::Display for AllocationError {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AllocationError::OutOfMemory(OutOfMemory::Host) => {
-                write!(fmt, "Failed to allocate descriptor set: Out of host memory")
-            }
-            AllocationError::OutOfMemory(OutOfMemory::Device) => write!(
-                fmt,
-                "Failed to allocate descriptor set: Out of device memory"
-            ),
-            AllocationError::OutOfPoolMemory => {
-                write!(fmt, "Failed to allocate descriptor set: Out of pool memory")
-            }
-            AllocationError::FragmentedPool => {
-                write!(fmt, "Failed to allocate descriptor set: Pool is fragmented")
-            }
-            AllocationError::IncompatibleLayout => write!(
-                fmt,
-                "Failed to allocate descriptor set: Incompatible layout"
-            ),
-        }
-    }
-}
-
-impl std::error::Error for AllocationError {}
 
 /// A descriptor pool is a collection of memory from which descriptor sets are allocated.
 pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {

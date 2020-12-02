@@ -954,7 +954,7 @@ impl window::PresentationSurface<Backend> for Surface {
         &mut self,
         device: &device::Device,
         config: window::SwapchainConfig,
-    ) -> Result<(), window::CreationError> {
+    ) -> Result<(), window::SwapchainError> {
         assert!(image::Usage::COLOR_ATTACHMENT.contains(config.image_usage));
 
         let swapchain = match self.presentation.take() {
@@ -974,7 +974,7 @@ impl window::PresentationSurface<Backend> for Surface {
                 );
                 if result != winerror::S_OK {
                     error!("ResizeBuffers failed with 0x{:x}", result as u32);
-                    return Err(window::CreationError::WindowInUse(hal::device::WindowInUse));
+                    return Err(window::SwapchainError::WindowInUse);
                 }
                 present.swapchain
             }

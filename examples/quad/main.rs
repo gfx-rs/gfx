@@ -356,7 +356,7 @@ where
 
         let img = image::load(Cursor::new(&img_data[..]), image::ImageFormat::Png)
             .unwrap()
-            .to_rgba();
+            .to_rgba8();
         let (width, height) = img.dimensions();
         let kind = i::Kind::D2(width as i::Size, height as i::Size, 1, 1);
         let row_alignment_mask = limits.optimal_buffer_copy_pitch_alignment as u32 - 1;

@@ -82,7 +82,7 @@ impl Device {
             ShaderStage::Geometry => glow::GEOMETRY_SHADER,
             ShaderStage::Fragment => glow::FRAGMENT_SHADER,
             ShaderStage::Compute if can_compute => glow::COMPUTE_SHADER,
-            _ => return Err(d::ShaderError::UnsupportedStage(stage.to_flag())),
+            _ => return Err(d::ShaderError::Unsupported),
         };
 
         let name = unsafe { gl.create_shader(target) }.unwrap();
@@ -897,9 +897,8 @@ impl d::Device<B> for Device {
                     warn!("\tLog: {}", log);
                 }
             } else {
-                return Err(pso::CreationError::Shader(
-                    d::ShaderError::CompilationFailed(log),
-                ));
+                error!("\tLog: {}", log);
+                return Err(pso::CreationError::Other);
             }
 
             name
@@ -1153,7 +1152,7 @@ impl d::Device<B> for Device {
             .contains(LegacyFeatures::CONSTANT_BUFFER)
             && usage.contains(buffer::Usage::UNIFORM)
         {
-            return Err(buffer::CreationError::UnsupportedUsage { usage });
+            return Err(buffer::CreationError::UnsupportedUsage(usage));
         }
 
         Ok(n::Buffer::Unbound { size, usage })
@@ -1732,7 +1731,7 @@ impl d::Device<B> for Device {
         &self,
         fence: &n::Fence,
         timeout_ns: u64,
-    ) -> Result<bool, d::OomOrDeviceLost> {
+    ) -> Result<bool, d::WaitError> {
         // TODO:
         // This can be called by multiple objects wanting to ensure they have exclusive
         // access to a resource. How much does this call costs ? The status of the fence
@@ -1780,7 +1779,7 @@ impl d::Device<B> for Device {
         fences: I,
         wait: d::WaitFor,
         timeout_ns: u64,
-    ) -> Result<bool, d::OomOrDeviceLost>
+    ) -> Result<bool, d::WaitError>
     where
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
@@ -1836,7 +1835,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, d::OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, d::WaitError> {
         unimplemented!()
     }
 
@@ -1873,7 +1872,7 @@ impl d::Device<B> for Device {
         _data: &mut [u8],
         _stride: buffer::Offset,
         _flags: query::ResultFlags,
-    ) -> Result<bool, d::OomOrDeviceLost> {
+    ) -> Result<bool, d::WaitError> {
         unimplemented!()
     }
 

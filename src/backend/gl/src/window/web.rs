@@ -113,7 +113,7 @@ impl window::PresentationSurface<B> for Surface {
         &mut self,
         device: &Device,
         config: window::SwapchainConfig,
-    ) -> Result<(), window::CreationError> {
+    ) -> Result<(), window::SwapchainError> {
         let gl = &device.share.context;
 
         if let Some(swapchain) = self.swapchain.take() {

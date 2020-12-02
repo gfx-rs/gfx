@@ -8,13 +8,13 @@
 //! for a particular GPU, generally created from an [instance][crate::Instance]
 //! of that [backend][crate::Backend].
 
-use std::{any::Any, fmt};
-
 use crate::{
     device, format, image, memory,
     queue::{QueueGroup, QueuePriority},
     Backend, Features, Hints, Limits,
 };
+
+use std::{any::Any, fmt};
 
 /// A description for a single type of memory in a heap.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

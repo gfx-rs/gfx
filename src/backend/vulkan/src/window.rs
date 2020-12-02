@@ -10,9 +10,9 @@ use ash::{extensions::khr, version::DeviceV1_0 as _, vk};
 use hal::{format::Format, window as w};
 use smallvec::SmallVec;
 
-use crate::{conv, info, native};
 use crate::{
-    Backend, Device, Instance, PhysicalDevice, QueueFamily, RawDevice, RawInstance, VK_ENTRY,
+    conv, info, native, Backend, Device, Instance, PhysicalDevice, QueueFamily, RawDevice,
+    RawInstance, VK_ENTRY,
 };
 
 #[derive(Debug, Default)]
@@ -415,7 +415,7 @@ impl w::PresentationSurface<Backend> for Surface {
         &mut self,
         device: &Device,
         config: w::SwapchainConfig,
-    ) -> Result<(), w::CreationError> {
+    ) -> Result<(), w::SwapchainError> {
         use hal::device::Device as _;
 
         let format = config.format;
@@ -508,21 +508,15 @@ impl w::PresentationSurface<Backend> for Surface {
                 };
                 Ok((image, suboptimal))
             }
-            Err(vk::Result::NOT_READY) => Err(w::AcquireError::NotReady),
-            Err(vk::Result::TIMEOUT) => Err(w::AcquireError::Timeout),
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(w::AcquireError::OutOfDate),
-            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
-                Err(w::AcquireError::SurfaceLost(hal::device::SurfaceLost))
+            Err(vk::Result::NOT_READY) => Err(w::AcquireError::NotReady { timeout: false }),
+            Err(vk::Result::TIMEOUT) => Err(w::AcquireError::NotReady { timeout: true }),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(w::OutOfDate.into()),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => Err(w::SurfaceLost.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(hal::device::OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(hal::device::OutOfMemory::Device.into())
             }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(w::AcquireError::OutOfMemory(hal::device::OutOfMemory::Host))
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(w::AcquireError::OutOfMemory(
-                hal::device::OutOfMemory::Device,
-            )),
-            Err(vk::Result::ERROR_DEVICE_LOST) => {
-                Err(w::AcquireError::DeviceLost(hal::device::DeviceLost))
-            }
+            Err(vk::Result::ERROR_DEVICE_LOST) => Err(hal::device::DeviceLost.into()),
             _ => unreachable!(),
         }
     }
@@ -559,25 +553,19 @@ impl Swapchain {
         match index {
             // special case for Intel Vulkan returning bizzare values (ugh)
             Ok((i, _)) if self.vendor_id == info::intel::VENDOR && i > 0x100 => {
-                Err(w::AcquireError::OutOfDate)
+                Err(w::OutOfDate.into())
             }
             Ok((i, true)) => Ok((i, Some(w::Suboptimal))),
             Ok((i, false)) => Ok((i, None)),
-            Err(vk::Result::NOT_READY) => Err(w::AcquireError::NotReady),
-            Err(vk::Result::TIMEOUT) => Err(w::AcquireError::Timeout),
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(w::AcquireError::OutOfDate),
-            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
-                Err(w::AcquireError::SurfaceLost(hal::device::SurfaceLost))
+            Err(vk::Result::NOT_READY) => Err(w::AcquireError::NotReady { timeout: false }),
+            Err(vk::Result::TIMEOUT) => Err(w::AcquireError::NotReady { timeout: true }),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(w::OutOfDate.into()),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => Err(w::SurfaceLost.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(hal::device::OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(hal::device::OutOfMemory::Device.into())
             }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(w::AcquireError::OutOfMemory(hal::device::OutOfMemory::Host))
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(w::AcquireError::OutOfMemory(
-                hal::device::OutOfMemory::Device,
-            )),
-            Err(vk::Result::ERROR_DEVICE_LOST) => {
-                Err(w::AcquireError::DeviceLost(hal::device::DeviceLost))
-            }
+            Err(vk::Result::ERROR_DEVICE_LOST) => Err(hal::device::DeviceLost.into()),
             _ => panic!("Failed to acquire image."),
         }
     }

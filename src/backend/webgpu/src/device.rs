@@ -3,7 +3,7 @@ use std::{borrow::Borrow, ops::Range};
 use hal::{
     buffer,
     device::{
-        AllocationError, BindError, DeviceLost, MapError, OomOrDeviceLost, OutOfMemory, ShaderError,
+        AllocationError, BindError, DeviceLost, MapError, OutOfMemory, ShaderError, WaitError,
     },
     format, image,
     memory::{Requirements, Segment},
@@ -418,7 +418,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         _fence: &<Backend as hal::Backend>::Fence,
         _timeout_ns: u64,
-    ) -> Result<bool, OomOrDeviceLost> {
+    ) -> Result<bool, WaitError> {
         todo!()
     }
 
@@ -427,7 +427,7 @@ impl hal::device::Device<Backend> for Device {
         _fences: I,
         _wait: hal::device::WaitFor,
         _timeout_ns: u64,
-    ) -> Result<bool, OomOrDeviceLost>
+    ) -> Result<bool, WaitError>
     where
         I: IntoIterator,
         I::Item: Borrow<<Backend as hal::Backend>::Fence>,
@@ -457,7 +457,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn get_event_status(
         &self,
         _event: &<Backend as hal::Backend>::Event,
-    ) -> Result<bool, OomOrDeviceLost> {
+    ) -> Result<bool, WaitError> {
         todo!()
     }
 
@@ -494,7 +494,7 @@ impl hal::device::Device<Backend> for Device {
         _data: &mut [u8],
         _stride: buffer::Offset,
         _flags: query::ResultFlags,
-    ) -> Result<bool, OomOrDeviceLost> {
+    ) -> Result<bool, WaitError> {
         todo!()
     }
 

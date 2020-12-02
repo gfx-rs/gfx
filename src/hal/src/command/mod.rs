@@ -16,8 +16,6 @@
 mod clear;
 mod structs;
 
-use std::{any::Any, borrow::Borrow, fmt, ops::Range};
-
 use crate::{
     buffer,
     image::{Filter, Layout, SubresourceRange},
@@ -25,6 +23,8 @@ use crate::{
     pass, pso, query, Backend, DrawCount, IndexCount, IndexType, InstanceCount, TaskCount,
     VertexCount, VertexOffset, WorkGroupCount,
 };
+
+use std::{any::Any, borrow::Borrow, fmt, ops::Range};
 
 pub use self::clear::*;
 pub use self::structs::*;
