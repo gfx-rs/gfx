@@ -68,7 +68,11 @@ fn get_final_function(
     type MTLFunctionConstant = Object;
 
     let mut mtl_function = library.get_function(entry, None).map_err(|e| {
-        error!("Function retrieval error {:?}", e);
+        error!(
+            "Function retrieval error {:?}. Known names: {:?}",
+            e,
+            library.function_names()
+        );
         FunctionError::InvalidEntryPoint
     })?;
 
@@ -644,17 +648,16 @@ impl Device {
         module: &naga::Module,
         naga_options: &naga::back::msl::Options,
     ) -> Result<n::ModuleInfo, d::ShaderError> {
-        let source = naga::back::msl::write_string(module, naga_options)
+        let (source, info) = naga::back::msl::write_string(module, naga_options)
             .map_err(|e| d::ShaderError::CompilationFailed(format!("{:?}", e)))?;
 
         let mut entry_point_map = n::EntryPointMap::default();
-        for (&(stage, ref name), ep) in module.entry_points.iter() {
+        for ((pair, ep), name) in module.entry_points.iter().zip(info.entry_point_names) {
             entry_point_map.insert(
-                name.clone(),
+                pair.1.clone(),
                 spirv::EntryPoint {
-                    //TODO: fill that information by Naga
-                    name: format!("{}{:?}", name, stage),
-                    execution_model: match stage {
+                    name,
+                    execution_model: match pair.0 {
                         naga::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
                         naga::ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
                         naga::ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
@@ -1811,20 +1814,24 @@ impl hal::device::Device<Backend> for Device {
         //TODO: we can probably at least parse here and save the `Ast`
         Ok(n::ShaderModule {
             spv: raw_data.to_vec(),
-            #[cfg(feature = "naga")]
-            naga: match naga::front::spv::Parser::new(raw_data.iter().cloned(), &Default::default())
-                .parse()
-            {
-                Ok(module) => match naga::proc::Validator::new().validate(&module) {
-                    Ok(()) => Some(module),
+            #[cfg(all(feature = "naga", not(feature = "naga-in")))]
+            naga: None,
+            #[cfg(feature = "naga-in")]
+            naga: {
+                let parser =
+                    naga::front::spv::Parser::new(raw_data.iter().cloned(), &Default::default());
+                match parser.parse() {
+                    Ok(module) => match naga::proc::Validator::new().validate(&module) {
+                        Ok(()) => Some(module),
+                        Err(e) => {
+                            warn!("Naga validation failed: {:?}", e);
+                            None
+                        }
+                    },
                     Err(e) => {
-                        warn!("Naga validation failed: {:?}", e);
+                        warn!("Naga parsing failed: {:?}", e);
                         None
                     }
-                },
-                Err(e) => {
-                    warn!("Naga parsing failed: {:?}", e);
-                    None
                 }
             },
         })
@@ -1834,13 +1841,13 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn create_shader_module_from_naga(
         &self,
         module: naga::Module,
-    ) -> Result<n::ShaderModule, d::ShaderError> {
+    ) -> Result<n::ShaderModule, (d::ShaderError, naga::Module)> {
         use naga::back::spv;
         let mut flags = spv::WriterFlags::empty();
         if cfg!(debug_assertions) {
             flags |= spv::WriterFlags::DEBUG;
         }
-        let spv = spv::Writer::new(&module.header, flags).write(&module);
+        let spv = spv::write_vec(&module, flags);
         Ok(n::ShaderModule {
             spv,
             naga: Some(module),

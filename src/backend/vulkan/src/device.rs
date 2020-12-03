@@ -1210,6 +1210,20 @@ impl d::Device<B> for Device {
         }
     }
 
+    #[cfg(feature = "naga")]
+    unsafe fn create_shader_module_from_naga(
+        &self,
+        module: naga::Module,
+    ) -> Result<n::ShaderModule, (d::ShaderError, naga::Module)> {
+        use naga::back::spv;
+        let mut flags = spv::WriterFlags::empty();
+        if cfg!(debug_assertions) {
+            flags |= spv::WriterFlags::DEBUG;
+        }
+        let spv = spv::write_vec(&module, flags);
+        self.create_shader_module(&spv).map_err(|e| (e, module))
+    }
+
     unsafe fn create_sampler(
         &self,
         desc: &image::SamplerDesc,

@@ -16,6 +16,7 @@ edition = "2018"
 default = []
 auto-capture = []
 signpost = []
+naga-parse = ["naga/spv-in"]
 
 [lib]
 name = "gfx_backend_metal"
@@ -42,9 +43,9 @@ raw-window-handle = "0.3"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-1"
+tag = "gfx-2"
 #TODO: remove `spv-out` once spirv-cross is deprecated
-features = ["spv-in", "spv-out", "msl-out"]
+features = ["spv-out", "msl-out"]
 optional = true
 
 # This forces docs.rs to build the crate on mac, otherwise the build fails

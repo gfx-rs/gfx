@@ -9,6 +9,8 @@ extern crate lazy_static;
 #[macro_use]
 extern crate objc;
 
+#[cfg(not(feature = "use-rtld-next"))]
+use ash::Entry;
 use ash::{
     extensions::{
         self,
@@ -18,10 +20,8 @@ use ash::{
         nv::MeshShader,
     },
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-    vk,
+    vk, LoadingError,
 };
-#[cfg(not(feature = "use-rtld-next"))]
-use ash::{Entry, LoadingError};
 
 use hal::{
     adapter,
@@ -41,7 +41,7 @@ use std::{
 };
 
 #[cfg(feature = "use-rtld-next")]
-use ash::{EntryCustom, LoadingError};
+use ash::EntryCustom;
 #[cfg(feature = "use-rtld-next")]
 use shared_library::dynamic_library::{DynamicLibrary, SpecialHandles};
 
@@ -115,14 +115,14 @@ lazy_static! {
 #[cfg(feature = "use-rtld-next")]
 lazy_static! {
     // Entry function pointers
-    pub static ref VK_ENTRY: Result<EntryCustom<V1_0, ()>, LoadingError>
-        = EntryCustom::new_custom(
-            || Ok(()),
+    pub static ref VK_ENTRY: Result<EntryCustom<()>, LoadingError>
+        = Ok(EntryCustom::new_custom(
+            (),
             |_, name| unsafe {
                 DynamicLibrary::symbol_special(SpecialHandles::Next, &*name.to_string_lossy())
-                    .unwrap_or(ptr::null_mut())
+                    .unwrap_or(std::ptr::null_mut())
             }
-        );
+        ));
 }
 
 pub struct RawInstance {

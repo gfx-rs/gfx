@@ -3,7 +3,8 @@ EXCLUDES:=--exclude gfx-backend-webgpu
 FEATURES_GL:=
 FEATURES_HAL:=
 FEATURES_HAL2:=
-METAL_SHADERS=src/backend/metal/shaders
+METAL_SHADERS:=src/backend/metal/shaders
+VULKAN_FEATURES:=naga
 
 ifeq (,$(TARGET))
 	CHECK_TARGET_FLAG=
@@ -38,6 +39,7 @@ else
 		EXCLUDES+= --exclude gfx-backend-metal
 		FEATURES_HAL=vulkan
 		FEATURES_GL=gl
+		VULKAN_FEATURES+= use-rtld-next
 	endif
 endif
 
@@ -58,6 +60,7 @@ check: check-backends
 
 check-backends:
 	cargo check --all $(CHECK_TARGET_FLAG) $(EXCLUDES) --exclude gfx-warden
+	cargo check --manifest-path=src/backend/vulkan/Cargo.toml --features "$(VULKAN_FEATURES)"
 ifeq ($(UNAME_S),Darwin)
 	cargo check --manifest-path=src/backend/metal/Cargo.toml --all-features
 endif
