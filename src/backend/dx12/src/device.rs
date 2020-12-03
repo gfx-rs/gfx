@@ -3616,7 +3616,10 @@ impl d::Device<B> for Device {
 
     unsafe fn set_command_buffer_name(&self, command_buffer: &mut cmd::CommandBuffer, name: &str) {
         let cwstr = wide_cstr(name);
-        command_buffer.raw.SetName(cwstr.as_ptr());
+        if !command_buffer.raw.is_null() {
+            command_buffer.raw.SetName(cwstr.as_ptr());
+        }
+        command_buffer.raw_name = cwstr;
     }
 
     unsafe fn set_semaphore_name(&self, semaphore: &mut r::Semaphore, name: &str) {
