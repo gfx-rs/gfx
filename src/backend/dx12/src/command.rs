@@ -449,6 +449,8 @@ pub struct CommandBuffer {
 
     /// Temporary transition barriers.
     barriers: Vec<d3d12::D3D12_RESOURCE_BARRIER>,
+    /// Name of the underlying raw `GraphicsCommandList` object.
+    pub(crate) raw_name: Vec<u16>,
 }
 
 impl fmt::Debug for CommandBuffer {
@@ -496,6 +498,7 @@ impl CommandBuffer {
             retained_resources: Vec::new(),
             temp_marker: Vec::new(),
             barriers: Vec::new(),
+            raw_name: Vec::new(),
         }
     }
 
@@ -1205,6 +1208,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         assert_eq!(self.raw, native::GraphicsCommandList::null());
         self.allocator = Some(allocator);
         self.raw = list;
+
+        if !self.raw_name.is_empty() {
+            self.raw.SetName(self.raw_name.as_ptr());
+        }
     }
 
     unsafe fn finish(&mut self) {
@@ -1220,6 +1227,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.raw.close();
         }
         if self.phase != Phase::Initial {
+            // Reset the name so it won't get used later for an unnamed `CommandBuffer`.
+            const EMPTY_NAME: u16 = 0;
+            self.raw.SetName(&EMPTY_NAME);
+
             self.pool_shared.release_list(self.raw);
             self.raw = native::GraphicsCommandList::null();
         }
