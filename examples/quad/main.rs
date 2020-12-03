@@ -102,40 +102,28 @@ fn main() {
         .with_title("quad".to_string());
 
     // instantiate backend
-    #[cfg(not(target_arch = "wasm32"))]
-    let (_window, instance, mut adapters, surface) = {
-        let window = wb.build(&event_loop).unwrap();
-        let instance =
-            back::Instance::create("gfx-rs quad", 1).expect("Failed to create an instance!");
-        let adapters = instance.enumerate_adapters();
-        let surface = unsafe {
-            instance
-                .create_surface(&window)
-                .expect("Failed to create a surface!")
-        };
-        // Return `window` so it is not dropped: dropping it invalidates `surface`.
-        (window, Some(instance), adapters, surface)
-    };
+    let window = wb.build(&event_loop).unwrap();
 
     #[cfg(target_arch = "wasm32")]
-    let (_window, instance, mut adapters, surface) = {
-        let (window, surface) = {
-            let window = wb.build(&event_loop).unwrap();
-            web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .body()
-                .unwrap()
-                .append_child(&winit::platform::web::WindowExtWebSys::canvas(&window))
-                .unwrap();
-            let surface = back::Surface::from_raw_handle(&window);
-            (window, surface)
-        };
+    web_sys::window()
+        .unwrap()
+        .document()
+        .unwrap()
+        .body()
+        .unwrap()
+        .append_child(&winit::platform::web::WindowExtWebSys::canvas(&window))
+        .unwrap();
 
-        let adapters = surface.enumerate_adapters();
-        (window, None, adapters, surface)
+    let instance =
+        back::Instance::create("gfx-rs quad", 1).expect("Failed to create an instance!");
+
+    let surface = unsafe {
+        instance
+            .create_surface(&window)
+            .expect("Failed to create a surface!")
     };
+
+    let mut adapters = instance.enumerate_adapters();
 
     for adapter in &adapters {
         println!("{:?}", adapter.info);
@@ -143,7 +131,7 @@ fn main() {
 
     let adapter = adapters.remove(0);
 
-    let mut renderer = Renderer::new(instance, surface, adapter);
+    let mut renderer = Renderer::new(Some(instance), surface, adapter);
 
     renderer.render();
 

@@ -33,10 +33,10 @@ mod window;
 
 // Web implementation
 #[cfg(target_arch = "wasm32")]
-pub use window::web::{Surface, Swapchain};
+pub use window::web::{Instance, Surface, Swapchain};
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use crate::window::egl::{Instance, Surface, Swapchain};
+pub use window::egl::{Instance, Surface, Swapchain};
 
 pub use glow::Context as GlContext;
 use glow::HasContext;
@@ -101,11 +101,7 @@ impl Deref for GlContainer {
 pub enum Backend {}
 
 impl hal::Backend for Backend {
-    #[cfg(not(target_arch = "wasm32"))]
     type Instance = Instance;
-
-    #[cfg(target_arch = "wasm32")]
-    type Instance = Surface;
 
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
