@@ -4,7 +4,8 @@ use crate::{
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use hal::{adapter::Adapter, format as f, image, window};
-use std::iter;
+use parking_lot::Mutex;
+use std::{iter, sync::Arc};
 use wasm_bindgen::JsCast;
 
 #[derive(Clone, Debug)]
@@ -15,6 +16,66 @@ pub struct Swapchain {
     pub(crate) frame_buffers: ArrayVec<[native::RawFrameBuffer; 3]>,
 }
 
+#[derive(Debug)]
+pub struct Instance {
+    canvas: Mutex<Option<Starc<web_sys::HtmlCanvasElement>>>,
+}
+
+impl hal::Instance<B> for Instance {
+    fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
+        Ok(Instance {
+            canvas: Mutex::new(None),
+        })
+    }
+
+    fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
+        if let Some(canvas) = self.canvas.lock().as_ref() {
+            let adapter = PhysicalDevice::new_adapter(GlContainer::from_canvas(canvas));
+            vec![adapter]
+        } else {
+            vec![]
+        }
+    }
+
+    unsafe fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, window::InitError> {
+        if let raw_window_handle::RawWindowHandle::Web(handle) = has_handle.raw_window_handle() {
+            let canvas: Starc<web_sys::HtmlCanvasElement> = Starc::new(
+                web_sys::window()
+                    .and_then(|win| win.document())
+                    .expect("Cannot get document")
+                    .query_selector(&format!("canvas[data-raw-handle=\"{}\"]", handle.id))
+                    .expect("Cannot query for canvas")
+                    .expect("Canvas is not found")
+                    .dyn_into()
+                    .expect("Failed to downcast to canvas type"),
+            );
+
+            *self.canvas.lock() = Some(canvas.clone());
+
+            Ok(Surface {
+                canvas,
+                swapchain: None,
+                renderbuffer: None,
+            })
+        } else {
+            unreachable!()
+        }
+    }
+
+    unsafe fn destroy_surface(&self, surface: Surface) {
+        let mut canvas_option_ref = self.canvas.lock();
+
+        if let Some(canvas) = canvas_option_ref.as_ref() {
+            if Arc::ptr_eq(&canvas.arc, &surface.canvas.arc) {
+                *canvas_option_ref = None;
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Surface {
     canvas: Starc<web_sys::HtmlCanvasElement>,
@@ -23,30 +84,6 @@ pub struct Surface {
 }
 
 impl Surface {
-    pub fn from_canvas(canvas: web_sys::HtmlCanvasElement) -> Self {
-        Surface {
-            canvas: Starc::new(canvas),
-            swapchain: None,
-            renderbuffer: None,
-        }
-    }
-
-    pub fn from_raw_handle(has_handle: &impl raw_window_handle::HasRawWindowHandle) -> Self {
-        if let raw_window_handle::RawWindowHandle::Web(handle) = has_handle.raw_window_handle() {
-            let canvas = web_sys::window()
-                .and_then(|win| win.document())
-                .expect("Cannot get document")
-                .query_selector(&format!("canvas[data-raw-handle=\"{}\"]", handle.id))
-                .expect("Cannot query for canvas")
-                .expect("Canvas is not found")
-                .dyn_into()
-                .expect("Failed to downcast to canvas type");
-            Self::from_canvas(canvas)
-        } else {
-            unreachable!()
-        }
-    }
-
     fn swapchain_formats(&self) -> Vec<f::Format> {
         vec![f::Format::Rgba8Unorm, f::Format::Bgra8Unorm]
     }
@@ -173,28 +210,5 @@ impl window::PresentationSurface<B> for Surface {
         let swapchain_image =
             native::SwapchainImage::new(self.renderbuffer.unwrap(), sc.raw_format, sc.channel);
         Ok((swapchain_image, None))
-    }
-}
-
-impl hal::Instance<B> for Surface {
-    fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
-        unimplemented!()
-    }
-
-    fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
-        // TODO: Move to `self` like native/window
-        let adapter = PhysicalDevice::new_adapter(GlContainer::from_canvas(&self.canvas));
-        vec![adapter]
-    }
-
-    unsafe fn create_surface(
-        &self,
-        _: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<Surface, window::InitError> {
-        unimplemented!()
-    }
-
-    unsafe fn destroy_surface(&self, _surface: Surface) {
-        // TODO: Implement Surface cleanup
     }
 }
