@@ -399,9 +399,9 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Create a new shader module from the `naga` module.
     unsafe fn create_shader_module_from_naga(
         &self,
-        _module: naga::Module,
-    ) -> Result<B::ShaderModule, ShaderError> {
-        Err(ShaderError::Unsupported)
+        module: naga::Module,
+    ) -> Result<B::ShaderModule, (ShaderError, naga::Module)> {
+        Err((ShaderError::Unsupported, module))
     }
 
     /// Destroy a shader module module
