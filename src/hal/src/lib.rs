@@ -46,9 +46,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate serde;
 
-use std::any::Any;
-use std::fmt;
-use std::hash::Hash;
+use std::{any::Any, fmt, hash::Hash};
 
 pub mod adapter;
 pub mod buffer;

@@ -41,10 +41,10 @@ lazy_static = "1"
 raw-window-handle = "0.3"
 
 [dependencies.naga]
-#path = "../../../../naga"
 git = "https://github.com/gfx-rs/naga"
-rev = "0893d912be268298ae2ed784beb541a23b9d6b31"
-features = ["spv-in", "msl-out"]
+tag = "gfx-1"
+#TODO: remove `spv-out` once spirv-cross is deprecated
+features = ["spv-in", "spv-out", "msl-out"]
 optional = true
 
 # This forces docs.rs to build the crate on mac, otherwise the build fails

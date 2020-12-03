@@ -74,32 +74,25 @@ jobs:
           - os: macos-10.15
             name: MacOS Stable
             channel: stable
-            additional_command: cd src/backend/metal && cargo check --all-features
           - os: macos-10.15
             name: MacOS Nightly
             channel: nightly
-            additional_command:
           - os: ubuntu-18.04
             name: Ubuntu Stable
             channel: stable
-            additional_command:
           - os: ubuntu-18.04
             name: Ubuntu Nightly
             channel: nightly
-            additional_command:
           - os: ubuntu-18.04
             name: Web Assembly
             channel: nightly
             target: wasm32-unknown-unknown
-            additional_command:
           - os: windows-2019
             name: Windows Stable
             channel: stable
-            additional_command:
           - os: windows-2019
             name: Windows Nightly
             channel: nightly
-            additional_command:
     steps:
       - uses: actions/checkout@v2
       - if: matrix.channel == 'nightly'
@@ -119,6 +112,3 @@ jobs:
       #- if: matrix.channel == 'stable'
       #  run: rustup component add clippy
       - run: make all
-      - if: matrix.additional_command != ''
-        name: Check extra features
-        run: ${{ matrix.additional_command }}

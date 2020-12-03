@@ -1830,6 +1830,23 @@ impl hal::device::Device<Backend> for Device {
         })
     }
 
+    #[cfg(feature = "naga")]
+    unsafe fn create_shader_module_from_naga(
+        &self,
+        module: naga::Module,
+    ) -> Result<n::ShaderModule, d::ShaderError> {
+        use naga::back::spv;
+        let mut flags = spv::WriterFlags::empty();
+        if cfg!(debug_assertions) {
+            flags |= spv::WriterFlags::DEBUG;
+        }
+        let spv = spv::Writer::new(&module.header, flags).write(&module);
+        Ok(n::ShaderModule {
+            spv,
+            naga: Some(module),
+        })
+    }
+
     unsafe fn create_sampler(
         &self,
         info: &image::SamplerDesc,
