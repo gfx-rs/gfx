@@ -3639,9 +3639,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let sin = self.state.pending_subpasses.pop().unwrap();
 
         self.state.render_pso_is_compatible = match self.state.render_pso {
-            Some(ref ps) => {
-                ps.formats == sin.formats && self.state.target.samples == sin.sample_count
-            }
+            Some(ref ps) => ps.formats == sin.formats,
             None => false,
         };
         self.state.active_depth_stencil_desc = pso::DepthStencilDesc::default();

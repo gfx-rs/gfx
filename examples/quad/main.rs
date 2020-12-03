@@ -114,8 +114,7 @@ fn main() {
         .append_child(&winit::platform::web::WindowExtWebSys::canvas(&window))
         .unwrap();
 
-    let instance =
-        back::Instance::create("gfx-rs quad", 1).expect("Failed to create an instance!");
+    let instance = back::Instance::create("gfx-rs quad", 1).expect("Failed to create an instance!");
 
     let surface = unsafe {
         instance
