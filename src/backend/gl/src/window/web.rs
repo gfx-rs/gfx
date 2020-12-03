@@ -4,7 +4,8 @@ use crate::{
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use hal::{adapter::Adapter, format as f, image, window};
-use std::{iter, sync::Mutex};
+use parking_lot::Mutex;
+use std::{iter, sync::Arc};
 use wasm_bindgen::JsCast;
 
 #[derive(Clone, Debug)]
@@ -28,7 +29,7 @@ impl hal::Instance<B> for Instance {
     }
 
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
-        if let Some(canvas) = self.canvas.lock().unwrap().as_ref() {
+        if let Some(canvas) = self.canvas.lock().as_ref() {
             let adapter = PhysicalDevice::new_adapter(GlContainer::from_canvas(canvas));
             vec![adapter]
         } else {
@@ -52,7 +53,7 @@ impl hal::Instance<B> for Instance {
                     .expect("Failed to downcast to canvas type"),
             );
 
-            *self.canvas.lock().unwrap() = Some(canvas.clone());
+            *self.canvas.lock() = Some(canvas.clone());
 
             Ok(Surface {
                 canvas,
@@ -64,8 +65,14 @@ impl hal::Instance<B> for Instance {
         }
     }
 
-    unsafe fn destroy_surface(&self, _surface: Surface) {
-        // TODO: Implement Surface cleanup
+    unsafe fn destroy_surface(&self, surface: Surface) {
+        let mut canvas_option_ref = self.canvas.lock();
+
+        if let Some(canvas) = canvas_option_ref.as_ref() {
+            if Arc::ptr_eq(&canvas.arc, &surface.canvas.arc) {
+                *canvas_option_ref = None;
+            }
+        }
     }
 }
 
