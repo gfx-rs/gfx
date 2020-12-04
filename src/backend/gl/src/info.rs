@@ -357,7 +357,7 @@ pub(crate) fn query_all(
         get_usize(gl, glow::MAX_TEXTURE_BUFFER_SIZE).unwrap_or(0)
     };
     let min_storage_buffer_offset_alignment = if IS_WEBGL {
-        1024
+        256
     } else {
         get_u64(gl, glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT).unwrap_or(256)
     };
