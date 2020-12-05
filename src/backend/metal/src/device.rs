@@ -164,10 +164,16 @@ impl Drop for Device {
 bitflags! {
     /// Memory type bits.
     struct MemoryTypes: u32 {
+        // = `DEVICE_LOCAL`
         const PRIVATE = 1<<0;
+        // = `CPU_VISIBLE | COHERENT`
         const SHARED = 1<<1;
+        // = `DEVICE_LOCAL | CPU_VISIBLE`
         const MANAGED_UPLOAD = 1<<2;
-        const MANAGED_DOWNLOAD = 1<<3;
+        // = `DEVICE_LOCAL | CPU_VISIBLE | CACHED`
+        // Memory range invalidation is implemented to stall the whole pipeline.
+        // It's inefficient, therefore we aren't going to expose this type.
+        //const MANAGED_DOWNLOAD = 1<<3;
     }
 }
 
@@ -177,7 +183,7 @@ impl MemoryTypes {
             Self::PRIVATE => (MTLStorageMode::Private, MTLCPUCacheMode::DefaultCache),
             Self::SHARED => (MTLStorageMode::Shared, MTLCPUCacheMode::DefaultCache),
             Self::MANAGED_UPLOAD => (MTLStorageMode::Managed, MTLCPUCacheMode::WriteCombined),
-            Self::MANAGED_DOWNLOAD => (MTLStorageMode::Managed, MTLCPUCacheMode::DefaultCache),
+            //Self::MANAGED_DOWNLOAD => (MTLStorageMode::Managed, MTLCPUCacheMode::DefaultCache),
             _ => unreachable!(),
         }
     }
@@ -210,13 +216,7 @@ impl PhysicalDevice {
                     properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE,
                     heap_index: 1,
                 },
-                adapter::MemoryType {
-                    // MANAGED_DOWNLOAD
-                    properties: Properties::DEVICE_LOCAL
-                        | Properties::CPU_VISIBLE
-                        | Properties::CPU_CACHED,
-                    heap_index: 1,
-                },
+                // MANAGED_DOWNLOAD (removed)
             ]
         } else {
             vec![
