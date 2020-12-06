@@ -21,7 +21,7 @@ path = "src/lib.rs"
 [dependencies]
 bitflags = "1.0"
 mint = { version = "0.5", optional = true }
-naga = { git = "https://github.com/gfx-rs/naga", tag = "gfx-2" }
+naga = { git = "https://github.com/gfx-rs/naga", tag = "gfx-3" }
 raw-window-handle = "0.3"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 thiserror = "1"
