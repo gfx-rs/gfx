@@ -16,7 +16,7 @@ edition = "2018"
 name = "gfx_backend_gl"
 
 [features]
-default = []
+default = ["x11"]
 
 [dependencies]
 arrayvec = "0.5"
