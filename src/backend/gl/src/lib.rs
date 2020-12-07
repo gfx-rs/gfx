@@ -391,7 +391,7 @@ impl PhysicalDevice {
 
         let mut memory_types = Vec::new();
 
-        let mut add_memory_type = |memory_type: adapter::MemoryType| {
+        let mut add_buffer_memory_type = |memory_type: adapter::MemoryType| {
             if private_caps.index_buffer_role_change {
                 // If `index_buffer_role_change` is true, we can use a buffer for any role
                 memory_types.push((memory_type, MemoryUsage::Buffer(buffer::Usage::all())));
@@ -407,27 +407,25 @@ impl PhysicalDevice {
             }
         };
 
+        // Coherent memory is only available if we have `glBufferStorage`
+        let coherent_flag = if private_caps.buffer_storage {
+            memory::Properties::COHERENT
+        } else {
+            memory::Properties::empty()
+        };
         // Mimicking vulkan, memory types with more flags should come before those with fewer flags
-        if private_caps.map && private_caps.buffer_storage {
-            // Coherent memory is only available if we have `glBufferStorage`
-            add_memory_type(adapter::MemoryType {
-                properties: memory::Properties::CPU_VISIBLE
-                    | memory::Properties::CPU_CACHED
-                    | memory::Properties::COHERENT,
-                heap_index: CPU_VISIBLE_HEAP,
-            });
-            add_memory_type(adapter::MemoryType {
-                properties: memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
-                heap_index: CPU_VISIBLE_HEAP,
-            });
-        } else if private_caps.map || private_caps.emulate_map {
-            add_memory_type(adapter::MemoryType {
-                properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
-                heap_index: CPU_VISIBLE_HEAP,
-            });
-        }
+        add_buffer_memory_type(adapter::MemoryType {
+            properties: coherent_flag
+                | memory::Properties::CPU_VISIBLE
+                | memory::Properties::CPU_CACHED,
+            heap_index: CPU_VISIBLE_HEAP,
+        });
+        add_buffer_memory_type(adapter::MemoryType {
+            properties: coherent_flag | memory::Properties::CPU_VISIBLE,
+            heap_index: CPU_VISIBLE_HEAP,
+        });
 
-        add_memory_type(adapter::MemoryType {
+        add_buffer_memory_type(adapter::MemoryType {
             properties: memory::Properties::DEVICE_LOCAL,
             heap_index: DEVICE_LOCAL_HEAP,
         });
