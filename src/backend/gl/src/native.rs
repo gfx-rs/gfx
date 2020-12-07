@@ -292,11 +292,13 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         })
     }
 
-    unsafe fn free<I>(&mut self, _descriptor_sets: I)
+    unsafe fn free<I>(&mut self, descriptor_sets: I)
     where
         I: IntoIterator<Item = DescriptorSet>,
     {
-        // Poof!  Does nothing, because OpenGL doesn't have a meaningful concept of a `DescriptorSet`.
+        for _set in descriptor_sets {
+            // Poof!  Does nothing, because OpenGL doesn't have a meaningful concept of a `DescriptorSet`.
+        }
     }
 
     unsafe fn reset(&mut self) {
