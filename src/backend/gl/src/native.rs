@@ -306,10 +306,12 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
     }
 }
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Debug)]
 pub enum ShaderModule {
     Raw(Shader),
     Spirv(Vec<u32>),
+    #[cfg(feature = "naga")]
+    Naga(naga::Module, Vec<u32>),
 }
 
 #[derive(Debug)]

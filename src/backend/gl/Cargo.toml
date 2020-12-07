@@ -35,6 +35,13 @@ raw-window-handle = "0.3"
 egl = { package = "khronos-egl", version = "2.2" }
 x11 = { version = "2", features = ["xlib"], optional = true }
 
+[dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-4"
+#TODO: remove `spv-out` once spirv-cross is deprecated
+features = ["spv-out", "glsl-out"]
+optional = true
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3.6"
 wasm-bindgen = "0.2.51"
