@@ -63,7 +63,8 @@ impl hal::Instance<crate::Backend> for Instance {
 
         {
             debug!("Configurations:");
-            let mut configurations = Vec::with_capacity(100);
+            let config_count = egl::get_config_count(display).unwrap();
+            let mut configurations = Vec::with_capacity(config_count);
             egl::get_configs(display, &mut configurations).unwrap();
             for &config in configurations.iter() {
                 debug!("\tCONFORMANT=0x{:X}, RENDERABLE=0x{:X}, NATIVE_RENDERABLE=0x{:X}, SURFACE_TYPE=0x{:X}",

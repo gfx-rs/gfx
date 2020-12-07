@@ -31,7 +31,7 @@ name = "mesh-shading"
 path = "mesh-shading/main.rs"
 
 [dependencies]
-image = "0.23"
+image = "0.23.12"
 log = "0.4"
 hal = { path = "../src/hal", version = "0.6", package = "gfx-hal" }
 auxil = { path = "../src/auxil/auxil", version = "0.5", package = "gfx-auxil" }
