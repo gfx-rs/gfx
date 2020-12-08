@@ -63,6 +63,11 @@ check-backends:
 	cargo check --manifest-path=src/backend/vulkan/Cargo.toml --features "$(VULKAN_FEATURES)"
 ifeq ($(UNAME_S),Darwin)
 	cargo check --manifest-path=src/backend/metal/Cargo.toml --all-features
+else ifeq ($(OS),Windows_NT)
+	cargo check --manifest-path=src/backend/dx12/Cargo.toml --all-features
+	cargo check --manifest-path=src/backend/dx11/Cargo.toml --all-features
+else
+	cargo check --manifest-path=src/backend/gl/Cargo.toml --all-features
 endif
 
 check-wasm:

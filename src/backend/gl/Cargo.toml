@@ -16,7 +16,7 @@ edition = "2018"
 name = "gfx_backend_gl"
 
 [features]
-default = []
+default = ["x11"]
 
 [dependencies]
 arrayvec = "0.5"
@@ -34,6 +34,13 @@ raw-window-handle = "0.3"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egl = { package = "khronos-egl", version = "2.2" }
 x11 = { version = "2", features = ["xlib"], optional = true }
+
+[dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-4"
+#TODO: remove `spv-out` once spirv-cross is deprecated
+features = ["spv-out", "glsl-out"]
+optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3.6"

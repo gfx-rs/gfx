@@ -66,11 +66,11 @@ impl Device {
         }
     }
 
-    pub fn create_shader_module_from_source(
+    fn create_shader_module_raw(
         &self,
         shader: &str,
         stage: ShaderStage,
-    ) -> Result<n::ShaderModule, d::ShaderError> {
+    ) -> Result<n::Shader, d::ShaderError> {
         let gl = &self.share.context;
 
         let can_compute = self.share.limits.max_compute_work_group_count[0] != 0;
@@ -101,10 +101,19 @@ impl Device {
             if !log.is_empty() {
                 warn!("\tLog: {}", log);
             }
-            Ok(n::ShaderModule::Raw(name))
+            Ok(name)
         } else {
             Err(d::ShaderError::CompilationFailed(log))
         }
+    }
+
+    pub fn create_shader_module_from_source(
+        &self,
+        shader: &str,
+        stage: ShaderStage,
+    ) -> Result<n::ShaderModule, d::ShaderError> {
+        self.create_shader_module_raw(shader, stage)
+            .map(n::ShaderModule::Raw)
     }
 
     fn bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
@@ -396,13 +405,14 @@ impl Device {
         desc_remap_data: &mut n::DescRemapData,
         name_binding_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
     ) -> n::Shader {
-        assert_eq!(point.entry, "main");
         match *point.module {
             n::ShaderModule::Raw(raw) => {
+                assert_eq!(point.entry, "main");
                 debug!("Can't remap bindings for raw shaders. Assuming they are already rebound.");
                 raw
             }
             n::ShaderModule::Spirv(ref spirv) => {
+                assert_eq!(point.entry, "main");
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
                 spirv_cross_specialize_ast(&mut ast, &point.specialization).unwrap();
@@ -416,12 +426,51 @@ impl Device {
 
                 let glsl = self.translate_spirv(&mut ast, stage, point.entry).unwrap();
                 debug!("SPIRV-Cross generated shader:\n{}", glsl);
-                let shader = match self.create_shader_module_from_source(&glsl, stage).unwrap() {
-                    n::ShaderModule::Raw(raw) => raw,
-                    _ => panic!("Unhandled"),
+                self.create_shader_module_raw(&glsl, stage).unwrap()
+            }
+            #[cfg(feature = "naga")]
+            n::ShaderModule::Naga(ref module, ref spirv) => {
+                use naga::back::glsl;
+
+                let options = glsl::Options {
+                    version: {
+                        let sl = &self.share.info.shading_language;
+                        let value = (sl.major * 100 + sl.minor) as u16;
+                        if sl.is_embedded {
+                            glsl::Version::Embedded(value)
+                        } else {
+                            glsl::Version::Desktop(value)
+                        }
+                    },
+                    entry_point: (
+                        match stage {
+                            ShaderStage::Vertex => naga::ShaderStage::Vertex,
+                            ShaderStage::Fragment => naga::ShaderStage::Fragment,
+                            ShaderStage::Compute => naga::ShaderStage::Compute,
+                            _ => unreachable!(),
+                        },
+                        point.entry.to_string(),
+                    ),
                 };
 
-                shader
+                let mut output = Vec::new();
+                let mut writer = glsl::Writer::new(&mut output, module, &options).unwrap();
+
+                match writer.write() {
+                    Ok(_texture_mapping) => {
+                        let source = String::from_utf8(output).unwrap();
+                        debug!("Naga generated shader:\n{}", source);
+                        self.create_shader_module_raw(&source, stage).unwrap()
+                    }
+                    Err(e) => {
+                        warn!("Naga: {}", e);
+                        let fallback = pso::EntryPoint {
+                            module: &n::ShaderModule::Spirv(spirv.to_vec()),
+                            ..point.clone()
+                        };
+                        self.compile_shader(&fallback, stage, desc_remap_data, name_binding_map)
+                    }
+                }
             }
         }
     }
@@ -1107,6 +1156,20 @@ impl d::Device<B> for Device {
         raw_data: &[u32],
     ) -> Result<n::ShaderModule, d::ShaderError> {
         Ok(n::ShaderModule::Spirv(raw_data.into()))
+    }
+
+    #[cfg(feature = "naga")]
+    unsafe fn create_shader_module_from_naga(
+        &self,
+        module: naga::Module,
+    ) -> Result<n::ShaderModule, (d::ShaderError, naga::Module)> {
+        use naga::back::spv;
+        let mut flags = spv::WriterFlags::empty();
+        if cfg!(debug_assertions) {
+            flags |= spv::WriterFlags::DEBUG;
+        }
+        let spv = spv::write_vec(&module, flags);
+        Ok(n::ShaderModule::Naga(module, spv))
     }
 
     unsafe fn create_sampler(
