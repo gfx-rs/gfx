@@ -407,12 +407,10 @@ impl Device {
     ) -> n::Shader {
         match *point.module {
             n::ShaderModule::Raw(raw) => {
-                assert_eq!(point.entry, "main");
                 debug!("Can't remap bindings for raw shaders. Assuming they are already rebound.");
                 raw
             }
             n::ShaderModule::Spirv(ref spirv) => {
-                assert_eq!(point.entry, "main");
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
                 spirv_cross_specialize_ast(&mut ast, &point.specialization).unwrap();
