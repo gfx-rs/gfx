@@ -615,12 +615,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn image_format_properties(
         &self,
-        _format: hal::format::Format,
+        format: hal::format::Format,
         _dimensions: u8,
         _tiling: image::Tiling,
         _usage: image::Usage,
         _view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
+        conv::describe_format(format)?;
         Some(image::FormatProperties {
             max_extent: image::Extent {
                 width: !0,
