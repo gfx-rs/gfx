@@ -216,11 +216,36 @@ pub fn describe_format(format: Format) -> Option<FormatDescription> {
             FormatDescription::new(glow::RGBA32I, glow::RGBA_INTEGER, glow::INT, 4, Integer)
         }
         Rgba32Sfloat => FormatDescription::new(glow::RGBA32F, glow::RGBA, glow::FLOAT, 4, Float),
-        D32Sfloat => FormatDescription::new(
+        S8Uint => FormatDescription::new(glow::R8, glow::RED, glow::UNSIGNED_BYTE, 1, Integer),
+        D16Unorm => FormatDescription::new(
+            glow::DEPTH_COMPONENT16,
+            glow::DEPTH,
+            glow::UNSIGNED_NORMALIZED,
+            1,
+            Float,
+        ),
+        D24UnormS8Uint => FormatDescription::new(
+            glow::DEPTH24_STENCIL8,
+            glow::DEPTH_STENCIL,
+            glow::UNSIGNED_INT,
+            2,
+            Float,
+        ),
+        D32Sfloat => {
+            FormatDescription::new(glow::DEPTH_COMPONENT32F, glow::DEPTH, glow::FLOAT, 1, Float)
+        }
+        D32SfloatS8Uint => FormatDescription::new(
             glow::DEPTH32F_STENCIL8,
             glow::DEPTH_STENCIL,
-            glow::FLOAT_32_UNSIGNED_INT_24_8_REV,
+            glow::UNSIGNED_INT,
             1,
+            Float,
+        ),
+        X8D24Unorm => FormatDescription::new(
+            glow::DEPTH_COMPONENT24,
+            glow::DEPTH_STENCIL,
+            glow::UNSIGNED_NORMALIZED,
+            2,
             Float,
         ),
 

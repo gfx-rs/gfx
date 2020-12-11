@@ -1402,7 +1402,7 @@ impl d::Device<B> for Device {
     ) -> Result<n::Image, i::CreationError> {
         let gl = &self.share.context;
 
-        let desc = conv::describe_format(format).unwrap();
+        let desc = conv::describe_format(format).ok_or(i::CreationError::Format(format))?;
         let channel = format.base_format().1;
 
         let image = if num_levels > 1 || usage.intersects(i::Usage::STORAGE | i::Usage::SAMPLED) {
