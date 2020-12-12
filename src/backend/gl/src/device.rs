@@ -1537,6 +1537,8 @@ impl d::Device<B> for Device {
 
         Ok(n::Image {
             object_type: image,
+            kind,
+            format_desc: surface_desc,
             channel,
             requirements: memory::Requirements {
                 size,

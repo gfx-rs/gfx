@@ -4,7 +4,7 @@ use auxil::FastHashMap;
 use hal::{
     buffer, format, image as i,
     memory::{Properties, Requirements},
-    pass, pso,
+    pass, pso, window as w,
 };
 
 use parking_lot::{Mutex, RwLock};
@@ -171,6 +171,8 @@ pub struct ComputePipeline {
 #[derive(Copy, Clone, Debug)]
 pub struct Image {
     pub(crate) object_type: ImageType,
+    pub(crate) kind: i::Kind,
+    pub(crate) format_desc: format::FormatDesc,
     // Required for clearing operations
     pub(crate) channel: format::ChannelType,
     pub(crate) requirements: Requirements,
@@ -236,6 +238,7 @@ impl SwapchainImage {
     pub(crate) fn new(
         renderbuffer: Renderbuffer,
         format: TextureFormat,
+        extent: w::Extent2D,
         channel: format::ChannelType,
     ) -> Self {
         SwapchainImage {
@@ -245,6 +248,13 @@ impl SwapchainImage {
                     format,
                 },
                 channel,
+                kind: i::Kind::D2(extent.width as u32, extent.height as u32, 1, 1),
+                format_desc: format::FormatDesc {
+                    bits: 0,
+                    dim: (0, 0),
+                    packed: false,
+                    aspects: format::Aspects::empty(),
+                },
                 requirements: Requirements {
                     size: 0,
                     alignment: 1,
