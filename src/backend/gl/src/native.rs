@@ -170,7 +170,7 @@ pub struct ComputePipeline {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Image {
-    pub(crate) kind: ImageKind,
+    pub(crate) object_type: ImageType,
     // Required for clearing operations
     pub(crate) channel: format::ChannelType,
     pub(crate) requirements: Requirements,
@@ -179,7 +179,7 @@ pub struct Image {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum ImageKind {
+pub enum ImageType {
     Renderbuffer {
         raw: Renderbuffer,
         format: TextureFormat,
@@ -240,7 +240,7 @@ impl SwapchainImage {
     ) -> Self {
         SwapchainImage {
             image: Image {
-                kind: ImageKind::Renderbuffer {
+                object_type: ImageType::Renderbuffer {
                     raw: renderbuffer,
                     format,
                 },

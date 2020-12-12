@@ -1484,7 +1484,7 @@ impl d::Device<B> for Device {
                 }
                 _ => unimplemented!(),
             };
-            n::ImageKind::Texture {
+            n::ImageType::Texture {
                 target,
                 raw: name,
                 format: desc.tex_external,
@@ -1510,7 +1510,7 @@ impl d::Device<B> for Device {
                 }
                 _ => unimplemented!(),
             };
-            n::ImageKind::Renderbuffer {
+            n::ImageType::Renderbuffer {
                 raw: name,
                 format: desc.tex_external,
             }
@@ -1530,7 +1530,7 @@ impl d::Device<B> for Device {
         }
 
         Ok(n::Image {
-            kind: image,
+            object_type: image,
             channel,
             requirements: memory::Requirements {
                 size,
@@ -1572,8 +1572,8 @@ impl d::Device<B> for Device {
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewCreationError> {
         assert_eq!(swizzle, Swizzle::NO);
-        match image.kind {
-            n::ImageKind::Renderbuffer { raw, .. } => {
+        match image.object_type {
+            n::ImageType::Renderbuffer { raw, .. } => {
                 let level = range.level_start;
                 if range.level_start == 0 && range.layer_start == 0 {
                     Ok(n::ImageView::Renderbuffer(raw))
@@ -1583,7 +1583,7 @@ impl d::Device<B> for Device {
                     Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds))
                 }
             }
-            n::ImageKind::Texture {
+            n::ImageType::Texture {
                 target,
                 raw,
                 format,
@@ -1976,9 +1976,9 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_image(&self, image: n::Image) {
         let gl = &self.share.context;
-        match image.kind {
-            n::ImageKind::Renderbuffer { raw, .. } => gl.delete_renderbuffer(raw),
-            n::ImageKind::Texture { raw, .. } => gl.delete_texture(raw),
+        match image.object_type {
+            n::ImageType::Renderbuffer { raw, .. } => gl.delete_renderbuffer(raw),
+            n::ImageType::Texture { raw, .. } => gl.delete_texture(raw),
         }
     }
 
