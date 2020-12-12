@@ -158,6 +158,8 @@ impl hal::Instance<crate::Backend> for Instance {
         let mut native_window = match has_handle.raw_window_handle() {
             #[cfg(not(target_os = "android"))]
             Rwh::Xlib(handle) => handle.window,
+            #[cfg(not(target_os = "android"))]
+            Rwh::Xcb(handle) => handle.window as _,
             #[cfg(target_os = "android")]
             Rwh::Android(handle) => handle.a_native_window,
             other => panic!("Unsupported window: {:?}", other),
