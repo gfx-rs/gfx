@@ -1405,6 +1405,7 @@ impl d::Device<B> for Device {
         let desc = conv::describe_format(format).ok_or(i::CreationError::Format(format))?;
         let channel = format.base_format().1;
 
+        let mut pixel_count: u64 = 0;
         let image = if num_levels > 1 || usage.intersects(i::Usage::STORAGE | i::Usage::SAMPLED) {
             let name = gl.create_texture().unwrap();
             let target = match kind {
@@ -1418,6 +1419,7 @@ impl d::Device<B> for Device {
                             w as _,
                             h as _,
                         );
+                        pixel_count += (w * h) as u64 * num_levels as u64;
                     } else {
                         gl.tex_parameter_i32(
                             glow::TEXTURE_2D,
@@ -1438,6 +1440,7 @@ impl d::Device<B> for Device {
                                 desc.data_type,
                                 None,
                             );
+                            pixel_count += (w * h) as u64;
                             w = std::cmp::max(w / 2, 1);
                             h = std::cmp::max(h / 2, 1);
                         }
@@ -1455,6 +1458,7 @@ impl d::Device<B> for Device {
                             h as _,
                             l as _,
                         );
+                        pixel_count += (w * h) as u64 * l as u64 * num_levels as u64;
                     } else {
                         gl.tex_parameter_i32(
                             glow::TEXTURE_2D_ARRAY,
@@ -1476,6 +1480,7 @@ impl d::Device<B> for Device {
                                 desc.data_type,
                                 None,
                             );
+                            pixel_count += (w * h) as u64 * l as u64;
                             w = std::cmp::max(w / 2, 1);
                             h = std::cmp::max(h / 2, 1);
                         }
@@ -1498,6 +1503,7 @@ impl d::Device<B> for Device {
             match kind {
                 i::Kind::D2(w, h, 1, 1) => {
                     gl.renderbuffer_storage(glow::RENDERBUFFER, desc.tex_internal, w as _, h as _);
+                    pixel_count += (w * h) as u64;
                 }
                 i::Kind::D2(w, h, 1, samples) => {
                     gl.renderbuffer_storage_multisample(
@@ -1507,6 +1513,7 @@ impl d::Device<B> for Device {
                         w as _,
                         h as _,
                     );
+                    pixel_count += (w * h) as u64 * samples as u64; // Not sure though
                 }
                 _ => unimplemented!(),
             };
@@ -1518,8 +1525,7 @@ impl d::Device<B> for Device {
 
         let surface_desc = format.base_format().0.desc();
         let bytes_per_texel = surface_desc.bits / 8;
-        let ext = kind.extent();
-        let size = (ext.width * ext.height * ext.depth) as u64 * bytes_per_texel as u64;
+        let size = pixel_count as u64 * bytes_per_texel as u64;
         let type_mask = self.share.image_memory_type_mask();
 
         if let Err(err) = self.share.check() {
