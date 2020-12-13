@@ -180,6 +180,22 @@ pub struct Image {
     pub(crate) num_layers: i::Layer,
 }
 
+impl Image {
+    pub(crate) fn pitches(&self, level: i::Level) -> [buffer::Offset; 4] {
+        let extent = self.kind.extent().at_level(level);
+        let bytes_per_texel = self.format_desc.bits as i::Size >> 3;
+        let row_pitch = extent.width * bytes_per_texel;
+        let depth_pitch = extent.height * row_pitch;
+        let array_pitch = extent.depth * depth_pitch;
+        [
+            bytes_per_texel as _,
+            row_pitch as _,
+            depth_pitch as _,
+            array_pitch as _,
+        ]
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageType {
     Renderbuffer {
