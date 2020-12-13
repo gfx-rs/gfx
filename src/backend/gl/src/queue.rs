@@ -691,8 +691,8 @@ impl CommandQueue {
                 }
 
                 match src_image {
-                    native::ImageKind::Texture { .. } => unimplemented!(),
-                    native::ImageKind::Renderbuffer {
+                    native::ImageType::Texture { .. } => unimplemented!(),
+                    native::ImageType::Renderbuffer {
                         raw: src_renderbuffer,
                         format: src_format,
                     } => {

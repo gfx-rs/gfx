@@ -133,13 +133,13 @@ pub enum Command {
     },
     CopyRenderbufferToBuffer(n::Renderbuffer, n::RawBuffer, command::BufferImageCopy),
     CopyImageToTexture(
-        n::ImageKind,
+        n::ImageType,
         n::Texture,
         n::TextureTarget,
         command::ImageCopy,
     ),
     CopyImageToRenderbuffer {
-        src_image: n::ImageKind,
+        src_image: n::ImageType,
         dst_renderbuffer: n::Renderbuffer,
         dst_format: n::TextureFormat,
         data: command::ImageCopy,
@@ -793,9 +793,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             Some(fbo) => {
                 // TODO: reset color mask
                 // 2. ClearBuffer
-                let view = match image.kind {
-                    n::ImageKind::Renderbuffer { raw, .. } => n::ImageView::Renderbuffer(raw),
-                    n::ImageKind::Texture {
+                let view = match image.object_type {
+                    n::ImageType::Renderbuffer { raw, .. } => n::ImageView::Renderbuffer(raw),
+                    n::ImageType::Texture {
                         target,
                         raw,
                         level_count,
@@ -856,9 +856,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             }
             None => {
                 // 1. glClear
-                let (tex, target) = match image.kind {
-                    n::ImageKind::Texture { target, raw, .. } => (raw, target), //TODO
-                    n::ImageKind::Renderbuffer { .. } => unimplemented!(),
+                let (tex, target) = match image.object_type {
+                    n::ImageType::Texture { target, raw, .. } => (raw, target), //TODO
+                    n::ImageType::Renderbuffer { .. } => unimplemented!(),
                 };
 
                 self.data.push_cmd(Command::BindTexture(0, tex, target));
@@ -1305,15 +1305,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let r = region.borrow().clone();
-            let cmd = match dst.kind {
-                n::ImageKind::Renderbuffer { raw, format } => Command::CopyImageToRenderbuffer {
-                    src_image: src.kind,
+            let cmd = match dst.object_type {
+                n::ImageType::Renderbuffer { raw, format } => Command::CopyImageToRenderbuffer {
+                    src_image: src.object_type,
                     dst_renderbuffer: raw,
                     dst_format: format,
                     data: r,
                 },
-                n::ImageKind::Texture { raw, target, .. } => {
-                    Command::CopyImageToTexture(src.kind, raw, target, r)
+                n::ImageType::Texture { raw, target, .. } => {
+                    Command::CopyImageToTexture(src.object_type, raw, target, r)
                 }
             };
             self.data.push_cmd(cmd);
@@ -1340,11 +1340,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             let mut r = region.borrow().clone();
             r.buffer_offset += src_range.start;
-            let cmd = match dst.kind {
-                n::ImageKind::Renderbuffer { raw, .. } => {
+            let cmd = match dst.object_type {
+                n::ImageType::Renderbuffer { raw, .. } => {
                     Command::CopyBufferToRenderbuffer(src_raw, raw, r)
                 }
-                n::ImageKind::Texture {
+                n::ImageType::Texture {
                     raw,
                     target,
                     format,
@@ -1383,11 +1383,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             let mut r = region.borrow().clone();
             r.buffer_offset += dst_range.start;
-            let cmd = match src.kind {
-                n::ImageKind::Renderbuffer { raw, .. } => {
+            let cmd = match src.object_type {
+                n::ImageType::Renderbuffer { raw, .. } => {
                     Command::CopyRenderbufferToBuffer(raw, dst_raw, r)
                 }
-                n::ImageKind::Texture {
+                n::ImageType::Texture {
                     raw,
                     target,
                     format,
