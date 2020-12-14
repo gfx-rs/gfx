@@ -1114,12 +1114,24 @@ impl d::Device<B> for Device {
             }
 
             if let Some(depth_stencil) = subpass.depth_stencil {
-                if self.share.private_caps.framebuffer_texture {
-                    Self::bind_target(gl, target, glow::DEPTH_STENCIL_ATTACHMENT, &attachments[depth_stencil]);
-                } else {
-                    Self::bind_target_compat(gl, target, glow::DEPTH_STENCIL_ATTACHMENT, &attachments[depth_stencil]);
-                }
+                let aspects = match attachments[depth_stencil] {
+                    n::ImageView::Texture { ref sub, .. } => sub.aspects,
+                    n::ImageView::Renderbuffer { aspects, .. } => aspects,
+                };
 
+                let attachment = if aspects == Aspects::DEPTH {
+                    glow::DEPTH_ATTACHMENT
+                } else if aspects == Aspects::STENCIL {
+                    glow::STENCIL_ATTACHMENT
+                } else {
+                    glow::DEPTH_STENCIL_ATTACHMENT
+                };
+
+                if self.share.private_caps.framebuffer_texture {
+                    Self::bind_target(gl, target, attachment, &attachments[depth_stencil]);
+                } else {
+                    Self::bind_target_compat(gl, target, attachment, &attachments[depth_stencil]);
+                }
             }
 
             let status = gl.check_framebuffer_status(target);
