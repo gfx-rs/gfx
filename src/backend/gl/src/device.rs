@@ -9,7 +9,7 @@ use crate::{
 use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
 use hal::{
     buffer, device as d,
-    format::{Format, Swizzle},
+    format::{Aspects, Format, Swizzle},
     image as i, memory, pass,
     pool::CommandPoolCreateFlags,
     pso, query, queue,
@@ -118,7 +118,7 @@ impl Device {
 
     fn bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
         match *view {
-            n::ImageView::Renderbuffer(rb) => unsafe {
+            n::ImageView::Renderbuffer { raw: rb, .. } => unsafe {
                 gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
             },
             n::ImageView::Texture {
@@ -157,7 +157,7 @@ impl Device {
 
     pub(crate) fn bind_target(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
         match *view {
-            n::ImageView::Renderbuffer(rb) => unsafe {
+            n::ImageView::Renderbuffer { raw: rb, .. } => unsafe {
                 gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
             },
             n::ImageView::Texture {
@@ -1596,7 +1596,10 @@ impl d::Device<B> for Device {
             n::ImageType::Renderbuffer { raw, .. } => {
                 let level = range.level_start;
                 if range.level_start == 0 && range.layer_start == 0 {
-                    Ok(n::ImageView::Renderbuffer(raw))
+                    Ok(n::ImageView::Renderbuffer {
+                        raw,
+                        aspects: image.format_desc.aspects,
+                    })
                 } else if level != 0 {
                     Err(i::ViewCreationError::Level(level)) //TODO
                 } else {
@@ -1720,7 +1723,7 @@ impl d::Device<B> for Device {
                             n::ImageView::Texture { target, raw, .. } => {
                                 bindings.push(n::DescSetBindings::Texture(binding, raw, target))
                             }
-                            n::ImageView::Renderbuffer(_) => {
+                            n::ImageView::Renderbuffer { .. } => {
                                 panic!("Texture doesn't support shader binding")
                             }
                         }
@@ -1736,7 +1739,7 @@ impl d::Device<B> for Device {
                         n::ImageView::Texture { target, raw, .. } => {
                             bindings.push(n::DescSetBindings::Texture(binding, raw, target))
                         }
-                        n::ImageView::Renderbuffer(_) => {
+                        n::ImageView::Renderbuffer { .. } => {
                             panic!("Texture doesn't support shader binding")
                         }
                     },

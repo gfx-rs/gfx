@@ -794,7 +794,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 // TODO: reset color mask
                 // 2. ClearBuffer
                 let view = match image.object_type {
-                    n::ImageType::Renderbuffer { raw, .. } => n::ImageView::Renderbuffer(raw),
+                    n::ImageType::Renderbuffer { raw, .. } => n::ImageView::Renderbuffer {
+                        raw,
+                        aspects: image.format_desc.aspects,
+                    },
                     n::ImageType::Texture {
                         target,
                         raw,

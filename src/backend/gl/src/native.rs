@@ -222,7 +222,10 @@ pub enum FatSampler {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageView {
-    Renderbuffer(Renderbuffer),
+    Renderbuffer {
+        raw: Renderbuffer,
+        aspects: format::Aspects,
+    },
     Texture {
         target: TextureTarget,
         raw: Texture,
@@ -279,7 +282,10 @@ impl SwapchainImage {
                 num_levels: 1,
                 num_layers: 1,
             },
-            view: ImageView::Renderbuffer(renderbuffer),
+            view: ImageView::Renderbuffer {
+                raw: renderbuffer,
+                aspects: format::Aspects::empty(),
+            },
         }
     }
 }
