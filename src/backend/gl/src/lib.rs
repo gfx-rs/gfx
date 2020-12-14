@@ -1,5 +1,24 @@
-//! OpenGL implementation of a device, striving to support OpenGL 2.0 with at
-//! least VAOs, but using newer extensions when available.
+/*!
+# OpenGL backend internals.
+
+The main target is OpenGL ES3 on Linux and Android.
+
+## Binding model
+
+Binding model is the biggest and most painful difference with gfx-hal API.
+
+First, the bindings get linearized into the pipeline layout (see `PipelineLayoutSet`).
+Then a pipeline gets created, and we track all the texture-sampler associations.
+We only support at most one sampler used with each texture so far. The linear index
+of this sampler is stored per texture slot in `SamplerBindMap` array.
+
+The texture-sampler pairs get potentially invalidated in 2 places:
+  - when a new pipeline is bound, we update the linear indices of associated samplers
+  - when a new descriptor set is bound, we update both the textures and the samplers
+
+We expect that the changes to sampler states between any 2 pipelines of the same layout
+will be minimal, if any.
+*/
 
 #![allow(missing_docs, missing_copy_implementations)]
 
@@ -14,7 +33,7 @@ use std::{
     thread,
 };
 
-use hal::{adapter, buffer, image, memory, pso, queue as q};
+use hal::{adapter, buffer, image, memory, queue as q};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -40,6 +59,10 @@ pub use glow::Context as GlContext;
 use glow::HasContext;
 
 type ColorSlot = u8;
+
+// we can support more samplers if not every one of them is used at a time,
+// but it probably doesn't worth it.
+const MAX_SAMPLERS: usize = glow::MAX_TEXTURE_IMAGE_UNITS as usize;
 
 struct GlContainer {
     context: GlContext,

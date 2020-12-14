@@ -1220,8 +1220,27 @@ impl d::Device<B> for Device {
         if cfg!(debug_assertions) {
             flags |= spv::WriterFlags::DEBUG;
         }
-        let spv = spv::write_vec(&module, flags);
-        self.create_shader_module(&spv).map_err(|e| (e, module))
+
+        let caps = [
+            spv::Capability::Shader,
+            spv::Capability::Matrix,
+            spv::Capability::InputAttachment,
+            spv::Capability::Sampled1D,
+            spv::Capability::Image1D,
+            spv::Capability::SampledBuffer,
+            spv::Capability::ImageBuffer,
+            spv::Capability::ImageQuery,
+            spv::Capability::DerivativeControl,
+            //TODO: fill out the rest
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        match spv::write_vec(&module, flags, caps) {
+            Ok(spv) => self.create_shader_module(&spv).map_err(|e| (e, module)),
+            Err(e) => return Err((d::ShaderError::CompilationFailed(format!("{}", e)), module)),
+        }
     }
 
     unsafe fn create_sampler(

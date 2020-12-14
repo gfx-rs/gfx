@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::GlContext;
+use crate::{GlContext, MAX_SAMPLERS};
 
 use hal::{
     self, buffer, command,
@@ -148,7 +148,7 @@ pub enum Command {
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
     BindTexture(u32, n::Texture, n::TextureTarget),
     BindSampler(u32, n::Sampler),
-    SetTextureSamplerSettings(u32, n::Texture, n::TextureTarget, image::SamplerDesc),
+    SetTextureSamplerSettings(u32, n::TextureTarget, image::SamplerDesc),
 
     SetColorMask(Option<DrawBuffer>, pso::ColorMask),
     SetDepthMask(bool),
@@ -172,6 +172,12 @@ pub struct RenderPassCache {
     render_pass: n::RenderPass,
     framebuffer: n::FrameBuffer,
     attachment_clears: Vec<Option<AttachmentClear>>,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct TextureSlotInfo {
+    tex_target: n::TextureTarget,
+    sampler_index: Option<u8>,
 }
 
 // Cache current states of the command buffer
@@ -208,6 +214,10 @@ struct Cache {
     depth_mask: Option<bool>,
     // Current stencil mask
     stencil_mask: Option<pso::Sided<pso::StencilValue>>,
+    /// Currently bound samplers.
+    samplers: Vec<Option<n::FatSampler>>,
+    /// Current sampler redirection map.
+    texture_slots: [TextureSlotInfo; glow::MAX_TEXTURE_IMAGE_UNITS as usize],
 }
 
 impl Cache {
@@ -228,6 +238,8 @@ impl Cache {
             uniforms: Vec::new(),
             depth_mask: None,
             stencil_mask: None,
+            samplers: (0..MAX_SAMPLERS).map(|_| None).collect(),
+            texture_slots: [TextureSlotInfo::default(); glow::MAX_TEXTURE_IMAGE_UNITS as usize],
         }
     }
 }
@@ -647,6 +659,99 @@ impl CommandBuffer {
                 }
             }
         }
+    }
+
+    fn update_sampler_states(&mut self, dirty_textures: u32, dirty_samplers: u32) {
+        for (texture_index, slot) in self.cache.texture_slots.iter().enumerate() {
+            if let Some(sampler_index) = slot.sampler_index {
+                if dirty_textures & (1 << texture_index) != 0
+                    || dirty_samplers & (1 << sampler_index) != 0
+                {
+                    if let Some(ref sampler) = self.cache.samplers[sampler_index as usize] {
+                        let command = match *sampler {
+                            n::FatSampler::Sampler(object) => {
+                                Command::BindSampler(texture_index as u32, object)
+                            }
+                            n::FatSampler::Info(ref info) => Command::SetTextureSamplerSettings(
+                                texture_index as u32,
+                                slot.tex_target,
+                                info.clone(),
+                            ),
+                        };
+                        self.data.push_cmd(command);
+                    }
+                }
+            }
+        }
+    }
+
+    fn bind_descriptor_sets<I, J>(
+        &mut self,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: I,
+        offsets: J,
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<n::DescriptorSet>,
+        J: IntoIterator,
+        J::Item: Borrow<command::DescriptorSetOffset>,
+    {
+        if let Some(_) = offsets.into_iter().next() {
+            warn!("Dynamic offsets are not supported yet");
+        }
+
+        let mut dirty_textures = 0u32;
+        let mut dirty_samplers = 0u32;
+        let mut set = first_set as usize;
+        for desc_set in sets {
+            let desc_set = desc_set.borrow();
+            let bindings = desc_set.bindings.lock();
+            for (binding_layout, new_binding) in desc_set.layout.iter().zip(bindings.iter()) {
+                let binding = layout.sets[set].bindings[binding_layout.binding as usize] as u32;
+                match *new_binding {
+                    n::DescSetBindings::Buffer {
+                        register,
+                        buffer,
+                        offset,
+                        size,
+                    } => {
+                        let bind_point = match register {
+                            n::BindingRegister::UniformBuffers => glow::UNIFORM_BUFFER,
+                            n::BindingRegister::StorageBuffers => glow::SHADER_STORAGE_BUFFER,
+                            n::BindingRegister::Textures => panic!("Wrong desc set binding"),
+                        };
+                        self.data.push_cmd(Command::BindBufferRange(
+                            bind_point,
+                            binding,
+                            buffer,
+                            offset as i32,
+                            size as i32,
+                        ));
+                    }
+                    n::DescSetBindings::Texture(texture, textype) => {
+                        dirty_textures |= 1 << binding;
+                        self.cache.texture_slots[binding as usize].tex_target = textype;
+                        self.data
+                            .push_cmd(Command::BindTexture(binding, texture, textype));
+                    }
+                    n::DescSetBindings::Sampler(sampler) => {
+                        dirty_samplers |= 1 << binding;
+                        self.cache.samplers[binding as usize] =
+                            Some(n::FatSampler::Sampler(sampler));
+                    }
+                    n::DescSetBindings::SamplerDesc(ref info) => {
+                        dirty_samplers |= 1 << binding;
+                        self.cache.samplers[binding as usize] =
+                            Some(n::FatSampler::Info(info.clone()));
+                    }
+                }
+            }
+
+            set += 1;
+        }
+
+        self.update_sampler_states(dirty_textures, dirty_samplers);
     }
 }
 
@@ -1074,61 +1179,67 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
-        let n::GraphicsPipeline {
-            primitive,
-            patch_size,
-            program,
-            ref blend_targets,
-            ref attributes,
-            ref vertex_buffers,
-            ref uniforms,
-            rasterizer,
-            depth,
-            ref baked_states,
-        } = *pipeline;
-
-        if self.cache.primitive != Some(primitive) {
-            self.cache.primitive = Some(primitive);
+        if self.cache.primitive != Some(pipeline.primitive) {
+            self.cache.primitive = Some(pipeline.primitive);
         }
 
-        if self.cache.patch_size != patch_size {
-            self.cache.patch_size = patch_size;
-            if let Some(size) = patch_size {
+        if self.cache.patch_size != pipeline.patch_size {
+            self.cache.patch_size = pipeline.patch_size;
+            if let Some(size) = pipeline.patch_size {
                 self.data.push_cmd(Command::SetPatchSize(size));
             }
         }
 
-        if self.cache.program != Some(program) {
-            self.cache.program = Some(program);
-            self.data.push_cmd(Command::BindProgram(program));
+        if self.cache.program != Some(pipeline.program) {
+            self.cache.program = Some(pipeline.program);
+            self.data.push_cmd(Command::BindProgram(pipeline.program));
         }
 
-        self.cache.attributes = attributes.clone();
+        self.cache.attributes = pipeline.attributes.clone();
+        self.cache.vertex_buffer_descs = pipeline.vertex_buffers.clone();
 
-        self.cache.vertex_buffer_descs = vertex_buffers.clone();
+        self.cache.uniforms = pipeline.uniforms.clone();
 
-        self.cache.uniforms = uniforms.clone();
+        self.update_blend_targets(&pipeline.blend_targets);
 
-        self.update_blend_targets(blend_targets);
-
-        self.data.push_cmd(Command::BindRasterizer { rasterizer });
-        self.data.push_cmd(Command::BindDepth(depth.map(|d| d.fun)));
+        self.data.push_cmd(Command::BindRasterizer {
+            rasterizer: pipeline.rasterizer,
+        });
+        self.data
+            .push_cmd(Command::BindDepth(pipeline.depth.map(|d| d.fun)));
         self.data.push_cmd(Command::SetDepthMask(
-            depth.map(|d| d.write).unwrap_or(true),
+            pipeline.depth.map_or(true, |d| d.write),
         ));
-        self.cache.depth_mask = depth.map(|d| d.write);
+        self.cache.depth_mask = pipeline.depth.map(|d| d.write);
 
-        if let Some(ref vp) = baked_states.viewport {
+        if let Some(ref vp) = pipeline.baked_states.viewport {
             self.set_viewports(0, iter::once(vp));
         }
-        if let Some(ref rect) = baked_states.scissor {
+        if let Some(ref rect) = pipeline.baked_states.scissor {
             self.set_scissors(0, iter::once(rect));
         }
-        if let Some(color) = baked_states.blend_color {
+        if let Some(color) = pipeline.baked_states.blend_color {
             self.set_blend_constants(color);
         }
-        if let Some(ref bounds) = baked_states.depth_bounds {
+        if let Some(ref bounds) = pipeline.baked_states.depth_bounds {
             self.set_depth_bounds(bounds.clone());
+        }
+
+        let mut dirty_textures = 0u32;
+        for (texture_index, (slot, &sampler_index)) in self
+            .cache
+            .texture_slots
+            .iter_mut()
+            .zip(pipeline.sampler_map.iter())
+            .enumerate()
+        {
+            if slot.sampler_index != sampler_index {
+                slot.sampler_index = sampler_index;
+                dirty_textures |= 1 << texture_index;
+            }
+        }
+        if dirty_textures != 0 {
+            self.update_sampler_states(dirty_textures, 0);
         }
     }
 
@@ -1144,121 +1255,29 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
-        assert!(offsets.into_iter().next().is_none()); // TODO: offsets unsupported
-
-        let mut set = first_set as _;
-        let drd = &*layout.desc_remap_data.read();
-        for desc_set in sets {
-            let desc_set = desc_set.borrow();
-            let bindings = desc_set.bindings.lock();
-            for new_binding in bindings.iter() {
-                match *new_binding {
-                    n::DescSetBindings::Buffer {
-                        ty: btype,
-                        binding,
-                        buffer,
-                        offset,
-                        size,
-                    } => {
-                        let glow_btype = match btype {
-                            n::BindingTypes::UniformBuffers => glow::UNIFORM_BUFFER,
-                            n::BindingTypes::StorageBuffers => glow::SHADER_STORAGE_BUFFER,
-                            n::BindingTypes::Images => panic!("Wrong desc set binding"),
-                        };
-                        for binding in drd.get_binding(btype, set, binding).unwrap() {
-                            self.data.push_cmd(Command::BindBufferRange(
-                                glow_btype,
-                                *binding,
-                                buffer,
-                                offset as i32,
-                                size as i32,
-                            ))
-                        }
-                    }
-                    n::DescSetBindings::Texture(binding, texture, textype) => {
-                        for binding in drd
-                            .get_binding(n::BindingTypes::Images, set, binding)
-                            .unwrap()
-                        {
-                            self.data
-                                .push_cmd(Command::BindTexture(*binding, texture, textype))
-                        }
-                    }
-                    n::DescSetBindings::Sampler(binding, sampler) => {
-                        for binding in drd
-                            .get_binding(n::BindingTypes::Images, set, binding)
-                            .unwrap()
-                        {
-                            self.data.push_cmd(Command::BindSampler(*binding, sampler))
-                        }
-                    }
-                    n::DescSetBindings::SamplerDesc(binding, ref sinfo) => {
-                        let mut all_txts = drd
-                            .get_binding(n::BindingTypes::Images, set, binding)
-                            .unwrap()
-                            .into_iter()
-                            .flat_map(|binding| {
-                                bindings.iter().filter_map(move |b| {
-                                    if let n::DescSetBindings::Texture(b, t, ttype) = *b {
-                                        let nbs =
-                                            drd.get_binding(n::BindingTypes::Images, set, b)?;
-                                        if nbs.contains(binding) {
-                                            Some((*binding, t, ttype))
-                                        } else {
-                                            None
-                                        }
-                                    } else {
-                                        None
-                                    }
-                                })
-                            })
-                            .collect::<Vec<_>>();
-
-                        // TODO: Check that other samplers aren't using the same
-                        // textures as in `all_txts` unless all the bindings of that
-                        // texture are gonna be unbound or the two samplers have
-                        // identical properties.
-                        all_txts.sort_unstable_by(|a, b| a.1.cmp(&b.1));
-                        all_txts.dedup_by(|a, b| a.1 == b.1);
-
-                        for (binding, txt, textype) in all_txts {
-                            self.data.push_cmd(Command::SetTextureSamplerSettings(
-                                binding,
-                                txt,
-                                textype,
-                                sinfo.clone(),
-                            ))
-                        }
-                    }
-                }
-            }
-
-            set += 1;
-        }
+        self.bind_descriptor_sets(layout, first_set, sets, offsets)
     }
 
     unsafe fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
-        let n::ComputePipeline { program } = *pipeline;
-
-        if self.cache.program != Some(program) {
-            self.cache.program = Some(program);
-            self.data.push_cmd(Command::BindProgram(program));
+        if self.cache.program != Some(pipeline.program) {
+            self.cache.program = Some(pipeline.program);
+            self.data.push_cmd(Command::BindProgram(pipeline.program));
         }
     }
 
     unsafe fn bind_compute_descriptor_sets<I, J>(
         &mut self,
-        _layout: &n::PipelineLayout,
-        _first_set: usize,
-        _sets: I,
-        _offsets: J,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: I,
+        offsets: J,
     ) where
         I: IntoIterator,
         I::Item: Borrow<n::DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
-        // TODO
+        self.bind_descriptor_sets(layout, first_set, sets, offsets)
     }
 
     unsafe fn dispatch(&mut self, count: hal::WorkGroupCount) {

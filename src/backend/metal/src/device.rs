@@ -1843,15 +1843,30 @@ impl hal::device::Device<Backend> for Device {
         module: naga::Module,
     ) -> Result<n::ShaderModule, (d::ShaderError, naga::Module)> {
         use naga::back::spv;
+
         let mut flags = spv::WriterFlags::empty();
         if cfg!(debug_assertions) {
             flags |= spv::WriterFlags::DEBUG;
         }
-        let spv = spv::write_vec(&module, flags);
-        Ok(n::ShaderModule {
-            spv,
-            naga: Some(module),
-        })
+        let caps = [
+            spv::Capability::Shader,
+            spv::Capability::Matrix,
+            spv::Capability::Sampled1D,
+            spv::Capability::Image1D,
+            spv::Capability::DerivativeControl,
+            //TODO: fill out the rest
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        match spv::write_vec(&module, flags, caps) {
+            Ok(spv) => Ok(n::ShaderModule {
+                spv,
+                naga: Some(module),
+            }),
+            Err(e) => Err((d::ShaderError::CompilationFailed(format!("{}", e)), module)),
+        }
     }
 
     unsafe fn create_sampler(

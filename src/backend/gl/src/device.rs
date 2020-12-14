@@ -16,7 +16,7 @@ use hal::{
 };
 
 use glow::HasContext;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
 use std::{borrow::Borrow, cell::Cell, ops::Range, slice, sync::Arc};
@@ -114,6 +114,80 @@ impl Device {
     ) -> Result<n::ShaderModule, d::ShaderError> {
         self.create_shader_module_raw(shader, stage)
             .map(n::ShaderModule::Raw)
+    }
+
+    fn create_shader_program(
+        &self,
+        shaders: &[(ShaderStage, Option<&pso::EntryPoint<B>>)],
+        layout: &n::PipelineLayout,
+    ) -> Result<(glow::Program, n::SamplerBindMap), pso::CreationError> {
+        let gl = &self.share.context;
+        let program = unsafe { gl.create_program().unwrap() };
+
+        let mut name_binding_map = FastHashMap::<String, (n::BindingRegister, u8)>::default();
+        let mut sampler_map = [None; glow::MAX_TEXTURE_IMAGE_UNITS as usize];
+
+        for &(stage, point_maybe) in shaders {
+            if let Some(point) = point_maybe {
+                let shader = self.compile_shader(
+                    point,
+                    stage,
+                    layout,
+                    &mut sampler_map,
+                    &mut name_binding_map,
+                );
+                unsafe {
+                    gl.attach_shader(program, shader);
+                    gl.delete_shader(shader);
+                }
+            }
+        }
+
+        unsafe {
+            gl.link_program(program);
+        }
+        info!("\tLinked program {:?}", program);
+        if let Err(err) = self.share.check() {
+            panic!("Error linking program: {:?}", err);
+        }
+
+        if !self
+            .share
+            .legacy_features
+            .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
+        {
+            unsafe {
+                gl.use_program(Some(program));
+            }
+            for (name, &(register, slot)) in name_binding_map.iter() {
+                match register {
+                    n::BindingRegister::Textures => unsafe {
+                        let loc = gl.get_uniform_location(program, name);
+                        gl.uniform_1_i32(loc.as_ref(), slot as _);
+                    },
+                    n::BindingRegister::UniformBuffers => unsafe {
+                        let index = gl.get_uniform_block_index(program, name).unwrap();
+                        gl.uniform_block_binding(program, index, slot as _);
+                    },
+                    n::BindingRegister::StorageBuffers => unsafe {
+                        let index = gl.get_shader_storage_block_index(program, name).unwrap();
+                        gl.shader_storage_block_binding(program, index, slot as _);
+                    },
+                }
+            }
+        }
+
+        let linked_ok = unsafe { gl.get_program_link_status(program) };
+        let log = unsafe { gl.get_program_info_log(program) };
+        if linked_ok {
+            if !log.is_empty() {
+                warn!("\tLog: {}", log);
+            }
+            Ok((program, sampler_map))
+        } else {
+            error!("\tLog: {}", log);
+            Err(pso::CreationError::Other)
+        }
     }
 
     fn bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
@@ -271,40 +345,40 @@ impl Device {
     fn remap_bindings(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
-        desc_remap_data: &mut n::DescRemapData,
-        nb_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
+        nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
+        layout: &n::PipelineLayout,
     ) {
         let res = ast.get_shader_resources().unwrap();
         self.remap_binding(
             ast,
-            desc_remap_data,
             nb_map,
             &res.sampled_images,
-            n::BindingTypes::Images,
+            n::BindingRegister::Textures,
+            layout,
         );
         self.remap_binding(
             ast,
-            desc_remap_data,
             nb_map,
             &res.uniform_buffers,
-            n::BindingTypes::UniformBuffers,
+            n::BindingRegister::UniformBuffers,
+            layout,
         );
         self.remap_binding(
             ast,
-            desc_remap_data,
             nb_map,
             &res.storage_buffers,
-            n::BindingTypes::StorageBuffers,
+            n::BindingRegister::StorageBuffers,
+            layout,
         );
     }
 
     fn remap_binding(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
-        desc_remap_data: &mut n::DescRemapData,
-        nb_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
+        nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
         all_res: &[spirv::Resource],
-        btype: n::BindingTypes,
+        register: n::BindingRegister,
+        layout: &n::PipelineLayout,
     ) {
         for res in all_res {
             let set = ast
@@ -313,33 +387,35 @@ impl Device {
             let binding = ast
                 .get_decoration(res.id, spirv::Decoration::Binding)
                 .unwrap();
-            let nbs = desc_remap_data
-                .get_binding(btype, set as _, binding)
-                .unwrap();
-            for nb in nbs {
-                if self
-                    .share
-                    .legacy_features
-                    .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
-                {
-                    ast.set_decoration(res.id, spirv::Decoration::Binding, *nb)
-                        .unwrap()
-                } else {
-                    ast.unset_decoration(res.id, spirv::Decoration::Binding)
-                        .unwrap();
-                    assert!(nb_map.insert(res.name.clone(), (btype, *nb)).is_none());
-                }
-                ast.unset_decoration(res.id, spirv::Decoration::DescriptorSet)
+            let set_info = &layout.sets[set as usize];
+            let slot = set_info.bindings[binding as usize] as u32;
+            assert!(slot < glow::MAX_TEXTURE_IMAGE_UNITS);
+
+            if self
+                .share
+                .legacy_features
+                .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
+            {
+                ast.set_decoration(res.id, spirv::Decoration::Binding, slot)
+                    .unwrap()
+            } else {
+                ast.unset_decoration(res.id, spirv::Decoration::Binding)
                     .unwrap();
+                assert!(nb_map
+                    .insert(res.name.clone(), (register, slot as u8))
+                    .is_none());
             }
+            ast.unset_decoration(res.id, spirv::Decoration::DescriptorSet)
+                .unwrap();
         }
     }
 
     fn combine_separate_images_and_samplers(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
-        desc_remap_data: &mut n::DescRemapData,
-        nb_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
+        sampler_map: &mut n::SamplerBindMap,
+        nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
+        layout: &n::PipelineLayout,
     ) {
         let mut id_map =
             FastHashMap::<u32, (pso::DescriptorSetIndex, pso::DescriptorBinding)>::default();
@@ -348,33 +424,37 @@ impl Device {
         self.populate_id_map(ast, &mut id_map, &res.separate_samplers);
 
         for cis in ast.get_combined_image_samplers().unwrap() {
-            let (set, binding) = id_map.get(&cis.image_id).unwrap();
-            let nb = desc_remap_data.reserve_binding(n::BindingTypes::Images);
-            desc_remap_data.insert_missing_binding(nb, n::BindingTypes::Images, *set, *binding);
-            let (set, binding) = id_map.get(&cis.sampler_id).unwrap();
-            desc_remap_data.insert_missing_binding(nb, n::BindingTypes::Images, *set, *binding);
+            let texture_slot = {
+                let &(set, binding) = id_map.get(&cis.image_id).unwrap();
+                layout.sets[set as usize].bindings[binding as usize]
+            };
+            let sampler_slot = {
+                let &(set, binding) = id_map.get(&cis.sampler_id).unwrap();
+                layout.sets[set as usize].bindings[binding as usize]
+            };
+            sampler_map[texture_slot as usize] = Some(sampler_slot);
 
-            let new_name = "GFX_HAL_COMBINED_SAMPLER".to_owned()
-                + "_"
-                + &cis.sampler_id.to_string()
-                + "_"
-                + &cis.image_id.to_string()
-                + "_"
-                + &cis.combined_id.to_string();
-            ast.set_name(cis.combined_id, &new_name).unwrap();
             if self
                 .share
                 .legacy_features
                 .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
             {
-                ast.set_decoration(cis.combined_id, spirv::Decoration::Binding, nb)
-                    .unwrap()
+                // if it was previously assigned, clear the binding of the image
+                let _ = ast.unset_decoration(cis.image_id, spirv::Decoration::Binding);
+                ast.set_decoration(
+                    cis.combined_id,
+                    spirv::Decoration::Binding,
+                    texture_slot as u32,
+                )
+                .unwrap()
             } else {
+                let name = ast.get_name(cis.combined_id).unwrap();
                 ast.unset_decoration(cis.combined_id, spirv::Decoration::Binding)
                     .unwrap();
-                assert!(nb_map
-                    .insert(new_name, (n::BindingTypes::Images, nb))
-                    .is_none())
+                assert_eq!(
+                    nb_map.insert(name, (n::BindingRegister::Textures, texture_slot)),
+                    None
+                );
             }
             ast.unset_decoration(cis.combined_id, spirv::Decoration::DescriptorSet)
                 .unwrap();
@@ -383,7 +463,7 @@ impl Device {
 
     fn populate_id_map(
         &self,
-        ast: &mut spirv::Ast<glsl::Target>,
+        ast: &spirv::Ast<glsl::Target>,
         id_map: &mut FastHashMap<u32, (pso::DescriptorSetIndex, pso::DescriptorBinding)>,
         all_res: &[spirv::Resource],
     ) {
@@ -402,8 +482,9 @@ impl Device {
         &self,
         point: &pso::EntryPoint<B>,
         stage: ShaderStage,
-        desc_remap_data: &mut n::DescRemapData,
-        name_binding_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
+        layout: &n::PipelineLayout,
+        sampler_map: &mut n::SamplerBindMap,
+        name_binding_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
     ) -> n::Shader {
         match *point.module {
             n::ShaderModule::Raw(raw) => {
@@ -414,11 +495,12 @@ impl Device {
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
                 spirv_cross_specialize_ast(&mut ast, &point.specialization).unwrap();
-                self.remap_bindings(&mut ast, desc_remap_data, name_binding_map);
+                self.remap_bindings(&mut ast, name_binding_map, layout);
                 self.combine_separate_images_and_samplers(
                     &mut ast,
-                    desc_remap_data,
+                    sampler_map,
                     name_binding_map,
+                    layout,
                 );
                 self.set_push_const_layout(&mut ast).unwrap();
 
@@ -433,7 +515,7 @@ impl Device {
                 let options = glsl::Options {
                     version: {
                         let sl = &self.share.info.shading_language;
-                        let value = (sl.major * 100 + sl.minor) as u16;
+                        let value = (sl.major * 100 + sl.minor * 10) as u16;
                         if sl.is_embedded {
                             glsl::Version::Embedded(value)
                         } else {
@@ -455,7 +537,31 @@ impl Device {
                 let mut writer = glsl::Writer::new(&mut output, module, &options).unwrap();
 
                 match writer.write() {
-                    Ok(_texture_mapping) => {
+                    Ok(texture_mapping) => {
+                        for (name, mapping) in texture_mapping {
+                            let texture_linear_index =
+                                match module.global_variables[mapping.texture].binding {
+                                    Some(naga::Binding::Resource { group, binding }) => {
+                                        layout.sets[group as usize].bindings[binding as usize]
+                                    }
+                                    ref other => panic!("Unexpected texture binding {:?}", other),
+                                };
+                            name_binding_map
+                                .insert(name, (n::BindingRegister::Textures, texture_linear_index));
+                            if let Some(sampler_handle) = mapping.sampler {
+                                let sampler_linear_index = match module.global_variables
+                                    [sampler_handle]
+                                    .binding
+                                {
+                                    Some(naga::Binding::Resource { group, binding }) => {
+                                        layout.sets[group as usize].bindings[binding as usize]
+                                    }
+                                    ref other => panic!("Unexpected sampler binding {:?}", other),
+                                };
+                                sampler_map[texture_linear_index as usize] =
+                                    Some(sampler_linear_index);
+                            }
+                        }
                         let source = String::from_utf8(output).unwrap();
                         debug!("Naga generated shader:\n{}", source);
                         self.create_shader_module_raw(&source, stage).unwrap()
@@ -466,7 +572,7 @@ impl Device {
                             module: &n::ShaderModule::Spirv(spirv.to_vec()),
                             ..point.clone()
                         };
-                        self.compile_shader(&fallback, stage, desc_remap_data, name_binding_map)
+                        self.compile_shader(&fallback, stage, layout, sampler_map, name_binding_map)
                     }
                 }
             }
@@ -720,71 +826,46 @@ impl d::Device<B> for Device {
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
     {
-        let mut drd = n::DescRemapData::new();
+        use std::convert::TryInto;
+        let mut sets = Vec::new();
+        let mut num_samplers = 0usize;
+        let mut num_textures = 0usize;
+        let mut num_uniform_buffers = 0usize;
+        let mut num_storage_buffers = 0usize;
 
-        layouts.into_iter().enumerate().for_each(|(set, layout)| {
-            layout.borrow().iter().for_each(|binding| {
-                // DescriptorType -> Descriptor
-                //
-                // Sampler -> Sampler
-                // Image -> SampledImage, StorageImage, InputAttachment
-                // CombinedImageSampler -> CombinedImageSampler
-                // Buffer -> UniformBuffer, StorageBuffer
-                // UniformTexel -> UniformTexel
-                // StorageTexel -> StorageTexel
+        for layout in layouts {
+            let layout_bindings = layout.borrow();
+            // create a vector with the size enough to hold all the bindings, filled with `!0`
+            let mut bindings =
+                vec![!0; layout_bindings.last().map_or(0, |b| b.binding as usize + 1)];
 
-                assert!(!binding.immutable_samplers); //TODO: Implement immutable_samplers
-                use crate::pso::DescriptorType::*;
-                match binding.ty {
-                    Sampler
-                    | Image {
-                        ty:
-                            pso::ImageDescriptorType::Sampled {
-                                with_sampler: false,
-                            },
-                    } => {
-                        // We need to figure out combos once we get the shaders, until then we
-                        // do nothing
+            for binding in layout_bindings.iter() {
+                assert!(!binding.immutable_samplers); //TODO
+                let counter = match binding.ty {
+                    pso::DescriptorType::Sampler => &mut num_samplers,
+                    pso::DescriptorType::InputAttachment | pso::DescriptorType::Image { .. } => {
+                        &mut num_textures
                     }
-                    Image {
-                        ty: pso::ImageDescriptorType::Sampled { with_sampler: true },
-                    } => {
-                        drd.insert_missing_binding_into_spare(
-                            n::BindingTypes::Images,
-                            set as _,
-                            binding.binding,
-                        );
-                    }
-                    Buffer {
+                    pso::DescriptorType::Buffer {
                         ty,
-                        format:
-                            pso::BufferDescriptorFormat::Structured {
-                                dynamic_offset: false,
-                            },
+                        format: _, //TODO
                     } => match ty {
-                        pso::BufferDescriptorType::Uniform => {
-                            drd.insert_missing_binding_into_spare(
-                                n::BindingTypes::UniformBuffers,
-                                set as _,
-                                binding.binding,
-                            );
-                        }
-                        pso::BufferDescriptorType::Storage { .. } => {
-                            drd.insert_missing_binding_into_spare(
-                                n::BindingTypes::StorageBuffers,
-                                set as _,
-                                binding.binding,
-                            );
-                        }
+                        pso::BufferDescriptorType::Uniform => &mut num_uniform_buffers,
+                        pso::BufferDescriptorType::Storage { .. } => &mut num_storage_buffers,
                     },
-                    _ => unimplemented!(), // 6
-                }
-            })
-        });
+                };
 
-        Ok(n::PipelineLayout {
-            desc_remap_data: Arc::new(RwLock::new(drd)),
-        })
+                bindings[binding.binding as usize] = (*counter).try_into().unwrap();
+                *counter += binding.count;
+            }
+
+            sets.push(n::PipelineLayoutSet {
+                layout: Arc::clone(layout_bindings),
+                bindings,
+            });
+        }
+
+        Ok(n::PipelineLayout { sets })
     }
 
     unsafe fn create_pipeline_cache(&self, _data: Option<&[u8]>) -> Result<(), d::OutOfMemory> {
@@ -814,16 +895,7 @@ impl d::Device<B> for Device {
         desc: &pso::GraphicsPipelineDesc<'a, B>,
         _cache: Option<&()>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        let gl = &self.share.context;
-        let share = &self.share;
         let desc = desc.borrow();
-        let subpass = {
-            let subpass = desc.subpass;
-            match subpass.main_pass.subpasses.get(subpass.index as usize) {
-                Some(sp) => sp,
-                None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
-            }
-        };
 
         let (vertex_buffers, desc_attributes, input_assembler, vs, gs, hs, ds) =
             match desc.primitive_assembler {
@@ -864,92 +936,14 @@ impl d::Device<B> for Device {
                 }
             };
 
-        let program = {
-            let name = gl.create_program().unwrap();
-
-            // Attach shaders to program
-            let shaders = [
-                (ShaderStage::Vertex, Some(vs)),
-                (ShaderStage::Hull, hs),
-                (ShaderStage::Domain, ds),
-                (ShaderStage::Geometry, gs.as_ref()),
-                (ShaderStage::Fragment, desc.fragment.as_ref()),
-            ];
-
-            let mut name_binding_map =
-                FastHashMap::<String, (n::BindingTypes, pso::DescriptorBinding)>::default();
-            let shader_names = &shaders
-                .iter()
-                .filter_map(|&(stage, point_maybe)| {
-                    point_maybe.map(|point| {
-                        let shader_name = self.compile_shader(
-                            point,
-                            stage,
-                            &mut desc.layout.desc_remap_data.write(),
-                            &mut name_binding_map,
-                        );
-                        gl.attach_shader(name, shader_name);
-                        shader_name
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            if !share.private_caps.program_interface && share.private_caps.frag_data_location {
-                for i in 0..subpass.color_attachments.len() {
-                    let color_name = format!("Target{}\0", i);
-                    gl.bind_frag_data_location(name, i as u32, color_name.as_str());
-                }
-            }
-
-            gl.link_program(name);
-            info!("\tLinked program {:?}", name);
-            if let Err(err) = share.check() {
-                panic!("Error linking program: {:?}", err);
-            }
-
-            for shader_name in shader_names {
-                gl.detach_shader(name, *shader_name);
-                gl.delete_shader(*shader_name);
-            }
-
-            if !self
-                .share
-                .legacy_features
-                .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
-            {
-                let gl = &self.share.context;
-                gl.use_program(Some(name));
-                for (bname, (btype, binding)) in name_binding_map.iter() {
-                    match btype {
-                        n::BindingTypes::Images => {
-                            let loc = gl.get_uniform_location(name, bname);
-                            gl.uniform_1_i32(loc.as_ref(), *binding as _);
-                        }
-                        n::BindingTypes::UniformBuffers => {
-                            let index = gl.get_uniform_block_index(name, bname).unwrap();
-                            gl.uniform_block_binding(name, index, *binding);
-                        }
-                        n::BindingTypes::StorageBuffers => {
-                            let index = gl.get_shader_storage_block_index(name, bname).unwrap();
-                            gl.shader_storage_block_binding(name, index, *binding);
-                        }
-                    }
-                }
-            }
-
-            let linked_ok = gl.get_program_link_status(name);
-            let log = gl.get_program_info_log(name);
-            if linked_ok {
-                if !log.is_empty() {
-                    warn!("\tLog: {}", log);
-                }
-            } else {
-                error!("\tLog: {}", log);
-                return Err(pso::CreationError::Other);
-            }
-
-            name
-        };
+        let shaders = [
+            (ShaderStage::Vertex, Some(vs)),
+            (ShaderStage::Hull, hs),
+            (ShaderStage::Domain, ds),
+            (ShaderStage::Geometry, gs.as_ref()),
+            (ShaderStage::Fragment, desc.fragment.as_ref()),
+        ];
+        let (program, sampler_map) = self.create_shader_program(&shaders[..], &desc.layout)?;
 
         let patch_size = match input_assembler.primitive {
             pso::Primitive::PatchList(size) => Some(size as _),
@@ -1005,6 +999,7 @@ impl d::Device<B> for Device {
             rasterizer: desc.rasterizer,
             depth: desc.depth_stencil.depth,
             baked_states: desc.baked_states.clone(),
+            sampler_map,
         })
     }
 
@@ -1013,66 +1008,12 @@ impl d::Device<B> for Device {
         desc: &pso::ComputePipelineDesc<'a, B>,
         _cache: Option<&()>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
-        let gl = &self.share.context;
-        let share = &self.share;
-
-        let program = {
-            let name = gl.create_program().unwrap();
-
-            let mut name_binding_map =
-                FastHashMap::<String, (n::BindingTypes, pso::DescriptorBinding)>::default();
-            let shader = self.compile_shader(
-                &desc.shader,
-                ShaderStage::Compute,
-                &mut desc.layout.desc_remap_data.write(),
-                &mut name_binding_map,
-            );
-
-            gl.attach_shader(name, shader);
-            gl.link_program(name);
-            info!("\tLinked program {:?}", name);
-            if let Err(err) = share.check() {
-                panic!("Error linking program: {:?}", err);
-            }
-
-            gl.detach_shader(name, shader);
-            gl.delete_shader(shader);
-
-            if !self
-                .share
-                .legacy_features
-                .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
-            {
-                let gl = &self.share.context;
-                gl.use_program(Some(name));
-                for (bname, (btype, binding)) in name_binding_map.iter() {
-                    match btype {
-                        n::BindingTypes::Images => {
-                            let loc = gl.get_uniform_location(name, bname);
-                            gl.uniform_1_i32(loc.as_ref(), *binding as _);
-                        }
-                        n::BindingTypes::UniformBuffers | n::BindingTypes::StorageBuffers => {
-                            let index = gl.get_uniform_block_index(name, bname).unwrap();
-                            gl.uniform_block_binding(name, index, *binding);
-                        }
-                    }
-                }
-            }
-
-            let linked_ok = gl.get_program_link_status(name);
-            let log = gl.get_program_info_log(name);
-            if linked_ok {
-                if !log.is_empty() {
-                    warn!("\tLog: {}", log);
-                }
-            } else {
-                return Err(pso::CreationError::Other);
-            }
-
-            name
-        };
-
-        Ok(n::ComputePipeline { program })
+        let shader = (ShaderStage::Compute, Some(&desc.shader));
+        let (program, sampler_map) = self.create_shader_program(&[shader], &desc.layout)?;
+        Ok(n::ComputePipeline {
+            program,
+            sampler_map,
+        })
     }
 
     unsafe fn create_framebuffer<I>(
@@ -1178,8 +1119,23 @@ impl d::Device<B> for Device {
         if cfg!(debug_assertions) {
             flags |= spv::WriterFlags::DEBUG;
         }
-        let spv = spv::write_vec(&module, flags);
-        Ok(n::ShaderModule::Naga(module, spv))
+
+        let caps = [
+            spv::Capability::Shader,
+            spv::Capability::Matrix,
+            spv::Capability::Sampled1D,
+            spv::Capability::Image1D,
+            spv::Capability::DerivativeControl,
+            //TODO: fill out the rest
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        match spv::write_vec(&module, flags, caps) {
+            Ok(spv) => Ok(n::ShaderModule::Naga(module, spv)),
+            Err(e) => Err((d::ShaderError::CompilationFailed(format!("{}", e)), module)),
+        }
     }
 
     unsafe fn create_sampler(
@@ -1702,19 +1658,18 @@ impl d::Device<B> for Device {
 
             for descriptor in write.descriptors {
                 let binding_layout = &write.set.layout[layout_index];
-                let binding = binding_layout.binding;
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref sub) => {
                         let (raw_buffer, buffer_range) = buffer.as_bound();
                         let range = crate::resolve_sub_range(sub, buffer_range);
 
-                        let ty = match binding_layout.ty {
+                        let register = match binding_layout.ty {
                             pso::DescriptorType::Buffer { ty, .. } => match ty {
                                 pso::BufferDescriptorType::Uniform => {
-                                    n::BindingTypes::UniformBuffers
+                                    n::BindingRegister::UniformBuffers
                                 }
                                 pso::BufferDescriptorType::Storage { .. } => {
-                                    n::BindingTypes::StorageBuffers
+                                    n::BindingRegister::StorageBuffers
                                 }
                             },
                             other => {
@@ -1723,8 +1678,7 @@ impl d::Device<B> for Device {
                         };
 
                         bindings.push(n::DescSetBindings::Buffer {
-                            ty,
-                            binding,
+                            register,
                             buffer: raw_buffer,
                             offset: range.start as i32,
                             size: (range.end - range.start) as i32,
@@ -1733,7 +1687,7 @@ impl d::Device<B> for Device {
                     pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
                         match *view {
                             n::ImageView::Texture { target, raw, .. } => {
-                                bindings.push(n::DescSetBindings::Texture(binding, raw, target))
+                                bindings.push(n::DescSetBindings::Texture(raw, target))
                             }
                             n::ImageView::Renderbuffer { .. } => {
                                 panic!("Texture doesn't support shader binding")
@@ -1741,15 +1695,16 @@ impl d::Device<B> for Device {
                         }
                         match *sampler {
                             n::FatSampler::Sampler(sampler) => {
-                                bindings.push(n::DescSetBindings::Sampler(binding, sampler))
+                                bindings.push(n::DescSetBindings::Sampler(sampler))
                             }
-                            n::FatSampler::Info(ref info) => bindings
-                                .push(n::DescSetBindings::SamplerDesc(binding, info.clone())),
+                            n::FatSampler::Info(ref info) => {
+                                bindings.push(n::DescSetBindings::SamplerDesc(info.clone()))
+                            }
                         }
                     }
                     pso::Descriptor::Image(view, _layout) => match *view {
                         n::ImageView::Texture { target, raw, .. } => {
-                            bindings.push(n::DescSetBindings::Texture(binding, raw, target))
+                            bindings.push(n::DescSetBindings::Texture(raw, target))
                         }
                         n::ImageView::Renderbuffer { .. } => {
                             panic!("Texture doesn't support shader binding")
@@ -1757,10 +1712,10 @@ impl d::Device<B> for Device {
                     },
                     pso::Descriptor::Sampler(sampler) => match *sampler {
                         n::FatSampler::Sampler(sampler) => {
-                            bindings.push(n::DescSetBindings::Sampler(binding, sampler))
+                            bindings.push(n::DescSetBindings::Sampler(sampler))
                         }
                         n::FatSampler::Info(ref info) => {
-                            bindings.push(n::DescSetBindings::SamplerDesc(binding, info.clone()))
+                            bindings.push(n::DescSetBindings::SamplerDesc(info.clone()))
                         }
                     },
                     pso::Descriptor::TexelBuffer(_view) => unimplemented!(),

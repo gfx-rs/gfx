@@ -753,11 +753,9 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 gl.bind_sampler(index, Some(sampler));
             },
-            com::Command::SetTextureSamplerSettings(index, texture, textype, ref sinfo) => unsafe {
+            com::Command::SetTextureSamplerSettings(index, textype, ref sinfo) => unsafe {
                 let gl = &self.share.context;
                 gl.active_texture(glow::TEXTURE0 + index);
-                gl.bind_texture(textype, Some(texture));
-
                 // TODO: Optimization: only change texture properties that have changed.
                 device::set_sampler_info(
                     &sinfo,

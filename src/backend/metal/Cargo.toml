@@ -43,7 +43,7 @@ raw-window-handle = "0.3"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-4"
+tag = "gfx-5"
 #TODO: remove `spv-out` once spirv-cross is deprecated
 features = ["spv-out", "msl-out"]
 optional = true
