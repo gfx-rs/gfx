@@ -274,7 +274,8 @@ impl w::PresentationSurface<crate::Backend> for Surface {
         _timeout_ns: u64,
     ) -> Result<(Self::SwapchainImage, Option<w::Suboptimal>), w::AcquireError> {
         let sc = self.swapchain.as_ref().unwrap();
-        let sc_image = native::SwapchainImage::new(sc.renderbuffer, sc.format, sc.channel);
+        let sc_image =
+            native::SwapchainImage::new(sc.renderbuffer, sc.format, sc.extent, sc.channel);
         Ok((sc_image, None))
     }
 }

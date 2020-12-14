@@ -1537,6 +1537,8 @@ impl d::Device<B> for Device {
 
         Ok(n::Image {
             object_type: image,
+            kind,
+            format_desc: surface_desc,
             channel,
             requirements: memory::Requirements {
                 size,
@@ -1554,10 +1556,22 @@ impl d::Device<B> for Device {
 
     unsafe fn get_image_subresource_footprint(
         &self,
-        _image: &n::Image,
-        _sub: i::Subresource,
+        image: &n::Image,
+        sub: i::Subresource,
     ) -> i::SubresourceFootprint {
-        unimplemented!()
+        let num_layers = image.kind.num_layers() as buffer::Offset;
+        let level_offset = (0..sub.level).fold(0, |offset, level| {
+            let pitches = image.pitches(level);
+            offset + num_layers * pitches[3]
+        });
+        let pitches = image.pitches(sub.level);
+        let layer_offset = level_offset + sub.layer as buffer::Offset * pitches[3];
+        i::SubresourceFootprint {
+            slice: layer_offset..layer_offset + pitches[3],
+            row_pitch: pitches[1] as _,
+            depth_pitch: pitches[2] as _,
+            array_pitch: pitches[3] as _,
+        }
     }
 
     unsafe fn bind_image_memory(

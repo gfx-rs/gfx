@@ -4,7 +4,7 @@ use auxil::FastHashMap;
 use hal::{
     buffer, format, image as i,
     memory::{Properties, Requirements},
-    pass, pso,
+    pass, pso, window as w,
 };
 
 use parking_lot::{Mutex, RwLock};
@@ -171,11 +171,29 @@ pub struct ComputePipeline {
 #[derive(Copy, Clone, Debug)]
 pub struct Image {
     pub(crate) object_type: ImageType,
+    pub(crate) kind: i::Kind,
+    pub(crate) format_desc: format::FormatDesc,
     // Required for clearing operations
     pub(crate) channel: format::ChannelType,
     pub(crate) requirements: Requirements,
     pub(crate) num_levels: i::Level,
     pub(crate) num_layers: i::Layer,
+}
+
+impl Image {
+    pub(crate) fn pitches(&self, level: i::Level) -> [buffer::Offset; 4] {
+        let extent = self.kind.extent().at_level(level);
+        let bytes_per_texel = self.format_desc.bits as i::Size >> 3;
+        let row_pitch = extent.width * bytes_per_texel;
+        let depth_pitch = extent.height * row_pitch;
+        let array_pitch = extent.depth * depth_pitch;
+        [
+            bytes_per_texel as _,
+            row_pitch as _,
+            depth_pitch as _,
+            array_pitch as _,
+        ]
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -236,6 +254,7 @@ impl SwapchainImage {
     pub(crate) fn new(
         renderbuffer: Renderbuffer,
         format: TextureFormat,
+        extent: w::Extent2D,
         channel: format::ChannelType,
     ) -> Self {
         SwapchainImage {
@@ -245,6 +264,13 @@ impl SwapchainImage {
                     format,
                 },
                 channel,
+                kind: i::Kind::D2(extent.width as u32, extent.height as u32, 1, 1),
+                format_desc: format::FormatDesc {
+                    bits: 0,
+                    dim: (0, 0),
+                    packed: false,
+                    aspects: format::Aspects::empty(),
+                },
                 requirements: Requirements {
                     size: 0,
                     alignment: 1,
