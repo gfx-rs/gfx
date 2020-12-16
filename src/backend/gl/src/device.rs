@@ -2104,20 +2104,4 @@ impl d::Device<B> for Device {
     ) {
         // TODO
     }
-
-    unsafe fn set_compute_pipeline_name(
-        &self,
-        _compute_pipeline: &mut n::ComputePipeline,
-        _name: &str,
-    ) {
-        // TODO
-    }
-
-    unsafe fn set_graphics_pipeline_name(
-        &self,
-        _graphics_pipeline: &mut n::GraphicsPipeline,
-        _name: &str,
-    ) {
-        // TODO
-    }
 }

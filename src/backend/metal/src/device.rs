@@ -1732,6 +1732,10 @@ impl hal::device::Device<Backend> for Device {
             1
         };
 
+        if let Some(name) = pipeline_desc.label {
+            pipeline.set_label(name);
+        }
+
         device
             .new_render_pipeline_state(&pipeline)
             .map(|raw| n::GraphicsPipeline {
@@ -1771,6 +1775,9 @@ impl hal::device::Device<Backend> for Device {
             ShaderStage::Compute,
         )?;
         pipeline.set_compute_function(Some(&cs_function));
+        if let Some(name) = pipeline_desc.label {
+            pipeline.set_label(name);
+        }
 
         self.shared
             .device
@@ -3233,26 +3240,6 @@ impl hal::device::Device<Backend> for Device {
         _name: &str,
     ) {
         // TODO
-    }
-
-    unsafe fn set_compute_pipeline_name(
-        &self,
-        compute_pipeline: &mut n::ComputePipeline,
-        name: &str,
-    ) {
-        if self.shared.private_caps.supports_debug_markers {
-            compute_pipeline.raw.set_label(name);
-        }
-    }
-
-    unsafe fn set_graphics_pipeline_name(
-        &self,
-        graphics_pipeline: &mut n::GraphicsPipeline,
-        name: &str,
-    ) {
-        if self.shared.private_caps.supports_debug_markers {
-            graphics_pipeline.raw.set_label(name);
-        }
     }
 }
 

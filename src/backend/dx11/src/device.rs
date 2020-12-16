@@ -1059,6 +1059,20 @@ impl device::Device<Backend> for Device {
         let blend_state = self.create_blend_state(&desc.blender, &desc.multisampling)?;
         let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
 
+        match desc.label {
+            Some(label) if verify_debug_ascii(label) => {
+                let mut name = label.to_string();
+
+                set_debug_name_with_suffix(&blend_state, &mut name, " -- Blend State");
+                set_debug_name_with_suffix(&rasterizer_state, &mut name, " -- Rasterizer State");
+                set_debug_name_with_suffix(&layout.raw, &mut name, " -- Input Layout");
+                if let Some(ref dss) = depth_stencil_state {
+                    set_debug_name_with_suffix(&dss.raw, &mut name, " -- Depth Stencil State");
+                }
+            }
+            _ => {}
+        }
+
         Ok(GraphicsPipeline {
             vs,
             gs,
@@ -2436,40 +2450,5 @@ impl device::Device<Backend> for Device {
 
     unsafe fn set_pipeline_layout_name(&self, _pipeline_layout: &mut PipelineLayout, _name: &str) {
         // TODO
-    }
-
-    unsafe fn set_compute_pipeline_name(
-        &self,
-        _compute_pipeline: &mut ComputePipeline,
-        _name: &str,
-    ) {
-        // TODO
-    }
-
-    unsafe fn set_graphics_pipeline_name(
-        &self,
-        graphics_pipeline: &mut GraphicsPipeline,
-        name: &str,
-    ) {
-        if !verify_debug_ascii(name) {
-            return;
-        }
-
-        let mut name = name.to_string();
-
-        set_debug_name_with_suffix(&graphics_pipeline.blend_state, &mut name, " -- Blend State");
-        set_debug_name_with_suffix(
-            &graphics_pipeline.rasterizer_state,
-            &mut name,
-            " -- Rasterizer State",
-        );
-        set_debug_name_with_suffix(
-            &graphics_pipeline.input_layout,
-            &mut name,
-            " -- Input Layout",
-        );
-        if let Some(ref dss) = graphics_pipeline.depth_stencil_state {
-            set_debug_name_with_suffix(&dss.raw, &mut name, " -- Depth Stencil State");
-        }
     }
 }
