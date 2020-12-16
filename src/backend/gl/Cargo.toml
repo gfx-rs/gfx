@@ -16,7 +16,7 @@ edition = "2018"
 name = "gfx_backend_gl"
 
 [features]
-default = ["x11"]
+default = []
 
 [dependencies]
 arrayvec = "0.5"
@@ -24,6 +24,7 @@ bitflags = "1"
 log = "0.4"
 hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
 auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
+libloading = "0.6"
 smallvec = "1.0"
 glow = "0.6.1"
 parking_lot = "0.11"
@@ -33,7 +34,6 @@ raw-window-handle = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egl = { package = "khronos-egl", version = "2.2" }
-x11 = { version = "2", features = ["xlib"], optional = true }
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"

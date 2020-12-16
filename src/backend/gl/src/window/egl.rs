@@ -3,6 +3,7 @@
 use crate::{conv, native, GlContainer, PhysicalDevice};
 use glow::HasContext;
 use hal::{image, window as w};
+use std::{os::raw, ptr};
 
 #[derive(Debug)]
 pub struct Swapchain {
@@ -26,48 +27,76 @@ pub struct Instance {
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
+fn get_x11_open_display() -> Option<ptr::NonNull<raw::c_void>> {
+    type XOpenDisplayFun =
+        unsafe extern "system" fn(display_name: *const raw::c_char) -> *mut raw::c_void;
+    log::info!("Loading X11 library to get the current display");
+    let library = libloading::Library::new("libX11.so").ok()?;
+    let func: libloading::Symbol<XOpenDisplayFun> =
+        unsafe { library.get(b"XOpenDisplay").unwrap() };
+    ptr::NonNull::new(unsafe { func(ptr::null()) })
+}
+
 impl hal::Instance<crate::Backend> for Instance {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
-        let client_extensions =
-            egl::query_string(None, egl::EXTENSIONS).map_err(|_| hal::UnsupportedBackend)?;
+        let client_extensions = egl::query_string(None, egl::EXTENSIONS)
+            .map_err(|_| hal::UnsupportedBackend)?
+            .to_string_lossy();
         log::info!("Client extensions: {:?}", client_extensions);
+        let client_ext_list = client_extensions.split_whitespace().collect::<Vec<_>>();
 
-        //TODO: requre  `GL_OES_surfaceless_context` or work around it
-
-        #[cfg(feature = "x11")]
-        let display = {
+        let mut is_default_display = false;
+        let x11_display = if client_ext_list.contains(&"EGL_EXT_platform_x11") {
+            get_x11_open_display()
+        } else {
+            None
+        };
+        let display = if let Some(x11_display) = x11_display {
+            log::info!("Using X11 platform");
             const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
-            let x11_display = unsafe { x11::xlib::XOpenDisplay(std::ptr::null()) };
-            assert!(!x11_display.is_null());
             let display_attributes = [egl::ATTRIB_NONE];
             egl::get_platform_display(
                 EGL_PLATFORM_X11_KHR,
-                x11_display as *mut _,
+                x11_display.as_ptr(),
                 &display_attributes,
             )
             .unwrap()
+        } else {
+            log::info!("Using default platform");
+            is_default_display = true;
+            egl::get_display(egl::DEFAULT_DISPLAY).unwrap()
         };
-        #[cfg(not(feature = "x11"))]
-        let display = egl::get_display(egl::DEFAULT_DISPLAY).unwrap();
 
         let version = egl::initialize(display).map_err(|_| hal::UnsupportedBackend)?;
         let vendor = egl::query_string(Some(display), egl::VENDOR).unwrap();
-        let display_extensions = egl::query_string(Some(display), egl::EXTENSIONS).unwrap();
+        let display_extensions = egl::query_string(Some(display), egl::EXTENSIONS)
+            .unwrap()
+            .to_string_lossy();
         log::info!(
             "Display vendor {:?}, version {:?}, extensions: {:?}",
             vendor,
             version,
             display_extensions
         );
-        assert!(version >= (1, 4), "Unable to request GL context");
+        if version < (1, 4) {
+            log::error!("EGL supported version is only {:?}", version);
+            return Err(hal::UnsupportedBackend);
+        }
+        let display_ext_list = display_extensions.split_whitespace().collect::<Vec<_>>();
+        let required_display_extensions = ["EGL_KHR_create_context", "EGL_KHR_surfaceless_context"];
+        for required_ext in required_display_extensions.iter() {
+            if !display_ext_list.contains(required_ext) {
+                log::warn!("{} is not present", required_ext);
+            }
+        }
 
-        {
-            debug!("Configurations:");
+        if log::max_level() >= log::LevelFilter::Trace {
+            log::trace!("Configurations:");
             let config_count = egl::get_config_count(display).unwrap();
             let mut configurations = Vec::with_capacity(config_count);
             egl::get_configs(display, &mut configurations).unwrap();
             for &config in configurations.iter() {
-                debug!("\tCONFORMANT=0x{:X}, RENDERABLE=0x{:X}, NATIVE_RENDERABLE=0x{:X}, SURFACE_TYPE=0x{:X}",
+                log::trace!("\tCONFORMANT=0x{:X}, RENDERABLE=0x{:X}, NATIVE_RENDERABLE=0x{:X}, SURFACE_TYPE=0x{:X}",
                     egl::get_config_attrib(display, config, egl::CONFORMANT).unwrap(),
                     egl::get_config_attrib(display, config, egl::RENDERABLE_TYPE).unwrap(),
                     egl::get_config_attrib(display, config, egl::NATIVE_RENDERABLE).unwrap(),
@@ -90,7 +119,12 @@ impl hal::Instance<crate::Backend> for Instance {
             egl::WINDOW_BIT,
             egl::NONE,
         ];
-        let config = match egl::choose_first_config(display, &config_attributes) {
+        let pre_config = if is_default_display {
+            Ok(None)
+        } else {
+            egl::choose_first_config(display, &config_attributes)
+        };
+        let config = match pre_config {
             Ok(Some(config)) => config,
             Ok(None) => {
                 log::warn!("no compatible EGL config found, trying off-screen");
@@ -111,14 +145,12 @@ impl hal::Instance<crate::Backend> for Instance {
         egl::bind_api(egl::OPENGL_ES_API).unwrap();
 
         //TODO: make it so `Device` == EGL Context
-        let gles_version = (3, 1);
         let mut context_attributes = vec![
-            egl::CONTEXT_MAJOR_VERSION,
-            gles_version.0,
-            egl::CONTEXT_MINOR_VERSION,
-            gles_version.1,
+            egl::CONTEXT_CLIENT_VERSION,
+            3, // Request GLES 3.0 or higher
         ];
-        if cfg!(debug_assertions) {
+        if cfg!(debug_assertions) && !is_default_display {
+            //TODO: figure out why this is needed
             context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
             context_attributes.push(egl::TRUE as _);
         }
@@ -126,7 +158,7 @@ impl hal::Instance<crate::Backend> for Instance {
         let context = match egl::create_context(display, config, None, &context_attributes) {
             Ok(context) => context,
             Err(e) => {
-                log::warn!("unable to create GLES {:?} context: {:?}", gles_version, e);
+                log::warn!("unable to create GLES 3.x context: {:?}", e);
                 return Err(hal::UnsupportedBackend);
             }
         };

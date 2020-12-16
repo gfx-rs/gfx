@@ -61,7 +61,6 @@ optional = true
 path = "../../src/backend/gl"
 version = "0.6"
 optional = true
-features = ["x11"]
 
 [[example]]
 name = "basic"

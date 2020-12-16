@@ -219,7 +219,7 @@ pub struct Info {
     pub extensions: HashSet<String>,
 }
 
-bitflags! {
+bitflags::bitflags! {
     /// Flags for features that are required for Vulkan but may not
     /// be supported by legacy backends (GL/DX11).
     pub struct LegacyFeatures: u32 {
