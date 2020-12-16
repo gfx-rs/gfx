@@ -93,7 +93,7 @@ quad:
 	cd examples && cargo run --bin quad --features ${FEATURES_HAL}
 
 quad-wasm:
-	cd examples && cargo +nightly build --features gl --target wasm32-unknown-unknown --bin quad && wasm-bindgen ../target/wasm32-unknown-unknown/debug/quad.wasm --out-dir ../examples/generated-wasm --web
+	cd examples && cargo build --features gl --target wasm32-unknown-unknown --bin quad && wasm-bindgen ../target/wasm32-unknown-unknown/debug/quad.wasm --out-dir ../examples/generated-wasm --web
 
 shader-binaries: $(METAL_SHADERS)/*.metal
 ifeq ($(UNAME_S),Darwin)
