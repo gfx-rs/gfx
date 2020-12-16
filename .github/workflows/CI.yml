@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-18.04
     env:
       TARGET: aarch64-linux-android
+      #TODO: remove this once khronos-egl is updated
       PKG_CONFIG_ALLOW_CROSS: 1
     steps:
       - uses: actions/checkout@v2
@@ -35,6 +36,16 @@ jobs:
           sudo apt-get install -y -qq libegl1-mesa-dev
           echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
       - run: cargo check --manifest-path src/backend/gl/Cargo.toml --target ${{ env.TARGET }}
+
+  webgl_build:
+    name: Web Assembly
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - run: rustup target add wasm32-unknown-unknown
+      # version has to match the `Cargo.toml` dependency in GL backend
+      - run: cargo install wasm-bindgen-cli --version 0.2.60
+      - run: make quad-wasm
 
   check-advisories:
     name: Advisory Check
@@ -66,7 +77,6 @@ jobs:
             MacOS Nightly,
             Ubuntu Stable,
             Ubuntu Nightly,
-            Web Assembly,
             Windows Stable,
             Windows Nightly,
           ]
@@ -83,10 +93,6 @@ jobs:
           - os: ubuntu-18.04
             name: Ubuntu Nightly
             channel: nightly
-          - os: ubuntu-18.04
-            name: Web Assembly
-            channel: nightly
-            target: wasm32-unknown-unknown
           - os: windows-2019
             name: Windows Stable
             channel: stable

@@ -29,12 +29,39 @@ impl hal::Instance<B> for Instance {
     }
 
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
-        if let Some(canvas) = self.canvas.lock().as_ref() {
-            let adapter = PhysicalDevice::new_adapter(GlContainer::from_canvas(canvas));
-            vec![adapter]
-        } else {
-            vec![]
-        }
+        let canvas_guard = self.canvas.lock();
+        let context = match *canvas_guard {
+            Some(ref canvas) => {
+                // TODO: Remove hardcoded width/height
+                if canvas.get_attribute("width").is_none() {
+                    canvas
+                        .set_attribute("width", "640")
+                        .expect("Cannot set width");
+                }
+                if canvas.get_attribute("height").is_none() {
+                    canvas
+                        .set_attribute("height", "480")
+                        .expect("Cannot set height");
+                }
+                let context_options = js_sys::Object::new();
+                js_sys::Reflect::set(
+                    &context_options,
+                    &"antialias".into(),
+                    &wasm_bindgen::JsValue::FALSE,
+                )
+                .expect("Cannot create context options");
+                let webgl2_context = canvas
+                    .get_context_with_context_options("webgl2", &context_options)
+                    .expect("Cannot create WebGL2 context")
+                    .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
+                    .expect("Cannot convert into WebGL2 context");
+                glow::Context::from_webgl2_context(webgl2_context)
+            }
+            None => return Vec::new(),
+        };
+
+        let adapter = PhysicalDevice::new_adapter(context);
+        vec![adapter]
     }
 
     unsafe fn create_surface(
@@ -207,8 +234,12 @@ impl window::PresentationSurface<B> for Surface {
         _timeout_ns: u64,
     ) -> Result<(Self::SwapchainImage, Option<window::Suboptimal>), window::AcquireError> {
         let sc = self.swapchain.as_ref().unwrap();
-        let swapchain_image =
-            native::SwapchainImage::new(self.renderbuffer.unwrap(), sc.raw_format, sc.channel);
+        let swapchain_image = native::SwapchainImage::new(
+            self.renderbuffer.unwrap(),
+            sc.raw_format,
+            sc.extent,
+            sc.channel,
+        );
         Ok((swapchain_image, None))
     }
 }

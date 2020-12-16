@@ -174,12 +174,13 @@ impl hal::Instance<crate::Backend> for Instance {
 
     fn enumerate_adapters(&self) -> Vec<hal::adapter::Adapter<crate::Backend>> {
         egl::make_current(self.display, None, None, Some(self.context)).unwrap();
-        let gl = unsafe {
-            GlContainer::from_fn_proc(|name| egl::get_proc_address(name).unwrap() as *const _)
+        let context = unsafe {
+            glow::Context::from_loader_function(|name| {
+                egl::get_proc_address(name).unwrap() as *const _
+            })
         };
-
         // Create physical device
-        vec![PhysicalDevice::new_adapter(gl)]
+        vec![PhysicalDevice::new_adapter(context)]
     }
 
     unsafe fn create_surface(

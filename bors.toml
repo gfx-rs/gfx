@@ -1,6 +1,7 @@
 status = [
   "Dependency Check",
   "iOS Stable",
+  "Web Assembly",
   "MacOS Stable",
   "MacOS Nightly",
   "Android Stable",

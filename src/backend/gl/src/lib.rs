@@ -41,51 +41,8 @@ use glow::HasContext;
 
 type ColorSlot = u8;
 
-pub(crate) struct GlContainer {
+struct GlContainer {
     context: GlContext,
-}
-
-impl GlContainer {
-    #[cfg(not(target_arch = "wasm32"))]
-    unsafe fn from_fn_proc<F>(fn_proc: F) -> GlContainer
-    where
-        F: FnMut(&str) -> *const std::os::raw::c_void,
-    {
-        let context = glow::Context::from_loader_function(fn_proc);
-        GlContainer { context }
-    }
-
-    #[cfg(target_arch = "wasm32")]
-    fn from_canvas(canvas: &web_sys::HtmlCanvasElement) -> GlContainer {
-        let context = {
-            use wasm_bindgen::JsCast;
-            // TODO: Remove hardcoded width/height
-            if canvas.get_attribute("width").is_none() {
-                canvas
-                    .set_attribute("width", "640")
-                    .expect("Cannot set width");
-            }
-            if canvas.get_attribute("height").is_none() {
-                canvas
-                    .set_attribute("height", "480")
-                    .expect("Cannot set height");
-            }
-            let context_options = js_sys::Object::new();
-            js_sys::Reflect::set(
-                &context_options,
-                &"antialias".into(),
-                &wasm_bindgen::JsValue::FALSE,
-            )
-            .expect("Cannot create context options");
-            let webgl2_context = canvas
-                .get_context_with_context_options("webgl2", &context_options)
-                .expect("Cannot create WebGL2 context")
-                .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
-                .expect("Cannot convert into WebGL2 context");
-            glow::Context::from_webgl2_context(webgl2_context)
-        };
-        GlContainer { context }
-    }
 }
 
 impl Deref for GlContainer {
@@ -368,7 +325,8 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 pub struct PhysicalDevice(Starc<Share>);
 
 impl PhysicalDevice {
-    fn new_adapter(gl: GlContainer) -> adapter::Adapter<Backend> {
+    fn new_adapter(context: GlContext) -> adapter::Adapter<Backend> {
+        let gl = GlContainer { context };
         // query information
         let (info, supported_features, legacy_features, hints, limits, private_caps) =
             info::query_all(&gl);
