@@ -345,40 +345,40 @@ impl Device {
     fn remap_bindings(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
-        nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
         layout: &n::PipelineLayout,
+        nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
     ) {
         let res = ast.get_shader_resources().unwrap();
         self.remap_binding(
             ast,
-            nb_map,
             &res.sampled_images,
             n::BindingRegister::Textures,
             layout,
+            nb_map,
         );
         self.remap_binding(
             ast,
-            nb_map,
             &res.uniform_buffers,
             n::BindingRegister::UniformBuffers,
             layout,
+            nb_map,
         );
         self.remap_binding(
             ast,
-            nb_map,
             &res.storage_buffers,
             n::BindingRegister::StorageBuffers,
             layout,
+            nb_map,
         );
     }
 
     fn remap_binding(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
-        nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
         all_res: &[spirv::Resource],
         register: n::BindingRegister,
         layout: &n::PipelineLayout,
+        nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
     ) {
         for res in all_res {
             let set = ast
@@ -461,6 +461,59 @@ impl Device {
         }
     }
 
+    #[cfg(feature = "naga")]
+    fn reflect_shader(
+        module: &naga::Module,
+        entry_point: &(naga::ShaderStage, String),
+        texture_mapping: FastHashMap<String, naga::back::glsl::TextureMapping>,
+        sampler_map: &mut n::SamplerBindMap,
+        name_binding_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
+        layout: &n::PipelineLayout,
+    ) {
+        let ep = &module.entry_points[entry_point];
+        for ((_, var), usage) in module
+            .global_variables
+            .iter()
+            .zip(ep.function.global_usage.iter())
+        {
+            if usage.is_empty() {
+                continue;
+            }
+            let register = match var.class {
+                naga::StorageClass::Uniform => n::BindingRegister::UniformBuffers,
+                naga::StorageClass::Storage => n::BindingRegister::StorageBuffers,
+                _ => continue,
+            };
+            //TODO: make Naga reflect all the names, not just textures
+            let slot = match var.binding {
+                Some(naga::Binding::Resource { group, binding }) => {
+                    layout.sets[group as usize].bindings[binding as usize]
+                }
+                ref other => panic!("Unexpected resource binding {:?}", other),
+            };
+            name_binding_map.insert(var.name.clone().unwrap(), (register, slot));
+        }
+
+        for (name, mapping) in texture_mapping {
+            let texture_linear_index = match module.global_variables[mapping.texture].binding {
+                Some(naga::Binding::Resource { group, binding }) => {
+                    layout.sets[group as usize].bindings[binding as usize]
+                }
+                ref other => panic!("Unexpected texture binding {:?}", other),
+            };
+            name_binding_map.insert(name, (n::BindingRegister::Textures, texture_linear_index));
+            if let Some(sampler_handle) = mapping.sampler {
+                let sampler_linear_index = match module.global_variables[sampler_handle].binding {
+                    Some(naga::Binding::Resource { group, binding }) => {
+                        layout.sets[group as usize].bindings[binding as usize]
+                    }
+                    ref other => panic!("Unexpected sampler binding {:?}", other),
+                };
+                sampler_map[texture_linear_index as usize] = Some(sampler_linear_index);
+            }
+        }
+    }
+
     fn populate_id_map(
         &self,
         ast: &spirv::Ast<glsl::Target>,
@@ -495,7 +548,7 @@ impl Device {
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
                 spirv_cross_specialize_ast(&mut ast, &point.specialization).unwrap();
-                self.remap_bindings(&mut ast, name_binding_map, layout);
+                self.remap_bindings(&mut ast, layout, name_binding_map);
                 self.combine_separate_images_and_samplers(
                     &mut ast,
                     sampler_map,
@@ -538,30 +591,14 @@ impl Device {
 
                 match writer.write() {
                     Ok(texture_mapping) => {
-                        for (name, mapping) in texture_mapping {
-                            let texture_linear_index =
-                                match module.global_variables[mapping.texture].binding {
-                                    Some(naga::Binding::Resource { group, binding }) => {
-                                        layout.sets[group as usize].bindings[binding as usize]
-                                    }
-                                    ref other => panic!("Unexpected texture binding {:?}", other),
-                                };
-                            name_binding_map
-                                .insert(name, (n::BindingRegister::Textures, texture_linear_index));
-                            if let Some(sampler_handle) = mapping.sampler {
-                                let sampler_linear_index = match module.global_variables
-                                    [sampler_handle]
-                                    .binding
-                                {
-                                    Some(naga::Binding::Resource { group, binding }) => {
-                                        layout.sets[group as usize].bindings[binding as usize]
-                                    }
-                                    ref other => panic!("Unexpected sampler binding {:?}", other),
-                                };
-                                sampler_map[texture_linear_index as usize] =
-                                    Some(sampler_linear_index);
-                            }
-                        }
+                        Self::reflect_shader(
+                            module,
+                            &options.entry_point,
+                            texture_mapping,
+                            sampler_map,
+                            name_binding_map,
+                            layout,
+                        );
                         let source = String::from_utf8(output).unwrap();
                         debug!("Naga generated shader:\n{}", source);
                         self.create_shader_module_raw(&source, stage).unwrap()
