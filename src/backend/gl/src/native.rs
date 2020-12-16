@@ -1,13 +1,12 @@
 use crate::{Backend, GlContext};
 
-use auxil::FastHashMap;
 use hal::{
     buffer, format, image as i,
     memory::{Properties, Requirements},
     pass, pso, window as w,
 };
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
 
 use std::{borrow::Borrow, cell::Cell, ops::Range, sync::Arc};
 
@@ -72,82 +71,15 @@ unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum BindingTypes {
-    Images,
+pub enum BindingRegister {
+    Textures,
     UniformBuffers,
     StorageBuffers,
 }
 
-#[derive(Clone, Debug)]
-pub struct DescRemapData {
-    bindings: FastHashMap<
-        (
-            BindingTypes,
-            pso::DescriptorSetIndex,
-            pso::DescriptorBinding,
-        ),
-        Vec<pso::DescriptorBinding>,
-    >,
-    next_binding: FastHashMap<BindingTypes, pso::DescriptorBinding>,
-}
-
-/// Stores where the descriptor bindings have been remaped too.
-///
-/// OpenGL doesn't support sets, so we have to flatten out the bindings.
-impl DescRemapData {
-    pub fn new() -> Self {
-        DescRemapData {
-            bindings: FastHashMap::default(),
-            next_binding: FastHashMap::default(),
-        }
-    }
-
-    pub fn insert_missing_binding_into_spare(
-        &mut self,
-        btype: BindingTypes,
-        set: pso::DescriptorSetIndex,
-        binding: pso::DescriptorBinding,
-    ) -> &[pso::DescriptorBinding] {
-        let nb = self.next_binding.entry(btype).or_insert(0);
-        let val = self
-            .bindings
-            .entry((btype, set, binding))
-            .or_insert(Vec::new());
-        val.push(*nb);
-        *nb += 1;
-        &*val
-    }
-
-    pub fn reserve_binding(&mut self, btype: BindingTypes) -> pso::DescriptorBinding {
-        let nb = self.next_binding.entry(btype).or_insert(0);
-        *nb += 1;
-        *nb - 1
-    }
-
-    pub fn insert_missing_binding(
-        &mut self,
-        nb: pso::DescriptorBinding,
-        btype: BindingTypes,
-        set: pso::DescriptorSetIndex,
-        binding: pso::DescriptorBinding,
-    ) -> &[pso::DescriptorBinding] {
-        let val = self
-            .bindings
-            .entry((btype, set, binding))
-            .or_insert(Vec::new());
-        val.push(nb);
-        &*val
-    }
-
-    pub fn get_binding(
-        &self,
-        btype: BindingTypes,
-        set: pso::DescriptorSetIndex,
-        binding: pso::DescriptorBinding,
-    ) -> Option<&[pso::DescriptorBinding]> {
-        self.bindings.get(&(btype, set, binding)).map(AsRef::as_ref)
-    }
-}
+/// For each texture in the pipeline layout, store the index of the only
+/// sampler (in this layout) that the texture is used with.    
+pub(crate) type SamplerBindMap = [Option<u8>; glow::MAX_TEXTURE_IMAGE_UNITS as usize];
 
 #[derive(Clone, Debug)]
 pub struct GraphicsPipeline {
@@ -161,11 +93,13 @@ pub struct GraphicsPipeline {
     pub(crate) rasterizer: pso::Rasterizer,
     pub(crate) depth: Option<pso::DepthTest>,
     pub(crate) baked_states: pso::BakedStates,
+    pub(crate) sampler_map: SamplerBindMap,
 }
 
 #[derive(Clone, Debug)]
 pub struct ComputePipeline {
     pub(crate) program: Program,
+    pub(crate) sampler_map: SamplerBindMap,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -293,20 +227,20 @@ impl SwapchainImage {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) enum DescSetBindings {
     Buffer {
-        ty: BindingTypes,
-        binding: pso::DescriptorBinding,
+        register: BindingRegister,
         buffer: RawBuffer,
         offset: i32,
         size: i32,
     },
-    Texture(pso::DescriptorBinding, Texture, TextureTarget),
-    Sampler(pso::DescriptorBinding, Sampler),
-    SamplerDesc(pso::DescriptorBinding, i::SamplerDesc),
+    Texture(Texture, TextureTarget),
+    Sampler(Sampler),
+    SamplerDesc(i::SamplerDesc),
 }
 
 #[derive(Clone, Debug)]
 pub struct DescriptorSet {
     pub(crate) layout: DescriptorSetLayout,
+    //TODO: use `UnsafeCell` instead
     pub(crate) bindings: Arc<Mutex<Vec<DescSetBindings>>>,
 }
 
@@ -388,8 +322,20 @@ impl SubpassDesc {
 }
 
 #[derive(Debug)]
+pub(crate) struct PipelineLayoutSet {
+    pub(crate) layout: DescriptorSetLayout,
+    /// Mapping of resources, indexed by `pso::DescriptorBinding`, into the whole layout space.
+    /// For image resources, the value is the texture slot index.
+    /// For sampler resources, the value is the index of the sampler in the whole layout.
+    /// For buffers, the value is the uniform or storage slot index.
+    /// For unused bindings, the value is `!0`
+    pub(crate) bindings: Vec<u8>,
+}
+
+#[derive(Debug)]
 pub struct PipelineLayout {
-    pub(crate) desc_remap_data: Arc<RwLock<DescRemapData>>,
+    /// Resource mapping for descriptor sets.
+    pub(crate) sets: Vec<PipelineLayoutSet>,
 }
 
 #[derive(Debug)]
