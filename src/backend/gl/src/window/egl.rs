@@ -1,6 +1,6 @@
 //! EGL-based surface and swapchain.
 
-use crate::{conv, native, GlContainer, PhysicalDevice};
+use crate::{conv, native, GlContainer, PhysicalDevice, Starc};
 use glow::HasContext;
 use hal::{image, window as w};
 use std::{os::raw, ptr};
@@ -17,6 +17,7 @@ pub struct Swapchain {
 
 #[derive(Debug)]
 pub struct Instance {
+    egl: Starc<egl::DynamicInstance>,
     display: egl::Display,
     version: (i32, i32),
     config: egl::Config,
@@ -39,7 +40,16 @@ fn get_x11_open_display() -> Option<ptr::NonNull<raw::c_void>> {
 
 impl hal::Instance<crate::Backend> for Instance {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
-        let client_extensions = egl::query_string(None, egl::EXTENSIONS)
+        let egl = match unsafe { egl::DynamicInstance::load() } {
+            Ok(egl) => Starc::new(egl),
+            Err(e) => {
+                log::warn!("Unable to open libEGL.so: {:?}", e);
+                return Err(hal::UnsupportedBackend);
+            }
+        };
+
+        let client_extensions = egl
+            .query_string(None, egl::EXTENSIONS)
             .map_err(|_| hal::UnsupportedBackend)?
             .to_string_lossy();
         log::info!("Client extensions: {:?}", client_extensions);
@@ -55,7 +65,7 @@ impl hal::Instance<crate::Backend> for Instance {
             log::info!("Using X11 platform");
             const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
             let display_attributes = [egl::ATTRIB_NONE];
-            egl::get_platform_display(
+            egl.get_platform_display(
                 EGL_PLATFORM_X11_KHR,
                 x11_display.as_ptr(),
                 &display_attributes,
@@ -64,12 +74,15 @@ impl hal::Instance<crate::Backend> for Instance {
         } else {
             log::info!("Using default platform");
             is_default_display = true;
-            egl::get_display(egl::DEFAULT_DISPLAY).unwrap()
+            egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
         };
 
-        let version = egl::initialize(display).map_err(|_| hal::UnsupportedBackend)?;
-        let vendor = egl::query_string(Some(display), egl::VENDOR).unwrap();
-        let display_extensions = egl::query_string(Some(display), egl::EXTENSIONS)
+        let version = egl
+            .initialize(display)
+            .map_err(|_| hal::UnsupportedBackend)?;
+        let vendor = egl.query_string(Some(display), egl::VENDOR).unwrap();
+        let display_extensions = egl
+            .query_string(Some(display), egl::EXTENSIONS)
             .unwrap()
             .to_string_lossy();
         log::info!(
@@ -92,15 +105,15 @@ impl hal::Instance<crate::Backend> for Instance {
 
         if log::max_level() >= log::LevelFilter::Trace {
             log::trace!("Configurations:");
-            let config_count = egl::get_config_count(display).unwrap();
+            let config_count = egl.get_config_count(display).unwrap();
             let mut configurations = Vec::with_capacity(config_count);
-            egl::get_configs(display, &mut configurations).unwrap();
+            egl.get_configs(display, &mut configurations).unwrap();
             for &config in configurations.iter() {
                 log::trace!("\tCONFORMANT=0x{:X}, RENDERABLE=0x{:X}, NATIVE_RENDERABLE=0x{:X}, SURFACE_TYPE=0x{:X}",
-                    egl::get_config_attrib(display, config, egl::CONFORMANT).unwrap(),
-                    egl::get_config_attrib(display, config, egl::RENDERABLE_TYPE).unwrap(),
-                    egl::get_config_attrib(display, config, egl::NATIVE_RENDERABLE).unwrap(),
-                    egl::get_config_attrib(display, config, egl::SURFACE_TYPE).unwrap(),
+                    egl.get_config_attrib(display, config, egl::CONFORMANT).unwrap(),
+                    egl.get_config_attrib(display, config, egl::RENDERABLE_TYPE).unwrap(),
+                    egl.get_config_attrib(display, config, egl::NATIVE_RENDERABLE).unwrap(),
+                    egl.get_config_attrib(display, config, egl::SURFACE_TYPE).unwrap(),
                 );
             }
         }
@@ -122,7 +135,7 @@ impl hal::Instance<crate::Backend> for Instance {
         let pre_config = if is_default_display {
             Ok(None)
         } else {
-            egl::choose_first_config(display, &config_attributes)
+            egl.choose_first_config(display, &config_attributes)
         };
         let config = match pre_config {
             Ok(Some(config)) => config,
@@ -131,7 +144,7 @@ impl hal::Instance<crate::Backend> for Instance {
                 supports_native_window = false;
                 let reduced_config_attributes =
                     [egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT, egl::NONE];
-                match egl::choose_first_config(display, &reduced_config_attributes) {
+                match egl.choose_first_config(display, &reduced_config_attributes) {
                     Ok(Some(config)) => config,
                     _ => return Err(hal::UnsupportedBackend),
                 }
@@ -142,7 +155,7 @@ impl hal::Instance<crate::Backend> for Instance {
             }
         };
 
-        egl::bind_api(egl::OPENGL_ES_API).unwrap();
+        egl.bind_api(egl::OPENGL_ES_API).unwrap();
 
         //TODO: make it so `Device` == EGL Context
         let mut context_attributes = vec![
@@ -155,7 +168,7 @@ impl hal::Instance<crate::Backend> for Instance {
             context_attributes.push(egl::TRUE as _);
         }
         context_attributes.push(egl::NONE as _);
-        let context = match egl::create_context(display, config, None, &context_attributes) {
+        let context = match egl.create_context(display, config, None, &context_attributes) {
             Ok(context) => context,
             Err(e) => {
                 log::warn!("unable to create GLES 3.x context: {:?}", e);
@@ -164,6 +177,7 @@ impl hal::Instance<crate::Backend> for Instance {
         };
 
         Ok(Instance {
+            egl,
             display,
             version,
             config,
@@ -173,10 +187,12 @@ impl hal::Instance<crate::Backend> for Instance {
     }
 
     fn enumerate_adapters(&self) -> Vec<hal::adapter::Adapter<crate::Backend>> {
-        egl::make_current(self.display, None, None, Some(self.context)).unwrap();
+        self.egl
+            .make_current(self.display, None, None, Some(self.context))
+            .unwrap();
         let context = unsafe {
             glow::Context::from_loader_function(|name| {
-                egl::get_proc_address(name).unwrap() as *const _
+                self.egl.get_proc_address(name).unwrap() as *const _
             })
         };
         // Create physical device
@@ -205,13 +221,14 @@ impl hal::Instance<crate::Backend> for Instance {
             egl::GL_COLORSPACE_SRGB as usize,
             egl::ATTRIB_NONE,
         ];
-        match egl::create_platform_window_surface(
+        match self.egl.create_platform_window_surface(
             self.display,
             self.config,
             &mut native_window as *mut _ as *mut _,
             &attributes,
         ) {
             Ok(raw) => Ok(Surface {
+                egl: self.egl.clone(),
                 raw,
                 display: self.display,
                 context: self.context,
@@ -226,16 +243,16 @@ impl hal::Instance<crate::Backend> for Instance {
     }
 
     unsafe fn destroy_surface(&self, surface: Surface) {
-        egl::destroy_surface(self.display, surface.raw).unwrap();
+        self.egl.destroy_surface(self.display, surface.raw).unwrap();
     }
 }
 
 impl Drop for Instance {
     fn drop(&mut self) {
-        if let Err(e) = egl::destroy_context(self.display, self.context) {
+        if let Err(e) = self.egl.destroy_context(self.display, self.context) {
             log::warn!("Error in destroy_context: {:?}", e);
         }
-        if let Err(e) = egl::terminate(self.display) {
+        if let Err(e) = self.egl.terminate(self.display) {
             log::warn!("Error in terminate: {:?}", e);
         }
     }
@@ -243,6 +260,7 @@ impl Drop for Instance {
 
 #[derive(Debug)]
 pub struct Surface {
+    egl: Starc<egl::DynamicInstance>,
     raw: egl::Surface,
     display: egl::Display,
     context: egl::Context,
@@ -355,13 +373,14 @@ impl Surface {
     ) -> Result<Option<w::Suboptimal>, w::PresentError> {
         let sc = self.swapchain.as_ref().unwrap();
 
-        egl::make_current(
-            self.display,
-            Some(self.raw),
-            Some(self.raw),
-            Some(self.context),
-        )
-        .unwrap();
+        self.egl
+            .make_current(
+                self.display,
+                Some(self.raw),
+                Some(self.raw),
+                Some(self.context),
+            )
+            .unwrap();
         gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(sc.framebuffer));
         gl.blit_framebuffer(
@@ -378,8 +397,10 @@ impl Surface {
         );
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
 
-        egl::swap_buffers(self.display, self.raw).unwrap();
-        egl::make_current(self.display, None, None, Some(self.context)).unwrap();
+        self.egl.swap_buffers(self.display, self.raw).unwrap();
+        self.egl
+            .make_current(self.display, None, None, Some(self.context))
+            .unwrap();
 
         Ok(None)
     }
