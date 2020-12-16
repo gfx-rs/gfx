@@ -28,38 +28,57 @@ unsafe impl Sync for Instance {}
 
 impl hal::Instance<crate::Backend> for Instance {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
-        let client_extensions =
-            egl::query_string(None, egl::EXTENSIONS).map_err(|_| hal::UnsupportedBackend)?;
+        let client_extensions = egl::query_string(None, egl::EXTENSIONS)
+            .map_err(|_| hal::UnsupportedBackend)?
+            .to_string_lossy();
         log::info!("Client extensions: {:?}", client_extensions);
-
-        //TODO: requre  `GL_OES_surfaceless_context` or work around it
+        let client_list = client_extensions.split_whitespace().collect::<Vec<_>>();
 
         #[cfg(feature = "x11")]
         let display = {
-            const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
-            let x11_display = unsafe { x11::xlib::XOpenDisplay(std::ptr::null()) };
-            assert!(!x11_display.is_null());
-            let display_attributes = [egl::ATTRIB_NONE];
-            egl::get_platform_display(
-                EGL_PLATFORM_X11_KHR,
-                x11_display as *mut _,
-                &display_attributes,
-            )
-            .unwrap()
+            if client_list.contains(&"EGL_EXT_platform_x11") {
+                const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
+                let x11_display = unsafe { x11::xlib::XOpenDisplay(std::ptr::null()) };
+                assert!(!x11_display.is_null());
+                let display_attributes = [egl::ATTRIB_NONE];
+                egl::get_platform_display(
+                    EGL_PLATFORM_X11_KHR,
+                    x11_display as *mut _,
+                    &display_attributes,
+                )
+                .unwrap()
+            } else {
+                log::warn!("X11 is not supported");
+                egl::get_display(egl::DEFAULT_DISPLAY).unwrap()
+            }
         };
         #[cfg(not(feature = "x11"))]
         let display = egl::get_display(egl::DEFAULT_DISPLAY).unwrap();
 
         let version = egl::initialize(display).map_err(|_| hal::UnsupportedBackend)?;
         let vendor = egl::query_string(Some(display), egl::VENDOR).unwrap();
-        let display_extensions = egl::query_string(Some(display), egl::EXTENSIONS).unwrap();
+        let display_extensions = egl::query_string(Some(display), egl::EXTENSIONS)
+            .unwrap()
+            .to_string_lossy();
         log::info!(
             "Display vendor {:?}, version {:?}, extensions: {:?}",
             vendor,
             version,
             display_extensions
         );
-        assert!(version >= (1, 4), "Unable to request GL context");
+        if version < (1, 4) {
+            log::error!("EGL supported version is only {:?}", version);
+            return Err(hal::UnsupportedBackend);
+        }
+        {
+            let required_list = ["EGL_KHR_create_context", "EGL_KHR_surfaceless_context"];
+            let list = display_extensions.split_whitespace().collect::<Vec<_>>();
+            for required_ext in required_list.iter() {
+                if !list.contains(required_ext) {
+                    log::warn!("{} is not present", required_ext);
+                }
+            }
+        }
 
         {
             debug!("Configurations:");
@@ -111,12 +130,9 @@ impl hal::Instance<crate::Backend> for Instance {
         egl::bind_api(egl::OPENGL_ES_API).unwrap();
 
         //TODO: make it so `Device` == EGL Context
-        let gles_version = (3, 1);
         let mut context_attributes = vec![
-            egl::CONTEXT_MAJOR_VERSION,
-            gles_version.0,
-            egl::CONTEXT_MINOR_VERSION,
-            gles_version.1,
+            egl::CONTEXT_CLIENT_VERSION,
+            3, // Request GLES 3.0 or higher
         ];
         if cfg!(debug_assertions) {
             context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
@@ -126,7 +142,7 @@ impl hal::Instance<crate::Backend> for Instance {
         let context = match egl::create_context(display, config, None, &context_attributes) {
             Ok(context) => context,
             Err(e) => {
-                log::warn!("unable to create GLES {:?} context: {:?}", gles_version, e);
+                log::warn!("unable to create GLES 3.x context: {:?}", e);
                 return Err(hal::UnsupportedBackend);
             }
         };
