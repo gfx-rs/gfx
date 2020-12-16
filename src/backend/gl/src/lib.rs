@@ -4,8 +4,6 @@
 #![allow(missing_docs, missing_copy_implementations)]
 
 #[macro_use]
-extern crate bitflags;
-#[macro_use]
 extern crate log;
 
 use std::{
