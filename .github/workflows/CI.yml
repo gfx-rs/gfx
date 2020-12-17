@@ -25,14 +25,10 @@ jobs:
       TARGET: aarch64-linux-android
     steps:
       - uses: actions/checkout@v2
+      - run: echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
       - name: Prepare Rust
         run: rustup target add ${{ env.TARGET }}
       - run: cargo check --manifest-path src/backend/vulkan/Cargo.toml --target ${{ env.TARGET }}
-      - name: Prepare EGL
-        run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq libegl1-mesa-dev
-          echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
       - run: cargo check --manifest-path src/backend/gl/Cargo.toml --target ${{ env.TARGET }}
 
   webgl_build:
@@ -106,11 +102,6 @@ jobs:
       - if: matrix.os == 'windows-2019'
         name: Install make
         run: choco install make
-      - if: matrix.os == 'ubuntu-18.04'
-        name: Install EGL Mesa
-        run: |
-          sudo apt-get update -y -qq
-          sudo apt-get install -y -qq libegl1-mesa-dev
       #- if: matrix.channel == 'stable'
       #  run: rustup component add clippy
       - run: make all
