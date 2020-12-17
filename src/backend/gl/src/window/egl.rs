@@ -23,20 +23,14 @@ pub struct Instance {
     config: egl::Config,
     context: egl::Context,
     supports_native_window: bool,
+    wsi_library: Option<libloading::Library>,
 }
 
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
-fn get_x11_open_display() -> Option<ptr::NonNull<raw::c_void>> {
-    type XOpenDisplayFun =
-        unsafe extern "system" fn(display_name: *const raw::c_char) -> *mut raw::c_void;
-    log::info!("Loading X11 library to get the current display");
-    let library = libloading::Library::new("libX11.so").ok()?;
-    let func: libloading::Symbol<XOpenDisplayFun> =
-        unsafe { library.get(b"XOpenDisplay").unwrap() };
-    ptr::NonNull::new(unsafe { func(ptr::null()) })
-}
+type XOpenDisplayFun =
+    unsafe extern "system" fn(display_name: *const raw::c_char) -> *mut raw::c_void;
 
 impl hal::Instance<crate::Backend> for Instance {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
@@ -55,9 +49,18 @@ impl hal::Instance<crate::Backend> for Instance {
         log::info!("Client extensions: {:?}", client_extensions);
         let client_ext_list = client_extensions.split_whitespace().collect::<Vec<_>>();
 
-        let mut is_default_display = false;
+        let mut wsi_library = None;
         let x11_display = if client_ext_list.contains(&"EGL_EXT_platform_x11") {
-            get_x11_open_display()
+            log::info!("Loading X11 library to get the current display");
+            if let Ok(library) = libloading::Library::new("libX11.so") {
+                let func: libloading::Symbol<XOpenDisplayFun> =
+                    unsafe { library.get(b"XOpenDisplay").unwrap() };
+                let result = unsafe { func(ptr::null()) };
+                wsi_library = Some(library);
+                ptr::NonNull::new(result)
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -73,7 +76,6 @@ impl hal::Instance<crate::Backend> for Instance {
             .unwrap()
         } else {
             log::info!("Using default platform");
-            is_default_display = true;
             egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
         };
 
@@ -132,10 +134,9 @@ impl hal::Instance<crate::Backend> for Instance {
             egl::WINDOW_BIT,
             egl::NONE,
         ];
-        let pre_config = if is_default_display {
-            Ok(None)
-        } else {
-            egl.choose_first_config(display, &config_attributes)
+        let pre_config = match wsi_library {
+            Some(_) => egl.choose_first_config(display, &config_attributes),
+            None => Ok(None),
         };
         let config = match pre_config {
             Ok(Some(config)) => config,
@@ -162,7 +163,7 @@ impl hal::Instance<crate::Backend> for Instance {
             egl::CONTEXT_CLIENT_VERSION,
             3, // Request GLES 3.0 or higher
         ];
-        if cfg!(debug_assertions) && !is_default_display {
+        if cfg!(debug_assertions) && wsi_library.is_none() {
             //TODO: figure out why this is needed
             context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
             context_attributes.push(egl::TRUE as _);
@@ -183,6 +184,7 @@ impl hal::Instance<crate::Backend> for Instance {
             config,
             context,
             supports_native_window,
+            wsi_library,
         })
     }
 
