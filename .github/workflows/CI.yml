@@ -43,9 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - run: rustup target add wasm32-unknown-unknown
-      # version has to match the `Cargo.toml` dependency in GL backend
-      - run: cargo install wasm-bindgen-cli --version 0.2.60
-      - run: make quad-wasm
+      - run: cargo build --manifest-path examples/Cargo.toml --features gl --target wasm32-unknown-unknown --bin quad
 
   check-advisories:
     name: Advisory Check
