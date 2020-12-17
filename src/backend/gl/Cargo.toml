@@ -31,7 +31,7 @@ spirv_cross = { version = "0.22", features = ["glsl"]}
 raw-window-handle = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-egl = { package = "khronos-egl", version = "2.2" }
+egl = { package = "khronos-egl", git = "https://github.com/timothee-haudebourg/khronos-egl", rev = "9568b2ee3b02f2c17cc9479f824db16daecf1664", features = ["dynamic"] }
 libloading = "0.6"
 
 [dependencies.naga]
