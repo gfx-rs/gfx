@@ -912,6 +912,7 @@ impl<B: hal::Backend> Scene<B> {
                     };
 
                     let desc = pso::GraphicsPipelineDesc {
+                        label: None,
                         rasterizer: rasterizer.clone(),
                         primitive_assembler: pso::PrimitiveAssemblerDesc::Vertex {
                             buffers: &vertex_buffers,
@@ -952,6 +953,7 @@ impl<B: hal::Backend> Scene<B> {
                     ref layout,
                 } => {
                     let desc = pso::ComputePipelineDesc {
+                        label: None,
                         shader: pso::EntryPoint {
                             entry: "main",
                             module: resources
@@ -1463,7 +1465,11 @@ impl<B: hal::Backend> Scene<B> {
             command_pool: Some(command_pool),
             query_pool: query_pool.ok(),
             upload_buffers,
-            download_types,
+            download_types: if download_types.is_empty() {
+                upload_types
+            } else {
+                download_types
+            },
             limits,
         })
     }

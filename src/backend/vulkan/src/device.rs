@@ -1032,7 +1032,12 @@ impl d::Device<B> for Device {
             ptr::null(),
             &mut pipeline,
         ) {
-            vk::Result::SUCCESS => Ok(n::ComputePipeline(pipeline)),
+            vk::Result::SUCCESS => {
+                if let Some(name) = desc.label {
+                    self.set_object_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
+                }
+                Ok(n::ComputePipeline(pipeline))
+            }
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
             vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
             _ => Err(pso::CreationError::Other),
@@ -1122,7 +1127,8 @@ impl d::Device<B> for Device {
 
         pipelines
             .into_iter()
-            .map(|pso| {
+            .zip(bufs.iter())
+            .map(|(pso, desc_pair)| {
                 if pso == vk::Pipeline::null() {
                     match error {
                         Some(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
@@ -1134,6 +1140,10 @@ impl d::Device<B> for Device {
                         _ => unreachable!(),
                     }
                 } else {
+                    let desc = desc_pair.0.borrow();
+                    if let Some(name) = desc.label {
+                        self.set_object_name(vk::ObjectType::PIPELINE, pso.as_raw(), name);
+                    }
                     Ok(n::ComputePipeline(pso))
                 }
             })
@@ -2174,22 +2184,6 @@ impl d::Device<B> for Device {
             pipeline_layout.raw.as_raw(),
             name,
         )
-    }
-
-    unsafe fn set_compute_pipeline_name(
-        &self,
-        compute_pipeline: &mut n::ComputePipeline,
-        name: &str,
-    ) {
-        self.set_object_name(vk::ObjectType::PIPELINE, compute_pipeline.0.as_raw(), name)
-    }
-
-    unsafe fn set_graphics_pipeline_name(
-        &self,
-        graphics_pipeline: &mut n::GraphicsPipeline,
-        name: &str,
-    ) {
-        self.set_object_name(vk::ObjectType::PIPELINE, graphics_pipeline.0.as_raw(), name)
     }
 }
 

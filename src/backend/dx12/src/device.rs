@@ -2171,6 +2171,10 @@ impl d::Device<B> for Device {
             if !desc.depth_stencil.depth_bounds {
                 baked_states.depth_bounds = None;
             }
+            if let Some(name) = desc.label {
+                let cwstr = wide_cstr(name);
+                pipeline.SetName(cwstr.as_ptr());
+            }
 
             Ok(r::GraphicsPipeline {
                 raw: pipeline,
@@ -2210,6 +2214,11 @@ impl d::Device<B> for Device {
         }
 
         if winerror::SUCCEEDED(hr) {
+            if let Some(name) = desc.label {
+                let cwstr = wide_cstr(name);
+                pipeline.SetName(cwstr.as_ptr());
+            }
+
             Ok(r::ComputePipeline {
                 raw: pipeline,
                 shared: Arc::clone(&desc.layout.shared),
@@ -3655,16 +3664,6 @@ impl d::Device<B> for Device {
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut r::PipelineLayout, name: &str) {
         let cwstr = wide_cstr(name);
         pipeline_layout.shared.signature.SetName(cwstr.as_ptr());
-    }
-
-    unsafe fn set_compute_pipeline_name(&self, pipeline: &mut r::ComputePipeline, name: &str) {
-        let cwstr = wide_cstr(name);
-        pipeline.raw.SetName(cwstr.as_ptr());
-    }
-
-    unsafe fn set_graphics_pipeline_name(&self, pipeline: &mut r::GraphicsPipeline, name: &str) {
-        let cwstr = wide_cstr(name);
-        pipeline.raw.SetName(cwstr.as_ptr());
     }
 }
 
