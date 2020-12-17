@@ -1,4 +1,4 @@
-use crate::{Backend, GlContext};
+use crate::{Backend, GlContext, MAX_TEXTURE_SLOTS};
 
 use hal::{
     buffer, format, image as i,
@@ -79,7 +79,7 @@ pub enum BindingRegister {
 
 /// For each texture in the pipeline layout, store the index of the only
 /// sampler (in this layout) that the texture is used with.    
-pub(crate) type SamplerBindMap = [Option<u8>; glow::MAX_TEXTURE_IMAGE_UNITS as usize];
+pub(crate) type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 
 #[derive(Clone, Debug)]
 pub struct GraphicsPipeline {

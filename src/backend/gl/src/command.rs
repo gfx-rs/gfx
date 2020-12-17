@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{GlContext, MAX_SAMPLERS};
+use crate::{GlContext, MAX_SAMPLERS, MAX_TEXTURE_SLOTS};
 
 use hal::{
     self, buffer, command,
@@ -217,7 +217,7 @@ struct Cache {
     /// Currently bound samplers.
     samplers: Vec<Option<n::FatSampler>>,
     /// Current sampler redirection map.
-    texture_slots: [TextureSlotInfo; glow::MAX_TEXTURE_IMAGE_UNITS as usize],
+    texture_slots: [TextureSlotInfo; MAX_TEXTURE_SLOTS],
 }
 
 impl Cache {
@@ -239,7 +239,7 @@ impl Cache {
             depth_mask: None,
             stencil_mask: None,
             samplers: (0..MAX_SAMPLERS).map(|_| None).collect(),
-            texture_slots: [TextureSlotInfo::default(); glow::MAX_TEXTURE_IMAGE_UNITS as usize],
+            texture_slots: [TextureSlotInfo::default(); MAX_TEXTURE_SLOTS],
         }
     }
 }

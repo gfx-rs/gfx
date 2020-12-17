@@ -62,7 +62,9 @@ type ColorSlot = u8;
 
 // we can support more samplers if not every one of them is used at a time,
 // but it probably doesn't worth it.
-const MAX_SAMPLERS: usize = glow::MAX_TEXTURE_IMAGE_UNITS as usize;
+const MAX_SAMPLERS: usize = 16;
+//TODO: has to be within glow::MAX_COMBINED_TEXTURE_IMAGE_UNITS
+const MAX_TEXTURE_SLOTS: usize = 16;
 
 struct GlContainer {
     context: GlContext,

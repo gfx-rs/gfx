@@ -3,8 +3,7 @@
 //! Screen presentation (fullscreen or window) of images requires two objects:
 //!
 //! * [Surface][Surface] is an abstraction of a native screen or window, for graphics use.
-//! * [Swapchain][Swapchain] is a chain of multiple images, which can be presented on
-//!   a surface.
+//!     It hosts a chain of multiple images, which can be presented on a surface ("swapchain").
 //!
 //! ## Window
 //!

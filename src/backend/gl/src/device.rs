@@ -3,7 +3,7 @@ use crate::{
     info::LegacyFeatures,
     native as n,
     pool::{BufferMemory, CommandPool, OwnedBuffer},
-    state, Backend as B, GlContainer, GlContext, MemoryUsage, Share, Starc,
+    state, Backend as B, GlContainer, GlContext, MemoryUsage, Share, Starc, MAX_TEXTURE_SLOTS,
 };
 
 use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
@@ -125,7 +125,7 @@ impl Device {
         let program = unsafe { gl.create_program().unwrap() };
 
         let mut name_binding_map = FastHashMap::<String, (n::BindingRegister, u8)>::default();
-        let mut sampler_map = [None; glow::MAX_TEXTURE_IMAGE_UNITS as usize];
+        let mut sampler_map = [None; MAX_TEXTURE_SLOTS];
 
         for &(stage, point_maybe) in shaders {
             if let Some(point) = point_maybe {
@@ -388,22 +388,20 @@ impl Device {
                 .get_decoration(res.id, spirv::Decoration::Binding)
                 .unwrap();
             let set_info = &layout.sets[set as usize];
-            let slot = set_info.bindings[binding as usize] as u32;
-            assert!(slot < glow::MAX_TEXTURE_IMAGE_UNITS);
+            let slot = set_info.bindings[binding as usize];
+            assert!((slot as usize) < MAX_TEXTURE_SLOTS);
 
             if self
                 .share
                 .legacy_features
                 .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
             {
-                ast.set_decoration(res.id, spirv::Decoration::Binding, slot)
+                ast.set_decoration(res.id, spirv::Decoration::Binding, slot as u32)
                     .unwrap()
             } else {
                 ast.unset_decoration(res.id, spirv::Decoration::Binding)
                     .unwrap();
-                assert!(nb_map
-                    .insert(res.name.clone(), (register, slot as u8))
-                    .is_none());
+                assert!(nb_map.insert(res.name.clone(), (register, slot)).is_none());
             }
             ast.unset_decoration(res.id, spirv::Decoration::DescriptorSet)
                 .unwrap();
