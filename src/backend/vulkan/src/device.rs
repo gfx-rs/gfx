@@ -2014,7 +2014,7 @@ impl d::Device<B> for Device {
         pool: &n::QueryPool,
         queries: Range<query::Id>,
         data: &mut [u8],
-        stride: buffer::Offset,
+        stride: buffer::Stride,
         flags: query::ResultFlags,
     ) -> Result<bool, d::WaitError> {
         let result = self.shared.raw.fp_v1_0().get_query_pool_results(
@@ -2024,7 +2024,7 @@ impl d::Device<B> for Device {
             queries.end - queries.start,
             data.len(),
             data.as_mut_ptr() as *mut _,
-            stride,
+            stride as vk::DeviceSize,
             conv::map_query_result_flags(flags),
         );
 

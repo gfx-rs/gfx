@@ -3086,7 +3086,7 @@ impl hal::device::Device<Backend> for Device {
         pool: &n::QueryPool,
         queries: Range<query::Id>,
         data: &mut [u8],
-        stride: buffer::Offset,
+        stride: buffer::Stride,
         flags: query::ResultFlags,
     ) -> Result<bool, d::WaitError> {
         let is_ready = match *pool {
@@ -3103,7 +3103,7 @@ impl hal::device::Device<Backend> for Device {
                 };
 
                 let size_data = mem::size_of::<u64>() as buffer::Offset;
-                if stride == size_data
+                if stride as u64 == size_data
                     && flags.contains(query::ResultFlags::BITS_64)
                     && !flags.contains(query::ResultFlags::WITH_AVAILABILITY)
                 {

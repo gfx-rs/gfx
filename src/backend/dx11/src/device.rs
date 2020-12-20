@@ -2313,7 +2313,7 @@ impl device::Device<Backend> for Device {
         _pool: &QueryPool,
         _queries: Range<query::Id>,
         _data: &mut [u8],
-        _stride: buffer::Offset,
+        _stride: buffer::Stride,
         _flags: query::ResultFlags,
     ) -> Result<bool, device::WaitError> {
         unimplemented!()

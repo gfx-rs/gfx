@@ -474,7 +474,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         buffer: &B::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     );
 
     /// Like `draw_indirect()`, this does indexed drawing a la `draw_indexed()` but
@@ -489,7 +489,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         buffer: &B::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     );
 
     /// Functions identically to `draw_indirect()`, except the amount of draw
@@ -507,7 +507,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         _count_buffer: &B::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     );
 
     /// Functions identically to `draw_indexed_indirect()`, except the amount of draw
@@ -525,7 +525,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         _count_buffer: &B::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     );
 
     /// Dispatches `task_count` of threads. Similar to compute dispatch.
@@ -537,7 +537,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         buffer: &B::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     );
 
     /// Like `draw_mesh_tasks_indirect` except that the draw count is read by
@@ -551,7 +551,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         count_buffer: &B::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     );
 
     /// Signals an event once all specified stages of the shader pipeline have completed.
@@ -597,7 +597,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         queries: Range<query::Id>,
         buffer: &B::Buffer,
         offset: buffer::Offset,
-        stride: buffer::Offset,
+        stride: buffer::Stride,
         flags: query::ResultFlags,
     );
 

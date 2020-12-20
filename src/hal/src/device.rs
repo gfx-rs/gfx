@@ -730,7 +730,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         pool: &B::QueryPool,
         queries: Range<query::Id>,
         data: &mut [u8],
-        stride: buffer::Offset,
+        stride: buffer::Stride,
         flags: query::ResultFlags,
     ) -> Result<bool, WaitError>;
 
