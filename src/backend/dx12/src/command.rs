@@ -2669,7 +2669,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _: &r::Buffer,
         _: buffer::Offset,
         _: hal::DrawCount,
-        _: u32,
+        _: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -2681,7 +2681,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _: &r::Buffer,
         _: buffer::Offset,
         _: DrawCount,
-        _: u32,
+        _: buffer::Stride,
     ) {
         unimplemented!()
     }

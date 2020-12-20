@@ -883,7 +883,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &Buffer,
         _: hal::buffer::Offset,
         _: hal::DrawCount,
-        _: u32,
+        _: hal::buffer::Stride,
     ) {
     }
 
@@ -918,7 +918,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     ) {
     }
 
-    unsafe fn draw_mesh_tasks(&mut self, _: u32, _: u32) {
+    unsafe fn draw_mesh_tasks(&mut self, _: hal::TaskCount, _: hal::TaskCount) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
