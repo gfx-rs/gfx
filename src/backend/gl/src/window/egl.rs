@@ -3,7 +3,7 @@
 use crate::{conv, native, GlContainer, PhysicalDevice, Starc};
 use glow::HasContext;
 use hal::{image, window as w};
-use std::{os::raw, ptr};
+use std::{os::raw, ptr, sync::Mutex};
 
 #[derive(Debug)]
 pub struct Swapchain {
@@ -18,67 +18,57 @@ pub struct Swapchain {
 #[derive(Debug)]
 pub struct Instance {
     egl: Starc<egl::DynamicInstance>,
-    display: egl::Display,
+    wsi_library: Option<libloading::Library>,
+    inner: Mutex<Inner>,
+}
+
+#[derive(Debug)]
+pub struct Inner {
+    egl: Starc<egl::DynamicInstance>,
     version: (i32, i32),
+    supports_native_window: bool,
+    display: egl::Display,
     config: egl::Config,
     context: egl::Context,
-    supports_native_window: bool,
-    wsi_library: Option<libloading::Library>,
+    wl_display: Option<*mut raw::c_void>,
 }
 
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
+const EGL_PLATFORM_WAYLAND_KHR: u32 = 0x31D8;
+const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
+
 type XOpenDisplayFun =
     unsafe extern "system" fn(display_name: *const raw::c_char) -> *mut raw::c_void;
 
-impl hal::Instance<crate::Backend> for Instance {
-    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
-        let egl = match unsafe { egl::DynamicInstance::load() } {
-            Ok(egl) => Starc::new(egl),
-            Err(e) => {
-                log::warn!("Unable to open libEGL.so: {:?}", e);
-                return Err(hal::UnsupportedBackend);
-            }
-        };
+type WlDisplayConnectFun =
+    unsafe extern "system" fn(display_name: *const raw::c_char) -> *mut raw::c_void;
 
-        let client_extensions = egl
-            .query_string(None, egl::EXTENSIONS)
-            .map_err(|_| hal::UnsupportedBackend)?
-            .to_string_lossy();
-        log::info!("Client extensions: {:?}", client_extensions);
-        let client_ext_list = client_extensions.split_whitespace().collect::<Vec<_>>();
+type WlDisplayDisconnectFun = unsafe extern "system" fn(display: *const raw::c_void);
 
-        let mut wsi_library = None;
-        let x11_display = if client_ext_list.contains(&"EGL_EXT_platform_x11") {
-            log::info!("Loading X11 library to get the current display");
-            if let Ok(library) = libloading::Library::new("libX11.so") {
-                let func: libloading::Symbol<XOpenDisplayFun> =
-                    unsafe { library.get(b"XOpenDisplay").unwrap() };
-                let result = unsafe { func(ptr::null()) };
-                wsi_library = Some(library);
-                ptr::NonNull::new(result)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        let display = if let Some(x11_display) = x11_display {
-            log::info!("Using X11 platform");
-            const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
-            let display_attributes = [egl::ATTRIB_NONE];
-            egl.get_platform_display(
-                EGL_PLATFORM_X11_KHR,
-                x11_display.as_ptr(),
-                &display_attributes,
-            )
-            .unwrap()
-        } else {
-            log::info!("Using default platform");
-            egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
-        };
+type WlEglWindowCreateFun = unsafe extern "system" fn(
+    surface: *const raw::c_void,
+    width: raw::c_int,
+    height: raw::c_int,
+) -> *mut raw::c_void;
 
+type WlEglWindowResizeFun = unsafe extern "system" fn(
+    window: *const raw::c_void,
+    width: raw::c_int,
+    height: raw::c_int,
+    dx: raw::c_int,
+    dy: raw::c_int,
+);
+
+type WlEglWindowDestroyFun = unsafe extern "system" fn(window: *const raw::c_void);
+
+impl Inner {
+    fn create(
+        egl: Starc<egl::DynamicInstance>,
+        display: egl::Display,
+        wsi_library: Option<&libloading::Library>,
+    ) -> Result<Self, hal::UnsupportedBackend> {
         let version = egl
             .initialize(display)
             .map_err(|_| hal::UnsupportedBackend)?;
@@ -177,20 +167,132 @@ impl hal::Instance<crate::Backend> for Instance {
             }
         };
 
-        Ok(Instance {
+        Ok(Self {
             egl,
             display,
             version,
+            supports_native_window,
             config,
             context,
-            supports_native_window,
+            wl_display: None,
+        })
+    }
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        if let Err(e) = self.egl.destroy_context(self.display, self.context) {
+            log::warn!("Error in destroy_context: {:?}", e);
+        }
+        if let Err(e) = self.egl.terminate(self.display) {
+            log::warn!("Error in terminate: {:?}", e);
+        }
+    }
+}
+
+impl hal::Instance<crate::Backend> for Instance {
+    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        let egl = match unsafe { egl::DynamicInstance::load() } {
+            Ok(egl) => Starc::new(egl),
+            Err(e) => {
+                log::warn!("Unable to open libEGL.so: {:?}", e);
+                return Err(hal::UnsupportedBackend);
+            }
+        };
+
+        let client_extensions = egl
+            .query_string(None, egl::EXTENSIONS)
+            .map_err(|_| hal::UnsupportedBackend)?
+            .to_string_lossy();
+        log::info!("Client extensions: {:?}", client_extensions);
+        let client_ext_list = client_extensions.split_whitespace().collect::<Vec<_>>();
+
+        let mut wsi_library = None;
+
+        let wayland_display = if client_ext_list.contains(&"EGL_EXT_platform_wayland") {
+            log::info!("Loading Wayland library to get the current display");
+            if let Ok(library) = libloading::Library::new("libwayland-client.so") {
+                /* We try to connect and disconnect here to simply ensure there
+                 * is an active wayland display available.
+                 */
+                let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
+                    unsafe { library.get(b"wl_display_connect").unwrap() };
+                let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> =
+                    unsafe { library.get(b"wl_display_disconnect").unwrap() };
+                if let Some(display) = ptr::NonNull::new(unsafe { wl_display_connect(ptr::null()) })
+                {
+                    unsafe { wl_display_disconnect(display.as_ptr()) }
+                    if let Ok(library) = libloading::Library::new("libwayland-egl.so") {
+                        Some(((), library))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let x11_display = if client_ext_list.contains(&"EGL_EXT_platform_x11") {
+            log::info!("Loading X11 library to get the current display");
+            if let Ok(library) = libloading::Library::new("libX11.so") {
+                let func: libloading::Symbol<XOpenDisplayFun> =
+                    unsafe { library.get(b"XOpenDisplay").unwrap() };
+                let result = unsafe { func(ptr::null()) };
+                ptr::NonNull::new(result).map(|ptr| (ptr, library))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let display = match (wayland_display, x11_display) {
+            (Some((_, library)), _) => {
+                log::info!("Using Wayland platform");
+                let display_attributes = [egl::ATTRIB_NONE];
+                wsi_library = Some(library);
+                egl.get_platform_display(
+                    EGL_PLATFORM_WAYLAND_KHR,
+                    egl::DEFAULT_DISPLAY,
+                    &display_attributes,
+                )
+                .unwrap()
+            }
+            (_, Some((x11_display, library))) => {
+                log::info!("Using X11 platform");
+                let display_attributes = [egl::ATTRIB_NONE];
+                wsi_library = Some(library);
+                egl.get_platform_display(
+                    EGL_PLATFORM_X11_KHR,
+                    x11_display.as_ptr(),
+                    &display_attributes,
+                )
+                .unwrap()
+            }
+            _ => {
+                log::info!("Using default platform");
+                egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
+            }
+        };
+
+        let inner = Inner::create(egl.clone(), display, wsi_library.as_ref())?;
+
+        Ok(Instance {
+            egl,
+            inner: Mutex::new(inner),
             wsi_library,
         })
     }
 
     fn enumerate_adapters(&self) -> Vec<hal::adapter::Adapter<crate::Backend>> {
+        let inner = self.inner.lock().unwrap();
         self.egl
-            .make_current(self.display, None, None, Some(self.context))
+            .make_current(inner.display, None, None, Some(inner.context))
             .unwrap();
         let context = unsafe {
             glow::Context::from_loader_function(|name| {
@@ -206,6 +308,8 @@ impl hal::Instance<crate::Backend> for Instance {
         has_handle: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Result<Surface, w::InitError> {
         use raw_window_handle::RawWindowHandle as Rwh;
+
+        let mut inner = self.inner.lock().unwrap();
         let mut native_window = match has_handle.raw_window_handle() {
             #[cfg(not(target_os = "android"))]
             Rwh::Xlib(handle) => handle.window,
@@ -213,28 +317,83 @@ impl hal::Instance<crate::Backend> for Instance {
             Rwh::Xcb(handle) => handle.window as _,
             #[cfg(target_os = "android")]
             Rwh::Android(handle) => handle.a_native_window,
+            #[cfg(not(target_os = "android"))]
+            Rwh::Wayland(handle) => {
+                /* Wayland displays are not sharable between surfaces so if the
+                 * surface we receive from this handle is from a different
+                 * display, we must re-initialize the context.
+                 *
+                 * See gfx-rs/gfx#3545
+                 */
+                if inner
+                    .wl_display
+                    .map(|ptr| ptr != handle.display)
+                    .unwrap_or(true)
+                {
+                    use std::ops::DerefMut;
+                    let display_attributes = [egl::ATTRIB_NONE];
+                    let display = self
+                        .egl
+                        .get_platform_display(
+                            EGL_PLATFORM_WAYLAND_KHR,
+                            handle.display,
+                            &display_attributes,
+                        )
+                        .unwrap();
+
+                    let new_inner =
+                        Inner::create(self.egl.clone(), display, self.wsi_library.as_ref())
+                            .map_err(|_| w::InitError::UnsupportedWindowHandle)?;
+
+                    let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
+                    inner.wl_display = Some(handle.display);
+                    drop(old_inner);
+                }
+
+                let window = {
+                    let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> = self
+                        .wsi_library
+                        .as_ref()
+                        .expect("unsupported window")
+                        .get(b"wl_egl_window_create")
+                        .unwrap();
+                    let result = wl_egl_window_create(handle.surface, 640, 480);
+                    ptr::NonNull::new(result)
+                };
+                window.expect("unsupported window").as_ptr() as _
+            }
             other => panic!("Unsupported window: {:?}", other),
         };
-        let attributes = [
-            egl::RENDER_BUFFER as usize,
-            egl::SINGLE_BUFFER as usize,
-            // Always enable sRGB
-            egl::GL_COLORSPACE as usize,
-            egl::GL_COLORSPACE_SRGB as usize,
-            egl::ATTRIB_NONE,
-        ];
+        let mut attributes = vec![egl::RENDER_BUFFER as usize, egl::SINGLE_BUFFER as usize];
+        if inner.version >= (1, 5) {
+            // Always enable sRGB in EGL 1.5
+            attributes.push(egl::GL_COLORSPACE as usize);
+            attributes.push(egl::GL_COLORSPACE_SRGB as usize);
+        }
+        attributes.push(egl::ATTRIB_NONE);
+
+        let native_window = match has_handle.raw_window_handle() {
+            #[cfg(not(target_os = "android"))]
+            Rwh::Wayland(_) => native_window as *mut raw::c_void,
+            _ => &mut native_window as *mut _ as *mut _,
+        };
         match self.egl.create_platform_window_surface(
-            self.display,
-            self.config,
-            &mut native_window as *mut _ as *mut _,
+            inner.display,
+            inner.config,
+            native_window,
             &attributes,
         ) {
             Ok(raw) => Ok(Surface {
                 egl: self.egl.clone(),
                 raw,
-                display: self.display,
-                context: self.context,
-                presentable: self.supports_native_window,
+                display: inner.display,
+                context: inner.context,
+                presentable: inner.supports_native_window,
+                wl_window: match has_handle.raw_window_handle() {
+                    #[cfg(not(target_os = "android"))]
+                    Rwh::Wayland(_) => Some(native_window),
+                    _ => None,
+                },
                 swapchain: None,
             }),
             Err(e) => {
@@ -245,17 +404,18 @@ impl hal::Instance<crate::Backend> for Instance {
     }
 
     unsafe fn destroy_surface(&self, surface: Surface) {
-        self.egl.destroy_surface(self.display, surface.raw).unwrap();
-    }
-}
-
-impl Drop for Instance {
-    fn drop(&mut self) {
-        if let Err(e) = self.egl.destroy_context(self.display, self.context) {
-            log::warn!("Error in destroy_context: {:?}", e);
-        }
-        if let Err(e) = self.egl.terminate(self.display) {
-            log::warn!("Error in terminate: {:?}", e);
+        let inner = self.inner.lock().unwrap();
+        self.egl
+            .destroy_surface(inner.display, surface.raw)
+            .unwrap();
+        if let Some(wl_window) = surface.wl_window {
+            let wl_egl_window_destroy: libloading::Symbol<WlEglWindowDestroyFun> = self
+                .wsi_library
+                .as_ref()
+                .expect("unsupported window")
+                .get(b"wl_egl_window_destroy")
+                .unwrap();
+            wl_egl_window_destroy(wl_window)
         }
     }
 }
@@ -267,6 +427,7 @@ pub struct Surface {
     display: egl::Display,
     context: egl::Context,
     presentable: bool,
+    wl_window: Option<*mut raw::c_void>,
     pub(crate) swapchain: Option<Swapchain>,
 }
 
@@ -282,6 +443,19 @@ impl w::PresentationSurface<crate::Backend> for Surface {
         config: w::SwapchainConfig,
     ) -> Result<(), w::SwapchainError> {
         self.unconfigure_swapchain(device);
+
+        if let Some(window) = self.wl_window {
+            let library = libloading::Library::new("libwayland-egl.so").unwrap();
+            let wl_egl_window_resize: libloading::Symbol<WlEglWindowResizeFun> =
+                library.get(b"wl_egl_window_resize").unwrap();
+            wl_egl_window_resize(
+                window,
+                config.extent.width as i32,
+                config.extent.height as i32,
+                0,
+                0,
+            );
+        }
 
         let desc = conv::describe_format(config.format).unwrap();
 
