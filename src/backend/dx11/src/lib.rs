@@ -964,7 +964,16 @@ impl window::PresentationSurface<Backend> for Surface {
                     return Ok(());
                 }
                 let non_srgb_format = conv::map_format_nosrgb(config.format).unwrap();
+
+                // Delete the existing view into the swapchain buffers.
                 drop(present.view);
+
+                // We must also delete the image data.
+                //
+                // This should not panic as all images must be deleted before
+                let mut present_image = Arc::try_unwrap(present.image).expect("Not all acquired images were deleted before the swapchain was reconfigured.");
+                present_image.internal.release_resources();
+
                 let result = present.swapchain.ResizeBuffers(
                     config.image_count,
                     config.extent.width,
