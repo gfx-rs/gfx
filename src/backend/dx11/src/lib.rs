@@ -3538,14 +3538,6 @@ impl Image {
     }
 }
 
-impl Drop for Image {
-    fn drop(&mut self) {
-        unsafe {
-            (*self.internal.raw).Release();
-        }
-    }
-}
-
 pub struct ImageView {
     subresource: UINT,
     format: format::Format,
