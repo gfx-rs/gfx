@@ -2625,7 +2625,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         buffer: &r::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         assert_eq!(stride, 16);
         let buffer = buffer.expect_bound();
@@ -2645,7 +2645,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         buffer: &r::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         assert_eq!(stride, 20);
         let buffer = buffer.expect_bound();
@@ -2669,7 +2669,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _: &r::Buffer,
         _: buffer::Offset,
         _: hal::DrawCount,
-        _: u32,
+        _: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -2681,7 +2681,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _: &r::Buffer,
         _: buffer::Offset,
         _: DrawCount,
-        _: u32,
+        _: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -2693,7 +2693,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         count_buffer: &r::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         assert_eq!(stride, 16);
         let buffer = buffer.expect_bound();
@@ -2716,7 +2716,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         count_buffer: &r::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         assert_eq!(stride, 20);
         let buffer = buffer.expect_bound();
@@ -2815,7 +2815,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _queries: Range<query::Id>,
         _buffer: &r::Buffer,
         _offset: buffer::Offset,
-        _stride: buffer::Offset,
+        _stride: buffer::Stride,
         _flags: query::ResultFlags,
     ) {
         unimplemented!()

@@ -2858,7 +2858,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         buffer: &Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         assert_eq!(draw_count, 1, "DX11 doesn't support MULTI_DRAW_INDIRECT");
         self.context
@@ -2870,7 +2870,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         buffer: &Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         assert_eq!(draw_count, 1, "DX11 doesn't support MULTI_DRAW_INDIRECT");
         self.context
@@ -2884,7 +2884,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         panic!("DX11 doesn't support DRAW_INDIRECT_COUNT")
     }
@@ -2896,7 +2896,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         panic!("DX11 doesn't support DRAW_INDIRECT_COUNT")
     }
@@ -2910,7 +2910,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &Buffer,
         _: buffer::Offset,
         _: hal::DrawCount,
-        _: u32,
+        _: buffer::Stride,
     ) {
         panic!("DX11 doesn't support MESH_SHADERS")
     }
@@ -2922,7 +2922,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &Buffer,
         _: buffer::Offset,
         _: hal::DrawCount,
-        _: u32,
+        _: buffer::Stride,
     ) {
         panic!("DX11 doesn't support MESH_SHADERS")
     }
@@ -2963,7 +2963,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _queries: Range<query::Id>,
         _buffer: &Buffer,
         _offset: buffer::Offset,
-        _stride: buffer::Offset,
+        _stride: buffer::Stride,
         _flags: query::ResultFlags,
     ) {
         unimplemented!()

@@ -467,7 +467,7 @@ impl device::Device<Backend> for Device {
         _: &(),
         _: Range<query::Id>,
         _: &mut [u8],
-        _: hal::buffer::Offset,
+        _: hal::buffer::Stride,
         _: query::ResultFlags,
     ) -> Result<bool, device::WaitError> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
@@ -883,7 +883,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &Buffer,
         _: hal::buffer::Offset,
         _: hal::DrawCount,
-        _: u32,
+        _: hal::buffer::Stride,
     ) {
     }
 
@@ -892,7 +892,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &Buffer,
         _: hal::buffer::Offset,
         _: hal::DrawCount,
-        _: u32,
+        _: hal::buffer::Stride,
     ) {
     }
 
@@ -903,7 +903,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &Buffer,
         _: hal::buffer::Offset,
         _: u32,
-        _: u32,
+        _: hal::buffer::Stride,
     ) {
     }
 
@@ -914,11 +914,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &Buffer,
         _: hal::buffer::Offset,
         _: u32,
-        _: u32,
+        _: hal::buffer::Stride,
     ) {
     }
 
-    unsafe fn draw_mesh_tasks(&mut self, _: u32, _: u32) {
+    unsafe fn draw_mesh_tasks(&mut self, _: hal::TaskCount, _: hal::TaskCount) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
@@ -927,7 +927,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &Buffer,
         _: hal::buffer::Offset,
         _: hal::DrawCount,
-        _: u32,
+        _: hal::buffer::Stride,
     ) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
@@ -939,7 +939,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &Buffer,
         _: hal::buffer::Offset,
         _: u32,
-        _: u32,
+        _: hal::buffer::Stride,
     ) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
@@ -980,7 +980,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: Range<query::Id>,
         _: &Buffer,
         _: hal::buffer::Offset,
-        _: hal::buffer::Offset,
+        _: hal::buffer::Stride,
         _: query::ResultFlags,
     ) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)

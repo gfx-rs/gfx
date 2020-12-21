@@ -1523,7 +1523,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _buffer: &n::Buffer,
         _offset: buffer::Offset,
         _draw_count: hal::DrawCount,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -1533,7 +1533,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _buffer: &n::Buffer,
         _offset: buffer::Offset,
         _draw_count: hal::DrawCount,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -1545,7 +1545,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &n::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -1557,7 +1557,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &n::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -1571,7 +1571,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &n::Buffer,
         _: buffer::Offset,
         _: hal::DrawCount,
-        _: u32,
+        _: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -1583,7 +1583,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: &n::Buffer,
         _: buffer::Offset,
         _: u32,
-        _: u32,
+        _: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -1615,7 +1615,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _queries: Range<query::Id>,
         _buffer: &n::Buffer,
         _offset: buffer::Offset,
-        _stride: buffer::Offset,
+        _stride: buffer::Stride,
         _flags: query::ResultFlags,
     ) {
         unimplemented!()

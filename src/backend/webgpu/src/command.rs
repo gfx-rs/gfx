@@ -402,7 +402,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _buffer: &<Backend as hal::Backend>::Buffer,
         _offset: buffer::Offset,
         _draw_count: DrawCount,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         todo!()
     }
@@ -412,7 +412,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _buffer: &<Backend as hal::Backend>::Buffer,
         _offset: buffer::Offset,
         _draw_count: DrawCount,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         todo!()
     }
@@ -424,7 +424,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &<Backend as hal::Backend>::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         todo!()
     }
@@ -436,7 +436,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &<Backend as hal::Backend>::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         todo!()
     }
@@ -450,7 +450,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _buffer: &<Backend as hal::Backend>::Buffer,
         _offset: buffer::Offset,
         _draw_count: DrawCount,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         todo!()
     }
@@ -462,7 +462,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &<Backend as hal::Backend>::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: DrawCount,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         todo!()
     }

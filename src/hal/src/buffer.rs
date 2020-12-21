@@ -10,6 +10,9 @@ use crate::{device::OutOfMemory, format::Format};
 /// An offset inside a buffer, in bytes.
 pub type Offset = u64;
 
+/// An stride between elements inside a buffer, in bytes.
+pub type Stride = u32;
+
 /// A subrange of the buffer.
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

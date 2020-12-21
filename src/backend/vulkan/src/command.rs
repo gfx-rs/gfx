@@ -843,7 +843,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         buffer: &n::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         self.device
             .raw
@@ -855,7 +855,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         buffer: &n::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         self.device
             .raw
@@ -876,7 +876,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         buffer: &n::Buffer,
         offset: buffer::Offset,
         draw_count: hal::DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         self.device
             .extension_fns
@@ -893,7 +893,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         count_buffer: &n::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         self.device
             .extension_fns
@@ -918,7 +918,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         count_buffer: &n::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         self.device
             .extension_fns
@@ -943,7 +943,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         count_buffer: &n::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         self.device
             .extension_fns
@@ -1044,7 +1044,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         queries: Range<query::Id>,
         buffer: &n::Buffer,
         offset: buffer::Offset,
-        stride: buffer::Offset,
+        stride: buffer::Stride,
         flags: query::ResultFlags,
     ) {
         //TODO: use safer wrapper
@@ -1055,7 +1055,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             queries.end - queries.start,
             buffer.raw,
             offset,
-            stride,
+            stride as vk::DeviceSize,
             conv::map_query_result_flags(flags),
         );
     }

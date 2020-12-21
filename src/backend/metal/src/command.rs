@@ -1550,7 +1550,7 @@ impl CommandSink {
 pub struct IndexBuffer<B> {
     buffer: B,
     offset: u32,
-    stride: u32,
+    stride: buffer::Stride,
 }
 
 /// This is an inner mutable part of the command buffer that is
@@ -4469,7 +4469,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         buffer: &native::Buffer,
         offset: buffer::Offset,
         count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         assert_eq!(offset % WORD_ALIGNMENT, 0);
         assert_eq!(stride % WORD_ALIGNMENT as u32, 0);
@@ -4494,7 +4494,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         buffer: &native::Buffer,
         offset: buffer::Offset,
         count: DrawCount,
-        stride: u32,
+        stride: buffer::Stride,
     ) {
         assert_eq!(offset % WORD_ALIGNMENT, 0);
         assert_eq!(stride % WORD_ALIGNMENT as u32, 0);
@@ -4526,7 +4526,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &native::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -4538,7 +4538,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &native::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32,
+        _stride: buffer::Stride,
     ) {
         unimplemented!()
     }
@@ -4695,7 +4695,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         queries: Range<query::Id>,
         buffer: &native::Buffer,
         offset: buffer::Offset,
-        stride: buffer::Offset,
+        stride: buffer::Stride,
         flags: query::ResultFlags,
     ) {
         let (raw, range) = buffer.as_bound();
@@ -4705,7 +4705,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 let size_data = mem::size_of::<u64>() as buffer::Offset;
                 let size_meta = mem::size_of::<u32>() as buffer::Offset;
 
-                if stride == size_data
+                if stride as u64 == size_data
                     && flags.contains(query::ResultFlags::BITS_64)
                     && !flags.contains(query::ResultFlags::WITH_AVAILABILITY)
                 {
@@ -4733,7 +4733,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     let commands = (0..queries.end - queries.start).flat_map(|i| {
                         let absolute_index =
                             (pool_range.start + queries.start + i) as buffer::Offset;
-                        let dst_offset = range.start + offset + i as buffer::Offset * stride;
+                        let dst_offset =
+                            range.start + offset + i as buffer::Offset * stride as buffer::Offset;
                         let com_data = soft::BlitCommand::CopyBuffer {
                             src: AsNative::from(visibility.buffer.as_ref()),
                             dst: AsNative::from(raw),
@@ -4788,8 +4789,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 }
             }
             native::QueryPool::Timestamp => {
-                let start = range.start + offset + queries.start as buffer::Offset * stride;
-                let end = range.start + offset + (queries.end - 1) as buffer::Offset * stride + 4;
+                let start = range.start
+                    + offset
+                    + queries.start as buffer::Offset * stride as buffer::Offset;
+                let end = range.start
+                    + offset
+                    + (queries.end - 1) as buffer::Offset * stride as buffer::Offset
+                    + 4;
                 let command = soft::BlitCommand::FillBuffer {
                     dst: AsNative::from(raw),
                     range: start..end,

@@ -42,7 +42,7 @@ fn main() {
         .skip(1)
         .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
         .collect();
-    let stride = std::mem::size_of::<u32>() as u64;
+    let stride = std::mem::size_of::<u32>() as buffer::Stride;
 
     let instance =
         back::Instance::create("gfx-rs compute", 1).expect("Failed to create an instance!");
@@ -193,7 +193,7 @@ fn main() {
             &[command::BufferCopy {
                 src: 0,
                 dst: 0,
-                size: stride * numbers.len() as u64,
+                size: stride as u64 * numbers.len() as u64,
             }],
         );
         command_buffer.pipeline_barrier(
@@ -227,7 +227,7 @@ fn main() {
             &[command::BufferCopy {
                 src: 0,
                 dst: 0,
-                size: stride * numbers.len() as u64,
+                size: stride as u64 * numbers.len() as u64,
             }],
         );
         command_buffer.finish();
@@ -269,10 +269,10 @@ unsafe fn create_buffer<B: hal::Backend>(
     memory_types: &[MemoryType],
     properties: memory::Properties,
     usage: buffer::Usage,
-    stride: u64,
+    stride: buffer::Stride,
     len: u64,
 ) -> (B::Memory, B::Buffer, u64) {
-    let mut buffer = device.create_buffer(stride * len, usage).unwrap();
+    let mut buffer = device.create_buffer(stride as u64 * len, usage).unwrap();
     let requirements = device.get_buffer_requirements(&buffer);
 
     let ty = memory_types
