@@ -4789,8 +4789,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 }
             }
             native::QueryPool::Timestamp => {
-                let start = range.start + offset + queries.start as buffer::Offset * stride;
-                let end = range.start + offset + (queries.end - 1) as buffer::Offset * stride + 4;
+                let start = range.start
+                    + offset
+                    + queries.start as buffer::Offset * stride as buffer::Offset;
+                let end = range.start
+                    + offset
+                    + (queries.end - 1) as buffer::Offset * stride as buffer::Offset
+                    + 4;
                 let command = soft::BlitCommand::FillBuffer {
                     dst: AsNative::from(raw),
                     range: start..end,
