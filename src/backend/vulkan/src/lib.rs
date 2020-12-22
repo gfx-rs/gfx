@@ -53,59 +53,6 @@ mod native;
 mod pool;
 mod window;
 
-// CStr's cannot be constant yet, until const fn lands we need to use a lazy_static
-lazy_static! {
-    static ref LAYERS: Vec<&'static CStr> = if cfg!(debug_assertions) {
-        vec![CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap()]
-    } else {
-        vec![]
-    };
-    static ref EXTENSIONS: Vec<&'static CStr> = if cfg!(debug_assertions) {
-        vec![
-            DebugUtils::name(),
-            DebugReport::name(),
-            *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2,
-        ]
-    } else {
-        vec![
-            DebugUtils::name(),
-            *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2,
-    ]
-    };
-    static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![extensions::khr::Swapchain::name()];
-    static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
-        extensions::khr::Surface::name(),
-        // Platform-specific WSI extensions
-        #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
-        extensions::khr::XlibSurface::name(),
-        #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
-        extensions::khr::XcbSurface::name(),
-        #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
-        extensions::khr::WaylandSurface::name(),
-        #[cfg(target_os = "android")]
-        extensions::khr::AndroidSurface::name(),
-        #[cfg(target_os = "windows")]
-        extensions::khr::Win32Surface::name(),
-        #[cfg(target_os = "macos")]
-        extensions::mvk::MacOSSurface::name(),
-    ];
-    static ref AMD_NEGATIVE_VIEWPORT_HEIGHT: &'static CStr =
-        CStr::from_bytes_with_nul(b"VK_AMD_negative_viewport_height\0").unwrap();
-    static ref KHR_MAINTENANCE1: &'static CStr =
-        CStr::from_bytes_with_nul(b"VK_KHR_maintenance1\0").unwrap();
-    static ref KHR_MAINTENANCE3: &'static CStr =
-        CStr::from_bytes_with_nul(b"VK_KHR_maintenance3\0").unwrap();
-    static ref KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE : &'static CStr =
-        CStr::from_bytes_with_nul(b"VK_KHR_sampler_mirror_clamp_to_edge\0").unwrap();
-    static ref KHR_GET_PHYSICAL_DEVICE_PROPERTIES2: &'static CStr =
-        CStr::from_bytes_with_nul(b"VK_KHR_get_physical_device_properties2\0").unwrap();
-    static ref KHR_DRAW_INDIRECT_COUNT: &'static CStr =
-        CStr::from_bytes_with_nul(b"VK_KHR_draw_indirect_count\0").unwrap();
-    static ref EXT_DESCRIPTOR_INDEXING: &'static CStr =
-        CStr::from_bytes_with_nul(b"VK_EXT_descriptor_indexing\0").unwrap();
-    static ref MESH_SHADER: &'static CStr = MeshShader::name();
-}
-
 #[cfg(not(feature = "use-rtld-next"))]
 lazy_static! {
     // Entry function pointers
@@ -375,48 +322,89 @@ impl hal::Instance<Backend> for Instance {
         })?;
 
         // Check our extensions against the available extensions
-        let extensions = SURFACE_EXTENSIONS
-            .iter()
-            .chain(EXTENSIONS.iter())
-            .filter_map(|&ext| {
-                instance_extensions
+        let extensions = {
+            let mut extensions: Vec<&'static CStr> = Vec::new();
+            extensions.push(extensions::khr::Surface::name());
+
+            // Platform-specific WSI extensions
+            if cfg!(all(
+                unix,
+                not(target_os = "android"),
+                not(target_os = "macos")
+            )) {
+                extensions.push(extensions::khr::XlibSurface::name());
+                extensions.push(extensions::khr::XcbSurface::name());
+                extensions.push(extensions::khr::WaylandSurface::name());
+            }
+            if cfg!(target_os = "android") {
+                extensions.push(extensions::khr::AndroidSurface::name());
+            }
+            if cfg!(target_os = "windows") {
+                extensions.push(extensions::khr::Win32Surface::name());
+            }
+            if cfg!(target_os = "macos") {
+                extensions.push(extensions::mvk::MacOSSurface::name());
+            }
+
+            extensions.push(DebugUtils::name());
+            if cfg!(debug_assertions) {
+                extensions.push(DebugReport::name());
+            }
+
+            extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+
+            // Only keep available extensions.
+            extensions.retain(|&ext| {
+                if instance_extensions
                     .iter()
                     .find(|inst_ext| unsafe {
                         CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext
                     })
-                    .map(|_| ext)
-                    .or_else(|| {
-                        info!("Unable to find extension: {}", ext.to_string_lossy());
-                        None
-                    })
-            })
-            .collect::<Vec<&CStr>>();
+                    .is_some()
+                {
+                    true
+                } else {
+                    info!("Unable to find extension: {}", ext.to_string_lossy());
+                    false
+                }
+            });
+            extensions
+        };
 
         // Check requested layers against the available layers
-        let layers = LAYERS
-            .iter()
-            .filter_map(|&layer| {
-                instance_layers
+        let layers = {
+            let mut layers: Vec<&'static CStr> = Vec::new();
+            if cfg!(debug_assertions) {
+                layers.push(CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap());
+            }
+
+            // Only keep available layers.
+            layers.retain(|&layer| {
+                if instance_layers
                     .iter()
                     .find(|inst_layer| unsafe {
                         CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer
                     })
-                    .map(|_| layer)
-                    .or_else(|| {
-                        warn!("Unable to find layer: {}", layer.to_string_lossy());
-                        None
-                    })
-            })
-            .collect::<Vec<&CStr>>();
+                    .is_some()
+                {
+                    true
+                } else {
+                    warn!("Unable to find layer: {}", layer.to_string_lossy());
+                    false
+                }
+            });
+            layers
+        };
 
         let instance = {
-            let cstrings = layers
+            let str_pointers = layers
                 .iter()
                 .chain(extensions.iter())
-                .map(|&s| CString::from(s))
+                .map(|&s| {
+                    // Safe because `layers` and `extensions` entries have static lifetime.
+                    s.as_ptr()
+                })
                 .collect::<Vec<_>>();
-
-            let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
 
             let create_info = vk::InstanceCreateInfo::builder()
                 .flags(vk::InstanceCreateFlags::empty())
@@ -432,7 +420,7 @@ impl hal::Instance<Backend> for Instance {
 
         let get_physical_device_properties = extensions
             .iter()
-            .find(|&&ext| ext == *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2)
+            .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
             .map(|_| {
                 vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| unsafe {
                     std::mem::transmute(
@@ -691,52 +679,47 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return Err(DeviceCreationError::MissingFeature);
         }
 
-        let maintenance_level = if self.supports_extension(*KHR_MAINTENANCE1) {
+        let maintenance_level = if self.supports_extension(vk::KhrMaintenance1Fn::name()) {
             1
         } else {
             0
         };
         let mut enabled_features = conv::map_device_features(requested_features);
-        let enabled_extensions = DEVICE_EXTENSIONS
-            .iter()
-            .cloned()
-            .chain(
-                if requested_features.contains(Features::NDC_Y_UP) && maintenance_level == 0 {
-                    Some(*AMD_NEGATIVE_VIEWPORT_HEIGHT)
-                } else {
-                    None
-                },
-            )
-            .chain(match maintenance_level {
-                0 => None,
-                1 => Some(*KHR_MAINTENANCE1),
+        let enabled_extensions = {
+            let mut enabled_extensions: Vec<&'static CStr> = Vec::new();
+            enabled_extensions.push(extensions::khr::Swapchain::name());
+
+            match maintenance_level {
+                0 => {
+                    if requested_features.contains(Features::NDC_Y_UP) {
+                        enabled_extensions.push(vk::AmdNegativeViewportHeightFn::name());
+                    }
+                }
+                1 => {
+                    enabled_extensions.push(vk::KhrMaintenance1Fn::name());
+                }
                 _ => unreachable!(),
-            })
-            .chain(
-                if requested_features.intersects(
-                    Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
-                        | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
-                        | Features::UNSIZED_DESCRIPTOR_ARRAY,
-                ) {
-                    vec![*KHR_MAINTENANCE3, *EXT_DESCRIPTOR_INDEXING]
-                } else {
-                    vec![]
-                },
-            )
-            .chain(
-                if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
-                    Some(*MESH_SHADER)
-                } else {
-                    None
-                },
-            )
-            .chain(
-                if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
-                    Some(*KHR_DRAW_INDIRECT_COUNT)
-                } else {
-                    None
-                },
-            );
+            }
+
+            if requested_features.intersects(
+                Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
+                    | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
+                    | Features::UNSIZED_DESCRIPTOR_ARRAY,
+            ) {
+                enabled_extensions.push(vk::KhrMaintenance3Fn::name());
+                enabled_extensions.push(vk::ExtDescriptorIndexingFn::name());
+            }
+
+            if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
+                enabled_extensions.push(MeshShader::name());
+            }
+
+            if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
+                enabled_extensions.push(DrawIndirectCount::name());
+            }
+
+            enabled_extensions
+        };
 
         let valid_ash_memory_types = {
             let mem_properties = self
@@ -757,9 +740,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         // Create device
         let device_raw = {
-            let cstrings = enabled_extensions.map(CString::from).collect::<Vec<_>>();
-
-            let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
+            let str_pointers = enabled_extensions
+                .iter()
+                .map(|&s| {
+                    // Safe because `enabled_extensions` entries have static lifetime.
+                    s.as_ptr()
+                })
+                .collect::<Vec<_>>();
 
             let info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(&family_infos)
@@ -971,7 +958,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .build();
 
             // Add extension infos to the p_next chain
-            if self.supports_extension(*EXT_DESCRIPTOR_INDEXING) {
+            if self.supports_extension(vk::ExtDescriptorIndexingFn::name()) {
                 descriptor_indexing_features =
                     Some(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
 
@@ -1000,15 +987,15 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             | Features::MUTABLE_COMPARISON_SAMPLER
             | Features::TEXTURE_DESCRIPTOR_ARRAY;
 
-        if self.supports_extension(*AMD_NEGATIVE_VIEWPORT_HEIGHT)
-            || self.supports_extension(*KHR_MAINTENANCE1)
+        if self.supports_extension(vk::AmdNegativeViewportHeightFn::name())
+            || self.supports_extension(vk::KhrMaintenance1Fn::name())
         {
             bits |= Features::NDC_Y_UP;
         }
-        if self.supports_extension(*KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE) {
+        if self.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name()) {
             bits |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
         }
-        if self.supports_extension(*KHR_DRAW_INDIRECT_COUNT) {
+        if self.supports_extension(DrawIndirectCount::name()) {
             bits |= Features::DRAW_INDIRECT_COUNT
         }
         // This will only be some if the extension exists
@@ -1189,7 +1176,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         if features.inherited_queries != 0 {
             bits |= Features::INHERITED_QUERIES;
         }
-        if self.supports_extension(*MESH_SHADER) {
+        if self.supports_extension(MeshShader::name()) {
             bits |= Features::TASK_SHADER;
             bits |= Features::MESH_SHADER
         }
