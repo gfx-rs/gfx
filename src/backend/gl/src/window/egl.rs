@@ -17,7 +17,6 @@ pub struct Swapchain {
 
 #[derive(Debug)]
 pub struct Instance {
-    egl: Starc<egl::DynamicInstance>,
     wsi_library: Option<libloading::Library>,
     inner: Mutex<Inner>,
 }
@@ -62,6 +61,31 @@ type WlEglWindowResizeFun = unsafe extern "system" fn(
 );
 
 type WlEglWindowDestroyFun = unsafe extern "system" fn(window: *const raw::c_void);
+
+fn open_x_display() -> Option<(ptr::NonNull<raw::c_void>, libloading::Library)> {
+    log::info!("Loading X11 library to get the current display");
+    let library = libloading::Library::new("libX11.so").ok()?;
+    let func: libloading::Symbol<XOpenDisplayFun> =
+        unsafe { library.get(b"XOpenDisplay").unwrap() };
+    let result = unsafe { func(ptr::null()) };
+    ptr::NonNull::new(result).map(|ptr| (ptr, library))
+}
+
+fn test_wayland_display() -> Option<libloading::Library> {
+    /* We try to connect and disconnect here to simply ensure there
+     * is an active wayland display available.
+     */
+    log::info!("Loading Wayland library to get the current display");
+    let client_library = libloading::Library::new("libwayland-client.so").ok()?;
+    let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
+        unsafe { client_library.get(b"wl_display_connect").unwrap() };
+    let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> =
+        unsafe { client_library.get(b"wl_display_disconnect").unwrap() };
+    let display = ptr::NonNull::new(unsafe { wl_display_connect(ptr::null()) })?;
+    unsafe { wl_display_disconnect(display.as_ptr()) };
+    let library = libloading::Library::new("libwayland-egl.so").ok()?;
+    Some(library)
+}
 
 impl Inner {
     fn create(
@@ -210,80 +234,45 @@ impl hal::Instance<crate::Backend> for Instance {
         let mut wsi_library = None;
 
         let wayland_display = if client_ext_list.contains(&"EGL_EXT_platform_wayland") {
-            log::info!("Loading Wayland library to get the current display");
-            if let Ok(library) = libloading::Library::new("libwayland-client.so") {
-                /* We try to connect and disconnect here to simply ensure there
-                 * is an active wayland display available.
-                 */
-                let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
-                    unsafe { library.get(b"wl_display_connect").unwrap() };
-                let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> =
-                    unsafe { library.get(b"wl_display_disconnect").unwrap() };
-                if let Some(display) = ptr::NonNull::new(unsafe { wl_display_connect(ptr::null()) })
-                {
-                    unsafe { wl_display_disconnect(display.as_ptr()) }
-                    if let Ok(library) = libloading::Library::new("libwayland-egl.so") {
-                        Some(((), library))
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
+            test_wayland_display()
         } else {
             None
         };
 
         let x11_display = if client_ext_list.contains(&"EGL_EXT_platform_x11") {
-            log::info!("Loading X11 library to get the current display");
-            if let Ok(library) = libloading::Library::new("libX11.so") {
-                let func: libloading::Symbol<XOpenDisplayFun> =
-                    unsafe { library.get(b"XOpenDisplay").unwrap() };
-                let result = unsafe { func(ptr::null()) };
-                ptr::NonNull::new(result).map(|ptr| (ptr, library))
-            } else {
-                None
-            }
+            open_x_display()
         } else {
             None
         };
 
-        let display = match (wayland_display, x11_display) {
-            (Some((_, library)), _) => {
-                log::info!("Using Wayland platform");
-                let display_attributes = [egl::ATTRIB_NONE];
-                wsi_library = Some(library);
-                egl.get_platform_display(
-                    EGL_PLATFORM_WAYLAND_KHR,
-                    egl::DEFAULT_DISPLAY,
-                    &display_attributes,
-                )
-                .unwrap()
-            }
-            (_, Some((x11_display, library))) => {
-                log::info!("Using X11 platform");
-                let display_attributes = [egl::ATTRIB_NONE];
-                wsi_library = Some(library);
-                egl.get_platform_display(
-                    EGL_PLATFORM_X11_KHR,
-                    x11_display.as_ptr(),
-                    &display_attributes,
-                )
-                .unwrap()
-            }
-            _ => {
-                log::info!("Using default platform");
-                egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
-            }
+        let display = if let Some(library) = wayland_display {
+            log::info!("Using Wayland platform");
+            let display_attributes = [egl::ATTRIB_NONE];
+            wsi_library = Some(library);
+            egl.get_platform_display(
+                EGL_PLATFORM_WAYLAND_KHR,
+                egl::DEFAULT_DISPLAY,
+                &display_attributes,
+            )
+            .unwrap()
+        } else if let Some((x11_display, library)) = x11_display {
+            log::info!("Using X11 platform");
+            let display_attributes = [egl::ATTRIB_NONE];
+            wsi_library = Some(library);
+            egl.get_platform_display(
+                EGL_PLATFORM_X11_KHR,
+                x11_display.as_ptr(),
+                &display_attributes,
+            )
+            .unwrap()
+        } else {
+            log::info!("Using default platform");
+            egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
         };
 
         let inner = Inner::create(egl.clone(), display, wsi_library.as_ref())?;
 
         Ok(Instance {
-            egl,
             inner: Mutex::new(inner),
             wsi_library,
         })
@@ -291,12 +280,13 @@ impl hal::Instance<crate::Backend> for Instance {
 
     fn enumerate_adapters(&self) -> Vec<hal::adapter::Adapter<crate::Backend>> {
         let inner = self.inner.lock().unwrap();
-        self.egl
+        inner
+            .egl
             .make_current(inner.display, None, None, Some(inner.context))
             .unwrap();
         let context = unsafe {
             glow::Context::from_loader_function(|name| {
-                self.egl.get_proc_address(name).unwrap() as *const _
+                inner.egl.get_proc_address(name).unwrap() as *const _
             })
         };
         // Create physical device
@@ -332,7 +322,7 @@ impl hal::Instance<crate::Backend> for Instance {
                 {
                     use std::ops::DerefMut;
                     let display_attributes = [egl::ATTRIB_NONE];
-                    let display = self
+                    let display = inner
                         .egl
                         .get_platform_display(
                             EGL_PLATFORM_WAYLAND_KHR,
@@ -342,7 +332,7 @@ impl hal::Instance<crate::Backend> for Instance {
                         .unwrap();
 
                     let new_inner =
-                        Inner::create(self.egl.clone(), display, self.wsi_library.as_ref())
+                        Inner::create(inner.egl.clone(), display, self.wsi_library.as_ref())
                             .map_err(|_| w::InitError::UnsupportedWindowHandle)?;
 
                     let old_inner = std::mem::replace(inner.deref_mut(), new_inner);
@@ -372,26 +362,26 @@ impl hal::Instance<crate::Backend> for Instance {
         }
         attributes.push(egl::ATTRIB_NONE);
 
-        let native_window = match has_handle.raw_window_handle() {
+        let native_window_ptr = match has_handle.raw_window_handle() {
             #[cfg(not(target_os = "android"))]
             Rwh::Wayland(_) => native_window as *mut raw::c_void,
             _ => &mut native_window as *mut _ as *mut _,
         };
-        match self.egl.create_platform_window_surface(
+        match inner.egl.create_platform_window_surface(
             inner.display,
             inner.config,
-            native_window,
+            native_window_ptr,
             &attributes,
         ) {
             Ok(raw) => Ok(Surface {
-                egl: self.egl.clone(),
+                egl: inner.egl.clone(),
                 raw,
                 display: inner.display,
                 context: inner.context,
                 presentable: inner.supports_native_window,
                 wl_window: match has_handle.raw_window_handle() {
                     #[cfg(not(target_os = "android"))]
-                    Rwh::Wayland(_) => Some(native_window),
+                    Rwh::Wayland(_) => Some(native_window_ptr),
                     _ => None,
                 },
                 swapchain: None,
@@ -405,7 +395,8 @@ impl hal::Instance<crate::Backend> for Instance {
 
     unsafe fn destroy_surface(&self, surface: Surface) {
         let inner = self.inner.lock().unwrap();
-        self.egl
+        inner
+            .egl
             .destroy_surface(inner.display, surface.raw)
             .unwrap();
         if let Some(wl_window) = surface.wl_window {
