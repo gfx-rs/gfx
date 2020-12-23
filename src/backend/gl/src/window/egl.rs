@@ -3,7 +3,8 @@
 use crate::{conv, native, GlContainer, PhysicalDevice, Starc};
 use glow::HasContext;
 use hal::{image, window as w};
-use std::{os::raw, ptr, sync::Mutex};
+use parking_lot::Mutex;
+use std::{os::raw, ptr};
 
 #[derive(Debug)]
 pub struct Swapchain {
@@ -279,7 +280,7 @@ impl hal::Instance<crate::Backend> for Instance {
     }
 
     fn enumerate_adapters(&self) -> Vec<hal::adapter::Adapter<crate::Backend>> {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.inner.lock();
         inner
             .egl
             .make_current(inner.display, None, None, Some(inner.context))
@@ -299,7 +300,7 @@ impl hal::Instance<crate::Backend> for Instance {
     ) -> Result<Surface, w::InitError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         let mut native_window = match has_handle.raw_window_handle() {
             #[cfg(not(target_os = "android"))]
             Rwh::Xlib(handle) => handle.window,
@@ -394,7 +395,7 @@ impl hal::Instance<crate::Backend> for Instance {
     }
 
     unsafe fn destroy_surface(&self, surface: Surface) {
-        let inner = self.inner.lock().unwrap();
+        let inner = self.inner.lock();
         inner
             .egl
             .destroy_surface(inner.display, surface.raw)
