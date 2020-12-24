@@ -23,7 +23,12 @@ use crate::{
     Backend, MemoryTypeId,
 };
 
-use std::{any::Any, borrow::Borrow, fmt, iter, ops::Range};
+use std::{
+    any::Any,
+    borrow::{Borrow, BorrowMut},
+    fmt, iter,
+    ops::Range,
+};
 
 /// Error occurred caused device to be lost.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -559,8 +564,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Structure specifying a copy descriptor set operation
     unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, B>>,
         I::IntoIter: ExactSizeIterator;
 
     /// Map a memory object into application address space
@@ -613,7 +617,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     fn create_fence(&self, signaled: bool) -> Result<B::Fence, OutOfMemory>;
 
     /// Resets a given fence to its original, unsignaled state.
-    unsafe fn reset_fence(&self, fence: &B::Fence) -> Result<(), OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &mut B::Fence) -> Result<(), OutOfMemory> {
         self.reset_fences(iter::once(fence))
     }
 
@@ -621,11 +625,11 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn reset_fences<I>(&self, fences: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<B::Fence>,
+        I::Item: BorrowMut<B::Fence>,
         I::IntoIter: ExactSizeIterator,
     {
-        for fence in fences {
-            self.reset_fence(fence.borrow())?;
+        for mut fence in fences {
+            self.reset_fence(fence.borrow_mut())?;
         }
         Ok(())
     }

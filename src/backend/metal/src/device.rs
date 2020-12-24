@@ -2370,8 +2370,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
+        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, Backend>>,
     {
         for _copy in copies {
             unimplemented!()
@@ -2963,7 +2962,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(n::Fence(mutex))
     }
 
-    unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &mut n::Fence) -> Result<(), d::OutOfMemory> {
         debug!("Resetting fence ptr {:?}", fence.0.raw() as *const _);
         *fence.0.lock() = n::FenceInner::Idle { signaled: false };
         Ok(())

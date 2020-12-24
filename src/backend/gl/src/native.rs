@@ -65,6 +65,7 @@ pub(crate) enum FenceInner {
     Pending(Option<<GlContext as glow::HasContext>::Fence>),
 }
 
+//TODO: reconsider the use of `Cell`
 #[derive(Debug)]
 pub struct Fence(pub(crate) Cell<FenceInner>);
 unsafe impl Send for Fence {}

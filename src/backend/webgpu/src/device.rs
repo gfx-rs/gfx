@@ -1,4 +1,7 @@
-use std::{borrow::Borrow, ops::Range};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    ops::Range,
+};
 
 use hal::{
     buffer,
@@ -350,8 +353,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, _copy_iter: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
+        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, Backend>>,
     {
         todo!()
     }
@@ -401,7 +403,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn reset_fence(
         &self,
-        _fence: &<Backend as hal::Backend>::Fence,
+        _fence: &mut <Backend as hal::Backend>::Fence,
     ) -> Result<(), OutOfMemory> {
         todo!()
     }
@@ -409,7 +411,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn reset_fences<I>(&self, _fences: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<<Backend as hal::Backend>::Fence>,
+        I::Item: BorrowMut<<Backend as hal::Backend>::Fence>,
     {
         todo!()
     }

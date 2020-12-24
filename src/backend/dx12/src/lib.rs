@@ -511,7 +511,7 @@ impl q::CommandQueue<Backend> for CommandQueue {
         &mut self,
         surface: &mut window::Surface,
         image: window::SwapchainImage,
-        _wait_semaphore: Option<&resource::Semaphore>,
+        _wait_semaphore: Option<&mut resource::Semaphore>,
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError> {
         surface.present(image).map(|()| None)
     }

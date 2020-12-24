@@ -2113,11 +2113,9 @@ impl device::Device<Backend> for Device {
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
+        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, Backend>>,
     {
-        for copy in copy_iter {
-            let _copy = copy.borrow();
+        for _copy in copy_iter {
             //TODO
             /*
             for offset in 0 .. copy.count {
@@ -2224,7 +2222,7 @@ impl device::Device<Backend> for Device {
         }))
     }
 
-    unsafe fn reset_fence(&self, fence: &Fence) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &mut Fence) -> Result<(), device::OutOfMemory> {
         *fence.mutex.lock() = false;
         Ok(())
     }

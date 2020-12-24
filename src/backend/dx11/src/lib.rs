@@ -971,7 +971,9 @@ impl window::PresentationSurface<Backend> for Surface {
                 // We must also delete the image data.
                 //
                 // This should not panic as all images must be deleted before
-                let mut present_image = Arc::try_unwrap(present.image).expect("Not all acquired images were deleted before the swapchain was reconfigured.");
+                let mut present_image = Arc::try_unwrap(present.image).expect(
+                    "Not all acquired images were deleted before the swapchain was reconfigured.",
+                );
                 present_image.internal.release_resources();
 
                 let result = present.swapchain.ResizeBuffers(
@@ -1167,7 +1169,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         &mut self,
         surface: &mut Surface,
         _image: SwapchainImage,
-        _wait_semaphore: Option<&Semaphore>,
+        _wait_semaphore: Option<&mut Semaphore>,
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
         let mut presentation = surface.presentation.as_mut().unwrap();
         let (interval, flags) = match presentation.mode {

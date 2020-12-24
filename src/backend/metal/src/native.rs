@@ -998,6 +998,8 @@ pub enum FenceInner {
     PendingSubmission(metal::CommandBuffer),
 }
 
+//TODO: reconsider the `Mutex`
+// it's only used in `submit()`
 #[derive(Debug)]
 pub struct Fence(pub(crate) Mutex<FenceInner>);
 

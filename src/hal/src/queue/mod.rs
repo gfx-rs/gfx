@@ -131,7 +131,7 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
         &mut self,
         surface: &mut B::Surface,
         image: <B::Surface as PresentationSurface<B>>::SwapchainImage,
-        wait_semaphore: Option<&B::Semaphore>,
+        wait_semaphore: Option<&mut B::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError>;
 
     /// Wait for the queue to be idle.

@@ -1467,7 +1467,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         &mut self,
         surface: &mut window::Surface,
         image: window::SurfaceImage,
-        wait_semaphore: Option<&native::Semaphore>,
+        wait_semaphore: Option<&mut native::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError> {
         let ssc = surface.swapchain.as_ref().unwrap();
         let wait_semaphore = if let Some(wait_semaphore) = wait_semaphore {

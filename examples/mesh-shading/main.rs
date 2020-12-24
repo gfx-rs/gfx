@@ -583,7 +583,7 @@ where
         // updated with a CPU->GPU data copy are not in use by the GPU, so we can perform those updates.
         // In this case there are none to be done, however.
         unsafe {
-            let fence = &self.submission_complete_fences[frame_idx];
+            let fence = &mut self.submission_complete_fences[frame_idx];
             self.device
                 .wait_for_fence(fence, !0)
                 .expect("Failed to wait for fence");
@@ -637,7 +637,7 @@ where
             let result = self.queue_group.queues[0].present(
                 &mut self.surface,
                 surface_image,
-                Some(&self.submission_complete_semaphores[frame_idx]),
+                Some(&mut self.submission_complete_semaphores[frame_idx]),
             );
 
             self.device.destroy_framebuffer(framebuffer);

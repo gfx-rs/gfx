@@ -2411,9 +2411,13 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         &mut self,
         _surface: &mut window::Surface,
         image: window::SwapchainImage,
-        wait_semaphore: Option<&native::Semaphore>,
+        wait_semaphore: Option<&mut native::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError> {
-        self.wait(wait_semaphore);
+        if let Some(semaphore) = wait_semaphore {
+            if let Some(ref system) = semaphore.system {
+                system.wait(!0);
+            }
+        }
 
         let queue = self.shared.queue.lock();
         let drawable = image.into_drawable();

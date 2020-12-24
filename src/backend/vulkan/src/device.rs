@@ -15,7 +15,7 @@ use hal::{
 };
 
 use std::{
-    borrow::Borrow,
+    borrow::{Borrow, BorrowMut},
     ffi::{CStr, CString},
     mem,
     ops::Range,
@@ -1751,12 +1751,10 @@ impl d::Device<B> for Device {
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, B>>,
         I::IntoIter: ExactSizeIterator,
     {
-        let copies = copies.into_iter().map(|copy| {
-            let c = copy.borrow();
+        let copies = copies.into_iter().map(|c| {
             vk::CopyDescriptorSet::builder()
                 .src_set(c.src_set.raw)
                 .src_binding(c.src_binding as u32)
@@ -1865,7 +1863,7 @@ impl d::Device<B> for Device {
     unsafe fn reset_fences<I>(&self, fences: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<n::Fence>,
+        I::Item: BorrowMut<n::Fence>,
         I::IntoIter: ExactSizeIterator,
     {
         let fences = fences.into_iter().map(|fence| fence.borrow().0);

@@ -3187,13 +3187,11 @@ impl d::Device<B> for Device {
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, B>>,
     {
         let mut accum = descriptors_cpu::MultiCopyAccumulator::default();
 
-        for copy_wrap in copy_iter {
-            let copy = copy_wrap.borrow();
+        for copy in copy_iter {
             let src_info = &copy.src_set.binding_infos[copy.src_binding as usize];
             let dst_info = &copy.dst_set.binding_infos[copy.dst_binding as usize];
 
@@ -3353,7 +3351,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn reset_fence(&self, fence: &r::Fence) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &mut r::Fence) -> Result<(), d::OutOfMemory> {
         assert_eq!(winerror::S_OK, fence.raw.signal(0));
         Ok(())
     }

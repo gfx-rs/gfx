@@ -1115,7 +1115,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         &mut self,
         surface: &mut Surface,
         image: native::SwapchainImage,
-        _wait_semaphore: Option<&native::Semaphore>,
+        _wait_semaphore: Option<&mut native::Semaphore>,
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError> {
         surface.present(image, &self.share.context)
     }

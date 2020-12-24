@@ -1767,12 +1767,9 @@ impl d::Device<B> for Device {
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, B>>,
     {
         for copy in copies {
-            let copy = copy.borrow();
-
             let src_set = &copy.src_set;
             let dst_set = &copy.dst_set;
             if std::ptr::eq(src_set, dst_set) {
@@ -1808,7 +1805,7 @@ impl d::Device<B> for Device {
         Ok(n::Fence(cell))
     }
 
-    unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &mut n::Fence) -> Result<(), d::OutOfMemory> {
         fence.0.replace(n::FenceInner::Idle { signaled: false });
         Ok(())
     }

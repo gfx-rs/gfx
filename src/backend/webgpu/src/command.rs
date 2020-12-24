@@ -52,7 +52,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         &mut self,
         _surface: &mut <Backend as hal::Backend>::Surface,
         _image: <<Backend as hal::Backend>::Surface as PresentationSurface<Backend>>::SwapchainImage,
-        _wait_semaphore: Option<&<Backend as hal::Backend>::Semaphore>,
+        _wait_semaphore: Option<&mut <Backend as hal::Backend>::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError> {
         todo!()
     }

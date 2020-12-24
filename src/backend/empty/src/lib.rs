@@ -179,7 +179,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         &mut self,
         _surface: &mut Surface,
         _image: SwapchainImage,
-        _wait_semaphore: Option<&()>,
+        _wait_semaphore: Option<&mut ()>,
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
         Ok(None)
     }
@@ -420,8 +420,7 @@ impl device::Device<Backend> for Device {
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, _: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
+        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, Backend>>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
@@ -584,7 +583,7 @@ impl device::Device<Backend> for Device {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn reset_fence(&self, _: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_fence(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {
         Ok(())
     }
 
