@@ -57,15 +57,12 @@ impl Buffer {
 #[derive(Debug)]
 pub struct BufferView;
 
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum FenceInner {
+#[derive(Debug)]
+pub enum Fence {
     Idle { signaled: bool },
-    Pending(Option<<GlContext as glow::HasContext>::Fence>),
+    Pending(<GlContext as glow::HasContext>::Fence),
 }
 
-//TODO: reconsider the use of `Cell`
-#[derive(Debug)]
-pub struct Fence(pub(crate) Cell<FenceInner>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 

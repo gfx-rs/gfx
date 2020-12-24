@@ -859,7 +859,7 @@ where
             };
             self.queue_group.queues[0].submit(
                 submission,
-                Some(&self.submission_complete_fences[frame_idx]),
+                Some(&mut self.submission_complete_fences[frame_idx]),
             );
 
             // present frame

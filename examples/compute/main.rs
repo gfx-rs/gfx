@@ -182,7 +182,7 @@ fn main() {
     let mut command_pool =
         unsafe { device.create_command_pool(family.id(), pool::CommandPoolCreateFlags::empty()) }
             .expect("Can't create command pool");
-    let fence = device.create_fence(false).unwrap();
+    let mut fence = device.create_fence(false).unwrap();
     unsafe {
         let mut command_buffer = command_pool.allocate_one(command::Level::Primary);
         command_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
@@ -231,7 +231,7 @@ fn main() {
         );
         command_buffer.finish();
 
-        queue_group.queues[0].submit_without_semaphores(Some(&command_buffer), Some(&fence));
+        queue_group.queues[0].submit_without_semaphores(Some(&command_buffer), Some(&mut fence));
 
         device.wait_for_fence(&fence, !0).unwrap();
         command_pool.free(Some(command_buffer));

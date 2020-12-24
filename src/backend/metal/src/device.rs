@@ -2937,18 +2937,13 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn destroy_image_view(&self, _view: n::ImageView) {}
 
     fn create_fence(&self, signaled: bool) -> Result<n::Fence, d::OutOfMemory> {
-        let mutex = Mutex::new(n::FenceInner::Idle { signaled });
-        debug!(
-            "Creating fence ptr {:?} with signal={}",
-            unsafe { mutex.raw() } as *const _,
-            signaled
-        );
-        Ok(n::Fence(mutex))
+        debug!("Creating fence with signal={}", signaled);
+        Ok(n::Fence::Idle { signaled })
     }
 
     unsafe fn reset_fence(&self, fence: &mut n::Fence) -> Result<(), d::OutOfMemory> {
-        debug!("Resetting fence ptr {:?}", fence.0.raw() as *const _);
-        *fence.0.lock() = n::FenceInner::Idle { signaled: false };
+        debug!("Resetting fence ptr {:?}", fence);
+        *fence = n::Fence::Idle { signaled: false };
         Ok(())
     }
 
@@ -2962,17 +2957,14 @@ impl hal::device::Device<Backend> for Device {
         }
 
         debug!("wait_for_fence {:?} for {} ms", fence, timeout_ns);
-        match *fence.0.lock() {
-            n::FenceInner::Idle { signaled } => {
+        match *fence {
+            n::Fence::Idle { signaled } => {
                 if !signaled {
-                    warn!(
-                        "Fence ptr {:?} is not pending, waiting not possible",
-                        fence.0.raw() as *const _
-                    );
+                    warn!("Fence ptr {:?} is not pending, waiting not possible", fence);
                 }
                 Ok(signaled)
             }
-            n::FenceInner::PendingSubmission(ref cmd_buf) => {
+            n::Fence::PendingSubmission(ref cmd_buf) => {
                 if timeout_ns == !0 {
                     cmd_buf.wait_until_completed();
                     return Ok(true);
@@ -2993,9 +2985,9 @@ impl hal::device::Device<Backend> for Device {
     }
 
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, d::DeviceLost> {
-        Ok(match *fence.0.lock() {
-            n::FenceInner::Idle { signaled } => signaled,
-            n::FenceInner::PendingSubmission(ref cmd_buf) => match cmd_buf.status() {
+        Ok(match *fence {
+            n::Fence::Idle { signaled } => signaled,
+            n::Fence::PendingSubmission(ref cmd_buf) => match cmd_buf.status() {
                 metal::MTLCommandBufferStatus::Completed => true,
                 _ => false,
             },

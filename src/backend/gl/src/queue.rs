@@ -1064,7 +1064,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submit_info: hal::queue::Submission<Ic, Iw, Is>,
-        fence: Option<&native::Fence>,
+        fence: Option<&mut native::Fence>,
     ) where
         T: 'a + Borrow<com::CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
@@ -1097,16 +1097,16 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         }
 
         if let Some(fence) = fence {
-            if self.share.private_caps.sync {
-                fence.0.set(native::FenceInner::Pending(Some(
+            *fence = if self.share.private_caps.sync {
+                native::Fence::Pending(
                     self.share
                         .context
                         .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
                         .unwrap(),
-                )));
+                )
             } else {
                 self.share.context.flush();
-                fence.0.set(native::FenceInner::Idle { signaled: true });
+                native::Fence::Idle { signaled: true }
             }
         }
     }

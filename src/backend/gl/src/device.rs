@@ -1783,12 +1783,11 @@ impl d::Device<B> for Device {
     }
 
     fn create_fence(&self, signaled: bool) -> Result<n::Fence, d::OutOfMemory> {
-        let cell = Cell::new(n::FenceInner::Idle { signaled });
-        Ok(n::Fence(cell))
+        Ok(n::Fence::Idle { signaled })
     }
 
     unsafe fn reset_fence(&self, fence: &mut n::Fence) -> Result<(), d::OutOfMemory> {
-        fence.0.replace(n::FenceInner::Idle { signaled: false });
+        *fence = n::Fence::Idle { signaled: false };
         Ok(())
     }
 
@@ -1802,17 +1801,14 @@ impl d::Device<B> for Device {
         // access to a resource. How much does this call costs ? The status of the fence
         // could be cached to avoid calling this more than once (in core or in the backend ?).
         let gl = &self.share.context;
-        match fence.0.get() {
-            n::FenceInner::Idle { signaled } => {
+        match *fence {
+            n::Fence::Idle { signaled } => {
                 if !signaled {
-                    warn!(
-                        "Fence ptr {:?} is not pending, waiting not possible",
-                        fence.0.as_ptr()
-                    );
+                    warn!("Fence ptr {:?} is not pending, waiting not possible", fence);
                 }
                 Ok(signaled)
             }
-            n::FenceInner::Pending(Some(sync)) => {
+            n::Fence::Pending(sync) => {
                 // TODO: Could `wait_sync` be used here instead?
                 match gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32) {
                     glow::TIMEOUT_EXPIRED => Ok(false),
@@ -1823,17 +1819,11 @@ impl d::Device<B> for Device {
                         Ok(false)
                     }
                     glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => {
-                        fence.0.set(n::FenceInner::Idle { signaled: true });
+                        //fence.0.set(n::Fence::Idle { signaled: true });
                         Ok(true)
                     }
                     _ => unreachable!(),
                 }
-            }
-            n::FenceInner::Pending(None) => {
-                // No sync capability, we fallback to waiting for *everything* to finish
-                gl.flush();
-                fence.0.set(n::FenceInner::Idle { signaled: true });
-                Ok(true)
             }
         }
     }
@@ -1887,12 +1877,9 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, d::DeviceLost> {
-        Ok(match fence.0.get() {
-            n::FenceInner::Pending(Some(sync)) => {
-                self.share.context.get_sync_status(sync) == glow::SIGNALED
-            }
-            n::FenceInner::Pending(None) => false,
-            n::FenceInner::Idle { signaled } => signaled,
+        Ok(match *fence {
+            n::Fence::Idle { signaled } => signaled,
+            n::Fence::Pending(sync) => self.share.context.get_sync_status(sync) == glow::SIGNALED,
         })
     }
 
@@ -2007,11 +1994,11 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_fence(&self, fence: n::Fence) {
-        match fence.0.get() {
-            n::FenceInner::Pending(Some(sync)) => {
+        match fence {
+            n::Fence::Idle { .. } => {}
+            n::Fence::Pending(sync) => {
                 self.share.context.delete_sync(sync);
             }
-            _ => {}
         }
     }
 

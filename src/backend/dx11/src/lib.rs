@@ -1124,7 +1124,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submission: queue::Submission<Ic, Iw, Is>,
-        fence: Option<&Fence>,
+        fence: Option<&mut Fence>,
     ) where
         T: 'a + Borrow<CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,

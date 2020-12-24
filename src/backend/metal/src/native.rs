@@ -17,7 +17,7 @@ use range_alloc::RangeAllocator;
 use arrayvec::ArrayVec;
 use cocoa_foundation::foundation::NSRange;
 use metal;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use spirv_cross::{msl, spirv};
 
 use std::{
@@ -995,15 +995,10 @@ pub enum QueryPool {
 }
 
 #[derive(Debug)]
-pub enum FenceInner {
+pub enum Fence {
     Idle { signaled: bool },
     PendingSubmission(metal::CommandBuffer),
 }
-
-//TODO: reconsider the `Mutex`
-// it's only used in `submit()`
-#[derive(Debug)]
-pub struct Fence(pub(crate) Mutex<FenceInner>);
 
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}

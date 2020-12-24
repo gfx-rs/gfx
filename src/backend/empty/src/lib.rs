@@ -165,7 +165,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         _: queue::Submission<Ic, Iw, Is>,
-        _: Option<&()>,
+        _: Option<&mut ()>,
     ) where
         T: 'a + Borrow<CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,

@@ -26,24 +26,13 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         _submission: Submission<Ic, Iw, Is>,
-        _fence: Option<&<Backend as hal::Backend>::Fence>,
+        _fence: Option<&mut <Backend as hal::Backend>::Fence>,
     ) where
         T: 'a + Borrow<<Backend as hal::Backend>::CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
         S: 'a + Borrow<<Backend as hal::Backend>::Semaphore>,
         Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
         Is: IntoIterator<Item = &'a S>,
-    {
-        todo!()
-    }
-
-    unsafe fn submit_without_semaphores<'a, T, Ic>(
-        &mut self,
-        _command_buffers: Ic,
-        _fence: Option<&<Backend as hal::Backend>::Fence>,
-    ) where
-        T: 'a + Borrow<<Backend as hal::Backend>::CommandBuffer>,
-        Ic: IntoIterator<Item = &'a T>,
     {
         todo!()
     }
@@ -57,7 +46,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         todo!()
     }
 
-    fn wait_idle(&self) -> Result<(), OutOfMemory> {
+    fn wait_idle(&mut self) -> Result<(), OutOfMemory> {
         todo!()
     }
 }
