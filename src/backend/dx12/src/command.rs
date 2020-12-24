@@ -243,7 +243,7 @@ impl PipelineCache {
             }
 
             // Bind Sampler descriptor tables.
-            if let Some(gpu) = set.first_gpu_sampler.get() {
+            if let Some(gpu) = set.first_gpu_sampler {
                 assert!(element.table.ty.contains(r::SAMPLERS));
 
                 // Cast is safe as offset **must** be in u32 range. Unable to
@@ -259,8 +259,7 @@ impl PipelineCache {
             //       Requires changes then in the descriptor update process.
             for binding in &set.binding_infos {
                 // It's not valid to modify the descriptor sets during recording -> access if safe.
-                let dynamic_descriptors = unsafe { &*binding.dynamic_descriptors.get() };
-                for descriptor in dynamic_descriptors {
+                for descriptor in binding.dynamic_descriptors.iter() {
                     let gpu_offset = descriptor.gpu_buffer_location + offsets.next().unwrap();
                     self.user_data.set_descriptor_cbv(root_offset, gpu_offset);
                     root_offset += 2;

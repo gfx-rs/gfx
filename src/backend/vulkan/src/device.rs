@@ -1615,102 +1615,101 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
+    unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>,
+        I: IntoIterator,
+        I::IntoIter: ExactSizeIterator,
+        I::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        let mut raw_writes = Vec::<vk::WriteDescriptorSet>::new();
+        let descriptors = op.descriptors.into_iter();
+        let mut raw_writes = Vec::<vk::WriteDescriptorSet>::with_capacity(descriptors.len());
         let mut image_infos = Vec::new();
         let mut buffer_infos = Vec::new();
         let mut texel_buffer_views = Vec::new();
 
-        for sw in write_iter {
-            // gfx-hal allows the type and stages to be different between the descriptor
-            // in a single write, while Vulkan requires them to be the same.
-            let mut last_type = vk::DescriptorType::SAMPLER;
-            let mut last_stages = pso::ShaderStageFlags::empty();
+        // gfx-hal allows the type and stages to be different between the descriptor
+        // in a single write, while Vulkan requires them to be the same.
+        let mut last_type = vk::DescriptorType::SAMPLER;
+        let mut last_stages = pso::ShaderStageFlags::empty();
 
-            let mut binding_pos = sw
-                .set
-                .bindings
-                .binary_search_by_key(&sw.binding, |b| b.binding)
-                .expect("Descriptor set writes don't match the set layout!");
-            let mut array_offset = sw.array_offset;
+        let mut binding_pos = op
+            .set
+            .bindings
+            .binary_search_by_key(&op.binding, |b| b.binding)
+            .expect("Descriptor set writes don't match the set layout!");
+        let mut array_offset = op.array_offset;
 
-            for descriptor in sw.descriptors {
-                let layout_binding = &sw.set.bindings[binding_pos];
-                array_offset += 1;
-                if array_offset == layout_binding.count {
-                    array_offset = 0;
-                    binding_pos += 1;
+        for descriptor in descriptors {
+            let layout_binding = &op.set.bindings[binding_pos];
+            array_offset += 1;
+            if array_offset == layout_binding.count {
+                array_offset = 0;
+                binding_pos += 1;
+            }
+
+            let descriptor_type = conv::map_descriptor_type(layout_binding.ty);
+            if descriptor_type == last_type && layout_binding.stage_flags == last_stages {
+                raw_writes.last_mut().unwrap().descriptor_count += 1;
+            } else {
+                last_type = descriptor_type;
+                last_stages = layout_binding.stage_flags;
+                raw_writes.push(vk::WriteDescriptorSet {
+                    s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
+                    p_next: ptr::null(),
+                    dst_set: op.set.raw,
+                    dst_binding: layout_binding.binding,
+                    dst_array_element: if layout_binding.binding == op.binding {
+                        op.array_offset as _
+                    } else {
+                        0
+                    },
+                    descriptor_count: 1,
+                    descriptor_type,
+                    p_image_info: image_infos.len() as _,
+                    p_buffer_info: buffer_infos.len() as _,
+                    p_texel_buffer_view: texel_buffer_views.len() as _,
+                });
+            }
+
+            match *descriptor.borrow() {
+                pso::Descriptor::Sampler(sampler) => {
+                    image_infos.push(
+                        vk::DescriptorImageInfo::builder()
+                            .sampler(sampler.0)
+                            .image_view(vk::ImageView::null())
+                            .image_layout(vk::ImageLayout::GENERAL)
+                            .build(),
+                    );
                 }
-
-                let descriptor_type = conv::map_descriptor_type(layout_binding.ty);
-                if descriptor_type == last_type && layout_binding.stage_flags == last_stages {
-                    raw_writes.last_mut().unwrap().descriptor_count += 1;
-                } else {
-                    last_type = descriptor_type;
-                    last_stages = layout_binding.stage_flags;
-                    raw_writes.push(vk::WriteDescriptorSet {
-                        s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
-                        p_next: ptr::null(),
-                        dst_set: sw.set.raw,
-                        dst_binding: layout_binding.binding,
-                        dst_array_element: if layout_binding.binding == sw.binding {
-                            sw.array_offset as _
-                        } else {
-                            0
-                        },
-                        descriptor_count: 1,
-                        descriptor_type,
-                        p_image_info: image_infos.len() as _,
-                        p_buffer_info: buffer_infos.len() as _,
-                        p_texel_buffer_view: texel_buffer_views.len() as _,
-                    });
+                pso::Descriptor::Image(view, layout) => {
+                    image_infos.push(
+                        vk::DescriptorImageInfo::builder()
+                            .sampler(vk::Sampler::null())
+                            .image_view(view.view)
+                            .image_layout(conv::map_image_layout(layout))
+                            .build(),
+                    );
                 }
-
-                match *descriptor.borrow() {
-                    pso::Descriptor::Sampler(sampler) => {
-                        image_infos.push(
-                            vk::DescriptorImageInfo::builder()
-                                .sampler(sampler.0)
-                                .image_view(vk::ImageView::null())
-                                .image_layout(vk::ImageLayout::GENERAL)
-                                .build(),
-                        );
-                    }
-                    pso::Descriptor::Image(view, layout) => {
-                        image_infos.push(
-                            vk::DescriptorImageInfo::builder()
-                                .sampler(vk::Sampler::null())
-                                .image_view(view.view)
-                                .image_layout(conv::map_image_layout(layout))
-                                .build(),
-                        );
-                    }
-                    pso::Descriptor::CombinedImageSampler(view, layout, sampler) => {
-                        image_infos.push(
-                            vk::DescriptorImageInfo::builder()
-                                .sampler(sampler.0)
-                                .image_view(view.view)
-                                .image_layout(conv::map_image_layout(layout))
-                                .build(),
-                        );
-                    }
-                    pso::Descriptor::Buffer(buffer, ref sub) => {
-                        buffer_infos.push(
-                            vk::DescriptorBufferInfo::builder()
-                                .buffer(buffer.raw)
-                                .offset(sub.offset)
-                                .range(sub.size.unwrap_or(vk::WHOLE_SIZE))
-                                .build(),
-                        );
-                    }
-                    pso::Descriptor::TexelBuffer(view) => {
-                        texel_buffer_views.push(view.raw);
-                    }
+                pso::Descriptor::CombinedImageSampler(view, layout, sampler) => {
+                    image_infos.push(
+                        vk::DescriptorImageInfo::builder()
+                            .sampler(sampler.0)
+                            .image_view(view.view)
+                            .image_layout(conv::map_image_layout(layout))
+                            .build(),
+                    );
+                }
+                pso::Descriptor::Buffer(buffer, ref sub) => {
+                    buffer_infos.push(
+                        vk::DescriptorBufferInfo::builder()
+                            .buffer(buffer.raw)
+                            .offset(sub.offset)
+                            .range(sub.size.unwrap_or(vk::WHOLE_SIZE))
+                            .build(),
+                    );
+                }
+                pso::Descriptor::TexelBuffer(view) => {
+                    texel_buffer_views.push(view.raw);
                 }
             }
         }
@@ -1749,28 +1748,18 @@ impl d::Device<B> for Device {
         self.shared.raw.update_descriptor_sets(&raw_writes, &[]);
     }
 
-    unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
-    where
-        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, B>>,
-        I::IntoIter: ExactSizeIterator,
-    {
-        let copies = copies.into_iter().map(|c| {
-            vk::CopyDescriptorSet::builder()
-                .src_set(c.src_set.raw)
-                .src_binding(c.src_binding as u32)
-                .src_array_element(c.src_array_offset as u32)
-                .dst_set(c.dst_set.raw)
-                .dst_binding(c.dst_binding as u32)
-                .dst_array_element(c.dst_array_offset as u32)
-                .descriptor_count(c.count as u32)
-                .build()
-        });
+    unsafe fn copy_descriptor_set<'a>(&self, op: pso::DescriptorSetCopy<'a, B>) {
+        let copy = vk::CopyDescriptorSet::builder()
+            .src_set(op.src_set.raw)
+            .src_binding(op.src_binding as u32)
+            .src_array_element(op.src_array_offset as u32)
+            .dst_set(op.dst_set.raw)
+            .dst_binding(op.dst_binding as u32)
+            .dst_array_element(op.dst_array_offset as u32)
+            .descriptor_count(op.count as u32)
+            .build();
 
-        inplace_it::inplace_or_alloc_array(copies.len(), |uninit_guard| {
-            let copies = uninit_guard.init_with_iter(copies);
-
-            self.shared.raw.update_descriptor_sets(&[], &copies);
-        });
+        self.shared.raw.update_descriptor_sets(&[], &[copy]);
     }
 
     unsafe fn map_memory(

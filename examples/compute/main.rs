@@ -165,19 +165,18 @@ fn main() {
         )
     };
 
-    let desc_set;
-
-    unsafe {
-        desc_set = desc_pool.allocate_set(&set_layout).unwrap();
-        device.write_descriptor_sets(Some(pso::DescriptorSetWrite {
-            set: &desc_set,
+    let desc_set = unsafe {
+        let mut desc_set = desc_pool.allocate_set(&set_layout).unwrap();
+        device.write_descriptor_set(pso::DescriptorSetWrite {
+            set: &mut desc_set,
             binding: 0,
             array_offset: 0,
             descriptors: Some(pso::Descriptor::Buffer(
                 &device_buffer,
                 buffer::SubRange::WHOLE,
             )),
-        }));
+        });
+        desc_set
     };
 
     let mut command_pool =

@@ -410,18 +410,14 @@ impl device::Device<Backend> for Device {
         Ok(layout)
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, _: I)
+    unsafe fn write_descriptor_set<'a, I>(&self, _: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        I: IntoIterator,
+        I::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
     }
 
-    unsafe fn copy_descriptor_sets<'a, I>(&self, _: I)
-    where
-        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, Backend>>,
-    {
+    unsafe fn copy_descriptor_set<'a>(&self, _: pso::DescriptorSetCopy<'a, Backend>) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 

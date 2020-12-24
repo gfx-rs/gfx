@@ -2200,167 +2200,156 @@ impl hal::device::Device<Backend> for Device {
         }
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
+    unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        I: IntoIterator,
+        I::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
-        debug!("write_descriptor_sets");
-        for write in write_iter {
-            match *write.set {
-                n::DescriptorSet::Emulated {
-                    ref pool,
-                    ref layouts,
-                    ref resources,
-                } => {
-                    let mut counters = resources.map(|r| r.start);
-                    let mut start = None; //TODO: can pre-compute this
-                    for (i, layout) in layouts.iter().enumerate() {
-                        if layout.binding == write.binding
-                            && layout.array_index == write.array_offset
-                        {
-                            start = Some(i);
-                            break;
-                        }
-                        counters.add(layout.content);
+        debug!("write_descriptor_set");
+        match *op.set {
+            n::DescriptorSet::Emulated {
+                ref pool,
+                ref layouts,
+                ref resources,
+            } => {
+                let mut counters = resources.map(|r| r.start);
+                let mut start = None; //TODO: can pre-compute this
+                for (i, layout) in layouts.iter().enumerate() {
+                    if layout.binding == op.binding && layout.array_index == op.array_offset {
+                        start = Some(i);
+                        break;
                     }
-                    let mut data = pool.write();
+                    counters.add(layout.content);
+                }
+                let mut data = pool.write();
 
-                    for (layout, descriptor) in
-                        layouts[start.unwrap()..].iter().zip(write.descriptors)
-                    {
-                        trace!("\t{:?}", layout);
-                        match *descriptor.borrow() {
-                            pso::Descriptor::Sampler(sam) => {
-                                debug_assert!(!layout
-                                    .content
-                                    .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
+                for (layout, descriptor) in layouts[start.unwrap()..].iter().zip(op.descriptors) {
+                    trace!("\t{:?}", layout);
+                    match *descriptor.borrow() {
+                        pso::Descriptor::Sampler(sam) => {
+                            debug_assert!(!layout
+                                .content
+                                .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
+                            data.samplers[counters.samplers as usize] = (
+                                layout.stages,
+                                Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref())),
+                            );
+                        }
+                        pso::Descriptor::Image(view, il) => {
+                            data.textures[counters.textures as usize] = (
+                                layout.stages,
+                                Some(AsNative::from(view.texture.as_ref())),
+                                il,
+                            );
+                        }
+                        pso::Descriptor::CombinedImageSampler(view, il, sam) => {
+                            if !layout
+                                .content
+                                .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
+                            {
                                 data.samplers[counters.samplers as usize] = (
                                     layout.stages,
                                     Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref())),
                                 );
                             }
-                            pso::Descriptor::Image(view, il) => {
-                                data.textures[counters.textures as usize] = (
-                                    layout.stages,
-                                    Some(AsNative::from(view.texture.as_ref())),
-                                    il,
-                                );
-                            }
-                            pso::Descriptor::CombinedImageSampler(view, il, sam) => {
-                                if !layout
-                                    .content
-                                    .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
-                                {
-                                    data.samplers[counters.samplers as usize] = (
-                                        layout.stages,
-                                        Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref())),
-                                    );
-                                }
-                                data.textures[counters.textures as usize] = (
-                                    layout.stages,
-                                    Some(AsNative::from(view.texture.as_ref())),
-                                    il,
-                                );
-                            }
-                            pso::Descriptor::TexelBuffer(view) => {
-                                data.textures[counters.textures as usize] = (
-                                    layout.stages,
-                                    Some(AsNative::from(view.raw.as_ref())),
-                                    image::Layout::General,
-                                );
-                            }
-                            pso::Descriptor::Buffer(buf, ref sub) => {
-                                let (raw, range) = buf.as_bound();
-                                debug_assert!(
-                                    range.start + sub.offset + sub.size.unwrap_or(0) <= range.end
-                                );
-                                data.buffers[counters.buffers as usize] = (
-                                    layout.stages,
-                                    Some(AsNative::from(raw)),
-                                    range.start + sub.offset,
-                                );
-                            }
+                            data.textures[counters.textures as usize] = (
+                                layout.stages,
+                                Some(AsNative::from(view.texture.as_ref())),
+                                il,
+                            );
                         }
-                        counters.add(layout.content);
+                        pso::Descriptor::TexelBuffer(view) => {
+                            data.textures[counters.textures as usize] = (
+                                layout.stages,
+                                Some(AsNative::from(view.raw.as_ref())),
+                                image::Layout::General,
+                            );
+                        }
+                        pso::Descriptor::Buffer(buf, ref sub) => {
+                            let (raw, range) = buf.as_bound();
+                            debug_assert!(
+                                range.start + sub.offset + sub.size.unwrap_or(0) <= range.end
+                            );
+                            data.buffers[counters.buffers as usize] = (
+                                layout.stages,
+                                Some(AsNative::from(raw)),
+                                range.start + sub.offset,
+                            );
+                        }
                     }
+                    counters.add(layout.content);
                 }
-                n::DescriptorSet::ArgumentBuffer {
-                    ref raw,
-                    raw_offset,
-                    ref pool,
-                    ref range,
-                    ref encoder,
-                    ref bindings,
-                    ..
-                } => {
-                    debug_assert!(self.shared.private_caps.argument_buffers);
+            }
+            n::DescriptorSet::ArgumentBuffer {
+                ref raw,
+                raw_offset,
+                ref pool,
+                ref range,
+                ref encoder,
+                ref bindings,
+                ..
+            } => {
+                debug_assert!(self.shared.private_caps.argument_buffers);
 
-                    encoder.set_argument_buffer(raw, raw_offset);
-                    let mut arg_index = {
-                        let binding = &bindings[&write.binding];
-                        debug_assert!((write.array_offset as usize) < binding.count);
-                        (binding.res_offset as NSUInteger) + (write.array_offset as NSUInteger)
-                    };
+                encoder.set_argument_buffer(raw, raw_offset);
+                let mut arg_index = {
+                    let binding = &bindings[&op.binding];
+                    debug_assert!((op.array_offset as usize) < binding.count);
+                    (binding.res_offset as NSUInteger) + (op.array_offset as NSUInteger)
+                };
 
-                    for (data, descriptor) in pool.write().resources
-                        [range.start as usize + arg_index as usize..range.end as usize]
-                        .iter_mut()
-                        .zip(write.descriptors)
-                    {
-                        match *descriptor.borrow() {
-                            pso::Descriptor::Sampler(sampler) => {
-                                debug_assert!(!bindings[&write.binding]
-                                    .content
-                                    .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
-                                encoder.set_sampler_state(arg_index, sampler.raw.as_ref().unwrap());
-                                arg_index += 1;
-                            }
-                            pso::Descriptor::Image(image, _layout) => {
-                                let tex_ref = image.texture.as_ref();
-                                encoder.set_texture(arg_index, tex_ref);
-                                data.ptr = (&**tex_ref).as_ptr();
-                                arg_index += 1;
-                            }
-                            pso::Descriptor::CombinedImageSampler(image, _il, sampler) => {
-                                let binding = &bindings[&write.binding];
-                                if !binding
-                                    .content
-                                    .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
-                                {
-                                    //TODO: supporting arrays of combined image-samplers can be tricky.
-                                    // We need to scan both sampler and image sections of the encoder
-                                    // at the same time.
-                                    assert!(
-                                        arg_index
-                                            < (binding.res_offset as NSUInteger)
-                                                + (binding.count as NSUInteger)
-                                    );
-                                    encoder.set_sampler_state(
-                                        arg_index + binding.count as NSUInteger,
-                                        sampler.raw.as_ref().unwrap(),
-                                    );
-                                }
-                                let tex_ref = image.texture.as_ref();
-                                encoder.set_texture(arg_index, tex_ref);
-                                data.ptr = (&**tex_ref).as_ptr();
-                            }
-                            pso::Descriptor::TexelBuffer(view) => {
-                                encoder.set_texture(arg_index, &view.raw);
-                                data.ptr = (&**view.raw).as_ptr();
-                                arg_index += 1;
-                            }
-                            pso::Descriptor::Buffer(buffer, ref sub) => {
-                                let (buf_raw, buf_range) = buffer.as_bound();
-                                encoder.set_buffer(
-                                    arg_index,
-                                    buf_raw,
-                                    buf_range.start + sub.offset,
+                for (data, descriptor) in pool.write().resources
+                    [range.start as usize + arg_index as usize..range.end as usize]
+                    .iter_mut()
+                    .zip(op.descriptors)
+                {
+                    match *descriptor.borrow() {
+                        pso::Descriptor::Sampler(sampler) => {
+                            debug_assert!(!bindings[&op.binding]
+                                .content
+                                .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
+                            encoder.set_sampler_state(arg_index, sampler.raw.as_ref().unwrap());
+                            arg_index += 1;
+                        }
+                        pso::Descriptor::Image(image, _layout) => {
+                            let tex_ref = image.texture.as_ref();
+                            encoder.set_texture(arg_index, tex_ref);
+                            data.ptr = (&**tex_ref).as_ptr();
+                            arg_index += 1;
+                        }
+                        pso::Descriptor::CombinedImageSampler(image, _il, sampler) => {
+                            let binding = &bindings[&op.binding];
+                            if !binding
+                                .content
+                                .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
+                            {
+                                //TODO: supporting arrays of combined image-samplers can be tricky.
+                                // We need to scan both sampler and image sections of the encoder
+                                // at the same time.
+                                assert!(
+                                    arg_index
+                                        < (binding.res_offset as NSUInteger)
+                                            + (binding.count as NSUInteger)
                                 );
-                                data.ptr = (&**buf_raw).as_ptr();
-                                arg_index += 1;
+                                encoder.set_sampler_state(
+                                    arg_index + binding.count as NSUInteger,
+                                    sampler.raw.as_ref().unwrap(),
+                                );
                             }
+                            let tex_ref = image.texture.as_ref();
+                            encoder.set_texture(arg_index, tex_ref);
+                            data.ptr = (&**tex_ref).as_ptr();
+                        }
+                        pso::Descriptor::TexelBuffer(view) => {
+                            encoder.set_texture(arg_index, &view.raw);
+                            data.ptr = (&**view.raw).as_ptr();
+                            arg_index += 1;
+                        }
+                        pso::Descriptor::Buffer(buffer, ref sub) => {
+                            let (buf_raw, buf_range) = buffer.as_bound();
+                            encoder.set_buffer(arg_index, buf_raw, buf_range.start + sub.offset);
+                            data.ptr = (&**buf_raw).as_ptr();
+                            arg_index += 1;
                         }
                     }
                 }
@@ -2368,13 +2357,8 @@ impl hal::device::Device<Backend> for Device {
         }
     }
 
-    unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
-    where
-        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, Backend>>,
-    {
-        for _copy in copies {
-            unimplemented!()
-        }
+    unsafe fn copy_descriptor_set<'a>(&self, _op: pso::DescriptorSetCopy<'a, Backend>) {
+        unimplemented!()
     }
 
     unsafe fn destroy_descriptor_pool(&self, _pool: n::DescriptorPool) {}

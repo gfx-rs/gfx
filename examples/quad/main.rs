@@ -289,7 +289,7 @@ where
             }
             .expect("Can't create descriptor pool"),
         );
-        let desc_set = unsafe { desc_pool.allocate_set(&set_layout) }.unwrap();
+        let mut desc_set = unsafe { desc_pool.allocate_set(&set_layout) }.unwrap();
 
         // Buffer allocations
         println!("Memory types: {:?}", memory_types);
@@ -438,15 +438,15 @@ where
         );
 
         unsafe {
-            device.write_descriptor_sets(iter::once(pso::DescriptorSetWrite {
-                set: &desc_set,
+            device.write_descriptor_set(pso::DescriptorSetWrite {
+                set: &mut desc_set,
                 binding: 0,
                 array_offset: 0,
                 descriptors: vec![
                     pso::Descriptor::Image(&*image_srv, i::Layout::ShaderReadOnlyOptimal),
                     pso::Descriptor::Sampler(&*sampler),
                 ],
-            }));
+            });
         }
 
         // copy buffer to texture

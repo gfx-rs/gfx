@@ -879,6 +879,8 @@ pub struct UsedResource {
 #[derive(Debug)]
 pub enum DescriptorSet {
     Emulated {
+        //TODO: consider storing the descriptors right here,
+        // to reduce the amount of locking, e.g. in descriptor binding.
         pool: Arc<RwLock<DescriptorEmulatedPoolInner>>,
         layouts: Arc<Vec<DescriptorLayout>>,
         resources: ResourceData<Range<PoolResourceIndex>>,

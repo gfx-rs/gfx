@@ -863,14 +863,14 @@ impl<B: Backend> Uniform<B> {
         let buffer = Some(buffer);
 
         desc.write_to_state(
-            vec![DescSetWrite {
+            DescSetWrite {
                 binding,
                 array_offset: 0,
                 descriptors: Some(pso::Descriptor::Buffer(
                     buffer.as_ref().unwrap().get_buffer(),
                     buffer::SubRange::WHOLE,
                 )),
-            }],
+            },
             &mut device.borrow_mut().device,
         );
 
@@ -950,23 +950,20 @@ struct DescSetWrite<W> {
 impl<B: Backend> DescSet<B> {
     unsafe fn write_to_state<'a, 'b: 'a, W>(
         &'b mut self,
-        write: Vec<DescSetWrite<W>>,
+        d: DescSetWrite<W>,
         device: &mut B::Device,
     ) where
         W: IntoIterator,
+        W::IntoIter: ExactSizeIterator,
         W::Item: std::borrow::Borrow<pso::Descriptor<'a, B>>,
     {
-        let set = self.set.as_ref().unwrap();
-        let write: Vec<_> = write
-            .into_iter()
-            .map(|d| pso::DescriptorSetWrite {
-                binding: d.binding,
-                array_offset: d.array_offset,
-                descriptors: d.descriptors,
-                set,
-            })
-            .collect();
-        device.write_descriptor_sets(write);
+        let set = self.set.as_mut().unwrap();
+        device.write_descriptor_set(pso::DescriptorSetWrite {
+            binding: d.binding,
+            array_offset: d.array_offset,
+            descriptors: d.descriptors,
+            set,
+        });
     }
 
     fn get_layout(&self) -> &B::DescriptorSetLayout {
@@ -1049,21 +1046,22 @@ impl<B: Backend> ImageState<B> {
             .expect("Can't create sampler");
 
         desc.write_to_state(
-            vec![
-                DescSetWrite {
-                    binding: 0,
-                    array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Image(
-                        &image_view,
-                        i::Layout::ShaderReadOnlyOptimal,
-                    )),
-                },
-                DescSetWrite {
-                    binding: 1,
-                    array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Sampler(&sampler)),
-                },
-            ],
+            DescSetWrite {
+                binding: 0,
+                array_offset: 0,
+                descriptors: Some(pso::Descriptor::Image(
+                    &image_view,
+                    i::Layout::ShaderReadOnlyOptimal,
+                )),
+            },
+            device,
+        );
+        desc.write_to_state(
+            DescSetWrite {
+                binding: 1,
+                array_offset: 0,
+                descriptors: Some(pso::Descriptor::Sampler(&sampler)),
+            },
             device,
         );
 

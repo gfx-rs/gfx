@@ -6,8 +6,6 @@ use hal::{
     pass, pso, window as w,
 };
 
-use parking_lot::Mutex;
-
 use std::{borrow::Borrow, cell::Cell, ops::Range, sync::Arc};
 
 pub type TextureTarget = u32;
@@ -242,7 +240,7 @@ pub(crate) enum DescSetBindings {
 pub struct DescriptorSet {
     pub(crate) layout: DescriptorSetLayout,
     //TODO: use `UnsafeCell` instead
-    pub(crate) bindings: Arc<Mutex<Vec<DescSetBindings>>>,
+    pub(crate) bindings: Vec<DescSetBindings>,
 }
 
 #[derive(Debug)]
@@ -255,7 +253,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
     ) -> Result<DescriptorSet, pso::AllocationError> {
         Ok(DescriptorSet {
             layout: Arc::clone(layout),
-            bindings: Arc::new(Mutex::new(Vec::new())),
+            bindings: Vec::new(),
         })
     }
 

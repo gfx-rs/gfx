@@ -1676,124 +1676,106 @@ impl d::Device<B> for Device {
         Ok(Arc::new(bindings))
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, writes: I)
+    unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>,
+        I: IntoIterator,
+        I::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        for write in writes {
-            let mut bindings = write.set.bindings.lock();
-            let mut layout_index = write
-                .set
-                .layout
-                .binary_search_by_key(&write.binding, |b| b.binding)
-                .unwrap();
-            let mut array_offset = write.array_offset;
+        let mut layout_index = op
+            .set
+            .layout
+            .binary_search_by_key(&op.binding, |b| b.binding)
+            .unwrap();
+        let mut array_offset = op.array_offset;
 
-            for descriptor in write.descriptors {
-                let binding_layout = &write.set.layout[layout_index];
-                match *descriptor.borrow() {
-                    pso::Descriptor::Buffer(buffer, ref sub) => {
-                        let (raw_buffer, buffer_range) = buffer.as_bound();
-                        let range = crate::resolve_sub_range(sub, buffer_range);
+        for descriptor in op.descriptors {
+            let binding_layout = &op.set.layout[layout_index];
+            let binding = match *descriptor.borrow() {
+                pso::Descriptor::Buffer(buffer, ref sub) => {
+                    let (raw_buffer, buffer_range) = buffer.as_bound();
+                    let range = crate::resolve_sub_range(sub, buffer_range);
 
-                        let register = match binding_layout.ty {
-                            pso::DescriptorType::Buffer { ty, .. } => match ty {
-                                pso::BufferDescriptorType::Uniform => {
-                                    n::BindingRegister::UniformBuffers
-                                }
-                                pso::BufferDescriptorType::Storage { .. } => {
-                                    n::BindingRegister::StorageBuffers
-                                }
-                            },
-                            other => {
-                                panic!("Can't write buffer into descriptor of type {:?}", other)
+                    let register = match binding_layout.ty {
+                        pso::DescriptorType::Buffer { ty, .. } => match ty {
+                            pso::BufferDescriptorType::Uniform => {
+                                n::BindingRegister::UniformBuffers
                             }
-                        };
+                            pso::BufferDescriptorType::Storage { .. } => {
+                                n::BindingRegister::StorageBuffers
+                            }
+                        },
+                        other => {
+                            panic!("Can't write buffer into descriptor of type {:?}", other)
+                        }
+                    };
 
-                        bindings.push(n::DescSetBindings::Buffer {
-                            register,
-                            buffer: raw_buffer,
-                            offset: range.start as i32,
-                            size: (range.end - range.start) as i32,
-                        });
+                    n::DescSetBindings::Buffer {
+                        register,
+                        buffer: raw_buffer,
+                        offset: range.start as i32,
+                        size: (range.end - range.start) as i32,
                     }
-                    pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
-                        match *view {
-                            n::ImageView::Texture { target, raw, .. } => {
-                                bindings.push(n::DescSetBindings::Texture(raw, target))
-                            }
-                            n::ImageView::Renderbuffer { .. } => {
-                                panic!("Texture doesn't support shader binding")
-                            }
-                        }
-                        match *sampler {
-                            n::FatSampler::Sampler(sampler) => {
-                                bindings.push(n::DescSetBindings::Sampler(sampler))
-                            }
-                            n::FatSampler::Info(ref info) => {
-                                bindings.push(n::DescSetBindings::SamplerDesc(info.clone()))
-                            }
-                        }
-                    }
-                    pso::Descriptor::Image(view, _layout) => match *view {
-                        n::ImageView::Texture { target, raw, .. } => {
-                            bindings.push(n::DescSetBindings::Texture(raw, target))
-                        }
+                }
+                pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
+                    match *view {
+                        n::ImageView::Texture { target, raw, .. } => op
+                            .set
+                            .bindings
+                            .push(n::DescSetBindings::Texture(raw, target)),
                         n::ImageView::Renderbuffer { .. } => {
                             panic!("Texture doesn't support shader binding")
                         }
-                    },
-                    pso::Descriptor::Sampler(sampler) => match *sampler {
-                        n::FatSampler::Sampler(sampler) => {
-                            bindings.push(n::DescSetBindings::Sampler(sampler))
-                        }
+                    }
+                    match *sampler {
+                        n::FatSampler::Sampler(sampler) => n::DescSetBindings::Sampler(sampler),
                         n::FatSampler::Info(ref info) => {
-                            bindings.push(n::DescSetBindings::SamplerDesc(info.clone()))
+                            n::DescSetBindings::SamplerDesc(info.clone())
                         }
-                    },
-                    pso::Descriptor::TexelBuffer(_view) => unimplemented!(),
+                    }
                 }
+                pso::Descriptor::Image(view, _layout) => match *view {
+                    n::ImageView::Texture { target, raw, .. } => {
+                        n::DescSetBindings::Texture(raw, target)
+                    }
+                    n::ImageView::Renderbuffer { .. } => {
+                        panic!("Texture doesn't support shader binding")
+                    }
+                },
+                pso::Descriptor::Sampler(sampler) => match *sampler {
+                    n::FatSampler::Sampler(sampler) => n::DescSetBindings::Sampler(sampler),
+                    n::FatSampler::Info(ref info) => n::DescSetBindings::SamplerDesc(info.clone()),
+                },
+                pso::Descriptor::TexelBuffer(_view) => unimplemented!(),
+            };
 
-                array_offset += 1;
-                if array_offset == binding_layout.count {
-                    array_offset = 0;
-                    layout_index += 1;
-                }
+            //TODO: overwrite instead of pushing on top
+            op.set.bindings.push(binding);
+
+            array_offset += 1;
+            if array_offset == binding_layout.count {
+                array_offset = 0;
+                layout_index += 1;
             }
         }
     }
 
-    unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
-    where
-        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, B>>,
-    {
-        for copy in copies {
-            let src_set = &copy.src_set;
-            let dst_set = &copy.dst_set;
-            if std::ptr::eq(src_set, dst_set) {
-                panic!("copying within same descriptor set is not currently supported");
-            }
-
-            let src_bindings = src_set.bindings.lock();
-            let mut dst_bindings = dst_set.bindings.lock();
-
-            let count = copy.count;
-
-            // TODO: add support for array bindings when the OpenGL backend gets them
-            let src_start = copy.src_binding as usize;
-            let src_end = src_start + count;
-            assert!(src_end <= src_bindings.len());
-
-            let src_slice = &src_bindings[src_start..src_end];
-
-            let dst_start = copy.dst_binding as usize;
-            let dst_end = dst_start + count;
-            assert!(dst_end <= dst_bindings.len());
-
-            dst_bindings[dst_start..dst_end].clone_from_slice(src_slice);
+    unsafe fn copy_descriptor_set<'a>(&self, op: pso::DescriptorSetCopy<'a, B>) {
+        if std::ptr::eq(op.src_set, &*op.dst_set) {
+            panic!("copying within same descriptor set is not currently supported");
         }
+
+        // TODO: add support for array bindings when the OpenGL backend gets them
+        let src_start = op.src_binding as usize;
+        let src_end = src_start + op.count;
+        assert!(src_end <= op.src_set.bindings.len());
+
+        let src_slice = &op.src_set.bindings[src_start..src_end];
+
+        let dst_start = op.dst_binding as usize;
+        let dst_end = dst_start + op.count;
+        assert!(dst_end <= op.dst_set.bindings.len());
+
+        op.dst_set.bindings[dst_start..dst_end].clone_from_slice(src_slice);
     }
 
     fn create_semaphore(&self) -> Result<n::Semaphore, d::OutOfMemory> {

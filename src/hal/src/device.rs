@@ -554,18 +554,15 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Destroy a descriptor set layout object
     unsafe fn destroy_descriptor_set_layout(&self, layout: B::DescriptorSetLayout);
 
-    /// Specifying the parameters of a descriptor set write operation
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
+    /// Specifying the parameters of a descriptor set write operation.
+    unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>;
+        I: IntoIterator,
+        I::IntoIter: ExactSizeIterator,
+        I::Item: Borrow<pso::Descriptor<'a, B>>;
 
-    /// Structure specifying a copy descriptor set operation
-    unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
-    where
-        I: IntoIterator<Item = pso::DescriptorSetCopy<'a, B>>,
-        I::IntoIter: ExactSizeIterator;
+    /// Structure specifying a copy descriptor set operation.
+    unsafe fn copy_descriptor_set<'a>(&self, op: pso::DescriptorSetCopy<'a, B>);
 
     /// Map a memory object into application address space
     ///

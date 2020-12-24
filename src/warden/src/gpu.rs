@@ -774,7 +774,7 @@ impl<B: hal::Backend> Scene<B> {
                 } => {
                     // create a descriptor set
                     let (ref binding_indices, ref set_layout) = resources.desc_set_layouts[layout];
-                    let desc_set = unsafe {
+                    let mut desc_set = unsafe {
                         resources
                             .desc_pools
                             .get_mut(pool)
@@ -786,11 +786,10 @@ impl<B: hal::Backend> Scene<B> {
                         set_layout
                     ));
                     // fill it up
-                    let mut writes = Vec::new();
                     let mut views = Vec::new();
                     for (&binding, range) in binding_indices.iter().zip(data) {
-                        writes.push(hal::pso::DescriptorSetWrite {
-                            set: &desc_set,
+                        let write = hal::pso::DescriptorSetWrite {
+                            set: &mut desc_set,
                             binding,
                             array_offset: 0,
                             descriptors: match *range {
@@ -831,10 +830,10 @@ impl<B: hal::Backend> Scene<B> {
                                     })
                                     .collect::<Vec<_>>(),
                             },
-                        });
-                    }
-                    unsafe {
-                        device.write_descriptor_sets(writes);
+                        };
+                        unsafe {
+                            device.write_descriptor_set(write);
+                        }
                     }
                     resources.desc_sets.insert(
                         name.clone(),

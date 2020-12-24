@@ -4161,6 +4161,8 @@ impl DescriptorSet {
 
 #[derive(Debug)]
 pub struct DescriptorPool {
+    //TODO: do we need this in the pool?
+    // if the sets owned their data, we could make this just `Vec<Descriptor>`
     handles: Vec<Descriptor>,
     allocator: RangeAllocator<DescriptorIndex>,
 }
