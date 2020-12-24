@@ -1936,7 +1936,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn set_event(&self, event: &n::Event) -> Result<(), d::OutOfMemory> {
+    unsafe fn set_event(&self, event: &mut n::Event) -> Result<(), d::OutOfMemory> {
         let result = self.shared.raw.set_event(event.0);
         match result {
             Ok(()) => Ok(()),
@@ -1946,7 +1946,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn reset_event(&self, event: &n::Event) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_event(&self, event: &mut n::Event) -> Result<(), d::OutOfMemory> {
         let result = self.shared.raw.reset_event(event.0);
         match result {
             Ok(()) => Ok(()),

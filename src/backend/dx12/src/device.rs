@@ -18,16 +18,8 @@ use winapi::{
 
 use auxil::{spirv_cross_specialize_ast, ShaderStage};
 use hal::{
-    buffer, device as d, format,
-    format::Aspects,
-    image, memory,
-    memory::Requirements,
-    pass,
-    pool::CommandPoolCreateFlags,
-    pso,
-    pso::VertexInputRate,
-    query,
-    queue::{CommandQueue as _, QueueFamilyId},
+    buffer, device as d, format, format::Aspects, image, memory, memory::Requirements, pass,
+    pool::CommandPoolCreateFlags, pso, pso::VertexInputRate, query, queue::QueueFamilyId,
     window as w,
 };
 
@@ -3021,7 +3013,7 @@ impl d::Device<B> for Device {
                 target_binding += 1;
                 offset = 0;
             }
-            let mut bind_info = &mut op.set.binding_infos[target_binding];
+            let bind_info = &mut op.set.binding_infos[target_binding];
             let mut src_cbv = None;
             let mut src_srv = None;
             let mut src_uav = None;
@@ -3406,11 +3398,11 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &mut ()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &mut ()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
@@ -3572,7 +3564,7 @@ impl d::Device<B> for Device {
 
     fn wait_idle(&self) -> Result<(), d::OutOfMemory> {
         for queue in &self.queues {
-            queue.wait_idle()?;
+            queue.wait_idle_impl()?;
         }
         Ok(())
     }

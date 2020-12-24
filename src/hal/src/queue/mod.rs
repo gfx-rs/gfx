@@ -135,5 +135,5 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<Option<Suboptimal>, PresentError>;
 
     /// Wait for the queue to be idle.
-    fn wait_idle(&self) -> Result<(), OutOfMemory>;
+    fn wait_idle(&mut self) -> Result<(), OutOfMemory>;
 }

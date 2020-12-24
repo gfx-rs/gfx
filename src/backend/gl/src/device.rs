@@ -1904,11 +1904,11 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &mut ()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &mut ()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 

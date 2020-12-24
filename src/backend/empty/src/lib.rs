@@ -184,7 +184,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
-    fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
+    fn wait_idle(&mut self) -> Result<(), device::OutOfMemory> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }
@@ -441,11 +441,11 @@ impl device::Device<Backend> for Device {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn set_event(&self, _: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn set_event(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn reset_event(&self, _: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_event(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 

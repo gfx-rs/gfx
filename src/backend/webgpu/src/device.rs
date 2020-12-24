@@ -465,14 +465,14 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn set_event(
         &self,
-        _event: &<Backend as hal::Backend>::Event,
+        _event: &mut <Backend as hal::Backend>::Event,
     ) -> Result<(), OutOfMemory> {
         todo!()
     }
 
     unsafe fn reset_event(
         &self,
-        _event: &<Backend as hal::Backend>::Event,
+        _event: &mut <Backend as hal::Backend>::Event,
     ) -> Result<(), OutOfMemory> {
         todo!()
     }
@@ -500,7 +500,7 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    fn wait_idle(&self) -> Result<(), OutOfMemory> {
+    fn wait_idle(&mut self) -> Result<(), OutOfMemory> {
         todo!()
     }
 

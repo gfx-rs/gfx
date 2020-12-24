@@ -1502,7 +1502,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn wait_idle(&self) -> Result<(), OutOfMemory> {
+    fn wait_idle(&mut self) -> Result<(), OutOfMemory> {
         match unsafe { self.device.raw.queue_wait_idle(*self.raw) } {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host),

@@ -1009,6 +1009,7 @@ unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 //TODO: review the atomic ordering
+//TODO: reconsider if Arc<Atomic> is needed
 #[derive(Debug)]
 pub struct Event(pub(crate) Arc<AtomicBool>);
 

@@ -471,6 +471,20 @@ impl CommandQueue {
         self.idle_fence.destroy();
         self.raw.destroy();
     }
+
+    fn wait_idle_impl(&self) -> Result<(), hal::device::OutOfMemory> {
+        self.raw.signal(self.idle_fence, 1);
+        assert_eq!(
+            winerror::S_OK,
+            self.idle_fence.set_event_on_completion(self.idle_event, 1)
+        );
+
+        unsafe {
+            synchapi::WaitForSingleObject(self.idle_event.0, winbase::INFINITE);
+        }
+
+        Ok(())
+    }
 }
 
 unsafe impl Send for CommandQueue {}
@@ -516,18 +530,8 @@ impl q::CommandQueue<Backend> for CommandQueue {
         surface.present(image).map(|()| None)
     }
 
-    fn wait_idle(&self) -> Result<(), hal::device::OutOfMemory> {
-        self.raw.signal(self.idle_fence, 1);
-        assert_eq!(
-            winerror::S_OK,
-            self.idle_fence.set_event_on_completion(self.idle_event, 1)
-        );
-
-        unsafe {
-            synchapi::WaitForSingleObject(self.idle_event.0, winbase::INFINITE);
-        }
-
-        Ok(())
+    fn wait_idle(&mut self) -> Result<(), hal::device::OutOfMemory> {
+        self.wait_idle_impl()
     }
 }
 

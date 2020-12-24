@@ -3014,13 +3014,13 @@ impl hal::device::Device<Backend> for Device {
         Ok(event.0.load(Ordering::Acquire))
     }
 
-    unsafe fn set_event(&self, event: &n::Event) -> Result<(), d::OutOfMemory> {
+    unsafe fn set_event(&self, event: &mut n::Event) -> Result<(), d::OutOfMemory> {
         event.0.store(true, Ordering::Release);
         self.shared.queue_blocker.lock().triage();
         Ok(())
     }
 
-    unsafe fn reset_event(&self, event: &n::Event) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_event(&self, event: &mut n::Event) -> Result<(), d::OutOfMemory> {
         Ok(event.0.store(false, Ordering::Release))
     }
 

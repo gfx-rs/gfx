@@ -1120,7 +1120,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         surface.present(image, &self.share.context)
     }
 
-    fn wait_idle(&self) -> Result<(), hal::device::OutOfMemory> {
+    fn wait_idle(&mut self) -> Result<(), hal::device::OutOfMemory> {
         unsafe {
             self.share.context.finish();
         }

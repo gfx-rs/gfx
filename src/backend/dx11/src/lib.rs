@@ -1184,7 +1184,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
-    fn wait_idle(&self) -> Result<(), hal::device::OutOfMemory> {
+    fn wait_idle(&mut self) -> Result<(), hal::device::OutOfMemory> {
         // unimplemented!()
         Ok(())
     }

@@ -2259,11 +2259,11 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, _event: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &mut ()) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, _event: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &mut ()) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
