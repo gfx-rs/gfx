@@ -307,13 +307,13 @@ where
 
         // TODO: check transitions: read/write mapping and vertex buffer read
         let buffer_memory = unsafe {
-            let memory = device
+            let mut memory = device
                 .allocate_memory(upload_type, buffer_req.size)
                 .unwrap();
             device
                 .bind_buffer_memory(&memory, 0, &mut positions_buffer)
                 .unwrap();
-            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
+            let mapping = device.map_memory(&mut memory, m::Segment::ALL).unwrap();
             ptr::copy_nonoverlapping(
                 positions.as_ptr() as *const u8,
                 mapping,
@@ -322,7 +322,7 @@ where
             device
                 .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
                 .unwrap();
-            device.unmap_memory(&memory);
+            device.unmap_memory(&mut memory);
             ManuallyDrop::new(memory)
         };
 

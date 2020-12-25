@@ -470,13 +470,13 @@ impl device::Device<Backend> for Device {
 
     unsafe fn map_memory(
         &self,
-        memory: &Memory,
+        memory: &mut Memory,
         segment: hal::memory::Segment,
     ) -> Result<*mut u8, device::MapError> {
         memory.map(segment)
     }
 
-    unsafe fn unmap_memory(&self, _memory: &Memory) {}
+    unsafe fn unmap_memory(&self, _memory: &mut Memory) {}
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where

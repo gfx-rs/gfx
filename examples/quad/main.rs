@@ -323,18 +323,18 @@ where
 
         // TODO: check transitions: read/write mapping and vertex buffer read
         let buffer_memory = unsafe {
-            let memory = device
+            let mut memory = device
                 .allocate_memory(upload_type, buffer_req.size)
                 .unwrap();
             device
                 .bind_buffer_memory(&memory, 0, &mut vertex_buffer)
                 .unwrap();
-            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
+            let mapping = device.map_memory(&mut memory, m::Segment::ALL).unwrap();
             ptr::copy_nonoverlapping(QUAD.as_ptr() as *const u8, mapping, buffer_len as usize);
             device
                 .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
                 .unwrap();
-            device.unmap_memory(&memory);
+            device.unmap_memory(&mut memory);
             ManuallyDrop::new(memory)
         };
 
@@ -362,13 +362,13 @@ where
 
         // copy image data into staging buffer
         let image_upload_memory = unsafe {
-            let memory = device
+            let mut memory = device
                 .allocate_memory(upload_type, image_mem_reqs.size)
                 .unwrap();
             device
                 .bind_buffer_memory(&memory, 0, &mut image_upload_buffer)
                 .unwrap();
-            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
+            let mapping = device.map_memory(&mut memory, m::Segment::ALL).unwrap();
             for y in 0..height as usize {
                 let row = &(*img)[y * (width as usize) * image_stride
                     ..(y + 1) * (width as usize) * image_stride];
@@ -381,7 +381,7 @@ where
             device
                 .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
                 .unwrap();
-            device.unmap_memory(&memory);
+            device.unmap_memory(&mut memory);
             ManuallyDrop::new(memory)
         };
 

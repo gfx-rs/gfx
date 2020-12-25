@@ -6,7 +6,7 @@ use hal::{
     pass, pso, window as w,
 };
 
-use std::{borrow::Borrow, cell::Cell, ops::Range, sync::Arc};
+use std::{borrow::Borrow, ops::Range, sync::Arc};
 
 pub type TextureTarget = u32;
 pub type TextureFormat = u32;
@@ -285,7 +285,7 @@ pub struct Memory {
     /// Allocation size
     pub(crate) size: u64,
     pub(crate) map_flags: u32,
-    pub(crate) emulate_map_allocation: Cell<Option<*mut u8>>,
+    pub(crate) emulate_map_allocation: Option<*mut u8>,
 }
 
 unsafe impl Send for Memory {}

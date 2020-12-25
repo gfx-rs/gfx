@@ -2139,13 +2139,13 @@ impl device::Device<Backend> for Device {
 
     unsafe fn map_memory(
         &self,
-        memory: &Memory,
+        memory: &mut Memory,
         segment: memory::Segment,
     ) -> Result<*mut u8, device::MapError> {
         Ok(memory.host_ptr.offset(segment.offset as isize))
     }
 
-    unsafe fn unmap_memory(&self, _memory: &Memory) {
+    unsafe fn unmap_memory(&self, _memory: &mut Memory) {
         // persistent mapping FTW
     }
 

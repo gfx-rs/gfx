@@ -1893,7 +1893,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn map_memory(
         &self,
-        memory: &n::Memory,
+        memory: &mut n::Memory,
         segment: memory::Segment,
     ) -> Result<*mut u8, d::MapError> {
         let range = memory.resolve(&segment);
@@ -1906,7 +1906,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(base_ptr.offset(range.start as _))
     }
 
-    unsafe fn unmap_memory(&self, memory: &n::Memory) {
+    unsafe fn unmap_memory(&self, memory: &mut n::Memory) {
         debug!("unmap_memory of size {}", memory.size);
     }
 

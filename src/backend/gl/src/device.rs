@@ -19,7 +19,7 @@ use glow::HasContext;
 use parking_lot::Mutex;
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
-use std::{borrow::Borrow, cell::Cell, ops::Range, slice, sync::Arc};
+use std::{borrow::Borrow, ops::Range, slice, sync::Arc};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -758,7 +758,7 @@ impl d::Device<B> for Device {
                     buffer: Some((raw, target)),
                     size,
                     map_flags,
-                    emulate_map_allocation: Cell::new(None),
+                    emulate_map_allocation: None,
                 })
             }
 
@@ -769,7 +769,7 @@ impl d::Device<B> for Device {
                     buffer: None,
                     size,
                     map_flags: 0,
-                    emulate_map_allocation: Cell::new(None),
+                    emulate_map_allocation: None,
                 })
             }
         }
@@ -1261,7 +1261,7 @@ impl d::Device<B> for Device {
 
     unsafe fn map_memory(
         &self,
-        memory: &n::Memory,
+        memory: &mut n::Memory,
         segment: memory::Segment,
     ) -> Result<*mut u8, d::MapError> {
         let gl = &self.share.context;
@@ -1272,12 +1272,12 @@ impl d::Device<B> for Device {
 
         let (buffer, target) = memory.buffer.expect("cannot map image memory");
         let ptr = if caps.emulate_map {
-            let ptr: *mut u8 = if let Some(ptr) = memory.emulate_map_allocation.get() {
+            let ptr: *mut u8 = if let Some(ptr) = memory.emulate_map_allocation {
                 ptr
             } else {
                 let ptr =
                     Box::into_raw(vec![0; memory.size as usize].into_boxed_slice()) as *mut u8;
-                memory.emulate_map_allocation.set(Some(ptr));
+                memory.emulate_map_allocation = Some(ptr);
                 ptr
             };
 
@@ -1296,14 +1296,14 @@ impl d::Device<B> for Device {
         Ok(ptr)
     }
 
-    unsafe fn unmap_memory(&self, memory: &n::Memory) {
+    unsafe fn unmap_memory(&self, memory: &mut n::Memory) {
         let gl = &self.share.context;
         let (buffer, target) = memory.buffer.expect("cannot unmap image memory");
 
         gl.bind_buffer(target, Some(buffer));
 
         if self.share.private_caps.emulate_map {
-            let ptr = memory.emulate_map_allocation.replace(None).unwrap();
+            let ptr = memory.emulate_map_allocation.take().unwrap();
             let _ = Box::from_raw(slice::from_raw_parts_mut(ptr, memory.size as usize));
         } else {
             gl.unmap_buffer(target);
@@ -1332,7 +1332,7 @@ impl d::Device<B> for Device {
             let size = segment.size.unwrap_or(mem.size - segment.offset);
 
             if self.share.private_caps.emulate_map {
-                let ptr = mem.emulate_map_allocation.get().unwrap();
+                let ptr = mem.emulate_map_allocation.unwrap();
                 let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);
                 gl.buffer_sub_data_u8_slice(target, offset as i32, slice);
             } else {
@@ -1366,7 +1366,7 @@ impl d::Device<B> for Device {
             let size = segment.size.unwrap_or(mem.size - segment.offset);
 
             if self.share.private_caps.emulate_map {
-                let ptr = mem.emulate_map_allocation.get().unwrap();
+                let ptr = mem.emulate_map_allocation.unwrap();
                 let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);
                 gl.get_buffer_sub_data(target, offset as i32, slice);
             } else {

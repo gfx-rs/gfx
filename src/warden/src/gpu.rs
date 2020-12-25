@@ -34,9 +34,9 @@ impl<'a, B: hal::Backend> FetchGuard<'a, B> {
 impl<'a, B: hal::Backend> Drop for FetchGuard<'a, B> {
     fn drop(&mut self) {
         let buffer = self.buffer.take().unwrap();
-        let memory = self.memory.take().unwrap();
+        let mut memory = self.memory.take().unwrap();
         unsafe {
-            self.device.unmap_memory(&memory);
+            self.device.unmap_memory(&mut memory);
             self.device.destroy_buffer(buffer);
             self.device.free_memory(memory);
         }
@@ -342,7 +342,7 @@ impl<B: hal::Backend> Scene<B> {
                             .iter()
                             .find(|i| upload_req.type_mask & (1 << i.0) != 0)
                             .unwrap();
-                        let upload_memory =
+                        let mut upload_memory =
                             unsafe { device.allocate_memory(upload_type, upload_req.size) }
                                 .unwrap();
 
@@ -351,13 +351,13 @@ impl<B: hal::Backend> Scene<B> {
                         // write the data
                         unsafe {
                             let mapping = device
-                                .map_memory(&upload_memory, memory::Segment::ALL)
+                                .map_memory(&mut upload_memory, memory::Segment::ALL)
                                 .unwrap();
                             File::open(data_path.join(data))
                                 .unwrap()
                                 .read_exact(slice::from_raw_parts_mut(mapping, size))
                                 .unwrap();
-                            device.unmap_memory(&upload_memory);
+                            device.unmap_memory(&mut upload_memory);
                         }
                         // add init commands
                         let final_state = b::Access::SHADER_READ;
@@ -500,7 +500,7 @@ impl<B: hal::Backend> Scene<B> {
                             .iter()
                             .find(|i| upload_req.type_mask & (1 << i.0) != 0)
                             .unwrap();
-                        let upload_memory =
+                        let mut upload_memory =
                             unsafe { device.allocate_memory(upload_type, upload_req.size) }
                                 .unwrap();
                         unsafe { device.bind_buffer_memory(&upload_memory, 0, &mut upload_buffer) }
@@ -509,7 +509,7 @@ impl<B: hal::Backend> Scene<B> {
                         unsafe {
                             let mut file = File::open(data_path.join(data)).unwrap();
                             let mapping = device
-                                .map_memory(&upload_memory, memory::Segment::ALL)
+                                .map_memory(&mut upload_memory, memory::Segment::ALL)
                                 .unwrap();
                             for y in 0..(h as usize * d as usize) {
                                 let slice = slice::from_raw_parts_mut(
@@ -518,7 +518,7 @@ impl<B: hal::Backend> Scene<B> {
                                 );
                                 file.read_exact(slice).unwrap();
                             }
-                            device.unmap_memory(&upload_memory);
+                            device.unmap_memory(&mut upload_memory);
                         }
                         // add init commands
                         let final_state =
@@ -1517,7 +1517,7 @@ impl<B: hal::Backend> Scene<B> {
             .iter()
             .find(|i| down_req.type_mask & (1 << i.0) != 0)
             .unwrap();
-        let down_memory =
+        let mut down_memory =
             unsafe { self.device.allocate_memory(download_type, down_req.size) }.unwrap();
 
         unsafe {
@@ -1580,8 +1580,11 @@ impl<B: hal::Backend> Scene<B> {
             self.device.destroy_command_pool(command_pool);
         }
 
-        let mapping =
-            unsafe { self.device.map_memory(&down_memory, memory::Segment::ALL) }.unwrap();
+        let mapping = unsafe {
+            self.device
+                .map_memory(&mut down_memory, memory::Segment::ALL)
+        }
+        .unwrap();
 
         FetchGuard {
             device: &mut self.device,
@@ -1629,11 +1632,11 @@ impl<B: hal::Backend> Scene<B> {
             .iter()
             .find(|i| down_req.type_mask & (1 << i.0) != 0)
             .unwrap();
-        let down_memory =
+        let mut down_memory =
             unsafe { self.device.allocate_memory(download_type, down_req.size) }.unwrap();
         unsafe {
             self.device
-                .bind_buffer_memory(&down_memory, 0, &mut down_buffer)
+                .bind_buffer_memory(&mut down_memory, 0, &mut down_buffer)
         }
         .unwrap();
 
@@ -1719,8 +1722,11 @@ impl<B: hal::Backend> Scene<B> {
             self.device.destroy_command_pool(command_pool);
         }
 
-        let mapping =
-            unsafe { self.device.map_memory(&down_memory, memory::Segment::ALL) }.unwrap();
+        let mapping = unsafe {
+            self.device
+                .map_memory(&mut down_memory, memory::Segment::ALL)
+        }
+        .unwrap();
 
         FetchGuard {
             device: &mut self.device,

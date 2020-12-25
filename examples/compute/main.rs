@@ -131,7 +131,7 @@ fn main() {
         (pipeline_layout, pipeline, set_layout, desc_pool)
     };
 
-    let (staging_memory, staging_buffer, _staging_size) = unsafe {
+    let (mut staging_memory, staging_buffer, _staging_size) = unsafe {
         create_buffer::<back::Backend>(
             &device,
             &memory_properties.memory_types,
@@ -144,14 +144,14 @@ fn main() {
 
     unsafe {
         let mapping = device
-            .map_memory(&staging_memory, memory::Segment::ALL)
+            .map_memory(&mut staging_memory, memory::Segment::ALL)
             .unwrap();
         ptr::copy_nonoverlapping(
             numbers.as_ptr() as *const u8,
             mapping,
             numbers.len() * stride as usize,
         );
-        device.unmap_memory(&staging_memory);
+        device.unmap_memory(&mut staging_memory);
     }
 
     let (device_memory, device_buffer, _device_buffer_size) = unsafe {
@@ -239,13 +239,13 @@ fn main() {
 
     unsafe {
         let mapping = device
-            .map_memory(&staging_memory, memory::Segment::ALL)
+            .map_memory(&mut staging_memory, memory::Segment::ALL)
             .unwrap();
         println!(
             "Times: {:?}",
             slice::from_raw_parts::<u32>(mapping as *const u8 as *const u32, numbers.len()),
         );
-        device.unmap_memory(&staging_memory);
+        device.unmap_memory(&mut staging_memory);
     }
 
     unsafe {

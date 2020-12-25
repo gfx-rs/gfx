@@ -3224,7 +3224,7 @@ impl d::Device<B> for Device {
 
     unsafe fn map_memory(
         &self,
-        memory: &r::Memory,
+        memory: &mut r::Memory,
         segment: memory::Segment,
     ) -> Result<*mut u8, d::MapError> {
         let mem = memory
@@ -3239,7 +3239,7 @@ impl d::Device<B> for Device {
         Ok(ptr as *mut _)
     }
 
-    unsafe fn unmap_memory(&self, memory: &r::Memory) {
+    unsafe fn unmap_memory(&self, memory: &mut r::Memory) {
         if let Some(mem) = memory.resource {
             (*mem).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
         }

@@ -1764,7 +1764,7 @@ impl d::Device<B> for Device {
 
     unsafe fn map_memory(
         &self,
-        memory: &n::Memory,
+        memory: &mut n::Memory,
         segment: Segment,
     ) -> Result<*mut u8, d::MapError> {
         let result = self.shared.raw.map_memory(
@@ -1783,7 +1783,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn unmap_memory(&self, memory: &n::Memory) {
+    unsafe fn unmap_memory(&self, memory: &mut n::Memory) {
         self.shared.raw.unmap_memory(memory.raw)
     }
 

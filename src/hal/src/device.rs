@@ -567,7 +567,11 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Map a memory object into application address space
     ///
     /// Call `map_memory()` to retrieve a host virtual address pointer to a region of a mappable memory object
-    unsafe fn map_memory(&self, memory: &B::Memory, segment: Segment) -> Result<*mut u8, MapError>;
+    unsafe fn map_memory(
+        &self,
+        memory: &mut B::Memory,
+        segment: Segment,
+    ) -> Result<*mut u8, MapError>;
 
     /// Flush mapped memory ranges
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
@@ -582,7 +586,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         I::Item: Borrow<(&'a B::Memory, Segment)>;
 
     /// Unmap a memory object once host access to it is no longer needed by the application
-    unsafe fn unmap_memory(&self, memory: &B::Memory);
+    unsafe fn unmap_memory(&self, memory: &mut B::Memory);
 
     /// Create a new semaphore object.
     fn create_semaphore(&self) -> Result<B::Semaphore, OutOfMemory>;
