@@ -151,6 +151,16 @@ impl Device {
             panic!("Error linking program: {:?}", err);
         }
 
+        let linked_ok = unsafe { gl.get_program_link_status(program) };
+        let log = unsafe { gl.get_program_info_log(program) };
+        if !linked_ok {
+            error!("\tLog: {}", log);
+            return Err(pso::CreationError::Other);
+        }
+        if !log.is_empty() {
+            warn!("\tLog: {}", log);
+        }
+
         if !self
             .share
             .legacy_features
@@ -177,17 +187,7 @@ impl Device {
             }
         }
 
-        let linked_ok = unsafe { gl.get_program_link_status(program) };
-        let log = unsafe { gl.get_program_info_log(program) };
-        if linked_ok {
-            if !log.is_empty() {
-                warn!("\tLog: {}", log);
-            }
-            Ok((program, sampler_map))
-        } else {
-            error!("\tLog: {}", log);
-            Err(pso::CreationError::Other)
-        }
+        Ok((program, sampler_map))
     }
 
     fn bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
