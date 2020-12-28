@@ -492,7 +492,7 @@ impl hal::device::Device<Backend> for Device {
         _pool: &<Backend as hal::Backend>::QueryPool,
         _queries: Range<query::Id>,
         _data: &mut [u8],
-        _stride: buffer::Offset,
+        _stride: buffer::Stride,
         _flags: query::ResultFlags,
     ) -> Result<bool, WaitError> {
         todo!()
