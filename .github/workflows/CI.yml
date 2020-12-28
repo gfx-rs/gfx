@@ -39,6 +39,17 @@ jobs:
       - run: rustup target add wasm32-unknown-unknown
       - run: cargo build --manifest-path examples/Cargo.toml --features gl --target wasm32-unknown-unknown --bin quad
 
+  webgpu_backend_build:
+    name: WebGPU
+    runs-on: ubuntu-18.04
+    continue-on-error: true
+    env:
+      RUSTFLAGS: --cfg=web_sys_unstable_apis
+    steps:
+      - uses: actions/checkout@v2
+      - run: rustup target add wasm32-unknown-unknown
+      - run: cargo build --manifest-path src/backend/webgpu/Cargo.toml --target wasm32-unknown-unknown
+
   check-advisories:
     name: Advisory Check
     runs-on: ubuntu-18.04
