@@ -148,10 +148,12 @@ bitflags!(
     pub struct ImageFeature: u32 {
         /// Image view can be sampled.
         const SAMPLED = 0x1;
-        /// Image view can be used as storage image.
+        /// Image view can be used as storage image with exclusive read & write access.
         const STORAGE = 0x2;
-        /// Image view can be used as storage image (with atomics).
+        /// Image view can be used as storage image with atomics.
         const STORAGE_ATOMIC = 0x4;
+        /// Image view can be used as storage image with simultaneous read/write access.
+        const STORAGE_READ_WRITE = 0x8;
         /// Image view can be used as color and input attachment.
         const COLOR_ATTACHMENT = 0x80;
         /// Image view can be used as color (with blending) and input attachment.

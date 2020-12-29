@@ -378,7 +378,12 @@ pub fn map_query_result_flags(flags: query::ResultFlags) -> vk::QueryResultFlags
 }
 
 pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {
-    format::ImageFeature::from_bits_truncate(features.as_raw())
+    let bits = format::ImageFeature::from_bits_truncate(features.as_raw());
+    if bits.contains(format::ImageFeature::STORAGE) {
+        bits | format::ImageFeature::STORAGE_READ_WRITE
+    } else {
+        bits
+    }
 }
 
 pub fn map_buffer_features(features: vk::FormatFeatureFlags) -> format::BufferFeature {

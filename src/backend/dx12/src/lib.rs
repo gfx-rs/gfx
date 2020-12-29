@@ -1456,7 +1456,12 @@ impl FormatProperties {
                     props.buffer_features |= f::BufferFeature::STORAGE_TEXEL;
                 }
                 if can_image {
+                    // Since read-only storage is exposed as SRV, we can guarantee read-only storage without checking D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD first.
                     props.optimal_tiling |= f::ImageFeature::STORAGE;
+
+                    if data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0 {
+                        props.optimal_tiling |= f::ImageFeature::STORAGE_READ_WRITE;
+                    }
                 }
             }
             //TODO: blits, linear tiling
