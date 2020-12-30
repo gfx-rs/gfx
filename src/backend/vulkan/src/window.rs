@@ -1,46 +1,17 @@
-use std::{
-    borrow::Borrow,
-    fmt, hash,
-    os::raw::c_void,
-    sync::{Arc, Mutex},
-    time::Instant,
-};
+use std::{borrow::Borrow, fmt, os::raw::c_void, sync::Arc, time::Instant};
 
 use ash::{extensions::khr, version::DeviceV1_0 as _, vk};
 use hal::{format::Format, window as w};
-use smallvec::SmallVec;
 
 use crate::{
     conv, info, native, Backend, Device, Instance, PhysicalDevice, QueueFamily, RawDevice,
     RawInstance, VK_ENTRY,
 };
 
-#[derive(Debug, Default)]
-pub struct FramebufferCache {
-    // We expect exactly one framebuffer per frame, but can support more.
-    pub framebuffers: SmallVec<[vk::Framebuffer; 1]>,
-}
-
-#[derive(Debug, Default)]
-pub struct FramebufferCachePtr(pub Arc<Mutex<FramebufferCache>>);
-
-impl hash::Hash for FramebufferCachePtr {
-    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
-        (self.0.as_ref() as *const Mutex<FramebufferCache>).hash(hasher)
-    }
-}
-impl PartialEq for FramebufferCachePtr {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-    }
-}
-impl Eq for FramebufferCachePtr {}
-
 #[derive(Debug)]
 struct SurfaceFrame {
     image: vk::Image,
     view: vk::ImageView,
-    framebuffers: FramebufferCachePtr,
 }
 
 #[derive(Debug)]
@@ -53,15 +24,13 @@ pub struct SurfaceSwapchain {
 }
 
 impl SurfaceSwapchain {
-    unsafe fn release_resources(self, device: &ash::Device) -> Swapchain {
-        let _ = device.device_wait_idle();
-        device.destroy_fence(self.fence.0, None);
-        device.destroy_semaphore(self.semaphore.0, None);
+    unsafe fn release_resources(self, device: &RawDevice) -> Swapchain {
+        let _ = device.raw.device_wait_idle();
+        device.raw.destroy_fence(self.fence.0, None);
+        device.raw.destroy_semaphore(self.semaphore.0, None);
         for frame in self.frames {
-            device.destroy_image_view(frame.view, None);
-            for framebuffer in frame.framebuffers.0.lock().unwrap().framebuffers.drain(..) {
-                device.destroy_framebuffer(framebuffer, None);
-            }
+            device.raw.destroy_image_view(frame.view, None);
+            device.clear_framebuffers(|key| key.image_views.contains(&frame.view));
         }
         self.swapchain
     }
@@ -422,7 +391,7 @@ impl w::PresentationSurface<Backend> for Surface {
         let old = self
             .swapchain
             .take()
-            .map(|ssc| ssc.release_resources(&device.shared.raw));
+            .map(|ssc| ssc.release_resources(&device.shared));
 
         let (swapchain, images) = device.create_swapchain(self, config, old)?;
 
@@ -448,8 +417,7 @@ impl w::PresentationSurface<Backend> for Surface {
                         .unwrap();
                     SurfaceFrame {
                         image: view.image,
-                        view: view.view,
-                        framebuffers: Default::default(),
+                        view: view.raw,
                     }
                 })
                 .collect(),
@@ -460,7 +428,7 @@ impl w::PresentationSurface<Backend> for Surface {
 
     unsafe fn unconfigure_swapchain(&mut self, device: &Device) {
         if let Some(ssc) = self.swapchain.take() {
-            let swapchain = ssc.release_resources(&device.shared.raw);
+            let swapchain = ssc.release_resources(&device.shared);
             swapchain.functor.destroy_swapchain(swapchain.raw, None);
         }
     }
@@ -481,11 +449,6 @@ impl w::PresentationSurface<Backend> for Surface {
             Ok(()) => {
                 ssc.device.raw.reset_fences(fences).unwrap();
                 let frame = &ssc.frames[index as usize];
-                // We have just waited for the frame to be fully available on CPU.
-                // All the associated framebuffers are expected to be destroyed by now.
-                for framebuffer in frame.framebuffers.0.lock().unwrap().framebuffers.drain(..) {
-                    ssc.device.raw.destroy_framebuffer(framebuffer, None);
-                }
                 let image = Self::SwapchainImage {
                     index,
                     image: native::Image {
@@ -493,17 +456,16 @@ impl w::PresentationSurface<Backend> for Surface {
                         ty: vk::ImageType::TYPE_2D,
                         flags: vk::ImageCreateFlags::empty(),
                         extent: ssc.swapchain.extent,
+                        array_layers: 1,
                     },
                     view: native::ImageView {
+                        raw: frame.view,
                         image: frame.image,
-                        view: frame.view,
                         range: hal::image::SubresourceRange {
                             aspects: hal::format::Aspects::COLOR,
                             ..Default::default()
                         },
-                        owner: native::ImageViewOwner::Surface(FramebufferCachePtr(Arc::clone(
-                            &frame.framebuffers.0,
-                        ))),
+                        extent: ssc.swapchain.extent,
                     },
                 };
                 Ok((image, suboptimal))

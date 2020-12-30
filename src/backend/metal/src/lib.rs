@@ -468,7 +468,6 @@ impl hal::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type Framebuffer = native::Framebuffer;
 
     type Buffer = native::Buffer;
     type BufferView = native::BufferView;

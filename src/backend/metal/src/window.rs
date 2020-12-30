@@ -286,6 +286,11 @@ impl w::PresentationSurface<Backend> for Surface {
             view: native::ImageView {
                 texture,
                 mtl_format: self.swapchain_format,
+                extent: image::Extent {
+                    width: size.width as u32,
+                    height: size.height as u32,
+                    depth: 1,
+                },
             },
             drawable,
         };

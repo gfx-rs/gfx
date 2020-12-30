@@ -99,15 +99,6 @@ pub struct RenderPass {
     pub(crate) name: String,
 }
 
-#[derive(Debug)]
-pub struct Framebuffer {
-    pub(crate) extent: image::Extent,
-    pub(crate) attachments: Vec<metal::Texture>,
-}
-
-unsafe impl Send for Framebuffer {}
-unsafe impl Sync for Framebuffer {}
-
 #[derive(Clone, Debug)]
 pub struct ResourceData<T> {
     pub buffers: T,
@@ -381,6 +372,8 @@ unsafe impl Sync for BufferView {}
 pub struct ImageView {
     pub(crate) texture: metal::Texture,
     pub(crate) mtl_format: metal::MTLPixelFormat,
+    // This extent is always considered 2D.
+    pub(crate) extent: image::Extent,
 }
 
 unsafe impl Send for ImageView {}

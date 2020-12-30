@@ -1797,25 +1797,6 @@ impl hal::device::Device<Backend> for Device {
             })
     }
 
-    unsafe fn create_framebuffer<I>(
-        &self,
-        _render_pass: &n::RenderPass,
-        attachments: I,
-        extent: image::Extent,
-    ) -> Result<n::Framebuffer, d::OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<n::ImageView>,
-    {
-        Ok(n::Framebuffer {
-            extent,
-            attachments: attachments
-                .into_iter()
-                .map(|at| at.borrow().texture.clone())
-                .collect(),
-        })
-    }
-
     unsafe fn create_shader_module(
         &self,
         raw_data: &[u32],
@@ -2377,8 +2358,6 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn destroy_compute_pipeline(&self, _pipeline: n::ComputePipeline) {}
 
-    unsafe fn destroy_framebuffer(&self, _buffer: n::Framebuffer) {}
-
     unsafe fn destroy_semaphore(&self, _semaphore: n::Semaphore) {}
 
     unsafe fn allocate_memory(
@@ -2933,6 +2912,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(n::ImageView {
             texture,
             mtl_format,
+            extent: image.kind.level_extent(range.level_start),
         })
     }
 
@@ -3192,8 +3172,6 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn set_semaphore_name(&self, _semaphore: &mut n::Semaphore, _name: &str) {}
 
     unsafe fn set_fence_name(&self, _fence: &mut n::Fence, _name: &str) {}
-
-    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut n::Framebuffer, _name: &str) {}
 
     unsafe fn set_render_pass_name(&self, render_pass: &mut n::RenderPass, name: &str) {
         render_pass.name = name.to_string();

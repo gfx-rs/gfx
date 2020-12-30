@@ -22,12 +22,14 @@ name = "gfx_backend_vulkan"
 [dependencies]
 arrayvec = "0.5"
 byteorder = "1"
+fxhash = "0.2.1"
 log = { version = "0.4" }
 lazy_static = "1"
 shared_library = { version = "0.1.9", optional = true }
 ash = "0.31"
 hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
 smallvec = "1.0"
+parking_lot = "0.11"
 raw-window-handle = "0.3"
 inplace_it = "0.3.2"
 

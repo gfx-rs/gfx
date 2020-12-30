@@ -373,26 +373,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// which references the compute pipeline, has finished execution.
     unsafe fn destroy_compute_pipeline(&self, pipeline: B::ComputePipeline);
 
-    /// Create a new framebuffer object.
-    ///
-    /// # Safety
-    /// - `extent.width`, `extent.height` and `extent.depth` **must** be greater than `0`.
-    unsafe fn create_framebuffer<I>(
-        &self,
-        pass: &B::RenderPass,
-        attachments: I,
-        extent: image::Extent,
-    ) -> Result<B::Framebuffer, OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<B::ImageView>;
-
-    /// Destroy a framebuffer.
-    ///
-    /// The framebuffer shouldn't be destroy before any submitted command buffer,
-    /// which references the framebuffer, has finished execution.
-    unsafe fn destroy_framebuffer(&self, buf: B::Framebuffer);
-
     /// Create a new shader module object from the SPIR-V binary data.
     ///
     /// Once a shader module has been created, any [entry points][crate::pso::EntryPoint]
@@ -759,9 +739,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Associate a name with a fence, for easier debugging in external tools or with validation
     /// layers that can print a friendly name when referring to objects in error messages
     unsafe fn set_fence_name(&self, fence: &mut B::Fence, name: &str);
-    /// Associate a name with a framebuffer, for easier debugging in external tools or with
-    /// validation layers that can print a friendly name when referring to objects in error messages
-    unsafe fn set_framebuffer_name(&self, framebuffer: &mut B::Framebuffer, name: &str);
     /// Associate a name with a render pass, for easier debugging in external tools or with
     /// validation layers that can print a friendly name when referring to objects in error messages
     unsafe fn set_render_pass_name(&self, render_pass: &mut B::RenderPass, name: &str);

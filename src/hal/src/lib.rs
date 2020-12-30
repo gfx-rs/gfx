@@ -589,8 +589,6 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type ShaderModule: fmt::Debug + Any + Send + Sync;
     /// The corresponding render pass type for this backend.
     type RenderPass: fmt::Debug + Any + Send + Sync;
-    /// The corresponding framebuffer type for this backend.
-    type Framebuffer: fmt::Debug + Any + Send + Sync;
 
     /// The corresponding memory type for this backend.
     type Memory: fmt::Debug + Any + Send + Sync;

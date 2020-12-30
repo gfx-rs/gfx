@@ -534,12 +534,9 @@ impl CommandBuffer {
             // TODO: handle case where we don't do double-buffering?
             vec![glow::BACK_LEFT]
         } else {
-            subpass
-                .color_attachments
-                .iter()
-                .enumerate()
-                .map(|(index, _)| glow::COLOR_ATTACHMENT0 + index as u32)
-                .collect::<Vec<_>>()
+            (glow::COLOR_ATTACHMENT0 ..)
+                .take(subpass.color_attachments.len())
+                .collect()
         };
 
         // Record commands
@@ -757,10 +754,10 @@ impl CommandBuffer {
 }
 
 impl command::CommandBuffer<Backend> for CommandBuffer {
-    unsafe fn begin(
+    unsafe fn begin<'a, I>(
         &mut self,
         _flags: command::CommandBufferFlags,
-        _inheritance_info: command::CommandBufferInheritanceInfo<Backend>,
+        _inheritance_info: command::CommandBufferInheritanceInfo<Backend, I>,
     ) {
         // TODO: Implement flags!
         if self.individual_reset {

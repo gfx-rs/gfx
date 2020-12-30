@@ -9,6 +9,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate objc;
 
+use arrayvec::ArrayVec;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::Entry;
 use ash::{
@@ -22,6 +23,7 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk, LoadingError,
 };
+use parking_lot::Mutex;
 
 use hal::{
     adapter,
@@ -52,6 +54,9 @@ mod info;
 mod native;
 mod pool;
 mod window;
+
+//TODO: no such limit in Vk?
+const MAX_TOTAL_ATTACHMENTS: usize = 16;
 
 #[cfg(not(feature = "use-rtld-next"))]
 lazy_static! {
@@ -494,15 +499,13 @@ impl hal::Instance<Backend> for Instance {
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
                     device_type: match properties.device_type {
-                        ash::vk::PhysicalDeviceType::OTHER => adapter::DeviceType::Other,
-                        ash::vk::PhysicalDeviceType::INTEGRATED_GPU => {
+                        vk::PhysicalDeviceType::OTHER => adapter::DeviceType::Other,
+                        vk::PhysicalDeviceType::INTEGRATED_GPU => {
                             adapter::DeviceType::IntegratedGpu
                         }
-                        ash::vk::PhysicalDeviceType::DISCRETE_GPU => {
-                            adapter::DeviceType::DiscreteGpu
-                        }
-                        ash::vk::PhysicalDeviceType::VIRTUAL_GPU => adapter::DeviceType::VirtualGpu,
-                        ash::vk::PhysicalDeviceType::CPU => adapter::DeviceType::Cpu,
+                        vk::PhysicalDeviceType::DISCRETE_GPU => adapter::DeviceType::DiscreteGpu,
+                        vk::PhysicalDeviceType::VIRTUAL_GPU => adapter::DeviceType::VirtualGpu,
+                        vk::PhysicalDeviceType::CPU => adapter::DeviceType::Cpu,
                         _ => adapter::DeviceType::Other,
                     },
                 };
@@ -807,6 +810,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 raw: device_raw,
                 features: requested_features,
                 instance: Arc::clone(&self.instance),
+                framebuffers: Mutex::default(),
                 extension_fns: DeviceExtensionFunctions {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
@@ -1288,7 +1292,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             max_storage_buffer_range: limits.max_storage_buffer_range as _,
             max_uniform_buffer_range: limits.max_uniform_buffer_range as _,
             min_memory_map_alignment: limits.min_memory_map_alignment,
-            standard_sample_locations: limits.standard_sample_locations == ash::vk::TRUE,
+            standard_sample_locations: limits.standard_sample_locations == vk::TRUE,
 
             // TODO: Implement Limits for Mesh Shaders
             //       Depends on VkPhysicalDeviceMeshShaderPropertiesNV which depends on VkPhysicalProperties2
@@ -1363,6 +1367,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 }
 
+#[derive(Clone, Hash, Eq, PartialEq, PartialOrd)]
+struct FramebufferKey {
+    render_pass: vk::RenderPass,
+    image_views: ArrayVec<[vk::ImageView; MAX_TOTAL_ATTACHMENTS]>,
+}
+
 struct DeviceExtensionFunctions {
     mesh_shaders: Option<MeshShader>,
     draw_indirect_count: Option<DrawIndirectCount>,
@@ -1374,6 +1384,13 @@ pub struct RawDevice {
     features: Features,
     instance: Arc<RawInstance>,
     extension_fns: DeviceExtensionFunctions,
+    framebuffers: Mutex<
+        std::collections::HashMap<
+            FramebufferKey,
+            vk::Framebuffer,
+            std::hash::BuildHasherDefault<fxhash::FxHasher>,
+        >,
+    >,
     maintenance_level: u8,
 }
 
@@ -1399,6 +1416,46 @@ impl RawDevice {
         let flip_y = self.features.contains(hal::Features::NDC_Y_UP);
         let shift_y = flip_y && self.maintenance_level != 0;
         conv::map_viewport(rect, flip_y, shift_y)
+    }
+
+    fn make_framebuffer(
+        &self,
+        key: FramebufferKey,
+        extent: image::Extent,
+    ) -> Result<vk::Framebuffer, OutOfMemory> {
+        use std::collections::hash_map::Entry;
+
+        let mut guard = self.framebuffers.lock();
+        match guard.entry(key) {
+            Entry::Occupied(e) => Ok(*e.get()),
+            Entry::Vacant(e) => {
+                let key = e.key();
+                let info = vk::FramebufferCreateInfo::builder()
+                    .flags(vk::FramebufferCreateFlags::empty())
+                    .render_pass(key.render_pass)
+                    .attachments(&key.image_views)
+                    .width(extent.width)
+                    .height(extent.height)
+                    .layers(extent.depth);
+
+                match unsafe { self.raw.create_framebuffer(&info, None) } {
+                    Ok(raw) => Ok(*e.insert(raw)),
+                    Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host),
+                    Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device),
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+
+    fn clear_framebuffers(&self, fun: impl Fn(&FramebufferKey) -> bool) {
+        let mut guard = self.framebuffers.lock();
+        for (key, &framebuffer) in guard.iter() {
+            if fun(key) {
+                unsafe { self.raw.destroy_framebuffer(framebuffer, None) };
+            }
+        }
+        guard.retain(|key, _| !fun(key));
     }
 }
 
@@ -1536,7 +1593,6 @@ impl hal::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type Framebuffer = native::Framebuffer;
 
     type Buffer = native::Buffer;
     type BufferView = native::BufferView;

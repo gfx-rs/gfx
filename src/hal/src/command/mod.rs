@@ -18,13 +18,13 @@ mod structs;
 
 use crate::{
     buffer,
-    image::{Filter, Layout, SubresourceRange},
+    image::{Extent, Filter, Layout, SubresourceRange},
     memory::{Barrier, Dependencies},
     pass, pso, query, Backend, DrawCount, IndexCount, IndexType, InstanceCount, TaskCount,
     VertexCount, VertexOffset, WorkGroupCount,
 };
 
-use std::{any::Any, borrow::Borrow, fmt, ops::Range};
+use std::{any::Any, borrow::Borrow, fmt, iter, ops::Range};
 
 pub use self::clear::*;
 pub use self::structs::*;
@@ -60,7 +60,7 @@ pub enum Level {
     Secondary,
 }
 
-/// Specifies how commands for the following renderpasses will be recorded.
+/// Specifies how commands for the following render passes will be recorded.
 #[derive(Debug)]
 pub enum SubpassContents {
     /// Contents of the subpass will be inline in the command buffer,
@@ -72,21 +72,39 @@ pub enum SubpassContents {
     SecondaryBuffers,
 }
 
+/// A render attachment provided to `begin_render_pass`.
+#[derive(Debug)]
+pub struct RenderAttachmentInfo<'a, B: Backend> {
+    /// View of the attachment image.
+    pub image_view: &'a B::ImageView,
+    /// Clear value, if needed.
+    pub clear_value: ClearValue,
+}
+
+/// Set of render attachments making a framebuffer.
+#[derive(Debug)]
+pub struct RenderpassInheritanceInfo<'a, B: Backend, I> {
+    /// The subpass of a render pass to record into.
+    pub subpass: pass::Subpass<'a, B>,
+    /// Image views.
+    pub image_views: I,
+    /// Extent.
+    pub extent: Extent,
+}
+
 #[allow(missing_docs)]
 #[derive(Debug)]
-pub struct CommandBufferInheritanceInfo<'a, B: Backend> {
-    pub subpass: Option<pass::Subpass<'a, B>>,
-    pub framebuffer: Option<&'a B::Framebuffer>,
+pub struct CommandBufferInheritanceInfo<'a, B: Backend, I> {
+    pub render_pass: Option<RenderpassInheritanceInfo<'a, B, I>>,
     pub occlusion_query_enable: bool,
     pub occlusion_query_flags: query::ControlFlags,
     pub pipeline_statistics: query::PipelineStatistic,
 }
 
-impl<'a, B: Backend> Default for CommandBufferInheritanceInfo<'a, B> {
+impl<'a, B: Backend, I> Default for CommandBufferInheritanceInfo<'a, B, I> {
     fn default() -> Self {
         CommandBufferInheritanceInfo {
-            subpass: None,
-            framebuffer: None,
+            render_pass: None,
             occlusion_query_enable: false,
             occlusion_query_flags: query::ControlFlags::empty(),
             pipeline_statistics: query::PipelineStatistic::empty(),
@@ -98,16 +116,19 @@ impl<'a, B: Backend> Default for CommandBufferInheritanceInfo<'a, B> {
 /// provided by a `Backend`'s command buffer.
 pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Begins recording commands to a command buffer.
-    unsafe fn begin(
+    unsafe fn begin<I>(
         &mut self,
         flags: CommandBufferFlags,
-        inheritance_info: CommandBufferInheritanceInfo<B>,
-    );
+        inheritance_info: CommandBufferInheritanceInfo<B, I>,
+    ) where
+        I: IntoIterator,
+        I::IntoIter: ExactSizeIterator,
+        I::Item: Borrow<B::ImageView>;
 
     /// Begins recording a primary command buffer
     /// (that has no inheritance information).
     unsafe fn begin_primary(&mut self, flags: CommandBufferFlags) {
-        self.begin(flags, CommandBufferInheritanceInfo::default());
+        self.begin::<iter::Empty::<B::ImageView>>(flags, CommandBufferInheritanceInfo::default());
     }
 
     /// Finish recording commands to a command buffer.
@@ -293,23 +314,24 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # Arguments
     ///
     /// * `render_area` - section of the framebuffer to render.
-    /// * `clear_values` - iterator of [clear values][crate::command::ClearValue]
-    ///   to use to use for `clear_*` commands, one for each attachment of the render pass
-    ///   that has a clear operation.
+    /// * `attachments` - iterator of [attachments][crate::command::RenderAttachmentInfo]
+    ///   that has both the image views and the clear values
     /// * `first_subpass` - specifies, for the first subpass, whether the
     ///   rendering commands are provided inline or whether the render
     ///   pass is composed of subpasses.
-    unsafe fn begin_render_pass<T>(
+    ///
+    /// # Note
+    ///
+    /// The `ExactSizeIterator` is not required, since the number of the attachments
+    /// can be known from the render pass.
+    unsafe fn begin_render_pass<'a, T>(
         &mut self,
         render_pass: &B::RenderPass,
-        framebuffer: &B::Framebuffer,
+        attachments: T,
         render_area: pso::Rect,
-        clear_values: T,
         first_subpass: SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<ClearValue>,
-        T::IntoIter: ExactSizeIterator;
+        T: IntoIterator<Item = RenderAttachmentInfo<'a, B>>;
 
     /// Steps to the next subpass in the current render pass.
     unsafe fn next_subpass(&mut self, contents: SubpassContents);

@@ -1150,56 +1150,6 @@ impl d::Device<B> for Device {
             .collect()
     }
 
-    unsafe fn create_framebuffer<T>(
-        &self,
-        renderpass: &n::RenderPass,
-        attachments: T,
-        extent: image::Extent,
-    ) -> Result<n::Framebuffer, d::OutOfMemory>
-    where
-        T: IntoIterator,
-        T::Item: Borrow<n::ImageView>,
-    {
-        let mut framebuffers_ptr = None;
-        let mut raw_attachments = SmallVec::<[_; 4]>::new();
-        for attachment in attachments {
-            let at = attachment.borrow();
-            raw_attachments.push(at.view);
-            match at.owner {
-                n::ImageViewOwner::User => {}
-                n::ImageViewOwner::Surface(ref fbo_ptr) => {
-                    framebuffers_ptr = Some(Arc::clone(&fbo_ptr.0));
-                }
-            }
-        }
-
-        let info = vk::FramebufferCreateInfo::builder()
-            .flags(vk::FramebufferCreateFlags::empty())
-            .render_pass(renderpass.raw)
-            .attachments(&raw_attachments)
-            .width(extent.width)
-            .height(extent.height)
-            .layers(extent.depth);
-
-        let result = self.shared.raw.create_framebuffer(&info, None);
-
-        match result {
-            Ok(raw) => Ok(n::Framebuffer {
-                raw,
-                owned: match framebuffers_ptr {
-                    Some(fbo_ptr) => {
-                        fbo_ptr.lock().unwrap().framebuffers.push(raw);
-                        false
-                    }
-                    None => true,
-                },
-            }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device),
-            _ => unreachable!(),
-        }
-    }
-
     unsafe fn create_shader_module(
         &self,
         spirv_data: &[u32],
@@ -1418,6 +1368,7 @@ impl d::Device<B> for Device {
                 ty: image_type,
                 flags,
                 extent,
+                array_layers,
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
@@ -1494,14 +1445,19 @@ impl d::Device<B> for Device {
             .components(conv::map_swizzle(swizzle))
             .subresource_range(conv::map_subresource_range(&range));
 
-        let result = self.shared.raw.create_image_view(&info, None);
-
-        match result {
-            Ok(view) => Ok(n::ImageView {
+        match self.shared.raw.create_image_view(&info, None) {
+            Ok(raw) => Ok(n::ImageView {
+                raw,
                 image: image.raw,
-                view,
+                extent: vk::Extent3D {
+                    width: (image.extent.width >> range.level_start).max(1),
+                    height: (image.extent.height >> range.level_start).max(1),
+                    depth: match kind {
+                        image::ViewKind::D3 => (image.extent.depth >> range.level_start).max(1),
+                        _ => range.layer_count.unwrap_or(image.array_layers - range.layer_start) as u32,
+                    },
+                },
                 range,
-                owner: n::ImageViewOwner::User,
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
@@ -1685,7 +1641,7 @@ impl d::Device<B> for Device {
                     image_infos.push(
                         vk::DescriptorImageInfo::builder()
                             .sampler(vk::Sampler::null())
-                            .image_view(view.view)
+                            .image_view(view.raw)
                             .image_layout(conv::map_image_layout(layout))
                             .build(),
                     );
@@ -1694,7 +1650,7 @@ impl d::Device<B> for Device {
                     image_infos.push(
                         vk::DescriptorImageInfo::builder()
                             .sampler(sampler.0)
-                            .image_view(view.view)
+                            .image_view(view.raw)
                             .image_layout(conv::map_image_layout(layout))
                             .build(),
                     );
@@ -2034,6 +1990,8 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_render_pass(&self, rp: n::RenderPass) {
+        self.shared
+            .clear_framebuffers(|key| key.render_pass == rp.raw);
         self.shared.raw.destroy_render_pass(rp.raw, None);
     }
 
@@ -2049,12 +2007,6 @@ impl d::Device<B> for Device {
         self.shared.raw.destroy_pipeline(pipeline.0, None);
     }
 
-    unsafe fn destroy_framebuffer(&self, fb: n::Framebuffer) {
-        if fb.owned {
-            self.shared.raw.destroy_framebuffer(fb.raw, None);
-        }
-    }
-
     unsafe fn destroy_buffer(&self, buffer: n::Buffer) {
         self.shared.raw.destroy_buffer(buffer.raw, None);
     }
@@ -2068,14 +2020,9 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_image_view(&self, view: n::ImageView) {
-        match view.owner {
-            n::ImageViewOwner::User => {
-                self.shared.raw.destroy_image_view(view.view, None);
-            }
-            n::ImageViewOwner::Surface(_fbo_cache) => {
-                //TODO: mark as deleted?
-            }
-        }
+        self.shared
+            .clear_framebuffers(|key| key.image_views.contains(&view.raw));
+        self.shared.raw.destroy_image_view(view.raw, None);
     }
 
     unsafe fn destroy_sampler(&self, sampler: n::Sampler) {
@@ -2135,10 +2082,6 @@ impl d::Device<B> for Device {
 
     unsafe fn set_fence_name(&self, fence: &mut n::Fence, name: &str) {
         self.set_object_name(vk::ObjectType::FENCE, fence.0.as_raw(), name)
-    }
-
-    unsafe fn set_framebuffer_name(&self, framebuffer: &mut n::Framebuffer, name: &str) {
-        self.set_object_name(vk::ObjectType::FRAMEBUFFER, framebuffer.raw.as_raw(), name)
     }
 
     unsafe fn set_render_pass_name(&self, render_pass: &mut n::RenderPass, name: &str) {
@@ -2326,6 +2269,7 @@ impl Device {
                 ty: vk::ImageType::TYPE_2D,
                 flags: vk::ImageCreateFlags::empty(),
                 extent,
+                array_layers: 1,
             })
             .collect();
 

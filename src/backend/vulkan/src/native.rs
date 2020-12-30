@@ -1,6 +1,6 @@
-use crate::{window::FramebufferCachePtr, Backend, RawDevice};
+use crate::{Backend, RawDevice};
 use ash::{version::DeviceV1_0, vk};
-use hal::{device::OutOfMemory, image::SubresourceRange, pso};
+use hal::{device::OutOfMemory, image::{Layer, SubresourceRange}, pso};
 use std::{borrow::Borrow, sync::Arc};
 
 #[derive(Debug, Hash)]
@@ -42,20 +42,15 @@ pub struct Image {
     pub(crate) ty: vk::ImageType,
     pub(crate) flags: vk::ImageCreateFlags,
     pub(crate) extent: vk::Extent3D,
-}
-
-#[derive(Debug, Hash, PartialEq, Eq)]
-pub enum ImageViewOwner {
-    User,
-    Surface(FramebufferCachePtr),
+    pub(crate) array_layers: Layer,
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct ImageView {
+    pub(crate) raw: vk::ImageView,
     pub(crate) image: vk::Image,
-    pub(crate) view: vk::ImageView,
     pub(crate) range: SubresourceRange,
-    pub(crate) owner: ImageViewOwner,
+    pub(crate) extent: vk::Extent3D,
 }
 
 #[derive(Debug, Hash)]
@@ -70,7 +65,6 @@ pub struct RenderPass {
 #[derive(Debug, Hash)]
 pub struct Framebuffer {
     pub(crate) raw: vk::Framebuffer,
-    pub(crate) owned: bool,
 }
 
 #[derive(Debug)]

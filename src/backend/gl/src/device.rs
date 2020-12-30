@@ -1078,14 +1078,11 @@ impl d::Device<B> for Device {
             let name = gl.create_framebuffer().unwrap();
             gl.bind_framebuffer(target, Some(name));
 
-            for (index, &color) in subpass.color_attachments.iter().enumerate() {
-                let color_attachment = glow::COLOR_ATTACHMENT0 + index as u32;
-                assert!(color_attachment <= glow::COLOR_ATTACHMENT31);
-
+            for (bind_point, &color) in (glow::COLOR_ATTACHMENT0 .. ).zip(subpass.color_attachments.iter()) {
                 if self.share.private_caps.framebuffer_texture {
-                    Self::bind_target(gl, target, color_attachment, &attachments[color]);
+                    Self::bind_target(gl, target, bind_point, &attachments[color]);
                 } else {
-                    Self::bind_target_compat(gl, target, color_attachment, &attachments[color]);
+                    Self::bind_target_compat(gl, target, bind_point, &attachments[color]);
                 }
             }
 
@@ -2038,10 +2035,6 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn set_fence_name(&self, _fence: &mut n::Fence, _name: &str) {
-        // TODO
-    }
-
-    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut n::FrameBuffer, _name: &str) {
         // TODO
     }
 
