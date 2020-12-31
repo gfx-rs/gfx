@@ -378,12 +378,42 @@ pub fn map_query_result_flags(flags: query::ResultFlags) -> vk::QueryResultFlags
 }
 
 pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {
-    let bits = format::ImageFeature::from_bits_truncate(features.as_raw());
-    if bits.contains(format::ImageFeature::STORAGE) {
-        bits | format::ImageFeature::STORAGE_READ_WRITE
-    } else {
-        bits
+    let mut mapped_flags = format::ImageFeature::empty();
+    if features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE) {
+        mapped_flags |= format::ImageFeature::SAMPLED;
+
+        if features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR) {
+            mapped_flags |= format::ImageFeature::SAMPLED_LINEAR;
+        }
     }
+
+    if features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE) {
+        mapped_flags |= format::ImageFeature::STORAGE_READ_WRITE;
+
+        if features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC) {
+            mapped_flags |= format::ImageFeature::STORAGE_ATOMIC;
+        }
+    }
+
+    if features.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT) {
+        mapped_flags |= format::ImageFeature::COLOR_ATTACHMENT;
+
+        if features.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND) {
+            mapped_flags |= format::ImageFeature::COLOR_ATTACHMENT_BLEND;
+        }
+    }
+    if features.contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT) {
+        mapped_flags |= format::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
+    }
+
+    if features.contains(vk::FormatFeatureFlags::BLIT_SRC) {
+        mapped_flags |= format::ImageFeature::BLIT_SRC;
+    }
+    if features.contains(vk::FormatFeatureFlags::BLIT_DST) {
+        mapped_flags |= format::ImageFeature::BLIT_DST;
+    }
+
+    mapped_flags
 }
 
 pub fn map_buffer_features(features: vk::FormatFeatureFlags) -> format::BufferFeature {
