@@ -18,6 +18,7 @@ pub type RawBuffer = <GlContext as glow::HasContext>::Buffer;
 pub type Shader = <GlContext as glow::HasContext>::Shader;
 pub type Program = <GlContext as glow::HasContext>::Program;
 pub type Renderbuffer = <GlContext as glow::HasContext>::Renderbuffer;
+pub type Framebuffer = <GlContext as glow::HasContext>::Framebuffer;
 pub type Texture = <GlContext as glow::HasContext>::Texture;
 pub type Sampler = <GlContext as glow::HasContext>::Sampler;
 // TODO: UniformLocation was copy in glow 0.3, but in 0.4 it isn't. Wrap it in a Starc for now
@@ -25,11 +26,10 @@ pub type Sampler = <GlContext as glow::HasContext>::Sampler;
 pub type UniformLocation = crate::Starc<<GlContext as glow::HasContext>::UniformLocation>;
 pub type DescriptorSetLayout = Arc<Vec<pso::DescriptorSetLayoutBinding>>;
 
-pub type RawFrameBuffer = <GlContext as glow::HasContext>::Framebuffer;
-
-#[derive(Clone, Debug)]
-pub struct FrameBuffer {
-    pub(crate) fbos: Vec<Option<RawFrameBuffer>>,
+#[derive(Debug, Eq, Hash, PartialEq)]
+pub(crate) struct FramebufferKey {
+    pub colors: ArrayVec<[native::ImageView; MAX_COLOR_ATTACHMENTS]>,
+    pub depth_stencil: Option<native::ImageView>,
 }
 
 #[derive(Debug)]

@@ -2,7 +2,7 @@ use crate::{
     command as com, device, info::LegacyFeatures, native, state, Backend, Device, GlContext, Share,
     Starc, Surface,
 };
-
+use auxil::FastHashMap;
 use glow::HasContext;
 use smallvec::SmallVec;
 
@@ -28,7 +28,7 @@ struct State {
     // Currently set scissor rects.
     num_scissors: usize,
     // Currently bound fbo
-    fbo: Option<native::RawFrameBuffer>,
+    fbo: Option<native::Framebuffer>,
 }
 
 impl State {
@@ -60,6 +60,7 @@ pub struct CommandQueue {
     pub(crate) share: Starc<Share>,
     features: hal::Features,
     vao: Option<native::VertexArray>,
+    framebuffers: FastHashMap<native::FramebufferKey, native::Framebuffer>,
     state: State,
 }
 
@@ -73,6 +74,7 @@ impl CommandQueue {
         CommandQueue {
             share: share.clone(),
             features,
+            framebuffers: FastHashMap::default(),
             vao,
             state: State::new(),
         }
@@ -178,6 +180,67 @@ impl CommandQueue {
     fn get_raw(data: &[u8], ptr: com::BufferSlice) -> &[u8] {
         assert!(data.len() >= (ptr.offset + ptr.size) as usize);
         &data[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
+    }
+
+    fn make_framebuffer(&mut self, key: native::FramebufferKey) -> Result<native::Framebuffer, hal::device::OutOfMemory> {
+        if !self.share.private_caps.framebuffer {
+            return Err(hal::device::OutOfMemory::Host);
+        }
+
+        let gl = &self.share.context;
+        let target = glow::DRAW_FRAMEBUFFER;
+
+        let framebuffer = gl.create_framebuffer().unwrap();
+        gl.bind_framebuffer(target, Some(framebuffer));
+
+        for (bind_point, view) in (glow::COLOR_ATTACHMENT0 .. ).zip(key.colors.iter()) {
+            if self.share.private_caps.framebuffer_texture {
+                Device::bind_target(gl, target, bind_point, view);
+            } else {
+                Device::bind_target_compat(gl, target, bind_point, view);
+            }
+        }
+
+        if let Some(ref depth_stencil) = key.depth_stencil {
+            let aspects = match *depth_stencil {
+                native::ImageView::Texture { ref sub, .. } => sub.aspects,
+                native::ImageView::Renderbuffer { ref aspects, .. } => *aspects,
+            };
+
+            let attachment = if aspects == hal::format::Aspects::DEPTH {
+                glow::DEPTH_ATTACHMENT
+            } else if aspects == hal::format::Aspects::STENCIL {
+                glow::STENCIL_ATTACHMENT
+            } else {
+                glow::DEPTH_STENCIL_ATTACHMENT
+            };
+
+            if self.share.private_caps.framebuffer_texture {
+                Device::bind_target(gl, target, attachment, depth_stencil);
+            } else {
+                Device::bind_target_compat(gl, target, attachment, depth_stencil);
+            }
+        }
+
+        let status = gl.check_framebuffer_status(target);
+        match status {
+            glow::FRAMEBUFFER_COMPLETE => {},
+            glow::FRAMEBUFFER_INCOMPLETE_ATTACHMENT => panic!("One of framebuffer attachmet points are incomplete"),
+            glow::FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT => panic!("Framebuffer does not have any image attached"),
+            glow::FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER => panic!("FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER"),
+            glow::FRAMEBUFFER_INCOMPLETE_READ_BUFFER => panic!("FRAMEBUFFER_INCOMPLETE_READ_BUFFER"),
+            glow::FRAMEBUFFER_UNSUPPORTED => panic!("FRAMEBUFFER_UNSUPPORTED"),
+            glow::FRAMEBUFFER_INCOMPLETE_MULTISAMPLE => panic!("FRAMEBUFFER_INCOMPLETE_MULTISAMPLE"),
+            glow::FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS => panic!("FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS"),
+            36057 /*glow::FRAMEBUFFER_INCOMPLETE_DIMENSIONS*/ => panic!("Framebuffer attachements have different dimensions"),
+            code => panic!("Unexpected framebuffer status code {}", code),
+        }
+
+        if let Err(err) = self.share.check() {
+            //TODO: attachments have been consumed
+            panic!("Error creating FBO: {:?} for {:?}", err, key);
+        }
+        Ok(framebuffer)
     }
 
     // Reset the state to match our _expected_ state before executing
@@ -481,6 +544,9 @@ impl CommandQueue {
                 };
             },
             com::Command::ClearTexture(_color) => unimplemented!(),
+            com::Command::SetRenderTargets(key) => {
+                let framebuffer = self.make_framebuffer(key).unwrap();
+            }
             com::Command::DrawBuffers(draw_buffers) => unsafe {
                 if self.share.private_caps.draw_buffers {
                     let draw_buffers = Self::get::<u32>(data_buf, draw_buffers);

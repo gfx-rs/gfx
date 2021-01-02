@@ -13,7 +13,7 @@ pub struct Swapchain {
     pub(crate) extent: window::Extent2D,
     pub(crate) channel: f::ChannelType,
     pub(crate) raw_format: native::TextureFormat,
-    pub(crate) frame_buffers: ArrayVec<[native::RawFrameBuffer; 3]>,
+    pub(crate) frame_buffers: ArrayVec<[native::Framebuffer; 3]>,
 }
 
 #[derive(Debug)]

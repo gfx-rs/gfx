@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{GlContext, MAX_SAMPLERS, MAX_TEXTURE_SLOTS};
+use crate::{GlContext, MAX_SAMPLERS, MAX_TEXTURE_SLOTS, MAX_COLOR_ATTACHMENTS};
 
 use hal::{
     self, buffer, command,
@@ -14,6 +14,7 @@ use crate::{
     Backend, ColorSlot,
 };
 
+use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 
 use std::{borrow::Borrow, iter, mem, ops::Range, slice, sync::Arc};
@@ -104,7 +105,8 @@ pub enum Command {
     /// The buffer slice contains a list of `GLenum`.
     DrawBuffers(BufferSlice),
 
-    BindFrameBuffer(FrameBufferTarget, Option<n::RawFrameBuffer>),
+    BindFrameBuffer(FrameBufferTarget, Option<n::Framebuffer>),
+    SetRenderTargets(n::FramebufferKey),
     BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
     SetDrawColorBuffers(usize),
     SetPatchSize(i32),
@@ -170,7 +172,7 @@ struct AttachmentClear {
 #[derive(Debug)]
 pub struct RenderPassCache {
     render_pass: n::RenderPass,
-    framebuffer: n::FrameBuffer,
+    framebuffer: n::Framebuffer,
     attachment_clears: Vec<Option<AttachmentClear>>,
 }
 
@@ -192,7 +194,7 @@ struct Cache {
     // Blend color.
     blend_color: Option<pso::ColorValue>,
     ///
-    framebuffer: Option<(FrameBufferTarget, n::RawFrameBuffer)>,
+    framebuffer: Option<(FrameBufferTarget, n::Framebuffer)>,
     ///
     // Indicates that invalid commands have been recorded.
     error_state: bool,
@@ -351,7 +353,7 @@ pub struct CommandBuffer {
     pub(crate) data: CommandStorage,
     individual_reset: bool,
 
-    fbo: Option<n::RawFrameBuffer>,
+    fbo: Option<n::Framebuffer>,
     /// The framebuffer to use for rendering to the main targets (0 by default).
     ///
     /// Use this to set the framebuffer that will be used for the screen display targets created
@@ -361,7 +363,7 @@ pub struct CommandBuffer {
     ///
     /// This framebuffer must exist and be configured correctly (with renderbuffer attachments,
     /// etc.) so that rendering to it can occur immediately.
-    pub display_fb: Option<n::RawFrameBuffer>,
+    pub display_fb: Option<n::Framebuffer>,
     cache: Cache,
 
     pass_cache: Option<RenderPassCache>,
@@ -374,7 +376,7 @@ pub struct CommandBuffer {
 
 impl CommandBuffer {
     pub(crate) fn new(
-        fbo: Option<n::RawFrameBuffer>,
+        fbo: Option<n::Framebuffer>,
         limits: Limits,
         memory: Arc<Mutex<BufferMemory>>,
         legacy_featues: info::LegacyFeatures,
