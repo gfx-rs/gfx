@@ -21,12 +21,12 @@ use hal::{
 use arrayvec::ArrayVec;
 use auxil::{FastHashMap, ShaderStage};
 use block::ConcreteBlock;
-use cocoa_foundation::foundation::{NSRange, NSUInteger};
+use cocoa_foundation::foundation::NSUInteger;
 use copyless::VecHelper;
 #[cfg(feature = "dispatch")]
 use dispatch;
 use foreign_types::ForeignType;
-use metal::{self, MTLIndexType, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLViewport};
+use metal::{self, MTLIndexType, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLViewport, NSRange};
 use objc::rc::autoreleasepool;
 use parking_lot::Mutex;
 

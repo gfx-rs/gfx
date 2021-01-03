@@ -30,10 +30,11 @@ bitflags = "1.0"
 copyless = "0.1.4"
 log = { version = "0.4" }
 dispatch = { version = "0.2", optional = true }
-metal = { version = "0.20", features = ["private"] }
+metal = { git = "https://github.com/gfx-rs/metal-rs", rev="ba08f5f98c70ab941020b8997936c9c75363b9aa", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
+#TODO: remove this, only used for `Id`
 cocoa-foundation = "0.1"
 spirv_cross = { version = "0.22", features = ["msl"] }
 parking_lot = "0.11"

@@ -7,7 +7,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
-use cocoa_foundation::foundation::{NSRange, NSUInteger};
+use cocoa_foundation::foundation::NSUInteger;
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use hal::{
@@ -23,7 +23,7 @@ use hal::{
 use metal::{
     CaptureManager, MTLCPUCacheMode, MTLLanguageVersion, MTLPrimitiveTopologyClass,
     MTLPrimitiveType, MTLResourceOptions, MTLSamplerMipFilter, MTLStorageMode, MTLTextureType,
-    MTLVertexStepFunction,
+    MTLVertexStepFunction, NSRange,
 };
 use objc::{
     rc::autoreleasepool,
@@ -1301,6 +1301,7 @@ impl hal::device::Device<Backend> for Device {
                     MTLLanguageVersion::V2_0 => (2, 0),
                     MTLLanguageVersion::V2_1 => (2, 1),
                     MTLLanguageVersion::V2_2 => (2, 2),
+                    MTLLanguageVersion::V2_3 => (2, 3),
                 },
                 spirv_cross_compatibility: true,
                 binding_map: res_overrides
@@ -1336,6 +1337,7 @@ impl hal::device::Device<Backend> for Device {
             MTLLanguageVersion::V2_0 => msl::Version::V2_0,
             MTLLanguageVersion::V2_1 => msl::Version::V2_1,
             MTLLanguageVersion::V2_2 => msl::Version::V2_2,
+            MTLLanguageVersion::V2_3 => msl::Version::V2_2, //TODO: update this!
         };
         shader_compiler_options.enable_point_size_builtin = false;
         shader_compiler_options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);

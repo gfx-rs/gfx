@@ -71,7 +71,7 @@ use foreign_types::ForeignTypeRef;
 use lazy_static::lazy_static;
 use metal::MTLFeatureSet;
 use metal::MTLLanguageVersion;
-use metal::{CGFloat, CGSize, CoreAnimationLayer, CoreAnimationLayerRef};
+use metal::{CGFloat, CGSize, MetalLayer, MetalLayerRef};
 use objc::{
     declare::ClassDecl,
     runtime::{Class, Object, Sel, BOOL, YES},
@@ -361,11 +361,11 @@ impl Instance {
         let class = class!(CAMetalLayer);
         let is_valid_layer: BOOL = msg_send![main_layer, isKindOfClass: class];
         let render_layer = if is_valid_layer == YES {
-            mem::transmute::<_, &CoreAnimationLayerRef>(main_layer).to_owned()
+            mem::transmute::<_, &MetalLayerRef>(main_layer).to_owned()
         } else {
             // If the main layer is not a CAMetalLayer, we create a CAMetalLayer sublayer and use it instead.
             // Unlike on macOS, we cannot replace the main view as UIView does not allow it (when NSView does).
-            let new_layer: CoreAnimationLayer = msg_send![class, new];
+            let new_layer: MetalLayer = msg_send![class, new];
             let bounds: CGRect = msg_send![main_layer, bounds];
             let () = msg_send![new_layer.as_ref(), setFrame: bounds];
             let () = msg_send![main_layer, addSublayer: new_layer.as_ref()];
@@ -407,10 +407,10 @@ impl Instance {
             result == YES
         };
 
-        let render_layer: CoreAnimationLayer = if use_current {
-            mem::transmute::<_, &CoreAnimationLayerRef>(existing).to_owned()
+        let render_layer: MetalLayer = if use_current {
+            mem::transmute::<_, &MetalLayerRef>(existing).to_owned()
         } else {
-            let layer: CoreAnimationLayer = msg_send![class, new];
+            let layer: MetalLayer = msg_send![class, new];
             let () = msg_send![view, setLayer: layer.as_ref()];
             let () = msg_send![view, setWantsLayer: YES];
             let bounds: CGRect = msg_send![view, bounds];
@@ -429,14 +429,14 @@ impl Instance {
         Surface::new(NonNull::new(view), render_layer)
     }
 
-    unsafe fn create_from_layer(&self, layer: &CoreAnimationLayerRef) -> Surface {
+    unsafe fn create_from_layer(&self, layer: &MetalLayerRef) -> Surface {
         let class = class!(CAMetalLayer);
         let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
         assert_eq!(proper_kind, YES);
         Surface::new(None, layer.to_owned())
     }
 
-    pub fn create_surface_from_layer(&self, layer: &CoreAnimationLayerRef) -> Surface {
+    pub fn create_surface_from_layer(&self, layer: &MetalLayerRef) -> Surface {
         unsafe { self.create_from_layer(layer) }
     }
 
@@ -785,10 +785,10 @@ impl PrivateCapabilities {
         let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
 
         let mut sample_count_mask: u8 = 1 | 4; // 1 and 4 samples are supported on all devices
-        if device.supports_sample_count(2) {
+        if device.supports_texture_sample_count(2) {
             sample_count_mask |= 2;
         }
-        if device.supports_sample_count(8) {
+        if device.supports_texture_sample_count(8) {
             sample_count_mask |= 8;
         }
 
