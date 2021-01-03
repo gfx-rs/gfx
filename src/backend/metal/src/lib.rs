@@ -680,6 +680,7 @@ struct PrivateCapabilities {
     os_version: (u32, u32),
     msl_version: metal::MTLLanguageVersion,
     exposed_queues: usize,
+    read_write_texture_tier: metal::MTLReadWriteTextureTier,
     // if TRUE, we'll report `NON_FILL_POLYGON_MODE` feature without the points support
     expose_line_mode: bool,
     resource_heaps: bool,
@@ -823,6 +824,7 @@ impl PrivateCapabilities {
                 MTLLanguageVersion::V1_0
             },
             exposed_queues: 1,
+            read_write_texture_tier: device.read_write_texture_support(),
             expose_line_mode: true,
             resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
             argument_buffers: experiments.argument_buffers

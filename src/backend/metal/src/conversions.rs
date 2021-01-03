@@ -179,6 +179,15 @@ impl PrivateCapabilities {
         let compressed_if = color_if | If::SAMPLED_LINEAR;
         let depth_if = color_if | If::DEPTH_STENCIL_ATTACHMENT;
 
+        // Affected formats documented at:
+        // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier1?language=objc
+        // https://developer.apple.com/documentation/metal/mtlreadwritetexturetier/mtlreadwritetexturetier2?language=objc
+        let (read_write_tier1_if, read_write_tier2_if) = match self.read_write_texture_tier {
+            MTLReadWriteTextureTier::TierNone => (If::empty(), If::empty()),
+            MTLReadWriteTextureTier::Tier1 => (If::STORAGE_READ_WRITE, If::empty()),
+            MTLReadWriteTextureTier::Tier2 => (If::STORAGE_READ_WRITE, If::STORAGE_READ_WRITE),
+        };
+
         match self.map_format(format) {
             Some(A8Unorm) => Properties {
                 optimal_tiling: compressed_if,
@@ -187,6 +196,7 @@ impl PrivateCapabilities {
             },
             Some(R8Unorm) => Properties {
                 optimal_tiling: color_if
+                    | read_write_tier2_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
@@ -221,12 +231,12 @@ impl PrivateCapabilities {
                 ..Properties::default()
             },
             Some(R8Uint) => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier2_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
             Some(R8Sint) => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier2_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
@@ -249,17 +259,18 @@ impl PrivateCapabilities {
                 ..Properties::default()
             },
             Some(R16Uint) => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier2_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
             Some(R16Sint) => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier2_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
             Some(R16Float) => Properties {
                 optimal_tiling: color_if
+                    | read_write_tier2_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
@@ -345,7 +356,7 @@ impl PrivateCapabilities {
                 ..Properties::default()
             },
             Some(R32Uint) if self.format_r32_all => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier1_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
@@ -355,7 +366,7 @@ impl PrivateCapabilities {
                 ..Properties::default()
             },
             Some(R32Sint) if self.format_r32_all => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier1_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
@@ -379,6 +390,7 @@ impl PrivateCapabilities {
             },
             Some(R32Float) if self.format_r32float_all => Properties {
                 optimal_tiling: color_if
+                    | read_write_tier1_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
@@ -415,6 +427,7 @@ impl PrivateCapabilities {
             },
             Some(RGBA8Unorm) => Properties {
                 optimal_tiling: color_if
+                    | read_write_tier2_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
@@ -449,12 +462,12 @@ impl PrivateCapabilities {
                 ..Properties::default()
             },
             Some(RGBA8Uint) => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier2_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
             Some(RGBA8Sint) => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier2_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
@@ -611,17 +624,18 @@ impl PrivateCapabilities {
                 ..Properties::default()
             },
             Some(RGBA16Uint) => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier2_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
             Some(RGBA16Sint) => Properties {
-                optimal_tiling: color_if | If::STORAGE | If::COLOR_ATTACHMENT,
+                optimal_tiling: color_if | read_write_tier2_if | If::STORAGE | If::COLOR_ATTACHMENT,
                 buffer_features,
                 ..Properties::default()
             },
             Some(RGBA16Float) => Properties {
                 optimal_tiling: color_if
+                    | read_write_tier2_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
@@ -635,7 +649,7 @@ impl PrivateCapabilities {
                 ..Properties::default()
             },
             Some(RGBA32Uint) if self.format_rgba32int_color_write => Properties {
-                optimal_tiling: color_if | If::COLOR_ATTACHMENT | If::STORAGE,
+                optimal_tiling: color_if | read_write_tier2_if | If::COLOR_ATTACHMENT | If::STORAGE,
                 buffer_features,
                 ..Properties::default()
             },
@@ -645,12 +659,13 @@ impl PrivateCapabilities {
                 ..Properties::default()
             },
             Some(RGBA32Sint) if self.format_rgba32int_color_write => Properties {
-                optimal_tiling: color_if | If::COLOR_ATTACHMENT | If::STORAGE,
+                optimal_tiling: color_if | read_write_tier2_if | If::COLOR_ATTACHMENT | If::STORAGE,
                 buffer_features,
                 ..Properties::default()
             },
             Some(RGBA32Float) if self.format_rgba32float_all => Properties {
                 optimal_tiling: color_if
+                    | read_write_tier2_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
@@ -664,7 +679,7 @@ impl PrivateCapabilities {
                 ..Properties::default()
             },
             Some(RGBA32Float) if self.format_rgba32float_color_write => Properties {
-                optimal_tiling: color_if | If::COLOR_ATTACHMENT | If::STORAGE,
+                optimal_tiling: color_if | read_write_tier2_if | If::COLOR_ATTACHMENT | If::STORAGE,
                 buffer_features,
                 ..Properties::default()
             },
