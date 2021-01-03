@@ -410,7 +410,14 @@ fn get_format_properties(
                         props.buffer_features |= format::BufferFeature::STORAGE_TEXEL;
                     }
                     if can_image {
+                        // Since read-only storage is exposed as SRV, we can guarantee read-only storage without checking D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD first.
                         props.optimal_tiling |= format::ImageFeature::STORAGE;
+
+                        if support_2.OutFormatSupport2 & d3d11::D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD
+                            != 0
+                        {
+                            props.optimal_tiling |= format::ImageFeature::STORAGE_READ_WRITE;
+                        }
                     }
                 }
             }
