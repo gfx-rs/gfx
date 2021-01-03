@@ -783,20 +783,6 @@ where
             }
         };
 
-        let framebuffer = unsafe {
-            self.device
-                .create_framebuffer(
-                    &self.render_pass,
-                    iter::once(surface_image.borrow()),
-                    i::Extent {
-                        width: self.dimensions.width,
-                        height: self.dimensions.height,
-                        depth: 1,
-                    },
-                )
-                .unwrap()
-        };
-
         // Compute index into our resource ring buffers based on the frame number
         // and number of frames in flight. Pay close attention to where this index is needed
         // versus when the swapchain image index we got from acquire_image is needed.
@@ -839,13 +825,15 @@ where
 
             cmd_buffer.begin_render_pass(
                 &self.render_pass,
-                &framebuffer,
-                self.viewport.rect,
-                &[command::ClearValue {
-                    color: command::ClearColor {
-                        float32: [0.8, 0.8, 0.8, 1.0],
+                iter::once(command::RenderAttachmentInfo {
+                    image_view: surface_image.borrow(),
+                    clear_value: command::ClearValue {
+                        color: command::ClearColor {
+                            float32: [0.8, 0.8, 0.8, 1.0],
+                        },
                     },
-                }],
+                }),
+                self.viewport.rect,
                 command::SubpassContents::Inline,
             );
             cmd_buffer.draw(0..6, 0..1);
@@ -868,8 +856,6 @@ where
                 surface_image,
                 Some(&mut self.submission_complete_semaphores[frame_idx]),
             );
-
-            self.device.destroy_framebuffer(framebuffer);
 
             if result.is_err() {
                 self.recreate_swapchain();

@@ -264,7 +264,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         first_subpass: com::SubpassContents,
     ) where
         T: IntoIterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
-        T::IntoIter: ExactSizeIterator,
     {
         let render_area = conv::map_rect(&render_area);
 

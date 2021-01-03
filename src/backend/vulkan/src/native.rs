@@ -1,6 +1,10 @@
 use crate::{Backend, RawDevice};
 use ash::{version::DeviceV1_0, vk};
-use hal::{device::OutOfMemory, image::{Layer, SubresourceRange}, pso};
+use hal::{
+    device::OutOfMemory,
+    image::{Layer, SubresourceRange},
+    pso,
+};
 use std::{borrow::Borrow, sync::Arc};
 
 #[derive(Debug, Hash)]

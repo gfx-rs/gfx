@@ -376,7 +376,9 @@ pub(crate) fn query_all(
         min_storage_buffer_offset_alignment,
         framebuffer_color_sample_counts: max_samples_mask,
         non_coherent_atom_size: 1,
-        max_color_attachments: get_usize(gl, glow::MAX_COLOR_ATTACHMENTS).unwrap_or(1).min(MAX_COLOR_ATTACHMENTS),
+        max_color_attachments: get_usize(gl, glow::MAX_COLOR_ATTACHMENTS)
+            .unwrap_or(1)
+            .min(MAX_COLOR_ATTACHMENTS),
         ..Limits::default()
     };
 

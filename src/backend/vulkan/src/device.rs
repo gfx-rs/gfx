@@ -1454,7 +1454,10 @@ impl d::Device<B> for Device {
                     height: (image.extent.height >> range.level_start).max(1),
                     depth: match kind {
                         image::ViewKind::D3 => (image.extent.depth >> range.level_start).max(1),
-                        _ => range.layer_count.unwrap_or(image.array_layers - range.layer_start) as u32,
+                        _ => range
+                            .layer_count
+                            .unwrap_or(image.array_layers - range.layer_start)
+                            as u32,
                     },
                 },
                 range,

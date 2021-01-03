@@ -147,11 +147,6 @@ pub enum Resource {
         shader: String,
         layout: String,
     },
-    Framebuffer {
-        pass: String,
-        views: HashMap<String, String>,
-        extent: hal::image::Extent,
-    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -240,13 +235,19 @@ pub struct DrawPass {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct RenderAttachment {
+    pub clear_value: ClearValue,
+    pub image_view: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub enum Job {
     Transfer {
         commands: Vec<TransferCommand>,
     },
     Graphics {
-        framebuffer: String,
-        clear_values: Vec<ClearValue>,
+        attachments: Vec<RenderAttachment>,
+        rect: hal::pso::Rect,
         pass: (String, HashMap<String, DrawPass>),
     },
     Compute {

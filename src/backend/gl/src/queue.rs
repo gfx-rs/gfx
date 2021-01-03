@@ -182,7 +182,10 @@ impl CommandQueue {
         &data[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
     }
 
-    fn make_framebuffer(&mut self, key: native::FramebufferKey) -> Result<native::Framebuffer, hal::device::OutOfMemory> {
+    fn make_framebuffer(
+        &mut self,
+        key: native::FramebufferKey,
+    ) -> Result<native::Framebuffer, hal::device::OutOfMemory> {
         if !self.share.private_caps.framebuffer {
             return Err(hal::device::OutOfMemory::Host);
         }
@@ -193,7 +196,7 @@ impl CommandQueue {
         let framebuffer = gl.create_framebuffer().unwrap();
         gl.bind_framebuffer(target, Some(framebuffer));
 
-        for (bind_point, view) in (glow::COLOR_ATTACHMENT0 .. ).zip(key.colors.iter()) {
+        for (bind_point, view) in (glow::COLOR_ATTACHMENT0..).zip(key.colors.iter()) {
             if self.share.private_caps.framebuffer_texture {
                 Device::bind_target(gl, target, bind_point, view);
             } else {

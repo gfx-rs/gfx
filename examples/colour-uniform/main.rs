@@ -342,18 +342,6 @@ impl<B: Backend> RendererState<B> {
             }
         };
 
-        let framebuffer = unsafe {
-            self.device
-                .borrow()
-                .device
-                .create_framebuffer(
-                    self.render_pass.render_pass.as_ref().unwrap(),
-                    iter::once(std::borrow::Borrow::borrow(&surface_image)),
-                    self.swapchain.extent,
-                )
-                .unwrap()
-        };
-
         let frame_idx = (self.swapchain.frame_index % self.swapchain.frame_queue_size) as usize;
         self.swapchain.frame_index += 1;
 
@@ -390,13 +378,15 @@ impl<B: Backend> RendererState<B> {
 
             cmd_buffer.begin_render_pass(
                 self.render_pass.render_pass.as_ref().unwrap(),
-                &framebuffer,
-                self.viewport.rect,
-                &[command::ClearValue {
-                    color: command::ClearColor {
-                        float32: self.bg_color,
+                iter::once(command::RenderAttachmentInfo {
+                    image_view: std::borrow::Borrow::borrow(&surface_image),
+                    clear_value: command::ClearValue {
+                        color: command::ClearColor {
+                            float32: self.bg_color,
+                        },
                     },
-                }],
+                }),
+                self.viewport.rect,
                 command::SubpassContents::Inline,
             );
             cmd_buffer.draw(0..6, 0..1);
@@ -421,8 +411,6 @@ impl<B: Backend> RendererState<B> {
             ) {
                 self.recreate_swapchain = true;
             }
-
-            self.device.borrow().device.destroy_framebuffer(framebuffer);
         }
     }
 

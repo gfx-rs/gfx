@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{GlContext, MAX_SAMPLERS, MAX_TEXTURE_SLOTS, MAX_COLOR_ATTACHMENTS};
+use crate::{GlContext, MAX_COLOR_ATTACHMENTS, MAX_SAMPLERS, MAX_TEXTURE_SLOTS};
 
 use hal::{
     self, buffer, command,
@@ -536,7 +536,7 @@ impl CommandBuffer {
             // TODO: handle case where we don't do double-buffering?
             vec![glow::BACK_LEFT]
         } else {
-            (glow::COLOR_ATTACHMENT0 ..)
+            (glow::COLOR_ATTACHMENT0..)
                 .take(subpass.color_attachments.len())
                 .collect()
         };

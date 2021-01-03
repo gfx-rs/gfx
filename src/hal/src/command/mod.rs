@@ -128,7 +128,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Begins recording a primary command buffer
     /// (that has no inheritance information).
     unsafe fn begin_primary(&mut self, flags: CommandBufferFlags) {
-        self.begin::<iter::Empty::<B::ImageView>>(flags, CommandBufferInheritanceInfo::default());
+        self.begin::<iter::Empty<B::ImageView>>(flags, CommandBufferInheritanceInfo::default());
     }
 
     /// Finish recording commands to a command buffer.

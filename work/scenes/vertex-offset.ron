@@ -40,17 +40,6 @@
 				layer_count: None,
 			),
 		),
-		"fbo": Framebuffer(
-			pass: "pass",
-			views: {
-				"c": "image.color.view"
-			},
-			extent: (
-				width: 1,
-				height: 1,
-				depth: 1,
-			),
-		),
 		"pipe-layout": PipelineLayout(
 			set_layouts: [],
 			push_constant_ranges: [],
@@ -158,10 +147,13 @@
 	},
 	jobs: {
 		"offset-aligned": Graphics(
-			framebuffer: "fbo",
-			clear_values: [
-				Color(Float((0.0, 0.0, 0.0, 0.0))),
+			attachments: [
+				(
+					image_view: "image.color.view",
+					clear_value: Color(Float((0.0, 0.0, 0.0, 0.0))),
+				)
 			],
+			rect: ( x: 0, y: 0, w: 1, h: 1 ),
 			pass: ("pass", {
 				"main": (commands: [
 					BindPipeline("pipe.vertex-offset"),
@@ -173,10 +165,13 @@
 			}),
 		),
 		"offset-overlap": Graphics(
-			framebuffer: "fbo",
-			clear_values: [
-				Color(Float((0.0, 0.0, 0.0, 0.0))),
+			attachments: [
+				(
+					image_view: "image.color.view",
+					clear_value: Color(Float((0.0, 0.0, 0.0, 0.0))),
+				)
 			],
+			rect: ( x: 0, y: 0, w: 1, h: 1 ),
 			pass: ("pass", {
 				"main": (commands: [
 					BindPipeline("pipe.vertex-offset-overlap"),

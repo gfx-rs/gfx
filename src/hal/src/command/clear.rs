@@ -55,9 +55,7 @@ impl fmt::Debug for ClearValue {
 
 impl Default for ClearValue {
     fn default() -> Self {
-        ClearValue {
-            _align: [0; 4],
-        }
+        ClearValue { _align: [0; 4] }
     }
 }
 

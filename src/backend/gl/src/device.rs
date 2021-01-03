@@ -190,7 +190,12 @@ impl Device {
         Ok((program, sampler_map))
     }
 
-    pub(crate) fn bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
+    pub(crate) fn bind_target_compat(
+        gl: &GlContainer,
+        point: u32,
+        attachment: u32,
+        view: &n::ImageView,
+    ) {
         match *view {
             n::ImageView::Renderbuffer { raw: rb, .. } => unsafe {
                 gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
