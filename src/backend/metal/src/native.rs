@@ -15,7 +15,6 @@ use hal::{
 use range_alloc::RangeAllocator;
 
 use arrayvec::ArrayVec;
-use cocoa_foundation::foundation::NSRange;
 use metal;
 use parking_lot::{Mutex, RwLock};
 use spirv_cross::{msl, spirv};
@@ -352,11 +351,11 @@ impl Image {
                 Some(raw.new_texture_view_from_slice(
                     self.mtl_format,
                     metal::MTLTextureType::D2Array,
-                    NSRange {
+                    metal::NSRange {
                         location: 0,
                         length: raw.mipmap_level_count(),
                     },
-                    NSRange {
+                    metal::NSRange {
                         location: 0,
                         length: self.kind.num_layers() as _,
                     },
