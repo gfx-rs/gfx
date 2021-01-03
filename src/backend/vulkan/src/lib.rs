@@ -1421,7 +1421,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submission: queue::Submission<Ic, Iw, Is>,
-        fence: Option<&native::Fence>,
+        fence: Option<&mut native::Fence>,
     ) where
         T: 'a + Borrow<command::CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
@@ -1467,7 +1467,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         &mut self,
         surface: &mut window::Surface,
         image: window::SurfaceImage,
-        wait_semaphore: Option<&native::Semaphore>,
+        wait_semaphore: Option<&mut native::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError> {
         let ssc = surface.swapchain.as_ref().unwrap();
         let wait_semaphore = if let Some(wait_semaphore) = wait_semaphore {
@@ -1502,7 +1502,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn wait_idle(&self) -> Result<(), OutOfMemory> {
+    fn wait_idle(&mut self) -> Result<(), OutOfMemory> {
         match unsafe { self.device.raw.queue_wait_idle(*self.raw) } {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host),

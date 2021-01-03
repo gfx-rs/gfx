@@ -18,16 +18,8 @@ use winapi::{
 
 use auxil::{spirv_cross_specialize_ast, ShaderStage};
 use hal::{
-    buffer, device as d, format,
-    format::Aspects,
-    image, memory,
-    memory::Requirements,
-    pass,
-    pool::CommandPoolCreateFlags,
-    pso,
-    pso::VertexInputRate,
-    query,
-    queue::{CommandQueue as _, QueueFamilyId},
+    buffer, device as d, format, format::Aspects, image, memory, memory::Requirements, pass,
+    pool::CommandPoolCreateFlags, pso, pso::VertexInputRate, query, queue::QueueFamilyId,
     window as w,
 };
 
@@ -2997,260 +2989,234 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
+    unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>,
+        I: IntoIterator,
+        I::Item: Borrow<pso::Descriptor<'a, B>>,
     {
         let mut descriptor_updater = self.descriptor_updater.lock();
         descriptor_updater.reset();
 
         let mut accum = descriptors_cpu::MultiCopyAccumulator::default();
-        debug!("write_descriptor_sets");
+        debug!("write_descriptor_set");
 
-        for write in write_iter {
-            let mut offset = write.array_offset as u64;
-            let mut target_binding = write.binding as usize;
-            let mut bind_info = &write.set.binding_infos[target_binding];
-            debug!(
-                "\t{:?} binding {} array offset {}",
-                bind_info, target_binding, offset
-            );
-            let base_sampler_offset = write.set.sampler_offset(write.binding, write.array_offset);
-            trace!("\tsampler offset {}", base_sampler_offset);
-            let mut sampler_offset = base_sampler_offset;
-            let mut desc_samplers = write.set.sampler_origins.borrow_mut();
+        let mut offset = op.array_offset as u64;
+        let mut target_binding = op.binding as usize;
+        let base_sampler_offset = op.set.sampler_offset(op.binding, op.array_offset);
+        trace!("\tsampler offset {}", base_sampler_offset);
+        let mut sampler_offset = base_sampler_offset;
+        debug!("\tbinding {} array offset {}", target_binding, offset);
 
-            for descriptor in write.descriptors {
-                // spill over the writes onto the next binding
-                while offset >= bind_info.count {
-                    assert_eq!(offset, bind_info.count);
-                    target_binding += 1;
-                    bind_info = &write.set.binding_infos[target_binding];
-                    offset = 0;
-                }
-                let mut src_cbv = None;
-                let mut src_srv = None;
-                let mut src_uav = None;
+        for descriptor in op.descriptors {
+            // spill over the writes onto the next binding
+            while offset >= op.set.binding_infos[target_binding].count {
+                target_binding += 1;
+                offset = 0;
+            }
+            let bind_info = &mut op.set.binding_infos[target_binding];
+            let mut src_cbv = None;
+            let mut src_srv = None;
+            let mut src_uav = None;
 
-                match *descriptor.borrow() {
-                    pso::Descriptor::Buffer(buffer, ref sub) => {
-                        let buffer = buffer.expect_bound();
+            match *descriptor.borrow() {
+                pso::Descriptor::Buffer(buffer, ref sub) => {
+                    let buffer = buffer.expect_bound();
 
-                        if bind_info.content.is_dynamic() {
-                            // Root Descriptor
-                            let buffer_address = (*buffer.resource).GetGPUVirtualAddress();
-                            // Descriptor sets need to be externally synchronized according to specification
-                            let dynamic_descriptors = &mut *bind_info.dynamic_descriptors.get();
-                            dynamic_descriptors[offset as usize].gpu_buffer_location =
-                                buffer_address + sub.offset;
-                        } else {
-                            // Descriptor table
-                            let size = sub.size_to(buffer.requirements.size);
-
-                            if bind_info.content.contains(r::DescriptorContent::CBV) {
-                                // Making the size field of buffer requirements for uniform
-                                // buffers a multiple of 256 and setting the required offset
-                                // alignment to 256 allows us to patch the size here.
-                                // We can always enforce the size to be aligned to 256 for
-                                // CBVs without going out-of-bounds.
-                                let mask =
-                                    d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
-                                let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                    BufferLocation: (*buffer.resource).GetGPUVirtualAddress()
-                                        + sub.offset,
-                                    SizeInBytes: (size as u32 + mask) as u32 & !mask,
-                                };
-                                let handle = descriptor_updater.alloc_handle(self.raw);
-                                self.raw.CreateConstantBufferView(&desc, handle);
-                                src_cbv = Some(handle);
-                            }
-                            if bind_info.content.contains(r::DescriptorContent::SRV) {
-                                assert_eq!(size % 4, 0);
-                                let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
-                                    Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
-                                    Shader4ComponentMapping: IDENTITY_MAPPING,
-                                    ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
-                                    u: mem::zeroed(),
-                                };
-                                *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
-                                    FirstElement: sub.offset as _,
-                                    NumElements: (size / 4) as _,
-                                    StructureByteStride: 0,
-                                    Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
-                                };
-                                let handle = descriptor_updater.alloc_handle(self.raw);
-                                self.raw.CreateShaderResourceView(
-                                    buffer.resource.as_mut_ptr(),
-                                    &desc,
-                                    handle,
-                                );
-                                src_srv = Some(handle);
-                            }
-                            if bind_info.content.contains(r::DescriptorContent::UAV) {
-                                assert_eq!(size % 4, 0);
-                                let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
-                                    Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
-                                    ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
-                                    u: mem::zeroed(),
-                                };
-                                *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
-                                    FirstElement: sub.offset as _,
-                                    NumElements: (size / 4) as _,
-                                    StructureByteStride: 0,
-                                    CounterOffsetInBytes: 0,
-                                    Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
-                                };
-                                let handle = descriptor_updater.alloc_handle(self.raw);
-                                self.raw.CreateUnorderedAccessView(
-                                    buffer.resource.as_mut_ptr(),
-                                    ptr::null_mut(),
-                                    &desc,
-                                    handle,
-                                );
-                                src_uav = Some(handle);
-                            }
-                        }
-                    }
-                    pso::Descriptor::Image(image, _layout) => {
-                        if bind_info.content.contains(r::DescriptorContent::SRV) {
-                            src_srv = image.handle_srv.map(|h| h.raw);
-                        }
-                        if bind_info.content.contains(r::DescriptorContent::UAV) {
-                            src_uav = image.handle_uav.map(|h| h.raw);
-                        }
-                    }
-                    pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
-                        src_srv = image.handle_srv.map(|h| h.raw);
-                        desc_samplers[sampler_offset] = sampler.handle.raw;
-                        sampler_offset += 1;
-                    }
-                    pso::Descriptor::Sampler(sampler) => {
-                        desc_samplers[sampler_offset] = sampler.handle.raw;
-                        sampler_offset += 1;
-                    }
-                    pso::Descriptor::TexelBuffer(buffer_view) => {
-                        if bind_info.content.contains(r::DescriptorContent::SRV) {
-                            let handle = buffer_view.handle_srv
-                                .expect("SRV handle of the storage texel buffer is zero (not supported by specified format)");
-                            src_srv = Some(handle.raw);
-                        }
-                        if bind_info.content.contains(r::DescriptorContent::UAV) {
-                            let handle = buffer_view.handle_uav
-                                .expect("UAV handle of the storage texel buffer is zero (not supported by specified format)");
-                            src_uav = Some(handle.raw);
-                        }
-                    }
-                }
-
-                if let Some(handle) = src_cbv {
-                    trace!("\tcbv offset {}", offset);
-                    accum.src_views.add(handle, 1);
-                    accum
-                        .dst_views
-                        .add(bind_info.view_range.as_ref().unwrap().at(offset), 1);
-                }
-                if let Some(handle) = src_srv {
-                    trace!("\tsrv offset {}", offset);
-                    accum.src_views.add(handle, 1);
-                    accum
-                        .dst_views
-                        .add(bind_info.view_range.as_ref().unwrap().at(offset), 1);
-                }
-                if let Some(handle) = src_uav {
-                    let uav_offset = if bind_info.content.contains(r::DescriptorContent::SRV) {
-                        bind_info.count + offset
+                    if bind_info.content.is_dynamic() {
+                        // Root Descriptor
+                        let buffer_address = (*buffer.resource).GetGPUVirtualAddress();
+                        // Descriptor sets need to be externally synchronized according to specification
+                        bind_info.dynamic_descriptors[offset as usize].gpu_buffer_location =
+                            buffer_address + sub.offset;
                     } else {
-                        offset
-                    };
-                    trace!("\tuav offset {}", uav_offset);
-                    accum.src_views.add(handle, 1);
-                    accum
-                        .dst_views
-                        .add(bind_info.view_range.as_ref().unwrap().at(uav_offset), 1);
+                        // Descriptor table
+                        let size = sub.size_to(buffer.requirements.size);
+
+                        if bind_info.content.contains(r::DescriptorContent::CBV) {
+                            // Making the size field of buffer requirements for uniform
+                            // buffers a multiple of 256 and setting the required offset
+                            // alignment to 256 allows us to patch the size here.
+                            // We can always enforce the size to be aligned to 256 for
+                            // CBVs without going out-of-bounds.
+                            let mask = d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - 1;
+                            let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                                BufferLocation: (*buffer.resource).GetGPUVirtualAddress()
+                                    + sub.offset,
+                                SizeInBytes: (size as u32 + mask) as u32 & !mask,
+                            };
+                            let handle = descriptor_updater.alloc_handle(self.raw);
+                            self.raw.CreateConstantBufferView(&desc, handle);
+                            src_cbv = Some(handle);
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::SRV) {
+                            assert_eq!(size % 4, 0);
+                            let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+                                Shader4ComponentMapping: IDENTITY_MAPPING,
+                                ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
+                                u: mem::zeroed(),
+                            };
+                            *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
+                                FirstElement: sub.offset as _,
+                                NumElements: (size / 4) as _,
+                                StructureByteStride: 0,
+                                Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
+                            };
+                            let handle = descriptor_updater.alloc_handle(self.raw);
+                            self.raw.CreateShaderResourceView(
+                                buffer.resource.as_mut_ptr(),
+                                &desc,
+                                handle,
+                            );
+                            src_srv = Some(handle);
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::UAV) {
+                            assert_eq!(size % 4, 0);
+                            let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+                                ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
+                                u: mem::zeroed(),
+                            };
+                            *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
+                                FirstElement: sub.offset as _,
+                                NumElements: (size / 4) as _,
+                                StructureByteStride: 0,
+                                CounterOffsetInBytes: 0,
+                                Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
+                            };
+                            let handle = descriptor_updater.alloc_handle(self.raw);
+                            self.raw.CreateUnorderedAccessView(
+                                buffer.resource.as_mut_ptr(),
+                                ptr::null_mut(),
+                                &desc,
+                                handle,
+                            );
+                            src_uav = Some(handle);
+                        }
+                    }
                 }
-
-                offset += 1;
+                pso::Descriptor::Image(image, _layout) => {
+                    if bind_info.content.contains(r::DescriptorContent::SRV) {
+                        src_srv = image.handle_srv.map(|h| h.raw);
+                    }
+                    if bind_info.content.contains(r::DescriptorContent::UAV) {
+                        src_uav = image.handle_uav.map(|h| h.raw);
+                    }
+                }
+                pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
+                    src_srv = image.handle_srv.map(|h| h.raw);
+                    op.set.sampler_origins[sampler_offset] = sampler.handle.raw;
+                    sampler_offset += 1;
+                }
+                pso::Descriptor::Sampler(sampler) => {
+                    op.set.sampler_origins[sampler_offset] = sampler.handle.raw;
+                    sampler_offset += 1;
+                }
+                pso::Descriptor::TexelBuffer(buffer_view) => {
+                    if bind_info.content.contains(r::DescriptorContent::SRV) {
+                        let handle = buffer_view.handle_srv
+                            .expect("SRV handle of the storage texel buffer is zero (not supported by specified format)");
+                        src_srv = Some(handle.raw);
+                    }
+                    if bind_info.content.contains(r::DescriptorContent::UAV) {
+                        let handle = buffer_view.handle_uav
+                            .expect("UAV handle of the storage texel buffer is zero (not supported by specified format)");
+                        src_uav = Some(handle.raw);
+                    }
+                }
             }
 
-            if sampler_offset != base_sampler_offset {
-                drop(desc_samplers);
-                write
-                    .set
-                    .update_samplers(&self.samplers.heap, &self.samplers.origins, &mut accum);
+            if let Some(handle) = src_cbv {
+                trace!("\tcbv offset {}", offset);
+                accum.src_views.add(handle, 1);
+                accum
+                    .dst_views
+                    .add(bind_info.view_range.as_ref().unwrap().at(offset), 1);
             }
+            if let Some(handle) = src_srv {
+                trace!("\tsrv offset {}", offset);
+                accum.src_views.add(handle, 1);
+                accum
+                    .dst_views
+                    .add(bind_info.view_range.as_ref().unwrap().at(offset), 1);
+            }
+            if let Some(handle) = src_uav {
+                let uav_offset = if bind_info.content.contains(r::DescriptorContent::SRV) {
+                    bind_info.count + offset
+                } else {
+                    offset
+                };
+                trace!("\tuav offset {}", uav_offset);
+                accum.src_views.add(handle, 1);
+                accum
+                    .dst_views
+                    .add(bind_info.view_range.as_ref().unwrap().at(uav_offset), 1);
+            }
+
+            offset += 1;
+        }
+
+        if sampler_offset != base_sampler_offset {
+            op.set
+                .update_samplers(&self.samplers.heap, &self.samplers.origins, &mut accum);
         }
 
         accum.flush(self.raw);
     }
 
-    unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
-    where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
-    {
+    unsafe fn copy_descriptor_set<'a>(&self, op: pso::DescriptorSetCopy<'a, B>) {
         let mut accum = descriptors_cpu::MultiCopyAccumulator::default();
 
-        for copy_wrap in copy_iter {
-            let copy = copy_wrap.borrow();
-            let src_info = &copy.src_set.binding_infos[copy.src_binding as usize];
-            let dst_info = &copy.dst_set.binding_infos[copy.dst_binding as usize];
+        let src_info = &op.src_set.binding_infos[op.src_binding as usize];
+        let dst_info = &op.dst_set.binding_infos[op.dst_binding as usize];
 
-            if let (Some(src_range), Some(dst_range)) =
-                (src_info.view_range.as_ref(), dst_info.view_range.as_ref())
+        if let (Some(src_range), Some(dst_range)) =
+            (src_info.view_range.as_ref(), dst_info.view_range.as_ref())
+        {
+            assert!(op.src_array_offset + op.count <= src_range.handle.size as usize);
+            assert!(op.dst_array_offset + op.count <= dst_range.handle.size as usize);
+            let count = op.count as u32;
+            accum
+                .src_views
+                .add(src_range.at(op.src_array_offset as _), count);
+            accum
+                .dst_views
+                .add(dst_range.at(op.dst_array_offset as _), count);
+
+            if (src_info.content & dst_info.content)
+                .contains(r::DescriptorContent::SRV | r::DescriptorContent::UAV)
             {
-                assert!(copy.src_array_offset + copy.count <= src_range.handle.size as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.handle.size as usize);
-                let count = copy.count as u32;
-                accum
-                    .src_views
-                    .add(src_range.at(copy.src_array_offset as _), count);
-                accum
-                    .dst_views
-                    .add(dst_range.at(copy.dst_array_offset as _), count);
-
-                if (src_info.content & dst_info.content)
-                    .contains(r::DescriptorContent::SRV | r::DescriptorContent::UAV)
-                {
-                    assert!(
-                        src_info.count as usize + copy.src_array_offset + copy.count
-                            <= src_range.handle.size as usize
-                    );
-                    assert!(
-                        dst_info.count as usize + copy.dst_array_offset + copy.count
-                            <= dst_range.handle.size as usize
-                    );
-                    accum.src_views.add(
-                        src_range.at(src_info.count + copy.src_array_offset as u64),
-                        count,
-                    );
-                    accum.dst_views.add(
-                        dst_range.at(dst_info.count + copy.dst_array_offset as u64),
-                        count,
-                    );
-                }
-            }
-
-            if dst_info.content.contains(r::DescriptorContent::SAMPLER) {
-                let src_offset = copy
-                    .src_set
-                    .sampler_offset(copy.src_binding, copy.src_array_offset);
-                let dst_offset = copy
-                    .dst_set
-                    .sampler_offset(copy.dst_binding, copy.dst_array_offset);
-                let src_samplers = copy.src_set.sampler_origins.borrow();
-                let mut dst_samplers = copy.dst_set.sampler_origins.borrow_mut();
-                dst_samplers[dst_offset..dst_offset + copy.count]
-                    .copy_from_slice(&src_samplers[src_offset..src_offset + copy.count]);
-                drop(dst_samplers);
-
-                copy.dst_set.update_samplers(
-                    &self.samplers.heap,
-                    &self.samplers.origins,
-                    &mut accum,
+                assert!(
+                    src_info.count as usize + op.src_array_offset + op.count
+                        <= src_range.handle.size as usize
+                );
+                assert!(
+                    dst_info.count as usize + op.dst_array_offset + op.count
+                        <= dst_range.handle.size as usize
+                );
+                accum.src_views.add(
+                    src_range.at(src_info.count + op.src_array_offset as u64),
+                    count,
+                );
+                accum.dst_views.add(
+                    dst_range.at(dst_info.count + op.dst_array_offset as u64),
+                    count,
                 );
             }
+        }
+
+        if dst_info.content.contains(r::DescriptorContent::SAMPLER) {
+            let src_offset = op
+                .src_set
+                .sampler_offset(op.src_binding, op.src_array_offset);
+            let dst_offset = op
+                .dst_set
+                .sampler_offset(op.dst_binding, op.dst_array_offset);
+            op.dst_set.sampler_origins[dst_offset..dst_offset + op.count]
+                .copy_from_slice(&op.src_set.sampler_origins[src_offset..src_offset + op.count]);
+
+            op.dst_set
+                .update_samplers(&self.samplers.heap, &self.samplers.origins, &mut accum);
         }
 
         accum.flush(self.raw.clone());
@@ -3258,7 +3224,7 @@ impl d::Device<B> for Device {
 
     unsafe fn map_memory(
         &self,
-        memory: &r::Memory,
+        memory: &mut r::Memory,
         segment: memory::Segment,
     ) -> Result<*mut u8, d::MapError> {
         let mem = memory
@@ -3273,7 +3239,7 @@ impl d::Device<B> for Device {
         Ok(ptr as *mut _)
     }
 
-    unsafe fn unmap_memory(&self, memory: &r::Memory) {
+    unsafe fn unmap_memory(&self, memory: &mut r::Memory) {
         if let Some(mem) = memory.resource {
             (*mem).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
         }
@@ -3353,7 +3319,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn reset_fence(&self, fence: &r::Fence) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &mut r::Fence) -> Result<(), d::OutOfMemory> {
         assert_eq!(winerror::S_OK, fence.raw.signal(0));
         Ok(())
     }
@@ -3432,11 +3398,11 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &mut ()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &mut ()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
@@ -3598,7 +3564,7 @@ impl d::Device<B> for Device {
 
     fn wait_idle(&self) -> Result<(), d::OutOfMemory> {
         for queue in &self.queues {
-            queue.wait_idle()?;
+            queue.wait_idle_impl()?;
         }
         Ok(())
     }

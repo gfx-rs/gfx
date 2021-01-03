@@ -471,6 +471,20 @@ impl CommandQueue {
         self.idle_fence.destroy();
         self.raw.destroy();
     }
+
+    fn wait_idle_impl(&self) -> Result<(), hal::device::OutOfMemory> {
+        self.raw.signal(self.idle_fence, 1);
+        assert_eq!(
+            winerror::S_OK,
+            self.idle_fence.set_event_on_completion(self.idle_event, 1)
+        );
+
+        unsafe {
+            synchapi::WaitForSingleObject(self.idle_event.0, winbase::INFINITE);
+        }
+
+        Ok(())
+    }
 }
 
 unsafe impl Send for CommandQueue {}
@@ -480,7 +494,7 @@ impl q::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submission: q::Submission<Ic, Iw, Is>,
-        fence: Option<&resource::Fence>,
+        fence: Option<&mut resource::Fence>,
     ) where
         T: 'a + Borrow<command::CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
@@ -511,23 +525,13 @@ impl q::CommandQueue<Backend> for CommandQueue {
         &mut self,
         surface: &mut window::Surface,
         image: window::SwapchainImage,
-        _wait_semaphore: Option<&resource::Semaphore>,
+        _wait_semaphore: Option<&mut resource::Semaphore>,
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError> {
         surface.present(image).map(|()| None)
     }
 
-    fn wait_idle(&self) -> Result<(), hal::device::OutOfMemory> {
-        self.raw.signal(self.idle_fence, 1);
-        assert_eq!(
-            winerror::S_OK,
-            self.idle_fence.set_event_on_completion(self.idle_event, 1)
-        );
-
-        unsafe {
-            synchapi::WaitForSingleObject(self.idle_event.0, winbase::INFINITE);
-        }
-
-        Ok(())
+    fn wait_idle(&mut self) -> Result<(), hal::device::OutOfMemory> {
+        self.wait_idle_impl()
     }
 }
 

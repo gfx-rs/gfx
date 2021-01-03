@@ -37,12 +37,12 @@
 //! # let device: empty::Device = return;
 //! # let mut present_queue: empty::CommandQueue = return;
 //! # unsafe {
-//! let render_semaphore = device.create_semaphore().unwrap();
+//! let mut render_semaphore = device.create_semaphore().unwrap();
 //!
 //! let (frame, suboptimal) = surface.acquire_image(!0).unwrap();
 //! // render the scene..
 //! // `render_semaphore` will be signalled once rendering has been finished
-//! present_queue.present(&mut surface, frame, Some(&render_semaphore));
+//! present_queue.present(&mut surface, frame, Some(&mut render_semaphore));
 //! # }}
 //! ```
 //!

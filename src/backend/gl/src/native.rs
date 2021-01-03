@@ -6,9 +6,7 @@ use hal::{
     pass, pso, window as w,
 };
 
-use parking_lot::Mutex;
-
-use std::{borrow::Borrow, cell::Cell, ops::Range, sync::Arc};
+use std::{borrow::Borrow, ops::Range, sync::Arc};
 
 pub type TextureTarget = u32;
 pub type TextureFormat = u32;
@@ -59,14 +57,12 @@ impl Buffer {
 #[derive(Debug)]
 pub struct BufferView;
 
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum FenceInner {
+#[derive(Debug)]
+pub enum Fence {
     Idle { signaled: bool },
-    Pending(Option<<GlContext as glow::HasContext>::Fence>),
+    Pending(<GlContext as glow::HasContext>::Fence),
 }
 
-#[derive(Debug)]
-pub struct Fence(pub(crate) Cell<FenceInner>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
@@ -241,7 +237,7 @@ pub(crate) enum DescSetBindings {
 pub struct DescriptorSet {
     pub(crate) layout: DescriptorSetLayout,
     //TODO: use `UnsafeCell` instead
-    pub(crate) bindings: Arc<Mutex<Vec<DescSetBindings>>>,
+    pub(crate) bindings: Vec<DescSetBindings>,
 }
 
 #[derive(Debug)]
@@ -254,7 +250,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
     ) -> Result<DescriptorSet, pso::AllocationError> {
         Ok(DescriptorSet {
             layout: Arc::clone(layout),
-            bindings: Arc::new(Mutex::new(Vec::new())),
+            bindings: Vec::new(),
         })
     }
 
@@ -289,7 +285,7 @@ pub struct Memory {
     /// Allocation size
     pub(crate) size: u64,
     pub(crate) map_flags: u32,
-    pub(crate) emulate_map_allocation: Cell<Option<*mut u8>>,
+    pub(crate) emulate_map_allocation: Option<*mut u8>,
 }
 
 unsafe impl Send for Memory {}

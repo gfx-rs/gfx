@@ -1,4 +1,7 @@
-use std::{borrow::Borrow, ops::Range};
+use std::{
+    borrow::{Borrow, BorrowMut},
+    ops::Range,
+};
 
 use hal::{
     buffer,
@@ -339,26 +342,21 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, _write_iter: I)
+    unsafe fn write_descriptor_set<'a, I>(&self, _op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        I: IntoIterator,
+        I::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
         todo!()
     }
 
-    unsafe fn copy_descriptor_sets<'a, I>(&self, _copy_iter: I)
-    where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
-    {
+    unsafe fn copy_descriptor_set<'a>(&self, _op: pso::DescriptorSetCopy<'a, Backend>) {
         todo!()
     }
 
     unsafe fn map_memory(
         &self,
-        _memory: &<Backend as hal::Backend>::Memory,
+        _memory: &mut <Backend as hal::Backend>::Memory,
         _segment: Segment,
     ) -> Result<*mut u8, MapError> {
         todo!()
@@ -380,7 +378,7 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn unmap_memory(&self, _memory: &<Backend as hal::Backend>::Memory) {
+    unsafe fn unmap_memory(&self, _memory: &mut <Backend as hal::Backend>::Memory) {
         todo!()
     }
 
@@ -401,7 +399,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn reset_fence(
         &self,
-        _fence: &<Backend as hal::Backend>::Fence,
+        _fence: &mut <Backend as hal::Backend>::Fence,
     ) -> Result<(), OutOfMemory> {
         todo!()
     }
@@ -409,7 +407,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn reset_fences<I>(&self, _fences: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<<Backend as hal::Backend>::Fence>,
+        I::Item: BorrowMut<<Backend as hal::Backend>::Fence>,
     {
         todo!()
     }
@@ -463,14 +461,14 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn set_event(
         &self,
-        _event: &<Backend as hal::Backend>::Event,
+        _event: &mut <Backend as hal::Backend>::Event,
     ) -> Result<(), OutOfMemory> {
         todo!()
     }
 
     unsafe fn reset_event(
         &self,
-        _event: &<Backend as hal::Backend>::Event,
+        _event: &mut <Backend as hal::Backend>::Event,
     ) -> Result<(), OutOfMemory> {
         todo!()
     }

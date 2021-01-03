@@ -2199,7 +2199,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
             wait_semaphores,
             signal_semaphores,
         }: hal::queue::Submission<Ic, Iw, Is>,
-        fence: Option<&native::Fence>,
+        fence: Option<&mut native::Fence>,
     ) where
         T: 'a + Borrow<CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
@@ -2376,11 +2376,8 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                 blocker.submit_impl(cmd_buffer);
 
                 if let Some(fence) = fence {
-                    debug!(
-                        "\tmarking fence ptr {:?} as pending",
-                        fence.0.raw() as *const _
-                    );
-                    *fence.0.lock() = native::FenceInner::PendingSubmission(cmd_buffer.to_owned());
+                    debug!("\tmarking fence as pending");
+                    *fence = native::Fence::PendingSubmission(cmd_buffer.to_owned());
                 }
             } else if let Some(cmd_buffer) = deferred_cmd_buffer {
                 blocker.submit_impl(cmd_buffer);
@@ -2411,9 +2408,13 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         &mut self,
         _surface: &mut window::Surface,
         image: window::SwapchainImage,
-        wait_semaphore: Option<&native::Semaphore>,
+        wait_semaphore: Option<&mut native::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError> {
-        self.wait(wait_semaphore);
+        if let Some(semaphore) = wait_semaphore {
+            if let Some(ref system) = semaphore.system {
+                system.wait(!0);
+            }
+        }
 
         let queue = self.shared.queue.lock();
         let drawable = image.into_drawable();
@@ -2430,7 +2431,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
-    fn wait_idle(&self) -> Result<(), OutOfMemory> {
+    fn wait_idle(&mut self) -> Result<(), OutOfMemory> {
         QueueInner::wait_idle(&self.shared.queue);
         Ok(())
     }

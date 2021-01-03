@@ -23,7 +23,12 @@ use crate::{
     Backend, MemoryTypeId,
 };
 
-use std::{any::Any, borrow::Borrow, fmt, iter, ops::Range};
+use std::{
+    any::Any,
+    borrow::{Borrow, BorrowMut},
+    fmt, iter,
+    ops::Range,
+};
 
 /// Error occurred caused device to be lost.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -549,24 +554,24 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Destroy a descriptor set layout object
     unsafe fn destroy_descriptor_set_layout(&self, layout: B::DescriptorSetLayout);
 
-    /// Specifying the parameters of a descriptor set write operation
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
-    where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>;
-
-    /// Structure specifying a copy descriptor set operation
-    unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
+    /// Specifying the parameters of a descriptor set write operation.
+    unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
-        I::IntoIter: ExactSizeIterator;
+        I::IntoIter: ExactSizeIterator,
+        I::Item: Borrow<pso::Descriptor<'a, B>>;
+
+    /// Structure specifying a copy descriptor set operation.
+    unsafe fn copy_descriptor_set<'a>(&self, op: pso::DescriptorSetCopy<'a, B>);
 
     /// Map a memory object into application address space
     ///
     /// Call `map_memory()` to retrieve a host virtual address pointer to a region of a mappable memory object
-    unsafe fn map_memory(&self, memory: &B::Memory, segment: Segment) -> Result<*mut u8, MapError>;
+    unsafe fn map_memory(
+        &self,
+        memory: &mut B::Memory,
+        segment: Segment,
+    ) -> Result<*mut u8, MapError>;
 
     /// Flush mapped memory ranges
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
@@ -581,7 +586,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         I::Item: Borrow<(&'a B::Memory, Segment)>;
 
     /// Unmap a memory object once host access to it is no longer needed by the application
-    unsafe fn unmap_memory(&self, memory: &B::Memory);
+    unsafe fn unmap_memory(&self, memory: &mut B::Memory);
 
     /// Create a new semaphore object.
     fn create_semaphore(&self) -> Result<B::Semaphore, OutOfMemory>;
@@ -613,7 +618,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     fn create_fence(&self, signaled: bool) -> Result<B::Fence, OutOfMemory>;
 
     /// Resets a given fence to its original, unsignaled state.
-    unsafe fn reset_fence(&self, fence: &B::Fence) -> Result<(), OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &mut B::Fence) -> Result<(), OutOfMemory> {
         self.reset_fences(iter::once(fence))
     }
 
@@ -621,11 +626,11 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn reset_fences<I>(&self, fences: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<B::Fence>,
+        I::Item: BorrowMut<B::Fence>,
         I::IntoIter: ExactSizeIterator,
     {
-        for fence in fences {
-            self.reset_fence(fence.borrow())?;
+        for mut fence in fences {
+            self.reset_fence(fence.borrow_mut())?;
         }
         Ok(())
     }
@@ -705,10 +710,10 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn get_event_status(&self, event: &B::Event) -> Result<bool, WaitError>;
 
     /// Sets an event.
-    unsafe fn set_event(&self, event: &B::Event) -> Result<(), OutOfMemory>;
+    unsafe fn set_event(&self, event: &mut B::Event) -> Result<(), OutOfMemory>;
 
     /// Resets an event.
-    unsafe fn reset_event(&self, event: &B::Event) -> Result<(), OutOfMemory>;
+    unsafe fn reset_event(&self, event: &mut B::Event) -> Result<(), OutOfMemory>;
 
     /// Create a new query pool object
     ///

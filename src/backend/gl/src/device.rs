@@ -19,7 +19,7 @@ use glow::HasContext;
 use parking_lot::Mutex;
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
-use std::{borrow::Borrow, cell::Cell, ops::Range, slice, sync::Arc};
+use std::{borrow::Borrow, ops::Range, slice, sync::Arc};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -758,7 +758,7 @@ impl d::Device<B> for Device {
                     buffer: Some((raw, target)),
                     size,
                     map_flags,
-                    emulate_map_allocation: Cell::new(None),
+                    emulate_map_allocation: None,
                 })
             }
 
@@ -769,7 +769,7 @@ impl d::Device<B> for Device {
                     buffer: None,
                     size,
                     map_flags: 0,
-                    emulate_map_allocation: Cell::new(None),
+                    emulate_map_allocation: None,
                 })
             }
         }
@@ -1261,7 +1261,7 @@ impl d::Device<B> for Device {
 
     unsafe fn map_memory(
         &self,
-        memory: &n::Memory,
+        memory: &mut n::Memory,
         segment: memory::Segment,
     ) -> Result<*mut u8, d::MapError> {
         let gl = &self.share.context;
@@ -1272,12 +1272,12 @@ impl d::Device<B> for Device {
 
         let (buffer, target) = memory.buffer.expect("cannot map image memory");
         let ptr = if caps.emulate_map {
-            let ptr: *mut u8 = if let Some(ptr) = memory.emulate_map_allocation.get() {
+            let ptr: *mut u8 = if let Some(ptr) = memory.emulate_map_allocation {
                 ptr
             } else {
                 let ptr =
                     Box::into_raw(vec![0; memory.size as usize].into_boxed_slice()) as *mut u8;
-                memory.emulate_map_allocation.set(Some(ptr));
+                memory.emulate_map_allocation = Some(ptr);
                 ptr
             };
 
@@ -1296,14 +1296,14 @@ impl d::Device<B> for Device {
         Ok(ptr)
     }
 
-    unsafe fn unmap_memory(&self, memory: &n::Memory) {
+    unsafe fn unmap_memory(&self, memory: &mut n::Memory) {
         let gl = &self.share.context;
         let (buffer, target) = memory.buffer.expect("cannot unmap image memory");
 
         gl.bind_buffer(target, Some(buffer));
 
         if self.share.private_caps.emulate_map {
-            let ptr = memory.emulate_map_allocation.replace(None).unwrap();
+            let ptr = memory.emulate_map_allocation.take().unwrap();
             let _ = Box::from_raw(slice::from_raw_parts_mut(ptr, memory.size as usize));
         } else {
             gl.unmap_buffer(target);
@@ -1332,7 +1332,7 @@ impl d::Device<B> for Device {
             let size = segment.size.unwrap_or(mem.size - segment.offset);
 
             if self.share.private_caps.emulate_map {
-                let ptr = mem.emulate_map_allocation.get().unwrap();
+                let ptr = mem.emulate_map_allocation.unwrap();
                 let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);
                 gl.buffer_sub_data_u8_slice(target, offset as i32, slice);
             } else {
@@ -1366,7 +1366,7 @@ impl d::Device<B> for Device {
             let size = segment.size.unwrap_or(mem.size - segment.offset);
 
             if self.share.private_caps.emulate_map {
-                let ptr = mem.emulate_map_allocation.get().unwrap();
+                let ptr = mem.emulate_map_allocation.unwrap();
                 let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);
                 gl.get_buffer_sub_data(target, offset as i32, slice);
             } else {
@@ -1676,127 +1676,106 @@ impl d::Device<B> for Device {
         Ok(Arc::new(bindings))
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, writes: I)
+    unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>,
+        I: IntoIterator,
+        I::Item: Borrow<pso::Descriptor<'a, B>>,
     {
-        for write in writes {
-            let mut bindings = write.set.bindings.lock();
-            let mut layout_index = write
-                .set
-                .layout
-                .binary_search_by_key(&write.binding, |b| b.binding)
-                .unwrap();
-            let mut array_offset = write.array_offset;
+        let mut layout_index = op
+            .set
+            .layout
+            .binary_search_by_key(&op.binding, |b| b.binding)
+            .unwrap();
+        let mut array_offset = op.array_offset;
 
-            for descriptor in write.descriptors {
-                let binding_layout = &write.set.layout[layout_index];
-                match *descriptor.borrow() {
-                    pso::Descriptor::Buffer(buffer, ref sub) => {
-                        let (raw_buffer, buffer_range) = buffer.as_bound();
-                        let range = crate::resolve_sub_range(sub, buffer_range);
+        for descriptor in op.descriptors {
+            let binding_layout = &op.set.layout[layout_index];
+            let binding = match *descriptor.borrow() {
+                pso::Descriptor::Buffer(buffer, ref sub) => {
+                    let (raw_buffer, buffer_range) = buffer.as_bound();
+                    let range = crate::resolve_sub_range(sub, buffer_range);
 
-                        let register = match binding_layout.ty {
-                            pso::DescriptorType::Buffer { ty, .. } => match ty {
-                                pso::BufferDescriptorType::Uniform => {
-                                    n::BindingRegister::UniformBuffers
-                                }
-                                pso::BufferDescriptorType::Storage { .. } => {
-                                    n::BindingRegister::StorageBuffers
-                                }
-                            },
-                            other => {
-                                panic!("Can't write buffer into descriptor of type {:?}", other)
+                    let register = match binding_layout.ty {
+                        pso::DescriptorType::Buffer { ty, .. } => match ty {
+                            pso::BufferDescriptorType::Uniform => {
+                                n::BindingRegister::UniformBuffers
                             }
-                        };
+                            pso::BufferDescriptorType::Storage { .. } => {
+                                n::BindingRegister::StorageBuffers
+                            }
+                        },
+                        other => {
+                            panic!("Can't write buffer into descriptor of type {:?}", other)
+                        }
+                    };
 
-                        bindings.push(n::DescSetBindings::Buffer {
-                            register,
-                            buffer: raw_buffer,
-                            offset: range.start as i32,
-                            size: (range.end - range.start) as i32,
-                        });
+                    n::DescSetBindings::Buffer {
+                        register,
+                        buffer: raw_buffer,
+                        offset: range.start as i32,
+                        size: (range.end - range.start) as i32,
                     }
-                    pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
-                        match *view {
-                            n::ImageView::Texture { target, raw, .. } => {
-                                bindings.push(n::DescSetBindings::Texture(raw, target))
-                            }
-                            n::ImageView::Renderbuffer { .. } => {
-                                panic!("Texture doesn't support shader binding")
-                            }
-                        }
-                        match *sampler {
-                            n::FatSampler::Sampler(sampler) => {
-                                bindings.push(n::DescSetBindings::Sampler(sampler))
-                            }
-                            n::FatSampler::Info(ref info) => {
-                                bindings.push(n::DescSetBindings::SamplerDesc(info.clone()))
-                            }
-                        }
-                    }
-                    pso::Descriptor::Image(view, _layout) => match *view {
-                        n::ImageView::Texture { target, raw, .. } => {
-                            bindings.push(n::DescSetBindings::Texture(raw, target))
-                        }
+                }
+                pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
+                    match *view {
+                        n::ImageView::Texture { target, raw, .. } => op
+                            .set
+                            .bindings
+                            .push(n::DescSetBindings::Texture(raw, target)),
                         n::ImageView::Renderbuffer { .. } => {
                             panic!("Texture doesn't support shader binding")
                         }
-                    },
-                    pso::Descriptor::Sampler(sampler) => match *sampler {
-                        n::FatSampler::Sampler(sampler) => {
-                            bindings.push(n::DescSetBindings::Sampler(sampler))
-                        }
+                    }
+                    match *sampler {
+                        n::FatSampler::Sampler(sampler) => n::DescSetBindings::Sampler(sampler),
                         n::FatSampler::Info(ref info) => {
-                            bindings.push(n::DescSetBindings::SamplerDesc(info.clone()))
+                            n::DescSetBindings::SamplerDesc(info.clone())
                         }
-                    },
-                    pso::Descriptor::TexelBuffer(_view) => unimplemented!(),
+                    }
                 }
+                pso::Descriptor::Image(view, _layout) => match *view {
+                    n::ImageView::Texture { target, raw, .. } => {
+                        n::DescSetBindings::Texture(raw, target)
+                    }
+                    n::ImageView::Renderbuffer { .. } => {
+                        panic!("Texture doesn't support shader binding")
+                    }
+                },
+                pso::Descriptor::Sampler(sampler) => match *sampler {
+                    n::FatSampler::Sampler(sampler) => n::DescSetBindings::Sampler(sampler),
+                    n::FatSampler::Info(ref info) => n::DescSetBindings::SamplerDesc(info.clone()),
+                },
+                pso::Descriptor::TexelBuffer(_view) => unimplemented!(),
+            };
 
-                array_offset += 1;
-                if array_offset == binding_layout.count {
-                    array_offset = 0;
-                    layout_index += 1;
-                }
+            //TODO: overwrite instead of pushing on top
+            op.set.bindings.push(binding);
+
+            array_offset += 1;
+            if array_offset == binding_layout.count {
+                array_offset = 0;
+                layout_index += 1;
             }
         }
     }
 
-    unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
-    where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
-    {
-        for copy in copies {
-            let copy = copy.borrow();
-
-            let src_set = &copy.src_set;
-            let dst_set = &copy.dst_set;
-            if std::ptr::eq(src_set, dst_set) {
-                panic!("copying within same descriptor set is not currently supported");
-            }
-
-            let src_bindings = src_set.bindings.lock();
-            let mut dst_bindings = dst_set.bindings.lock();
-
-            let count = copy.count;
-
-            // TODO: add support for array bindings when the OpenGL backend gets them
-            let src_start = copy.src_binding as usize;
-            let src_end = src_start + count;
-            assert!(src_end <= src_bindings.len());
-
-            let src_slice = &src_bindings[src_start..src_end];
-
-            let dst_start = copy.dst_binding as usize;
-            let dst_end = dst_start + count;
-            assert!(dst_end <= dst_bindings.len());
-
-            dst_bindings[dst_start..dst_end].clone_from_slice(src_slice);
+    unsafe fn copy_descriptor_set<'a>(&self, op: pso::DescriptorSetCopy<'a, B>) {
+        if std::ptr::eq(op.src_set, &*op.dst_set) {
+            panic!("copying within same descriptor set is not currently supported");
         }
+
+        // TODO: add support for array bindings when the OpenGL backend gets them
+        let src_start = op.src_binding as usize;
+        let src_end = src_start + op.count;
+        assert!(src_end <= op.src_set.bindings.len());
+
+        let src_slice = &op.src_set.bindings[src_start..src_end];
+
+        let dst_start = op.dst_binding as usize;
+        let dst_end = dst_start + op.count;
+        assert!(dst_end <= op.dst_set.bindings.len());
+
+        op.dst_set.bindings[dst_start..dst_end].clone_from_slice(src_slice);
     }
 
     fn create_semaphore(&self) -> Result<n::Semaphore, d::OutOfMemory> {
@@ -1804,12 +1783,11 @@ impl d::Device<B> for Device {
     }
 
     fn create_fence(&self, signaled: bool) -> Result<n::Fence, d::OutOfMemory> {
-        let cell = Cell::new(n::FenceInner::Idle { signaled });
-        Ok(n::Fence(cell))
+        Ok(n::Fence::Idle { signaled })
     }
 
-    unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), d::OutOfMemory> {
-        fence.0.replace(n::FenceInner::Idle { signaled: false });
+    unsafe fn reset_fence(&self, fence: &mut n::Fence) -> Result<(), d::OutOfMemory> {
+        *fence = n::Fence::Idle { signaled: false };
         Ok(())
     }
 
@@ -1823,17 +1801,14 @@ impl d::Device<B> for Device {
         // access to a resource. How much does this call costs ? The status of the fence
         // could be cached to avoid calling this more than once (in core or in the backend ?).
         let gl = &self.share.context;
-        match fence.0.get() {
-            n::FenceInner::Idle { signaled } => {
+        match *fence {
+            n::Fence::Idle { signaled } => {
                 if !signaled {
-                    warn!(
-                        "Fence ptr {:?} is not pending, waiting not possible",
-                        fence.0.as_ptr()
-                    );
+                    warn!("Fence ptr {:?} is not pending, waiting not possible", fence);
                 }
                 Ok(signaled)
             }
-            n::FenceInner::Pending(Some(sync)) => {
+            n::Fence::Pending(sync) => {
                 // TODO: Could `wait_sync` be used here instead?
                 match gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32) {
                     glow::TIMEOUT_EXPIRED => Ok(false),
@@ -1844,17 +1819,11 @@ impl d::Device<B> for Device {
                         Ok(false)
                     }
                     glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => {
-                        fence.0.set(n::FenceInner::Idle { signaled: true });
+                        //fence.0.set(n::Fence::Idle { signaled: true });
                         Ok(true)
                     }
                     _ => unreachable!(),
                 }
-            }
-            n::FenceInner::Pending(None) => {
-                // No sync capability, we fallback to waiting for *everything* to finish
-                gl.flush();
-                fence.0.set(n::FenceInner::Idle { signaled: true });
-                Ok(true)
             }
         }
     }
@@ -1908,12 +1877,9 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, d::DeviceLost> {
-        Ok(match fence.0.get() {
-            n::FenceInner::Pending(Some(sync)) => {
-                self.share.context.get_sync_status(sync) == glow::SIGNALED
-            }
-            n::FenceInner::Pending(None) => false,
-            n::FenceInner::Idle { signaled } => signaled,
+        Ok(match *fence {
+            n::Fence::Idle { signaled } => signaled,
+            n::Fence::Pending(sync) => self.share.context.get_sync_status(sync) == glow::SIGNALED,
         })
     }
 
@@ -1925,11 +1891,11 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &mut ()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &mut ()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
@@ -2028,11 +1994,11 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_fence(&self, fence: n::Fence) {
-        match fence.0.get() {
-            n::FenceInner::Pending(Some(sync)) => {
+        match fence {
+            n::Fence::Idle { .. } => {}
+            n::Fence::Pending(sync) => {
                 self.share.context.delete_sync(sync);
             }
-            _ => {}
         }
     }
 

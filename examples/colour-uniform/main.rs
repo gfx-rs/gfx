@@ -691,7 +691,7 @@ impl<B: Backend> BufferState<B> {
     where
         T: Copy,
     {
-        let memory: B::Memory;
+        let mut memory: B::Memory;
         let mut buffer: B::Buffer;
         let size: u64;
 
@@ -726,9 +726,9 @@ impl<B: Backend> BufferState<B> {
             size = mem_req.size;
 
             // TODO: check transitions: read/write mapping and vertex buffer read
-            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
+            let mapping = device.map_memory(&mut memory, m::Segment::ALL).unwrap();
             ptr::copy_nonoverlapping(data_source.as_ptr() as *const u8, mapping, upload_size);
-            device.unmap_memory(&memory);
+            device.unmap_memory(&mut memory);
         }
 
         BufferState {
@@ -749,7 +749,7 @@ impl<B: Backend> BufferState<B> {
         let upload_size = data_source.len() * stride;
 
         assert!(offset + upload_size as u64 <= self.size);
-        let memory = self.memory.as_ref().unwrap();
+        let memory = self.memory.as_mut().unwrap();
 
         unsafe {
             let mapping = device
@@ -775,7 +775,7 @@ impl<B: Backend> BufferState<B> {
         let row_pitch = (width * stride as u32 + row_alignment_mask) & !row_alignment_mask;
         let upload_size = (height * row_pitch) as u64;
 
-        let memory: B::Memory;
+        let mut memory: B::Memory;
         let mut buffer: B::Buffer;
         let size: u64;
 
@@ -801,7 +801,7 @@ impl<B: Backend> BufferState<B> {
             size = mem_reqs.size;
 
             // copy image data into staging buffer
-            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
+            let mapping = device.map_memory(&mut memory, m::Segment::ALL).unwrap();
             for y in 0..height as usize {
                 let data_source_slice =
                     &(**img)[y * (width as usize) * stride..(y + 1) * (width as usize) * stride];
@@ -811,7 +811,7 @@ impl<B: Backend> BufferState<B> {
                     data_source_slice.len(),
                 );
             }
-            device.unmap_memory(&memory);
+            device.unmap_memory(&mut memory);
         }
 
         (
@@ -863,14 +863,14 @@ impl<B: Backend> Uniform<B> {
         let buffer = Some(buffer);
 
         desc.write_to_state(
-            vec![DescSetWrite {
+            DescSetWrite {
                 binding,
                 array_offset: 0,
                 descriptors: Some(pso::Descriptor::Buffer(
                     buffer.as_ref().unwrap().get_buffer(),
                     buffer::SubRange::WHOLE,
                 )),
-            }],
+            },
             &mut device.borrow_mut().device,
         );
 
@@ -950,23 +950,20 @@ struct DescSetWrite<W> {
 impl<B: Backend> DescSet<B> {
     unsafe fn write_to_state<'a, 'b: 'a, W>(
         &'b mut self,
-        write: Vec<DescSetWrite<W>>,
+        d: DescSetWrite<W>,
         device: &mut B::Device,
     ) where
         W: IntoIterator,
+        W::IntoIter: ExactSizeIterator,
         W::Item: std::borrow::Borrow<pso::Descriptor<'a, B>>,
     {
-        let set = self.set.as_ref().unwrap();
-        let write: Vec<_> = write
-            .into_iter()
-            .map(|d| pso::DescriptorSetWrite {
-                binding: d.binding,
-                array_offset: d.array_offset,
-                descriptors: d.descriptors,
-                set,
-            })
-            .collect();
-        device.write_descriptor_sets(write);
+        let set = self.set.as_mut().unwrap();
+        device.write_descriptor_set(pso::DescriptorSetWrite {
+            binding: d.binding,
+            array_offset: d.array_offset,
+            descriptors: d.descriptors,
+            set,
+        });
     }
 
     fn get_layout(&self) -> &B::DescriptorSetLayout {
@@ -1049,21 +1046,22 @@ impl<B: Backend> ImageState<B> {
             .expect("Can't create sampler");
 
         desc.write_to_state(
-            vec![
-                DescSetWrite {
-                    binding: 0,
-                    array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Image(
-                        &image_view,
-                        i::Layout::ShaderReadOnlyOptimal,
-                    )),
-                },
-                DescSetWrite {
-                    binding: 1,
-                    array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Sampler(&sampler)),
-                },
-            ],
+            DescSetWrite {
+                binding: 0,
+                array_offset: 0,
+                descriptors: Some(pso::Descriptor::Image(
+                    &image_view,
+                    i::Layout::ShaderReadOnlyOptimal,
+                )),
+            },
+            device,
+        );
+        desc.write_to_state(
+            DescSetWrite {
+                binding: 1,
+                array_offset: 0,
+                descriptors: Some(pso::Descriptor::Sampler(&sampler)),
+            },
             device,
         );
 

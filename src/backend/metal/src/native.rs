@@ -17,7 +17,7 @@ use range_alloc::RangeAllocator;
 use arrayvec::ArrayVec;
 use cocoa_foundation::foundation::NSRange;
 use metal;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use spirv_cross::{msl, spirv};
 
 use std::{
@@ -879,6 +879,8 @@ pub struct UsedResource {
 #[derive(Debug)]
 pub enum DescriptorSet {
     Emulated {
+        //TODO: consider storing the descriptors right here,
+        // to reduce the amount of locking, e.g. in descriptor binding.
         pool: Arc<RwLock<DescriptorEmulatedPoolInner>>,
         layouts: Arc<Vec<DescriptorLayout>>,
         resources: ResourceData<Range<PoolResourceIndex>>,
@@ -993,18 +995,16 @@ pub enum QueryPool {
 }
 
 #[derive(Debug)]
-pub enum FenceInner {
+pub enum Fence {
     Idle { signaled: bool },
     PendingSubmission(metal::CommandBuffer),
 }
-
-#[derive(Debug)]
-pub struct Fence(pub(crate) Mutex<FenceInner>);
 
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 //TODO: review the atomic ordering
+//TODO: reconsider if Arc<Atomic> is needed
 #[derive(Debug)]
 pub struct Event(pub(crate) Arc<AtomicBool>);
 

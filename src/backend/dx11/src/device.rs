@@ -1976,193 +1976,176 @@ impl device::Device<Backend> for Device {
         })
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
+    unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        I: IntoIterator,
+        I::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
-        for write in write_iter {
-            // Get baseline mapping
-            let mut mapping = write
-                .set
-                .layout
-                .pool_mapping
-                .map_register(|mapping| mapping.offset);
+        // Get baseline mapping
+        let mut mapping = op
+            .set
+            .layout
+            .pool_mapping
+            .map_register(|mapping| mapping.offset);
 
-            // Iterate over layout bindings until the first binding is found.
-            let binding_start = write
-                .set
-                .layout
-                .bindings
-                .iter()
-                .position(|binding| binding.binding == write.binding)
-                .unwrap();
+        // Iterate over layout bindings until the first binding is found.
+        let binding_start = op
+            .set
+            .layout
+            .bindings
+            .iter()
+            .position(|binding| binding.binding == op.binding)
+            .unwrap();
 
-            // If we've skipped layout bindings, we need to add them to get the correct binding offset
-            for binding in &write.set.layout.bindings[..binding_start] {
-                let content = DescriptorContent::from(binding.ty);
-                mapping.add_content_many(content, binding.stage_flags, binding.count as _);
-            }
+        // If we've skipped layout bindings, we need to add them to get the correct binding offset
+        for binding in &op.set.layout.bindings[..binding_start] {
+            let content = DescriptorContent::from(binding.ty);
+            mapping.add_content_many(content, binding.stage_flags, binding.count as _);
+        }
 
-            // We start at the given binding index and array index
-            let mut binding_index = binding_start;
-            let mut array_index = write.array_offset;
+        // We start at the given binding index and array index
+        let mut binding_index = binding_start;
+        let mut array_index = op.array_offset;
 
-            // If we're skipping array indices in the current binding, we need to add them to get the correct binding offset
-            if array_index > 0 {
-                let binding: &pso::DescriptorSetLayoutBinding =
-                    &write.set.layout.bindings[binding_index];
-                let content = DescriptorContent::from(binding.ty);
-                mapping.add_content_many(content, binding.stage_flags, array_index as _);
-            }
+        // If we're skipping array indices in the current binding, we need to add them to get the correct binding offset
+        if array_index > 0 {
+            let binding: &pso::DescriptorSetLayoutBinding = &op.set.layout.bindings[binding_index];
+            let content = DescriptorContent::from(binding.ty);
+            mapping.add_content_many(content, binding.stage_flags, array_index as _);
+        }
 
-            // Iterate over the descriptors, figuring out the corresponding binding, and adding
-            // it to the set of bindings.
-            //
-            // When we hit the end of an array of descriptors and there are still descriptors left
-            // over, we will spill into writing the next binding.
-            for descriptor in write.descriptors {
-                let binding: &pso::DescriptorSetLayoutBinding =
-                    &write.set.layout.bindings[binding_index];
+        // Iterate over the descriptors, figuring out the corresponding binding, and adding
+        // it to the set of bindings.
+        //
+        // When we hit the end of an array of descriptors and there are still descriptors left
+        // over, we will spill into writing the next binding.
+        for descriptor in op.descriptors {
+            let binding: &pso::DescriptorSetLayoutBinding = &op.set.layout.bindings[binding_index];
 
-                let handles = match *descriptor.borrow() {
-                    pso::Descriptor::Buffer(buffer, ref _sub) => RegisterData {
-                        c: match buffer.internal.disjoint_cb {
-                            Some(dj_buf) => dj_buf as *mut _,
-                            None => buffer.internal.raw as *mut _,
-                        },
-                        t: buffer.internal.srv.map_or(ptr::null_mut(), |p| p as *mut _),
-                        u: buffer.internal.uav.map_or(ptr::null_mut(), |p| p as *mut _),
-                        s: ptr::null_mut(),
+            let handles = match *descriptor.borrow() {
+                pso::Descriptor::Buffer(buffer, ref _sub) => RegisterData {
+                    c: match buffer.internal.disjoint_cb {
+                        Some(dj_buf) => dj_buf as *mut _,
+                        None => buffer.internal.raw as *mut _,
                     },
-                    pso::Descriptor::Image(image, _layout) => RegisterData {
-                        c: ptr::null_mut(),
-                        t: image.srv_handle.map_or(ptr::null_mut(), |h| h as *mut _),
-                        u: image.uav_handle.map_or(ptr::null_mut(), |h| h as *mut _),
-                        s: ptr::null_mut(),
-                    },
-                    pso::Descriptor::Sampler(sampler) => RegisterData {
-                        c: ptr::null_mut(),
-                        t: ptr::null_mut(),
-                        u: ptr::null_mut(),
-                        s: sampler.sampler_handle.as_raw() as *mut _,
-                    },
-                    pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
-                        RegisterData {
-                            c: ptr::null_mut(),
-                            t: image.srv_handle.map_or(ptr::null_mut(), |h| h as *mut _),
-                            u: image.uav_handle.map_or(ptr::null_mut(), |h| h as *mut _),
-                            s: sampler.sampler_handle.as_raw() as *mut _,
-                        }
-                    }
-                    pso::Descriptor::TexelBuffer(_buffer_view) => unimplemented!(),
+                    t: buffer.internal.srv.map_or(ptr::null_mut(), |p| p as *mut _),
+                    u: buffer.internal.uav.map_or(ptr::null_mut(), |p| p as *mut _),
+                    s: ptr::null_mut(),
+                },
+                pso::Descriptor::Image(image, _layout) => RegisterData {
+                    c: ptr::null_mut(),
+                    t: image.srv_handle.map_or(ptr::null_mut(), |h| h as *mut _),
+                    u: image.uav_handle.map_or(ptr::null_mut(), |h| h as *mut _),
+                    s: ptr::null_mut(),
+                },
+                pso::Descriptor::Sampler(sampler) => RegisterData {
+                    c: ptr::null_mut(),
+                    t: ptr::null_mut(),
+                    u: ptr::null_mut(),
+                    s: sampler.sampler_handle.as_raw() as *mut _,
+                },
+                pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => RegisterData {
+                    c: ptr::null_mut(),
+                    t: image.srv_handle.map_or(ptr::null_mut(), |h| h as *mut _),
+                    u: image.uav_handle.map_or(ptr::null_mut(), |h| h as *mut _),
+                    s: sampler.sampler_handle.as_raw() as *mut _,
+                },
+                pso::Descriptor::TexelBuffer(_buffer_view) => unimplemented!(),
+            };
+
+            let content = DescriptorContent::from(binding.ty);
+            if content.contains(DescriptorContent::CBV) {
+                let offsets = mapping.map_other(|map| map.c);
+                op.set
+                    .assign_stages(&offsets, binding.stage_flags, handles.c);
+            };
+            if content.contains(DescriptorContent::SRV) {
+                let offsets = mapping.map_other(|map| map.t);
+                op.set
+                    .assign_stages(&offsets, binding.stage_flags, handles.t);
+            };
+            if content.contains(DescriptorContent::UAV) {
+                // If this binding is used by the graphics pipeline and is a UAV, it belongs to the "Output Merger"
+                // stage, so we only put them in the fragment stage to save redundant descriptor allocations.
+                let stage_flags = if binding
+                    .stage_flags
+                    .intersects(pso::ShaderStageFlags::ALL - pso::ShaderStageFlags::COMPUTE)
+                {
+                    let mut stage_flags = pso::ShaderStageFlags::FRAGMENT;
+                    stage_flags.set(
+                        pso::ShaderStageFlags::COMPUTE,
+                        binding.stage_flags.contains(pso::ShaderStageFlags::COMPUTE),
+                    );
+                    stage_flags
+                } else {
+                    binding.stage_flags
                 };
 
-                let content = DescriptorContent::from(binding.ty);
-                if content.contains(DescriptorContent::CBV) {
-                    let offsets = mapping.map_other(|map| map.c);
-                    write
-                        .set
-                        .assign_stages(&offsets, binding.stage_flags, handles.c);
-                };
-                if content.contains(DescriptorContent::SRV) {
-                    let offsets = mapping.map_other(|map| map.t);
-                    write
-                        .set
-                        .assign_stages(&offsets, binding.stage_flags, handles.t);
-                };
-                if content.contains(DescriptorContent::UAV) {
-                    // If this binding is used by the graphics pipeline and is a UAV, it belongs to the "Output Merger"
-                    // stage, so we only put them in the fragment stage to save redundant descriptor allocations.
-                    let stage_flags = if binding
-                        .stage_flags
-                        .intersects(pso::ShaderStageFlags::ALL - pso::ShaderStageFlags::COMPUTE)
-                    {
-                        let mut stage_flags = pso::ShaderStageFlags::FRAGMENT;
-                        stage_flags.set(
-                            pso::ShaderStageFlags::COMPUTE,
-                            binding.stage_flags.contains(pso::ShaderStageFlags::COMPUTE),
-                        );
-                        stage_flags
-                    } else {
-                        binding.stage_flags
-                    };
+                let offsets = mapping.map_other(|map| map.u);
+                op.set.assign_stages(&offsets, stage_flags, handles.u);
+            };
+            if content.contains(DescriptorContent::SAMPLER) {
+                let offsets = mapping.map_other(|map| map.s);
+                op.set
+                    .assign_stages(&offsets, binding.stage_flags, handles.s);
+            };
 
-                    let offsets = mapping.map_other(|map| map.u);
-                    write.set.assign_stages(&offsets, stage_flags, handles.u);
-                };
-                if content.contains(DescriptorContent::SAMPLER) {
-                    let offsets = mapping.map_other(|map| map.s);
-                    write
-                        .set
-                        .assign_stages(&offsets, binding.stage_flags, handles.s);
-                };
+            mapping.add_content_many(content, binding.stage_flags, 1);
 
-                mapping.add_content_many(content, binding.stage_flags, 1);
-
-                array_index += 1;
-                if array_index >= binding.count {
-                    // We've run out of array to write to, we should overflow to the next binding.
-                    array_index = 0;
-                    binding_index += 1;
-                }
+            array_index += 1;
+            if array_index >= binding.count {
+                // We've run out of array to write to, we should overflow to the next binding.
+                array_index = 0;
+                binding_index += 1;
             }
         }
     }
 
-    unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
-    where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
-    {
-        for copy in copy_iter {
-            let _copy = copy.borrow();
-            //TODO
-            /*
-            for offset in 0 .. copy.count {
-                let (dst_ty, dst_handle_offset, dst_second_handle_offset) = copy
-                    .dst_set
-                    .get_handle_offset(copy.dst_binding + offset as u32);
-                let (src_ty, src_handle_offset, src_second_handle_offset) = copy
-                    .src_set
-                    .get_handle_offset(copy.src_binding + offset as u32);
-                assert_eq!(dst_ty, src_ty);
+    unsafe fn copy_descriptor_set<'a>(&self, _op: pso::DescriptorSetCopy<'a, Backend>) {
+        unimplemented!()
+        /*
+        for offset in 0 .. copy.count {
+            let (dst_ty, dst_handle_offset, dst_second_handle_offset) = copy
+                .dst_set
+                .get_handle_offset(copy.dst_binding + offset as u32);
+            let (src_ty, src_handle_offset, src_second_handle_offset) = copy
+                .src_set
+                .get_handle_offset(copy.src_binding + offset as u32);
+            assert_eq!(dst_ty, src_ty);
 
-                let dst_handle = copy.dst_set.handles.offset(dst_handle_offset as isize);
-                let src_handle = copy.dst_set.handles.offset(src_handle_offset as isize);
+            let dst_handle = copy.dst_set.handles.offset(dst_handle_offset as isize);
+            let src_handle = copy.dst_set.handles.offset(src_handle_offset as isize);
 
-                match dst_ty {
-                    pso::DescriptorType::Image {
-                        ty: pso::ImageDescriptorType::Sampled { with_sampler: true }
-                    } => {
-                        let dst_second_handle = copy
-                            .dst_set
-                            .handles
-                            .offset(dst_second_handle_offset as isize);
-                        let src_second_handle = copy
-                            .dst_set
-                            .handles
-                            .offset(src_second_handle_offset as isize);
+            match dst_ty {
+                pso::DescriptorType::Image {
+                    ty: pso::ImageDescriptorType::Sampled { with_sampler: true }
+                } => {
+                    let dst_second_handle = copy
+                        .dst_set
+                        .handles
+                        .offset(dst_second_handle_offset as isize);
+                    let src_second_handle = copy
+                        .dst_set
+                        .handles
+                        .offset(src_second_handle_offset as isize);
 
-                        *dst_handle = *src_handle;
-                        *dst_second_handle = *src_second_handle;
-                    }
-                    _ => *dst_handle = *src_handle,
+                    *dst_handle = *src_handle;
+                    *dst_second_handle = *src_second_handle;
                 }
-            }*/
-        }
+                _ => *dst_handle = *src_handle,
+            }
+        }*/
     }
 
     unsafe fn map_memory(
         &self,
-        memory: &Memory,
+        memory: &mut Memory,
         segment: memory::Segment,
     ) -> Result<*mut u8, device::MapError> {
         Ok(memory.host_ptr.offset(segment.offset as isize))
     }
 
-    unsafe fn unmap_memory(&self, _memory: &Memory) {
+    unsafe fn unmap_memory(&self, _memory: &mut Memory) {
         // persistent mapping FTW
     }
 
@@ -2224,7 +2207,7 @@ impl device::Device<Backend> for Device {
         }))
     }
 
-    unsafe fn reset_fence(&self, fence: &Fence) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &mut Fence) -> Result<(), device::OutOfMemory> {
         *fence.mutex.lock() = false;
         Ok(())
     }
@@ -2276,11 +2259,11 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, _event: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &mut ()) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, _event: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &mut ()) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 

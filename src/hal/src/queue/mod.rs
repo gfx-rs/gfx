@@ -96,7 +96,7 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submission: Submission<Ic, Iw, Is>,
-        fence: Option<&B::Fence>,
+        fence: Option<&mut B::Fence>,
     ) where
         T: 'a + Borrow<B::CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
@@ -108,7 +108,7 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn submit_without_semaphores<'a, T, Ic>(
         &mut self,
         command_buffers: Ic,
-        fence: Option<&B::Fence>,
+        fence: Option<&mut B::Fence>,
     ) where
         T: 'a + Borrow<B::CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
@@ -131,9 +131,9 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
         &mut self,
         surface: &mut B::Surface,
         image: <B::Surface as PresentationSurface<B>>::SwapchainImage,
-        wait_semaphore: Option<&B::Semaphore>,
+        wait_semaphore: Option<&mut B::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError>;
 
     /// Wait for the queue to be idle.
-    fn wait_idle(&self) -> Result<(), OutOfMemory>;
+    fn wait_idle(&mut self) -> Result<(), OutOfMemory>;
 }

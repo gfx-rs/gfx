@@ -131,7 +131,7 @@ fn main() {
         (pipeline_layout, pipeline, set_layout, desc_pool)
     };
 
-    let (staging_memory, staging_buffer, _staging_size) = unsafe {
+    let (mut staging_memory, staging_buffer, _staging_size) = unsafe {
         create_buffer::<back::Backend>(
             &device,
             &memory_properties.memory_types,
@@ -144,14 +144,14 @@ fn main() {
 
     unsafe {
         let mapping = device
-            .map_memory(&staging_memory, memory::Segment::ALL)
+            .map_memory(&mut staging_memory, memory::Segment::ALL)
             .unwrap();
         ptr::copy_nonoverlapping(
             numbers.as_ptr() as *const u8,
             mapping,
             numbers.len() * stride as usize,
         );
-        device.unmap_memory(&staging_memory);
+        device.unmap_memory(&mut staging_memory);
     }
 
     let (device_memory, device_buffer, _device_buffer_size) = unsafe {
@@ -165,25 +165,24 @@ fn main() {
         )
     };
 
-    let desc_set;
-
-    unsafe {
-        desc_set = desc_pool.allocate_set(&set_layout).unwrap();
-        device.write_descriptor_sets(Some(pso::DescriptorSetWrite {
-            set: &desc_set,
+    let desc_set = unsafe {
+        let mut desc_set = desc_pool.allocate_set(&set_layout).unwrap();
+        device.write_descriptor_set(pso::DescriptorSetWrite {
+            set: &mut desc_set,
             binding: 0,
             array_offset: 0,
             descriptors: Some(pso::Descriptor::Buffer(
                 &device_buffer,
                 buffer::SubRange::WHOLE,
             )),
-        }));
+        });
+        desc_set
     };
 
     let mut command_pool =
         unsafe { device.create_command_pool(family.id(), pool::CommandPoolCreateFlags::empty()) }
             .expect("Can't create command pool");
-    let fence = device.create_fence(false).unwrap();
+    let mut fence = device.create_fence(false).unwrap();
     unsafe {
         let mut command_buffer = command_pool.allocate_one(command::Level::Primary);
         command_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
@@ -232,7 +231,7 @@ fn main() {
         );
         command_buffer.finish();
 
-        queue_group.queues[0].submit_without_semaphores(Some(&command_buffer), Some(&fence));
+        queue_group.queues[0].submit_without_semaphores(Some(&command_buffer), Some(&mut fence));
 
         device.wait_for_fence(&fence, !0).unwrap();
         command_pool.free(Some(command_buffer));
@@ -240,13 +239,13 @@ fn main() {
 
     unsafe {
         let mapping = device
-            .map_memory(&staging_memory, memory::Segment::ALL)
+            .map_memory(&mut staging_memory, memory::Segment::ALL)
             .unwrap();
         println!(
             "Times: {:?}",
             slice::from_raw_parts::<u32>(mapping as *const u8 as *const u32, numbers.len()),
         );
-        device.unmap_memory(&staging_memory);
+        device.unmap_memory(&mut staging_memory);
     }
 
     unsafe {

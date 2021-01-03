@@ -225,7 +225,7 @@ where
     WI::Item: Borrow<Descriptor<'a, B>>,
 {
     /// The descriptor set to modify.
-    pub set: &'a B::DescriptorSet,
+    pub set: &'a mut B::DescriptorSet,
     /// Binding index to start writing at.
     ///
     /// *Note*: when there are more descriptors provided than
@@ -256,7 +256,7 @@ pub enum Descriptor<'a, B: Backend> {
 /// Copies a range of descriptors to be bound from one descriptor set to another.
 ///
 /// Should be provided to the `copy_descriptor_sets` method of a `Device`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 pub struct DescriptorSetCopy<'a, B: Backend> {
     /// Descriptor set to copy from.
     pub src_set: &'a B::DescriptorSet,
@@ -270,7 +270,7 @@ pub struct DescriptorSetCopy<'a, B: Backend> {
     /// Offset into the descriptor array to start copying from.
     pub src_array_offset: DescriptorArrayIndex,
     /// Descriptor set to copy to.
-    pub dst_set: &'a B::DescriptorSet,
+    pub dst_set: &'a mut B::DescriptorSet,
     /// Binding to copy to.
     ///
     /// *Note*: when there are more descriptors provided than

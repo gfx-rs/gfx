@@ -289,7 +289,7 @@ where
             }
             .expect("Can't create descriptor pool"),
         );
-        let desc_set = unsafe { desc_pool.allocate_set(&set_layout) }.unwrap();
+        let mut desc_set = unsafe { desc_pool.allocate_set(&set_layout) }.unwrap();
 
         // Buffer allocations
         println!("Memory types: {:?}", memory_types);
@@ -323,18 +323,18 @@ where
 
         // TODO: check transitions: read/write mapping and vertex buffer read
         let buffer_memory = unsafe {
-            let memory = device
+            let mut memory = device
                 .allocate_memory(upload_type, buffer_req.size)
                 .unwrap();
             device
                 .bind_buffer_memory(&memory, 0, &mut vertex_buffer)
                 .unwrap();
-            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
+            let mapping = device.map_memory(&mut memory, m::Segment::ALL).unwrap();
             ptr::copy_nonoverlapping(QUAD.as_ptr() as *const u8, mapping, buffer_len as usize);
             device
                 .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
                 .unwrap();
-            device.unmap_memory(&memory);
+            device.unmap_memory(&mut memory);
             ManuallyDrop::new(memory)
         };
 
@@ -362,13 +362,13 @@ where
 
         // copy image data into staging buffer
         let image_upload_memory = unsafe {
-            let memory = device
+            let mut memory = device
                 .allocate_memory(upload_type, image_mem_reqs.size)
                 .unwrap();
             device
                 .bind_buffer_memory(&memory, 0, &mut image_upload_buffer)
                 .unwrap();
-            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
+            let mapping = device.map_memory(&mut memory, m::Segment::ALL).unwrap();
             for y in 0..height as usize {
                 let row = &(*img)[y * (width as usize) * image_stride
                     ..(y + 1) * (width as usize) * image_stride];
@@ -381,7 +381,7 @@ where
             device
                 .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
                 .unwrap();
-            device.unmap_memory(&memory);
+            device.unmap_memory(&mut memory);
             ManuallyDrop::new(memory)
         };
 
@@ -438,15 +438,15 @@ where
         );
 
         unsafe {
-            device.write_descriptor_sets(iter::once(pso::DescriptorSetWrite {
-                set: &desc_set,
+            device.write_descriptor_set(pso::DescriptorSetWrite {
+                set: &mut desc_set,
                 binding: 0,
                 array_offset: 0,
                 descriptors: vec![
                     pso::Descriptor::Image(&*image_srv, i::Layout::ShaderReadOnlyOptimal),
                     pso::Descriptor::Sampler(&*sampler),
                 ],
-            }));
+            });
         }
 
         // copy buffer to texture
@@ -808,7 +808,7 @@ where
         // updated with a CPU->GPU data copy are not in use by the GPU, so we can perform those updates.
         // In this case there are none to be done, however.
         unsafe {
-            let fence = &self.submission_complete_fences[frame_idx];
+            let fence = &mut self.submission_complete_fences[frame_idx];
             self.device
                 .wait_for_fence(fence, !0)
                 .expect("Failed to wait for fence");
@@ -859,14 +859,14 @@ where
             };
             self.queue_group.queues[0].submit(
                 submission,
-                Some(&self.submission_complete_fences[frame_idx]),
+                Some(&mut self.submission_complete_fences[frame_idx]),
             );
 
             // present frame
             let result = self.queue_group.queues[0].present(
                 &mut self.surface,
                 surface_image,
-                Some(&self.submission_complete_semaphores[frame_idx]),
+                Some(&mut self.submission_complete_semaphores[frame_idx]),
             );
 
             self.device.destroy_framebuffer(framebuffer);

@@ -165,7 +165,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         _: queue::Submission<Ic, Iw, Is>,
-        _: Option<&()>,
+        _: Option<&mut ()>,
     ) where
         T: 'a + Borrow<CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
@@ -179,12 +179,12 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         &mut self,
         _surface: &mut Surface,
         _image: SwapchainImage,
-        _wait_semaphore: Option<&()>,
+        _wait_semaphore: Option<&mut ()>,
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
         Ok(None)
     }
 
-    fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
+    fn wait_idle(&mut self) -> Result<(), device::OutOfMemory> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }
@@ -410,19 +410,14 @@ impl device::Device<Backend> for Device {
         Ok(layout)
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, _: I)
+    unsafe fn write_descriptor_set<'a, I>(&self, _: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
-        J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        I: IntoIterator,
+        I::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
     }
 
-    unsafe fn copy_descriptor_sets<'a, I>(&self, _: I)
-    where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
-    {
+    unsafe fn copy_descriptor_set<'a>(&self, _: pso::DescriptorSetCopy<'a, Backend>) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
@@ -446,11 +441,11 @@ impl device::Device<Backend> for Device {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn set_event(&self, _: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn set_event(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn reset_event(&self, _: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_event(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
@@ -475,13 +470,13 @@ impl device::Device<Backend> for Device {
 
     unsafe fn map_memory(
         &self,
-        memory: &Memory,
+        memory: &mut Memory,
         segment: hal::memory::Segment,
     ) -> Result<*mut u8, device::MapError> {
         memory.map(segment)
     }
 
-    unsafe fn unmap_memory(&self, _memory: &Memory) {}
+    unsafe fn unmap_memory(&self, _memory: &mut Memory) {}
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
@@ -584,7 +579,7 @@ impl device::Device<Backend> for Device {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn reset_fence(&self, _: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_fence(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {
         Ok(())
     }
 

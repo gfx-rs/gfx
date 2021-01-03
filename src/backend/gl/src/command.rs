@@ -706,8 +706,9 @@ impl CommandBuffer {
         let mut set = first_set as usize;
         for desc_set in sets {
             let desc_set = desc_set.borrow();
-            let bindings = desc_set.bindings.lock();
-            for (binding_layout, new_binding) in desc_set.layout.iter().zip(bindings.iter()) {
+            for (binding_layout, new_binding) in
+                desc_set.layout.iter().zip(desc_set.bindings.iter())
+            {
                 let binding = layout.sets[set].bindings[binding_layout.binding as usize] as u32;
                 match *new_binding {
                     n::DescSetBindings::Buffer {
