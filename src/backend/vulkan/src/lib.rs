@@ -1246,6 +1246,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             framebuffer_depth_sample_counts: limits.framebuffer_depth_sample_counts.as_raw() as _,
             framebuffer_stencil_sample_counts: limits.framebuffer_stencil_sample_counts.as_raw()
                 as _,
+            timestamp_compute_and_graphics: limits.timestamp_compute_and_graphics != 0,
+            timestamp_period: limits.timestamp_period,
             max_color_attachments: limits.max_color_attachments as _,
             buffer_image_granularity: limits.buffer_image_granularity,
             non_coherent_atom_size: limits.non_coherent_atom_size as _,

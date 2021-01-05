@@ -409,6 +409,10 @@ pub struct Limits {
     pub framebuffer_depth_sample_counts: image::NumSamples,
     /// Number of samples supported for stencil attachments of framebuffers.
     pub framebuffer_stencil_sample_counts: image::NumSamples,
+    /// Timestamp queries are supported on all compute and graphics queues.
+    pub timestamp_compute_and_graphics: bool,
+    /// The amount of nanoseconds that causes a timestamp query value to increment by one.
+    pub timestamp_period: f32,
     /// Maximum number of color attachments that can be used by a subpass in a render pass.
     pub max_color_attachments: usize,
     ///
