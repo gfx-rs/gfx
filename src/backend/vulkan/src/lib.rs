@@ -38,6 +38,7 @@ use std::{
     ffi::{CStr, CString},
     fmt, mem, slice,
     sync::Arc,
+    thread,
 };
 
 #[cfg(feature = "use-rtld-next")]
@@ -196,6 +197,9 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
     _user_data: *mut std::os::raw::c_void,
 ) -> vk::Bool32 {
+    if thread::panicking() {
+        return vk::FALSE;
+    }
     let callback_data = *p_callback_data;
 
     let message_severity = match message_severity {
@@ -279,6 +283,10 @@ unsafe extern "system" fn debug_report_callback(
     description: *const std::os::raw::c_char,
     _user_data: *mut std::os::raw::c_void,
 ) -> vk::Bool32 {
+    if thread::panicking() {
+        return vk::FALSE;
+    }
+
     let level = match type_ {
         vk::DebugReportFlagsEXT::ERROR => log::Level::Error,
         vk::DebugReportFlagsEXT::WARNING => log::Level::Warn,
