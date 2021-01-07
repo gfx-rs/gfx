@@ -93,7 +93,7 @@ mod window;
 
 pub use crate::command::CommandPool;
 pub use crate::device::{Device, LanguageVersion, PhysicalDevice};
-pub use crate::window::{AcquireMode, Surface};
+pub use crate::window::Surface;
 
 pub type GraphicsCommandPool = CommandPool;
 

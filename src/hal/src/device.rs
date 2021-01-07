@@ -389,7 +389,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Destroy a framebuffer.
     ///
-    /// The framebuffer shouldn't be destroy before any submitted command buffer,
+    /// The framebuffer shouldn't be destroyed before any submitted command buffer,
     /// which references the framebuffer, has finished execution.
     unsafe fn destroy_framebuffer(&self, buf: B::Framebuffer);
 
