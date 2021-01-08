@@ -102,11 +102,7 @@ pub struct RenderPass {
 #[derive(Debug)]
 pub struct Framebuffer {
     pub(crate) extent: image::Extent,
-    pub(crate) attachments: Vec<metal::Texture>,
 }
-
-unsafe impl Send for Framebuffer {}
-unsafe impl Sync for Framebuffer {}
 
 #[derive(Clone, Debug)]
 pub struct ResourceData<T> {

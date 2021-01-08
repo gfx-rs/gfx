@@ -1,7 +1,13 @@
-use crate::{window::FramebufferCachePtr, Backend, RawDevice};
+use crate::{Backend, RawDevice, ROUGH_MAX_ATTACHMENT_COUNT};
 use ash::{version::DeviceV1_0, vk};
-use hal::{device::OutOfMemory, image::SubresourceRange, pso};
-use std::{borrow::Borrow, sync::Arc};
+use hal::{
+    device::OutOfMemory,
+    image::{Extent, SubresourceRange},
+    pso,
+};
+use parking_lot::Mutex;
+use smallvec::SmallVec;
+use std::{borrow::Borrow, collections::HashMap, sync::Arc};
 
 #[derive(Debug, Hash)]
 pub struct Semaphore(pub vk::Semaphore);
@@ -45,17 +51,10 @@ pub struct Image {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
-pub enum ImageViewOwner {
-    User,
-    Surface(FramebufferCachePtr),
-}
-
-#[derive(Debug, Hash, PartialEq, Eq)]
 pub struct ImageView {
     pub(crate) image: vk::Image,
-    pub(crate) view: vk::ImageView,
+    pub(crate) raw: vk::ImageView,
     pub(crate) range: SubresourceRange,
-    pub(crate) owner: ImageViewOwner,
 }
 
 #[derive(Debug, Hash)]
@@ -64,13 +63,19 @@ pub struct Sampler(pub vk::Sampler);
 #[derive(Debug, Hash)]
 pub struct RenderPass {
     pub raw: vk::RenderPass,
-    pub clear_attachments_mask: u64,
+    pub attachment_count: usize,
 }
 
-#[derive(Debug, Hash)]
-pub struct Framebuffer {
-    pub(crate) raw: vk::Framebuffer,
-    pub(crate) owned: bool,
+pub type FramebufferKey = SmallVec<[vk::ImageView; ROUGH_MAX_ATTACHMENT_COUNT]>;
+
+#[derive(Debug)]
+pub enum Framebuffer {
+    ImageLess(vk::Framebuffer),
+    Legacy {
+        name: String,
+        map: Mutex<HashMap<FramebufferKey, vk::Framebuffer>>,
+        extent: Extent,
+    },
 }
 
 #[derive(Debug)]

@@ -1,10 +1,12 @@
 use ash::{version::DeviceV1_0, vk};
 use smallvec::SmallVec;
-use std::{borrow::Borrow, ffi::CString, mem, ops::Range, slice, sync::Arc};
+use std::{
+    borrow::Borrow, collections::hash_map::Entry, ffi::CString, mem, ops::Range, slice, sync::Arc,
+};
 
 use inplace_it::inplace_or_alloc_array;
 
-use crate::{conv, native as n, Backend, DebugMessenger, RawDevice};
+use crate::{conv, native as n, Backend, DebugMessenger, RawDevice, ROUGH_MAX_ATTACHMENT_COUNT};
 use hal::{
     buffer, command as com,
     format::Aspects,
@@ -191,19 +193,24 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         flags: com::CommandBufferFlags,
         info: com::CommandBufferInheritanceInfo<Backend>,
     ) {
-        let inheritance_info = vk::CommandBufferInheritanceInfo::builder()
-            .render_pass(
-                info.subpass
-                    .map_or(vk::RenderPass::null(), |subpass| subpass.main_pass.raw),
-            )
-            .subpass(info.subpass.map_or(0, |subpass| subpass.index as u32))
-            .framebuffer(
-                info.framebuffer
-                    .map_or(vk::Framebuffer::null(), |buffer| buffer.raw),
-            )
-            .occlusion_query_enable(info.occlusion_query_enable)
-            .query_flags(conv::map_query_control_flags(info.occlusion_query_flags))
-            .pipeline_statistics(conv::map_pipeline_statistics(info.pipeline_statistics));
+        let inheritance_info =
+            vk::CommandBufferInheritanceInfo::builder()
+                .render_pass(
+                    info.subpass
+                        .map_or(vk::RenderPass::null(), |subpass| subpass.main_pass.raw),
+                )
+                .subpass(info.subpass.map_or(0, |subpass| subpass.index as u32))
+                .framebuffer(
+                    info.framebuffer
+                        .map_or(vk::Framebuffer::null(), |framebuffer| match *framebuffer {
+                            n::Framebuffer::ImageLess(raw) => raw,
+                            //TODO: can we do better here?
+                            n::Framebuffer::Legacy { .. } => vk::Framebuffer::null(),
+                        }),
+                )
+                .occlusion_query_enable(info.occlusion_query_enable)
+                .query_flags(conv::map_query_control_flags(info.occlusion_query_flags))
+                .pipeline_statistics(conv::map_pipeline_statistics(info.pipeline_statistics));
 
         let info = vk::CommandBufferBeginInfo::builder()
             .flags(conv::map_command_buffer_flags(flags))
@@ -232,48 +239,72 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn begin_render_pass<T>(
+    unsafe fn begin_render_pass<'a, T>(
         &mut self,
         render_pass: &n::RenderPass,
-        frame_buffer: &n::Framebuffer,
+        framebuffer: &n::Framebuffer,
         render_area: pso::Rect,
-        clear_values: T,
+        attachments: T,
         first_subpass: com::SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::ClearValue>,
-        T::IntoIter: ExactSizeIterator,
+        T: IntoIterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
     {
+        let mut raw_clear_values = SmallVec::<[vk::ClearValue; ROUGH_MAX_ATTACHMENT_COUNT]>::new();
+        let mut raw_image_views = n::FramebufferKey::new();
         let render_area = conv::map_rect(&render_area);
 
-        // Vulkan wants one clear value per attachment (even those that don't need clears),
-        // but can receive less clear values than total attachments.
-        let clear_value_count = 64 - render_pass.clear_attachments_mask.leading_zeros() as u32;
-        let mut clear_value_iter = clear_values.into_iter();
-        let raw_clear_values = (0..clear_value_count).map(|i| {
-            if render_pass.clear_attachments_mask & (1 << i) != 0 {
-                // Vulkan and HAL share same memory layout
-                let next = clear_value_iter.next().unwrap();
-                mem::transmute(*next.borrow())
-            } else {
-                mem::zeroed()
+        for attachment in attachments {
+            raw_clear_values.push(mem::transmute(attachment.clear_value));
+            raw_image_views.push(attachment.image_view.raw);
+        }
+
+        let mut attachment_info = vk::RenderPassAttachmentBeginInfo::builder()
+            .attachments(&raw_image_views)
+            .build();
+        let builder = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass.raw)
+            .render_area(render_area)
+            .clear_values(&raw_clear_values);
+
+        let info = match *framebuffer {
+            n::Framebuffer::ImageLess(raw_fbo) => builder
+                .framebuffer(raw_fbo)
+                .push_next(&mut attachment_info)
+                .build(),
+            n::Framebuffer::Legacy {
+                ref name,
+                ref map,
+                extent,
+            } => {
+                let raw_fbo = match map.lock().entry(raw_image_views.clone()) {
+                    Entry::Occupied(e) => *e.get(),
+                    Entry::Vacant(e) => {
+                        let info = vk::FramebufferCreateInfo::builder()
+                            .render_pass(render_pass.raw)
+                            .attachments(&raw_image_views)
+                            .width(extent.width)
+                            .height(extent.height)
+                            .layers(extent.depth);
+
+                        let raw = self
+                            .device
+                            .raw
+                            .create_framebuffer(&info, None)
+                            .expect("Unable to create a legacy framebuffer");
+                        self.device
+                            .set_object_name(vk::ObjectType::FRAMEBUFFER, raw, name);
+                        *e.insert(raw)
+                    }
+                };
+
+                builder.framebuffer(raw_fbo).build()
             }
-        });
+        };
 
-        inplace_or_alloc_array(raw_clear_values.len(), |uninit_guard| {
-            let raw_clear_values = uninit_guard.init_with_iter(raw_clear_values);
-
-            let info = vk::RenderPassBeginInfo::builder()
-                .render_pass(render_pass.raw)
-                .framebuffer(frame_buffer.raw)
-                .render_area(render_area)
-                .clear_values(&raw_clear_values);
-
-            let contents = map_subpass_contents(first_subpass);
-            self.device
-                .raw
-                .cmd_begin_render_pass(self.raw, &info, contents);
-        });
+        let contents = map_subpass_contents(first_subpass);
+        self.device
+            .raw
+            .cmd_begin_render_pass(self.raw, &info, contents);
     }
 
     unsafe fn next_subpass(&mut self, contents: com::SubpassContents) {

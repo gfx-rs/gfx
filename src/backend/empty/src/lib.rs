@@ -713,14 +713,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn begin_render_pass<T>(
+    unsafe fn begin_render_pass<'a, T>(
         &mut self,
         _: &(),
         _: &(),
         _: pso::Rect,
         _: T,
         _: command::SubpassContents,
-    ) {
+    ) where
+        T: IntoIterator<Item = command::RenderAttachmentInfo<'a, Backend>>,
+    {
     }
 
     unsafe fn next_subpass(&mut self, _: command::SubpassContents) {

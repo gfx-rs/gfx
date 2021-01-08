@@ -48,17 +48,18 @@ fn up_align(x: u32, alignment: u32) -> u32 {
 }
 
 #[derive(Clone, Debug)]
-struct AttachmentClear {
+struct AttachmentInfo {
     subpass_id: Option<pass::SubpassId>,
-    value: Option<com::ClearValue>,
+    view: r::ImageView,
+    clear_value: Option<com::ClearValue>,
     stencil_value: Option<u32>,
 }
 
 pub struct RenderPassCache {
     render_pass: r::RenderPass,
-    framebuffer: r::Framebuffer,
     target_rect: d3d12::D3D12_RECT,
-    attachment_clears: Vec<AttachmentClear>,
+    attachments: Vec<AttachmentInfo>,
+    num_layers: image::Layer,
     has_name: bool,
 }
 
@@ -584,7 +585,8 @@ impl CommandBuffer {
             };
 
             *resource_barrier.u.Transition_mut() = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
-                pResource: state.framebuffer.attachments[barrier.attachment_id]
+                pResource: state.attachments[barrier.attachment_id]
+                    .view
                     .resource
                     .as_mut_ptr(),
                 Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -606,10 +608,11 @@ impl CommandBuffer {
         let color_views = subpass
             .color_attachments
             .iter()
-            .map(|&(id, _)| state.framebuffer.attachments[id].handle_rtv.raw().unwrap())
+            .map(|&(id, _)| state.attachments[id].view.handle_rtv.raw().unwrap())
             .collect::<Vec<_>>();
         let ds_view = match subpass.depth_stencil_attachment {
-            Some((id, _)) => state.framebuffer.attachments[id]
+            Some((id, _)) => state.attachments[id]
+                .view
                 .handle_dsv
                 .as_ref()
                 .map(|handle| &handle.raw)
@@ -627,23 +630,18 @@ impl CommandBuffer {
         }
 
         // performs clears for all the attachments first used in this subpass
-        for (view, clear) in state
-            .framebuffer
-            .attachments
-            .iter()
-            .zip(state.attachment_clears.iter())
-        {
-            if clear.subpass_id != Some(self.cur_subpass) {
+        for at in state.attachments.iter() {
+            if at.subpass_id != Some(self.cur_subpass) {
                 continue;
             }
 
-            if let (Some(rtv), Some(cv)) = (view.handle_rtv.raw(), clear.value) {
+            if let (Some(rtv), Some(cv)) = (at.view.handle_rtv.raw(), at.clear_value) {
                 self.clear_render_target_view(rtv, unsafe { cv.color }, &[state.target_rect]);
             }
 
-            if let Some(handle) = view.handle_dsv {
-                let depth = clear.value.map(|cv| unsafe { cv.depth_stencil.depth });
-                let stencil = clear.stencil_value;
+            if let Some(handle) = at.view.handle_dsv {
+                let depth = at.clear_value.map(|cv| unsafe { cv.depth_stencil.depth });
+                let stencil = at.stencil_value;
 
                 if depth.is_some() || stencil.is_some() {
                     self.clear_depth_stencil_view(handle.raw, depth, stencil, &[state.target_rect]);
@@ -654,7 +652,6 @@ impl CommandBuffer {
 
     fn resolve_attachments(&self) {
         let state = self.pass_cache.as_ref().unwrap();
-        let framebuffer = &state.framebuffer;
         let subpass = &state.render_pass.subpasses[self.cur_subpass as usize];
 
         for (&(src_attachment, _), &(dst_attachment, _)) in subpass
@@ -666,11 +663,11 @@ impl CommandBuffer {
                 continue;
             }
 
-            let resolve_src = state.framebuffer.attachments[src_attachment];
-            let resolve_dst = state.framebuffer.attachments[dst_attachment];
+            let resolve_src = &state.attachments[src_attachment].view;
+            let resolve_dst = &state.attachments[dst_attachment].view;
 
             // The number of layers of the render area are given on framebuffer creation.
-            for l in 0..framebuffer.layers {
+            for l in 0..state.num_layers {
                 // Attachtments only have a single mip level by specification.
                 let subresource_src = resolve_src.calc_subresource(
                     resolve_src.mip_levels.0 as _,
@@ -1262,18 +1259,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn begin_render_pass<T>(
+    unsafe fn begin_render_pass<'a, T>(
         &mut self,
         render_pass: &r::RenderPass,
         framebuffer: &r::Framebuffer,
         target_rect: pso::Rect,
-        clear_values: T,
+        attachment_infos: T,
         _first_subpass: com::SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::ClearValue>,
+        T: IntoIterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
     {
-        assert_eq!(framebuffer.attachments.len(), render_pass.attachments.len());
         // Make sure that no subpass works with Present as intermediate layout.
         // This wouldn't make much sense, and proceeding with this constraint
         // allows the state transitions generated from subpass dependencies
@@ -1292,14 +1287,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
 
         self.barriers.clear();
-        let mut clear_iter = clear_values.into_iter();
-        let mut attachment_clears = Vec::new();
-        for (i, (view, attachment)) in framebuffer
-            .attachments
-            .iter()
+        let mut attachments = Vec::new();
+        for (i, (info, attachment)) in attachment_infos
+            .into_iter()
             .zip(render_pass.attachments.iter())
             .enumerate()
         {
+            let view = info.image_view.clone();
             // for swapchain views, we consider the initial layout to always be `General`
             let pass_start_state =
                 conv::map_image_resource_state(image::Access::empty(), attachment.layouts.start);
@@ -1313,26 +1307,20 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 self.barriers.push(Self::transition_barrier(barrier));
             }
 
-            let cv = if attachment.has_clears() {
-                Some(*clear_iter.next().unwrap().borrow())
-            } else {
-                None
-            };
-
-            attachment_clears.push(AttachmentClear {
+            attachments.push(AttachmentInfo {
                 subpass_id: render_pass
                     .subpasses
                     .iter()
                     .position(|sp| sp.is_using(i))
                     .map(|i| i as pass::SubpassId),
-                value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                    assert!(cv.is_some());
-                    cv
+                view,
+                clear_value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
+                    Some(info.clear_value)
                 } else {
                     None
                 },
                 stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                    Some(cv.unwrap().depth_stencil.stencil)
+                    Some(info.clear_value.depth_stencil.stencil)
                 } else {
                     None
                 },
@@ -1342,9 +1330,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         self.pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
-            framebuffer: framebuffer.clone(),
             target_rect: get_rect(&target_rect),
-            attachment_clears,
+            attachments,
+            num_layers: framebuffer.layers,
             has_name: !render_pass.raw_name.is_empty(),
         });
         self.cur_subpass = 0;
@@ -1370,18 +1358,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         let pc = self.pass_cache.take().unwrap();
         self.barriers.clear();
-        for (view, attachment) in pc
-            .framebuffer
-            .attachments
-            .iter()
-            .zip(pc.render_pass.attachments.iter())
-        {
+        for (at, attachment) in pc.attachments.iter().zip(pc.render_pass.attachments.iter()) {
             // for swapchain views, we consider the initial layout to always be `General`
             let pass_end_state =
                 conv::map_image_resource_state(image::Access::empty(), attachment.layouts.end);
-            if view.is_swapchain() && pass_end_state != d3d12::D3D12_RESOURCE_STATE_COMMON {
+            if at.view.is_swapchain() && pass_end_state != d3d12::D3D12_RESOURCE_STATE_COMMON {
                 let barrier = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
-                    pResource: view.resource.as_mut_ptr(),
+                    pResource: at.view.resource.as_mut_ptr(),
                     Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
                     StateBefore: pass_end_state,
                     StateAfter: d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -1604,7 +1587,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 com::AttachmentClear::Color { index, value } => {
                     let attachment = {
                         let rtv_id = sub_pass.color_attachments[index];
-                        pass_cache.framebuffer.attachments[rtv_id.0]
+                        &pass_cache.attachments[rtv_id.0].view
                     };
 
                     let mut rtv_pool = descriptors_cpu::HeapLinear::new(
@@ -1638,7 +1621,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 com::AttachmentClear::DepthStencil { depth, stencil } => {
                     let attachment = {
                         let dsv_id = sub_pass.depth_stencil_attachment.unwrap();
-                        pass_cache.framebuffer.attachments[dsv_id.0]
+                        &pass_cache.attachments[dsv_id.0].view
                     };
 
                     let mut dsv_pool = descriptors_cpu::HeapLinear::new(

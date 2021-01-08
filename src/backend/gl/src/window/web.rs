@@ -1,11 +1,10 @@
 use crate::{
     conv, device::Device, native, Backend as B, GlContainer, PhysicalDevice, QueueFamily, Starc,
 };
-use arrayvec::ArrayVec;
 use glow::HasContext;
 use hal::{adapter::Adapter, format as f, image, window};
 use parking_lot::Mutex;
-use std::{iter, sync::Arc};
+use std::sync::Arc;
 use wasm_bindgen::JsCast;
 
 #[derive(Clone, Debug)]
@@ -13,7 +12,7 @@ pub struct Swapchain {
     pub(crate) extent: window::Extent2D,
     pub(crate) channel: f::ChannelType,
     pub(crate) raw_format: native::TextureFormat,
-    pub(crate) frame_buffers: ArrayVec<[native::RawFrameBuffer; 3]>,
+    pub(crate) framebuffer: native::RawFramebuffer,
 }
 
 #[derive(Debug)]
@@ -122,9 +121,8 @@ impl Surface {
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
         let swapchain = self.swapchain.as_ref().unwrap();
 
-        let frame_buffer = swapchain.frame_buffers.first().unwrap();
         gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
-        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(*frame_buffer));
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.framebuffer));
         gl.blit_framebuffer(
             0,
             0,
@@ -182,9 +180,7 @@ impl window::PresentationSurface<B> for Surface {
 
         if let Some(swapchain) = self.swapchain.take() {
             // delete all frame buffers already allocated
-            for frame_buffer in swapchain.frame_buffers {
-                gl.delete_framebuffer(frame_buffer);
-            }
+            gl.delete_framebuffer(swapchain.framebuffer);
         }
 
         if self.renderbuffer.is_none() {
@@ -200,8 +196,8 @@ impl window::PresentationSurface<B> for Surface {
             config.extent.height as i32,
         );
 
-        let frame_buffer = gl.create_framebuffer().unwrap();
-        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(frame_buffer));
+        let framebuffer = gl.create_framebuffer().unwrap();
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(framebuffer));
         gl.framebuffer_renderbuffer(
             glow::READ_FRAMEBUFFER,
             glow::COLOR_ATTACHMENT0,
@@ -212,7 +208,7 @@ impl window::PresentationSurface<B> for Surface {
             extent: config.extent,
             channel: config.format.base_format().1,
             raw_format: desc.tex_external,
-            frame_buffers: iter::once(frame_buffer).collect(),
+            framebuffer,
         });
         Ok(())
     }
@@ -220,9 +216,7 @@ impl window::PresentationSurface<B> for Surface {
     unsafe fn unconfigure_swapchain(&mut self, device: &Device) {
         let gl = &device.share.context;
         if let Some(swapchain) = self.swapchain.take() {
-            for frame_buffer in swapchain.frame_buffers {
-                gl.delete_framebuffer(frame_buffer);
-            }
+            gl.delete_framebuffer(swapchain.framebuffer);
         }
         if let Some(renderbuffer) = self.renderbuffer.take() {
             gl.delete_renderbuffer(renderbuffer);

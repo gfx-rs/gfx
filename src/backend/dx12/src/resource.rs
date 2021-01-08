@@ -168,8 +168,7 @@ pub struct PipelineLayout {
 
 #[derive(Debug, Clone)]
 pub struct Framebuffer {
-    pub(crate) attachments: Vec<ImageView>,
-    // Number of layers in the render area. Required for subpass resolves.
+    /// Number of layers in the render area. Required for subpass resolves.
     pub(crate) layers: image::Layer,
 }
 

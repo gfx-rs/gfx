@@ -175,6 +175,7 @@ struct Renderer<B: hal::Backend> {
     dimensions: window::Extent2D,
     viewport: pso::Viewport,
     render_pass: ManuallyDrop<B::RenderPass>,
+    framebuffer: ManuallyDrop<B::Framebuffer>,
     pipeline: ManuallyDrop<B::GraphicsPipeline>,
     pipeline_layout: ManuallyDrop<B::PipelineLayout>,
     desc_set: B::DescriptorSet,
@@ -352,6 +353,7 @@ where
         let swap_config = window::SwapchainConfig::from_caps(&caps, format, DIMS);
         println!("{:?}", swap_config);
         let extent = swap_config.extent;
+        let fat = swap_config.framebuffer_attachment();
         unsafe {
             surface
                 .configure_swapchain(&device, swap_config)
@@ -383,6 +385,20 @@ where
                     .expect("Can't create render pass"),
             )
         };
+
+        let framebuffer = ManuallyDrop::new(unsafe {
+            device
+                .create_framebuffer(
+                    &render_pass,
+                    iter::once(fat),
+                    i::Extent {
+                        width: DIMS.width,
+                        height: DIMS.height,
+                        depth: 1,
+                    },
+                )
+                .unwrap()
+        });
 
         // Define maximum number of frames we want to be able to be "in flight" (being computed
         // simultaneously) at once
@@ -516,6 +532,7 @@ where
             dimensions: DIMS,
             viewport,
             render_pass,
+            framebuffer,
             pipeline,
             pipeline_layout,
             desc_set,
@@ -535,16 +552,30 @@ where
         let caps = self.surface.capabilities(&self.adapter.physical_device);
         let swap_config = window::SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
         println!("{:?}", swap_config);
+
         let extent = swap_config.extent.to_extent();
+        self.viewport.rect.w = extent.width as _;
+        self.viewport.rect.h = extent.height as _;
+
+        unsafe {
+            self.device
+                .destroy_framebuffer(ManuallyDrop::into_inner(ptr::read(&self.framebuffer)));
+            self.framebuffer = ManuallyDrop::new(
+                self.device
+                    .create_framebuffer(
+                        &self.render_pass,
+                        iter::once(swap_config.framebuffer_attachment()),
+                        extent,
+                    )
+                    .unwrap(),
+            )
+        };
 
         unsafe {
             self.surface
                 .configure_swapchain(&self.device, swap_config)
                 .expect("Can't create swapchain");
         }
-
-        self.viewport.rect.w = extent.width as _;
-        self.viewport.rect.h = extent.height as _;
     }
 
     fn render(&mut self) {
@@ -556,20 +587,6 @@ where
                     return;
                 }
             }
-        };
-
-        let framebuffer = unsafe {
-            self.device
-                .create_framebuffer(
-                    &self.render_pass,
-                    iter::once(surface_image.borrow()),
-                    i::Extent {
-                        width: self.dimensions.width,
-                        height: self.dimensions.height,
-                        depth: 1,
-                    },
-                )
-                .unwrap()
         };
 
         // Compute index into our resource ring buffers based on the frame number
@@ -610,13 +627,16 @@ where
 
             cmd_buffer.begin_render_pass(
                 &self.render_pass,
-                &framebuffer,
+                &self.framebuffer,
                 self.viewport.rect,
-                &[command::ClearValue {
-                    color: command::ClearColor {
-                        float32: [0.8, 0.8, 0.8, 1.0],
+                iter::once(command::RenderAttachmentInfo {
+                    image_view: surface_image.borrow(),
+                    clear_value: command::ClearValue {
+                        color: command::ClearColor {
+                            float32: [0.8, 0.8, 0.8, 1.0],
+                        },
                     },
-                }],
+                }),
                 command::SubpassContents::Inline,
             );
             cmd_buffer.draw_mesh_tasks(1, 0);
@@ -639,8 +659,6 @@ where
                 surface_image,
                 Some(&mut self.submission_complete_semaphores[frame_idx]),
             );
-
-            self.device.destroy_framebuffer(framebuffer);
 
             if result.is_err() {
                 self.recreate_swapchain();
@@ -680,6 +698,8 @@ where
             }
             self.device
                 .destroy_render_pass(ManuallyDrop::into_inner(ptr::read(&self.render_pass)));
+            self.device
+                .destroy_framebuffer(ManuallyDrop::into_inner(ptr::read(&self.framebuffer)));
             self.surface.unconfigure_swapchain(&self.device);
             self.device
                 .free_memory(ManuallyDrop::into_inner(ptr::read(&self.buffer_memory)));

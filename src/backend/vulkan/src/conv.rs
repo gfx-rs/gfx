@@ -418,7 +418,10 @@ pub fn map_buffer_features(features: vk::FormatFeatureFlags) -> format::BufferFe
     format::BufferFeature::from_bits_truncate(features.as_raw())
 }
 
-pub(crate) fn map_device_features(features: Features) -> crate::DeviceCreationFeatures {
+pub(crate) fn map_device_features(
+    features: Features,
+    imageless_framebuffers: bool,
+) -> crate::DeviceCreationFeatures {
     crate::DeviceCreationFeatures {
         // vk::PhysicalDeviceFeatures is a struct composed of Bool32's while
         // Features is a bitfield so we need to map everything manually
@@ -523,6 +526,15 @@ pub(crate) fn map_device_features(features: Features) -> crate::DeviceCreationFe
                 vk::PhysicalDeviceMeshShaderFeaturesNV::builder()
                     .task_shader(features.contains(Features::TASK_SHADER))
                     .mesh_shader(features.contains(Features::MESH_SHADER))
+                    .build(),
+            )
+        } else {
+            None
+        },
+        imageless_framebuffers: if imageless_framebuffers {
+            Some(
+                vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder()
+                    .imageless_framebuffer(imageless_framebuffers)
                     .build(),
             )
         } else {
@@ -668,7 +680,11 @@ pub fn map_descriptor_pool_create_flags(
     vk::DescriptorPoolCreateFlags::from_raw(flags.bits())
 }
 
-pub fn map_memory_properties(flags: vk::MemoryPropertyFlags) -> hal::memory::Properties {
+pub fn map_sample_count_flags(samples: image::NumSamples) -> vk::SampleCountFlags {
+    vk::SampleCountFlags::from_raw((samples as u32) & vk::SampleCountFlags::all().as_raw())
+}
+
+pub fn map_vk_memory_properties(flags: vk::MemoryPropertyFlags) -> hal::memory::Properties {
     use crate::memory::Properties;
     let mut properties = Properties::empty();
 
@@ -691,7 +707,7 @@ pub fn map_memory_properties(flags: vk::MemoryPropertyFlags) -> hal::memory::Pro
     properties
 }
 
-pub fn map_memory_heap_flags(flags: vk::MemoryHeapFlags) -> hal::memory::HeapFlags {
+pub fn map_vk_memory_heap_flags(flags: vk::MemoryHeapFlags) -> hal::memory::HeapFlags {
     use hal::memory::HeapFlags;
     let mut hal_flags = HeapFlags::empty();
 

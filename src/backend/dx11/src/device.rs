@@ -1112,18 +1112,10 @@ impl device::Device<Backend> for Device {
     unsafe fn create_framebuffer<I>(
         &self,
         _renderpass: &RenderPass,
-        attachments: I,
+        _attachments: I,
         extent: image::Extent,
-    ) -> Result<Framebuffer, device::OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<ImageView>,
-    {
+    ) -> Result<Framebuffer, device::OutOfMemory> {
         Ok(Framebuffer {
-            attachments: attachments
-                .into_iter()
-                .map(|att| att.borrow().clone())
-                .collect(),
             layers: extent.depth as _,
         })
     }
