@@ -142,18 +142,6 @@ impl Surface {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum AcquireMode {
-    Wait,
-    Oldest,
-}
-
-impl Default for AcquireMode {
-    fn default() -> Self {
-        AcquireMode::Oldest
-    }
-}
-
 #[derive(Debug)]
 pub struct SwapchainImage {
     image: native::Image,
