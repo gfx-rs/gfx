@@ -47,6 +47,7 @@ type WlDisplayConnectFun =
 
 type WlDisplayDisconnectFun = unsafe extern "system" fn(display: *const raw::c_void);
 
+#[cfg(not(target_os = "android"))]
 type WlEglWindowCreateFun = unsafe extern "system" fn(
     surface: *const raw::c_void,
     width: raw::c_int,
@@ -138,21 +139,23 @@ impl Inner {
         //Note: only GLES is supported here.
         let mut supports_native_window = true;
         //TODO: EGL_SLOW_CONFIG
-        let config_attributes = [
+        let mut config_attributes = vec![
             egl::CONFORMANT,
             egl::OPENGL_ES2_BIT,
             egl::RENDERABLE_TYPE,
             egl::OPENGL_ES2_BIT,
-            egl::NATIVE_RENDERABLE,
-            egl::TRUE as _,
             egl::SURFACE_TYPE,
             egl::WINDOW_BIT,
-            egl::NONE,
         ];
-        let pre_config = match wsi_library {
-            Some(_) => egl.choose_first_config(display, &config_attributes),
-            None => Ok(None),
-        };
+
+        if !cfg!(target_os = "android") {
+            config_attributes.push(egl::NATIVE_RENDERABLE);
+            config_attributes.push(egl::TRUE as _);
+        }
+
+        config_attributes.push(egl::NONE);
+
+        let pre_config = egl.choose_first_config(display, &config_attributes);
         let config = match pre_config {
             Ok(Some(config)) => config,
             Ok(None) => {
@@ -178,7 +181,7 @@ impl Inner {
             egl::CONTEXT_CLIENT_VERSION,
             3, // Request GLES 3.0 or higher
         ];
-        if cfg!(debug_assertions) && wsi_library.is_none() {
+        if cfg!(debug_assertions) && wsi_library.is_none() && !cfg!(target_os = "android") {
             //TODO: figure out why this is needed
             context_attributes.push(egl::CONTEXT_OPENGL_DEBUG);
             context_attributes.push(egl::TRUE as _);
@@ -225,22 +228,23 @@ impl hal::Instance<crate::Backend> for Instance {
             }
         };
 
-        let client_extensions = egl
-            .query_string(None, egl::EXTENSIONS)
-            .map_err(|_| hal::UnsupportedBackend)?
-            .to_string_lossy();
-        log::info!("Client extensions: {:?}", client_extensions);
-        let client_ext_list = client_extensions.split_whitespace().collect::<Vec<_>>();
+        let client_extensions = egl.query_string(None, egl::EXTENSIONS);
+
+        let client_ext_str = match client_extensions {
+            Ok(ext) => ext.to_string_lossy().into_owned(),
+            Err(_) => String::new(),
+        };
+        log::info!("Client extensions: {:?}", client_ext_str);
 
         let mut wsi_library = None;
 
-        let wayland_display = if client_ext_list.contains(&"EGL_EXT_platform_wayland") {
+        let wayland_display = if client_ext_str.contains(&"EGL_EXT_platform_wayland") {
             test_wayland_display()
         } else {
             None
         };
 
-        let x11_display = if client_ext_list.contains(&"EGL_EXT_platform_x11") {
+        let x11_display = if client_ext_str.contains(&"EGL_EXT_platform_x11") {
             open_x_display()
         } else {
             None
@@ -287,7 +291,10 @@ impl hal::Instance<crate::Backend> for Instance {
             .unwrap();
         let context = unsafe {
             glow::Context::from_loader_function(|name| {
-                inner.egl.get_proc_address(name).unwrap() as *const _
+                inner
+                    .egl
+                    .get_proc_address(name)
+                    .map_or(ptr::null(), |p| p as *const _)
             })
         };
         // Create physical device
@@ -301,13 +308,13 @@ impl hal::Instance<crate::Backend> for Instance {
         use raw_window_handle::RawWindowHandle as Rwh;
 
         let mut inner = self.inner.lock();
-        let mut native_window = match has_handle.raw_window_handle() {
+        let mut native_window_ptr = match has_handle.raw_window_handle() {
             #[cfg(not(target_os = "android"))]
-            Rwh::Xlib(handle) => handle.window,
+            Rwh::Xlib(handle) => handle.window as *mut std::ffi::c_void,
             #[cfg(not(target_os = "android"))]
-            Rwh::Xcb(handle) => handle.window as _,
+            Rwh::Xcb(handle) => handle.window as *mut std::ffi::c_void,
             #[cfg(target_os = "android")]
-            Rwh::Android(handle) => handle.a_native_window,
+            Rwh::Android(handle) => handle.a_native_window as *mut _ as *mut std::ffi::c_void,
             #[cfg(not(target_os = "android"))]
             Rwh::Wayland(handle) => {
                 /* Wayland displays are not sharable between surfaces so if the
@@ -351,11 +358,19 @@ impl hal::Instance<crate::Backend> for Instance {
                     let result = wl_egl_window_create(handle.surface, 640, 480);
                     ptr::NonNull::new(result)
                 };
-                window.expect("unsupported window").as_ptr() as _
+                window.expect("unsupported window").as_ptr() as *mut _ as *mut std::ffi::c_void
             }
             other => panic!("Unsupported window: {:?}", other),
         };
-        let mut attributes = vec![egl::RENDER_BUFFER as usize, egl::SINGLE_BUFFER as usize];
+
+        let mut attributes = vec![
+            egl::RENDER_BUFFER as usize,
+            if cfg!(target_os = "android") {
+                egl::BACK_BUFFER as usize
+            } else {
+                egl::SINGLE_BUFFER as usize
+            },
+        ];
         if inner.version >= (1, 5) {
             // Always enable sRGB in EGL 1.5
             attributes.push(egl::GL_COLORSPACE as usize);
@@ -363,35 +378,50 @@ impl hal::Instance<crate::Backend> for Instance {
         }
         attributes.push(egl::ATTRIB_NONE);
 
-        let native_window_ptr = match has_handle.raw_window_handle() {
+        let raw = if inner.version >= (1, 5) {
+            inner
+                .egl
+                .create_platform_window_surface(
+                    inner.display,
+                    inner.config,
+                    native_window_ptr,
+                    &attributes,
+                )
+                .map_err(|e| {
+                    log::warn!("Error in create_platform_window_surface: {:?}", e);
+                    w::InitError::UnsupportedWindowHandle
+                })
+        } else {
+            let attributes_i32: Vec<i32> = attributes.iter().map(|a| (*a as i32).into()).collect();
+            inner
+                .egl
+                .create_window_surface(
+                    inner.display,
+                    inner.config,
+                    native_window_ptr,
+                    Some(&attributes_i32),
+                )
+                .map_err(|e| {
+                    log::warn!("Error in create_platform_window_surface: {:?}", e);
+                    w::InitError::UnsupportedWindowHandle
+                })
+        }?;
+
+        let wl_window = match has_handle.raw_window_handle() {
             #[cfg(not(target_os = "android"))]
-            Rwh::Wayland(_) => native_window as *mut raw::c_void,
-            _ => &mut native_window as *mut _ as *mut _,
+            Rwh::Wayland(_) => Some(native_window_ptr),
+            _ => None,
         };
-        match inner.egl.create_platform_window_surface(
-            inner.display,
-            inner.config,
-            native_window_ptr,
-            &attributes,
-        ) {
-            Ok(raw) => Ok(Surface {
-                egl: inner.egl.clone(),
-                raw,
-                display: inner.display,
-                context: inner.context,
-                presentable: inner.supports_native_window,
-                wl_window: match has_handle.raw_window_handle() {
-                    #[cfg(not(target_os = "android"))]
-                    Rwh::Wayland(_) => Some(native_window_ptr),
-                    _ => None,
-                },
-                swapchain: None,
-            }),
-            Err(e) => {
-                log::warn!("Error in create_window_surface: {:?}", e);
-                Err(w::InitError::UnsupportedWindowHandle)
-            }
-        }
+
+        Ok(Surface {
+            egl: inner.egl.clone(),
+            raw,
+            display: inner.display,
+            context: inner.context,
+            presentable: inner.supports_native_window,
+            wl_window,
+            swapchain: None,
+        })
     }
 
     unsafe fn destroy_surface(&self, surface: Surface) {
