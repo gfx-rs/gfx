@@ -122,7 +122,7 @@ fn main() {
         println!("{:?}", adapter.info);
     }
 
-    let adapter = adapters.remove(0);
+    let adapter = adapters.drain(..).next().unwrap();
 
     let mut renderer = Renderer::new(instance, surface, adapter);
 

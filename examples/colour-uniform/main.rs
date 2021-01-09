@@ -103,7 +103,6 @@ struct RendererState<B: Backend> {
     img_desc_pool: Option<B::DescriptorPool>,
     swapchain: SwapchainState,
     device: Rc<RefCell<DeviceState<B>>>,
-    backend: BackendState<B>,
     vertex_buffer: BufferState<B>,
     render_pass: RenderPassState<B>,
     uniform: Uniform<B>,
@@ -116,6 +115,8 @@ struct RendererState<B: Backend> {
     bg_color: pso::ColorValue,
     cur_color: Color,
     cur_value: u32,
+    // Note the drop order!
+    backend: BackendState<B>,
 }
 
 #[derive(Debug)]
@@ -510,9 +511,9 @@ impl<B: Backend> Drop for RendererState<B> {
 }
 
 struct BackendState<B: Backend> {
-    instance: Option<B::Instance>,
     surface: ManuallyDrop<B::Surface>,
     adapter: AdapterState<B>,
+    instance: B::Instance,
     /// Needs to be kept alive even if its not used directly
     #[allow(dead_code)]
     window: winit::window::Window,
@@ -520,11 +521,9 @@ struct BackendState<B: Backend> {
 
 impl<B: Backend> Drop for BackendState<B> {
     fn drop(&mut self) {
-        if let Some(instance) = &self.instance {
-            unsafe {
-                let surface = ManuallyDrop::into_inner(ptr::read(&self.surface));
-                instance.destroy_surface(surface);
-            }
+        unsafe {
+            let surface = ManuallyDrop::into_inner(ptr::read(&self.surface));
+            self.instance.destroy_surface(surface);
         }
     }
 }
@@ -550,7 +549,7 @@ fn create_backend(
     };
     let mut adapters = instance.enumerate_adapters();
     BackendState {
-        instance: Some(instance),
+        instance,
         adapter: AdapterState::new(&mut adapters),
         surface: ManuallyDrop::new(surface),
         window,
