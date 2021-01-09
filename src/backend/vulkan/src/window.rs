@@ -12,7 +12,7 @@ use smallvec::SmallVec;
 
 use crate::{
     conv, info, native, Backend, Device, Instance, PhysicalDevice, QueueFamily, RawDevice,
-    RawInstance, VK_ENTRY,
+    RawInstance,
 };
 
 #[derive(Debug, Default)]
@@ -89,16 +89,12 @@ pub struct RawSurface {
 impl Instance {
     #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
     pub fn create_surface_from_xlib(&self, dpy: *mut vk::Display, window: vk::Window) -> Surface {
-        let entry = VK_ENTRY
-            .as_ref()
-            .expect("Unable to load Vulkan entry points");
-
         if !self.extensions.contains(&khr::XlibSurface::name()) {
             panic!("Vulkan driver does not support VK_KHR_XLIB_SURFACE");
         }
 
         let surface = {
-            let xlib_loader = khr::XlibSurface::new(entry, &self.raw.inner);
+            let xlib_loader = khr::XlibSurface::new(&self.entry, &self.raw.inner);
             let info = vk::XlibSurfaceCreateInfoKHR::builder()
                 .flags(vk::XlibSurfaceCreateFlagsKHR::empty())
                 .window(window)
@@ -117,16 +113,12 @@ impl Instance {
         connection: *mut vk::xcb_connection_t,
         window: vk::xcb_window_t,
     ) -> Surface {
-        let entry = VK_ENTRY
-            .as_ref()
-            .expect("Unable to load Vulkan entry points");
-
         if !self.extensions.contains(&khr::XcbSurface::name()) {
             panic!("Vulkan driver does not support VK_KHR_XCB_SURFACE");
         }
 
         let surface = {
-            let xcb_loader = khr::XcbSurface::new(entry, &self.raw.inner);
+            let xcb_loader = khr::XcbSurface::new(&self.entry, &self.raw.inner);
             let info = vk::XcbSurfaceCreateInfoKHR::builder()
                 .flags(vk::XcbSurfaceCreateFlagsKHR::empty())
                 .window(window)
@@ -145,16 +137,12 @@ impl Instance {
         display: *mut c_void,
         surface: *mut c_void,
     ) -> Surface {
-        let entry = VK_ENTRY
-            .as_ref()
-            .expect("Unable to load Vulkan entry points");
-
         if !self.extensions.contains(&khr::WaylandSurface::name()) {
             panic!("Vulkan driver does not support VK_KHR_WAYLAND_SURFACE");
         }
 
         let surface = {
-            let w_loader = khr::WaylandSurface::new(entry, &self.raw.inner);
+            let w_loader = khr::WaylandSurface::new(&self.entry, &self.raw.inner);
             let info = vk::WaylandSurfaceCreateInfoKHR::builder()
                 .flags(vk::WaylandSurfaceCreateFlagsKHR::empty())
                 .display(display)
@@ -168,17 +156,13 @@ impl Instance {
 
     #[cfg(target_os = "android")]
     pub fn create_surface_android(&self, window: *const c_void) -> Surface {
-        let entry = VK_ENTRY
-            .as_ref()
-            .expect("Unable to load Vulkan entry points");
-
         let surface = {
-            let loader = khr::AndroidSurface::new(entry, &self.raw.inner);
+            let a_loader = khr::AndroidSurface::new(&self.entry, &self.raw.inner);
             let info = vk::AndroidSurfaceCreateInfoKHR::builder()
                 .flags(vk::AndroidSurfaceCreateFlagsKHR::empty())
                 .window(window as *mut _);
 
-            unsafe { loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
+            unsafe { a_loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
         };
 
         self.create_surface_from_vk_surface_khr(surface)
@@ -186,10 +170,6 @@ impl Instance {
 
     #[cfg(windows)]
     pub fn create_surface_from_hwnd(&self, hinstance: *mut c_void, hwnd: *mut c_void) -> Surface {
-        let entry = VK_ENTRY
-            .as_ref()
-            .expect("Unable to load Vulkan entry points");
-
         if !self.extensions.contains(&khr::Win32Surface::name()) {
             panic!("Vulkan driver does not support VK_KHR_WIN32_SURFACE");
         }
@@ -199,7 +179,7 @@ impl Instance {
                 .flags(vk::Win32SurfaceCreateFlagsKHR::empty())
                 .hinstance(hinstance)
                 .hwnd(hwnd);
-            let win32_loader = khr::Win32Surface::new(entry, &self.raw.inner);
+            let win32_loader = khr::Win32Surface::new(&self.entry, &self.raw.inner);
             unsafe {
                 win32_loader
                     .create_win32_surface(&info, None)
@@ -243,16 +223,12 @@ impl Instance {
             }
         }
 
-        let entry = VK_ENTRY
-            .as_ref()
-            .expect("Unable to load Vulkan entry points");
-
         if !self.extensions.contains(&mvk::MacOSSurface::name()) {
             panic!("Vulkan driver does not support VK_MVK_MACOS_SURFACE");
         }
 
         let surface = {
-            let mac_os_loader = mvk::MacOSSurface::new(entry, &self.raw.inner);
+            let mac_os_loader = mvk::MacOSSurface::new(&self.entry, &self.raw.inner);
             let mut info = vk::MacOSSurfaceCreateInfoMVK::builder()
                 .flags(vk::MacOSSurfaceCreateFlagsMVK::empty());
             if let Some(view) = unsafe { view.as_ref() } {
@@ -270,11 +246,7 @@ impl Instance {
     }
 
     pub fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR) -> Surface {
-        let entry = VK_ENTRY
-            .as_ref()
-            .expect("Unable to load Vulkan entry points");
-
-        let functor = khr::Surface::new(entry, &self.raw.inner);
+        let functor = khr::Surface::new(&self.entry, &self.raw.inner);
 
         let raw = Arc::new(RawSurface {
             handle: surface,
