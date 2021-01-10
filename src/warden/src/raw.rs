@@ -92,6 +92,8 @@ pub enum Resource {
         format: hal::format::Format,
         usage: hal::image::Usage,
         #[serde(default)]
+        view_caps: hal::image::ViewCapabilities,
+        #[serde(default)]
         data: String,
     },
     ImageView {
@@ -149,7 +151,7 @@ pub enum Resource {
     },
     Framebuffer {
         pass: String,
-        views: HashMap<String, String>,
+        attachments: HashMap<String, hal::image::FramebufferAttachment>,
         extent: hal::image::Extent,
     },
 }
@@ -240,13 +242,19 @@ pub struct DrawPass {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct RenderAttachmentInfo {
+    pub image_view: String,
+    pub clear_value: ClearValue,
+}
+
+#[derive(Debug, Deserialize)]
 pub enum Job {
     Transfer {
         commands: Vec<TransferCommand>,
     },
     Graphics {
         framebuffer: String,
-        clear_values: Vec<ClearValue>,
+        attachments: HashMap<String, RenderAttachmentInfo>,
         pass: (String, HashMap<String, DrawPass>),
     },
     Compute {

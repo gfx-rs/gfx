@@ -65,6 +65,7 @@ type ColorSlot = u8;
 const MAX_SAMPLERS: usize = 16;
 //TODO: has to be within glow::MAX_COMBINED_TEXTURE_IMAGE_UNITS
 const MAX_TEXTURE_SLOTS: usize = 16;
+const MAX_COLOR_ATTACHMENTS: usize = 16;
 
 struct GlContainer {
     context: GlContext,
@@ -96,7 +97,7 @@ impl hal::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type Framebuffer = native::FrameBuffer;
+    type Framebuffer = native::Framebuffer;
 
     type Buffer = native::Buffer;
     type BufferView = native::BufferView;

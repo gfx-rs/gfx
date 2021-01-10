@@ -337,6 +337,15 @@ impl SwapchainConfig {
         }
     }
 
+    /// Return the framebuffer attachment corresponding to the swapchain image views.
+    pub fn framebuffer_attachment(&self) -> image::FramebufferAttachment {
+        image::FramebufferAttachment {
+            usage: self.image_usage,
+            view_caps: image::ViewCapabilities::empty(),
+            format: self.format,
+        }
+    }
+
     /// Create a swapchain configuration based on the capabilities
     /// returned from a physical device query. If the surface does not
     /// specify a current size, default_extent is clamped and used instead.

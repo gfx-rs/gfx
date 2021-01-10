@@ -1800,20 +1800,10 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn create_framebuffer<I>(
         &self,
         _render_pass: &n::RenderPass,
-        attachments: I,
+        _attachments: I,
         extent: image::Extent,
-    ) -> Result<n::Framebuffer, d::OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<n::ImageView>,
-    {
-        Ok(n::Framebuffer {
-            extent,
-            attachments: attachments
-                .into_iter()
-                .map(|at| at.borrow().texture.clone())
-                .collect(),
-        })
+    ) -> Result<n::Framebuffer, d::OutOfMemory> {
+        Ok(n::Framebuffer { extent })
     }
 
     unsafe fn create_shader_module(
@@ -2377,7 +2367,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn destroy_compute_pipeline(&self, _pipeline: n::ComputePipeline) {}
 
-    unsafe fn destroy_framebuffer(&self, _buffer: n::Framebuffer) {}
+    unsafe fn destroy_framebuffer(&self, _framebuffer: n::Framebuffer) {}
 
     unsafe fn destroy_semaphore(&self, _semaphore: n::Semaphore) {}
 

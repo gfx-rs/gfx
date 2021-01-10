@@ -5,6 +5,7 @@
 			num_levels: 1,
 			format: Rgba8Unorm,
 			usage: (bits: 0x15), //COLOR_ATTACHMENT | TRANSFER_SRC (for reading) | SAMPLED (temporary for GL)
+			view_caps: (bits: 0),
 		),
 		"pass": RenderPass(
 			attachments: {
@@ -37,8 +38,12 @@
 		),
 		"fbo": Framebuffer(
 			pass: "pass",
-			views: {
-				"c": "image.color.view"
+			attachments: {
+				"c": (
+					usage: (bits: 0x15),
+					view_caps: (bits: 0),
+					format: Rgba8Unorm,
+				),
 			},
 			extent: (
 				width: 1,
@@ -88,9 +93,12 @@
 	jobs: {
 		"empty": Graphics(
 			framebuffer: "fbo",
-			clear_values: [
-				Color(Float((0.8, 0.8, 0.8, 1.0))),
-			],
+			attachments: {
+				"c": (
+					image_view: "image.color.view",
+					clear_value: Color(Float((0.8, 0.8, 0.8, 1.0))),
+				),
+			},
 			pass: ("pass", {
 				"main": (commands: [
 				]),
@@ -98,9 +106,12 @@
 		),
 		"pass-through": Graphics(
 			framebuffer: "fbo",
-			clear_values: [
-				Color(Float((0.8, 0.8, 0.8, 1.0))),
-			],
+			attachments: {
+				"c": (
+					image_view: "image.color.view",
+					clear_value: Color(Float((0.8, 0.8, 0.8, 1.0))),
+				),
+			},
 			pass: ("pass", {
 				"main": (commands: [
 					BindPipeline("pipe.passthrough"),

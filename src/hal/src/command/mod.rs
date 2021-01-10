@@ -60,7 +60,7 @@ pub enum Level {
     Secondary,
 }
 
-/// Specifies how commands for the following renderpasses will be recorded.
+/// Specifies how commands for the following render passes will be recorded.
 #[derive(Debug)]
 pub enum SubpassContents {
     /// Contents of the subpass will be inline in the command buffer,
@@ -70,6 +70,15 @@ pub enum SubpassContents {
     /// the primary command buffer will only contain `execute_command()` calls
     /// until the subpass or render pass is complete.
     SecondaryBuffers,
+}
+
+/// A render attachment provided to `begin_render_pass`.
+#[derive(Debug)]
+pub struct RenderAttachmentInfo<'a, B: Backend> {
+    /// View of the attachment image.
+    pub image_view: &'a B::ImageView,
+    /// Clear value, if needed.
+    pub clear_value: ClearValue,
 }
 
 #[allow(missing_docs)]
@@ -293,23 +302,25 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # Arguments
     ///
     /// * `render_area` - section of the framebuffer to render.
-    /// * `clear_values` - iterator of [clear values][crate::command::ClearValue]
-    ///   to use to use for `clear_*` commands, one for each attachment of the render pass
-    ///   that has a clear operation.
+    /// * `attachments` - iterator of [attachments][crate::command::RenderAttachmentInfo]
+    ///   that has both the image views and the clear values
     /// * `first_subpass` - specifies, for the first subpass, whether the
     ///   rendering commands are provided inline or whether the render
     ///   pass is composed of subpasses.
-    unsafe fn begin_render_pass<T>(
+    ///
+    /// # Note
+    ///
+    /// The `ExactSizeIterator` is not required, since the number of the attachments
+    /// can be known from the render pass.
+    unsafe fn begin_render_pass<'a, T>(
         &mut self,
         render_pass: &B::RenderPass,
         framebuffer: &B::Framebuffer,
         render_area: pso::Rect,
-        clear_values: T,
+        attachments: T,
         first_subpass: SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<ClearValue>,
-        T::IntoIter: ExactSizeIterator;
+        T: IntoIterator<Item = RenderAttachmentInfo<'a, B>>;
 
     /// Steps to the next subpass in the current render pass.
     unsafe fn next_subpass(&mut self, contents: SubpassContents);

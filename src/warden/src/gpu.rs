@@ -130,7 +130,6 @@ pub struct ImageView<B: hal::Backend> {
 
 pub struct Framebuffer<B: hal::Backend> {
     pub handle: B::Framebuffer,
-    views: Vec<(String, Range<i::Layout>)>,
     extent: i::Extent,
 }
 
@@ -411,6 +410,7 @@ impl<B: hal::Backend> Scene<B> {
                     num_levels,
                     format,
                     usage,
+                    view_caps,
                     ref data,
                 } => {
                     // allocate memory
@@ -421,7 +421,7 @@ impl<B: hal::Backend> Scene<B> {
                             format,
                             i::Tiling::Optimal,
                             usage,
-                            i::ViewCapabilities::empty(),
+                            view_caps,
                         )
                     }
                     .unwrap();
@@ -845,33 +845,24 @@ impl<B: hal::Backend> Scene<B> {
                 }
                 raw::Resource::Framebuffer {
                     ref pass,
-                    ref views,
+                    ref attachments,
                     extent,
                 } => {
                     let rp = resources
                         .render_passes
                         .get(pass)
                         .expect(&format!("Missing render pass: {}", pass));
-                    let view_pairs = rp
+                    let infos = rp
                         .attachments
                         .iter()
-                        .map(|at| {
-                            let entry = views.iter().find(|entry| entry.0 == &at.0).unwrap();
-                            (entry.1.clone(), at.1.clone())
-                        })
+                        .map(|&(ref name, _)| attachments[name].clone())
                         .collect::<Vec<_>>();
-                    let framebuffer = {
-                        let image_views = view_pairs
-                            .iter()
-                            .map(|vp| &resources.image_views[&vp.0].handle);
-                        unsafe { device.create_framebuffer(&rp.handle, image_views, extent) }
-                            .unwrap()
-                    };
+                    let framebuffer =
+                        unsafe { device.create_framebuffer(&rp.handle, infos, extent) }.unwrap();
                     resources.framebuffers.insert(
                         name.clone(),
                         Framebuffer {
                             handle: framebuffer,
-                            views: view_pairs,
                             extent,
                         },
                     );
@@ -1237,7 +1228,7 @@ impl<B: hal::Backend> Scene<B> {
                 raw::Job::Graphics {
                     ref framebuffer,
                     ref pass,
-                    ref clear_values,
+                    ref attachments,
                 } => unsafe {
                     // collect all used image descriptors
                     let mut all_images = Vec::new();
@@ -1272,10 +1263,11 @@ impl<B: hal::Backend> Scene<B> {
                         pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT
                             ..pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                         memory::Dependencies::empty(),
-                        fb.views.iter().map(|v| {
-                            let view = &resources.image_views[&v.0];
+                        rp.attachments.iter().map(|&(ref name, ref rat)| {
+                            let info = &attachments[name];
+                            let view = &resources.image_views[&info.image_view];
                             resources.images[&view.image]
-                                .barrier_to(i::Access::COLOR_ATTACHMENT_WRITE, v.1.start)
+                                .barrier_to(i::Access::COLOR_ATTACHMENT_WRITE, rat.start)
                         }),
                     );
                     command_buf.pipeline_barrier(
@@ -1291,7 +1283,13 @@ impl<B: hal::Backend> Scene<B> {
                         &rp.handle,
                         &fb.handle,
                         rect,
-                        clear_values.iter().map(|cv| cv.to_raw()),
+                        rp.attachments.iter().map(|&(ref name, _)| {
+                            let info = &attachments[name];
+                            c::RenderAttachmentInfo {
+                                image_view: &resources.image_views[&info.image_view].handle,
+                                clear_value: info.clear_value.to_raw(),
+                            }
+                        }),
                         c::SubpassContents::Inline,
                     );
                     command_buf.set_scissors(0, Some(rect));
@@ -1408,10 +1406,11 @@ impl<B: hal::Backend> Scene<B> {
                         pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT
                             ..pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                         memory::Dependencies::empty(),
-                        fb.views.iter().map(|v| {
-                            let view = &resources.image_views[&v.0];
+                        rp.attachments.iter().map(|&(ref name, ref rat)| {
+                            let info = &attachments[name];
+                            let view = &resources.image_views[&info.image_view];
                             resources.images[&view.image]
-                                .barrier_from(i::Access::COLOR_ATTACHMENT_WRITE, v.1.end)
+                                .barrier_from(i::Access::COLOR_ATTACHMENT_WRITE, rat.end)
                         }),
                     );
                 },

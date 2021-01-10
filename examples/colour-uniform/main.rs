@@ -272,7 +272,17 @@ impl<B: Backend> RendererState<B> {
 
         let swapchain = SwapchainState::new(&mut *backend.surface, &*device.borrow());
         let render_pass = RenderPassState::new(&swapchain, Rc::clone(&device));
-        let framebuffer = FramebufferState::new(Rc::clone(&device), swapchain.frame_queue_size);
+        let framebuffer = device
+            .borrow()
+            .device
+            .create_framebuffer(
+                render_pass.render_pass.as_ref().unwrap(),
+                iter::once(swapchain.fat.clone()),
+                swapchain.extent,
+            )
+            .unwrap();
+        let framebuffer =
+            FramebufferState::new(Rc::clone(&device), swapchain.frame_queue_size, framebuffer);
 
         let pipeline = PipelineState::new(
             vec![image.get_layout(), uniform.get_layout()],
@@ -304,7 +314,8 @@ impl<B: Backend> RendererState<B> {
     }
 
     fn recreate_swapchain(&mut self) {
-        self.device.borrow().device.wait_idle().unwrap();
+        let device = &self.device.borrow().device;
+        device.wait_idle().unwrap();
 
         self.swapchain =
             unsafe { SwapchainState::new(&mut *self.backend.surface, &*self.device.borrow()) };
@@ -312,8 +323,23 @@ impl<B: Backend> RendererState<B> {
         self.render_pass =
             unsafe { RenderPassState::new(&self.swapchain, Rc::clone(&self.device)) };
 
+        let framebuffer = unsafe {
+            device.destroy_framebuffer(self.framebuffer.framebuffer.take().unwrap());
+            device
+                .create_framebuffer(
+                    self.render_pass.render_pass.as_ref().unwrap(),
+                    iter::once(self.swapchain.fat.clone()),
+                    self.swapchain.extent,
+                )
+                .unwrap()
+        };
+
         self.framebuffer = unsafe {
-            FramebufferState::new(Rc::clone(&self.device), self.swapchain.frame_queue_size)
+            FramebufferState::new(
+                Rc::clone(&self.device),
+                self.swapchain.frame_queue_size,
+                framebuffer,
+            )
         };
 
         self.pipeline = unsafe {
@@ -343,22 +369,10 @@ impl<B: Backend> RendererState<B> {
             }
         };
 
-        let framebuffer = unsafe {
-            self.device
-                .borrow()
-                .device
-                .create_framebuffer(
-                    self.render_pass.render_pass.as_ref().unwrap(),
-                    iter::once(std::borrow::Borrow::borrow(&surface_image)),
-                    self.swapchain.extent,
-                )
-                .unwrap()
-        };
-
         let frame_idx = (self.swapchain.frame_index % self.swapchain.frame_queue_size) as usize;
         self.swapchain.frame_index += 1;
 
-        let (command_pool, command_buffers, sem_image_present) =
+        let (framebuffer, command_pool, command_buffers, sem_image_present) =
             self.framebuffer.get_frame_data(frame_idx);
 
         unsafe {
@@ -391,13 +405,16 @@ impl<B: Backend> RendererState<B> {
 
             cmd_buffer.begin_render_pass(
                 self.render_pass.render_pass.as_ref().unwrap(),
-                &framebuffer,
+                framebuffer,
                 self.viewport.rect,
-                &[command::ClearValue {
-                    color: command::ClearColor {
-                        float32: self.bg_color,
+                iter::once(command::RenderAttachmentInfo {
+                    image_view: std::borrow::Borrow::borrow(&surface_image),
+                    clear_value: command::ClearValue {
+                        color: command::ClearColor {
+                            float32: self.bg_color,
+                        },
                     },
-                }],
+                }),
                 command::SubpassContents::Inline,
             );
             cmd_buffer.draw(0..6, 0..1);
@@ -422,8 +439,6 @@ impl<B: Backend> RendererState<B> {
             ) {
                 self.recreate_swapchain = true;
             }
-
-            self.device.borrow().device.destroy_framebuffer(framebuffer);
         }
     }
 
@@ -1315,6 +1330,7 @@ struct SwapchainState {
     format: f::Format,
     frame_index: u32,
     frame_queue_size: u32,
+    fat: i::FramebufferAttachment,
 }
 
 impl SwapchainState {
@@ -1332,6 +1348,7 @@ impl SwapchainState {
 
         println!("Surface format: {:?}", format);
         let swap_config = w::SwapchainConfig::from_caps(&caps, format, DIMS);
+        let fat = swap_config.framebuffer_attachment();
         let extent = swap_config.extent.to_extent();
         let frame_queue_size = swap_config.image_count;
         surface
@@ -1343,6 +1360,7 @@ impl SwapchainState {
             format,
             frame_index: 0,
             frame_queue_size,
+            fat,
         }
     }
 
@@ -1360,6 +1378,7 @@ impl SwapchainState {
 }
 
 struct FramebufferState<B: Backend> {
+    framebuffer: Option<B::Framebuffer>,
     command_pools: Option<Vec<B::CommandPool>>,
     command_buffer_lists: Vec<Vec<B::CommandBuffer>>,
     present_semaphores: Option<Vec<B::Semaphore>>,
@@ -1367,7 +1386,11 @@ struct FramebufferState<B: Backend> {
 }
 
 impl<B: Backend> FramebufferState<B> {
-    unsafe fn new(device: Rc<RefCell<DeviceState<B>>>, num_frames: u32) -> Self {
+    unsafe fn new(
+        device: Rc<RefCell<DeviceState<B>>>,
+        num_frames: u32,
+        framebuffer: B::Framebuffer,
+    ) -> Self {
         let mut command_pools: Vec<_> = vec![];
         let mut command_buffer_lists = Vec::new();
         let mut present_semaphores: Vec<B::Semaphore> = vec![];
@@ -1389,6 +1412,7 @@ impl<B: Backend> FramebufferState<B> {
         }
 
         FramebufferState {
+            framebuffer: Some(framebuffer),
             command_pools: Some(command_pools),
             command_buffer_lists,
             present_semaphores: Some(present_semaphores),
@@ -1400,11 +1424,13 @@ impl<B: Backend> FramebufferState<B> {
         &mut self,
         index: usize,
     ) -> (
+        &B::Framebuffer,
         &mut B::CommandPool,
         &mut Vec<B::CommandBuffer>,
         &mut B::Semaphore,
     ) {
         (
+            self.framebuffer.as_ref().unwrap(),
             &mut self.command_pools.as_mut().unwrap()[index],
             &mut self.command_buffer_lists[index],
             &mut self.present_semaphores.as_mut().unwrap()[index],
@@ -1417,6 +1443,8 @@ impl<B: Backend> Drop for FramebufferState<B> {
         let device = &self.device.borrow().device;
 
         unsafe {
+            device.destroy_framebuffer(self.framebuffer.take().unwrap());
+
             for (mut command_pool, comamnd_buffer_list) in self
                 .command_pools
                 .take()

@@ -18,6 +18,7 @@ pub type RawBuffer = <GlContext as glow::HasContext>::Buffer;
 pub type Shader = <GlContext as glow::HasContext>::Shader;
 pub type Program = <GlContext as glow::HasContext>::Program;
 pub type Renderbuffer = <GlContext as glow::HasContext>::Renderbuffer;
+pub type RawFramebuffer = <GlContext as glow::HasContext>::Framebuffer;
 pub type Texture = <GlContext as glow::HasContext>::Texture;
 pub type Sampler = <GlContext as glow::HasContext>::Sampler;
 // TODO: UniformLocation was copy in glow 0.3, but in 0.4 it isn't. Wrap it in a Starc for now
@@ -25,11 +26,9 @@ pub type Sampler = <GlContext as glow::HasContext>::Sampler;
 pub type UniformLocation = crate::Starc<<GlContext as glow::HasContext>::UniformLocation>;
 pub type DescriptorSetLayout = Arc<Vec<pso::DescriptorSetLayoutBinding>>;
 
-pub type RawFrameBuffer = <GlContext as glow::HasContext>::Framebuffer;
-
 #[derive(Clone, Debug)]
-pub struct FrameBuffer {
-    pub(crate) fbos: Vec<Option<RawFrameBuffer>>,
+pub struct Framebuffer {
+    pub(crate) raw: RawFramebuffer,
 }
 
 #[derive(Debug)]
@@ -162,6 +161,15 @@ pub enum ImageView {
         is_3d: bool,
         sub: i::SubresourceRange,
     },
+}
+
+impl ImageView {
+    pub(crate) fn aspects(&self) -> format::Aspects {
+        match *self {
+            ImageView::Renderbuffer { aspects, .. } => aspects,
+            ImageView::Texture { ref sub, .. } => sub.aspects,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -305,7 +313,7 @@ pub struct SubpassDesc {
 
 impl SubpassDesc {
     /// Check if an attachment is used by this sub-pass.
-    pub(crate) fn attachment_using(&self, at_id: pass::AttachmentId) -> Option<u32> {
+    pub(crate) fn _attachment_using(&self, at_id: pass::AttachmentId) -> Option<u32> {
         if self.depth_stencil == Some(at_id) {
             Some(glow::DEPTH_STENCIL_ATTACHMENT)
         } else {

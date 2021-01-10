@@ -1,8 +1,9 @@
 use crate::{
     command as com, device, info::LegacyFeatures, native, state, Backend, Device, GlContext, Share,
-    Starc, Surface,
+    Starc, Surface, MAX_COLOR_ATTACHMENTS,
 };
 
+use arrayvec::ArrayVec;
 use glow::HasContext;
 use smallvec::SmallVec;
 
@@ -27,8 +28,6 @@ struct State {
     num_viewports: usize,
     // Currently set scissor rects.
     num_scissors: usize,
-    // Currently bound fbo
-    fbo: Option<native::RawFrameBuffer>,
 }
 
 impl State {
@@ -40,7 +39,6 @@ impl State {
             index_buffer: None,
             num_viewports: 0,
             num_scissors: 0,
-            fbo: None,
         }
     }
 
@@ -481,28 +479,35 @@ impl CommandQueue {
                 };
             },
             com::Command::ClearTexture(_color) => unimplemented!(),
-            com::Command::DrawBuffers(draw_buffers) => unsafe {
-                if self.share.private_caps.draw_buffers {
-                    let draw_buffers = Self::get::<u32>(data_buf, draw_buffers);
-                    self.share.context.draw_buffers(draw_buffers);
-                } else {
-                    warn!("Draw buffers are not supported");
+            com::Command::BindFramebuffer {
+                target,
+                framebuffer,
+                ref colors,
+                ref depth_stencil,
+            } => {
+                let gl = &self.share.context;
+                unsafe { gl.bind_framebuffer(target, Some(framebuffer)) };
+                for (i, view) in colors.iter().enumerate() {
+                    self.bind_target(target, glow::COLOR_ATTACHMENT0 + i as u32, view);
                 }
-            },
-            com::Command::BindFrameBuffer(point, frame_buffer) => {
-                if self.share.private_caps.framebuffer {
-                    let gl = &self.share.context;
-                    unsafe { gl.bind_framebuffer(point, frame_buffer) };
-                    self.state.fbo = frame_buffer;
-                } else if frame_buffer.is_some() {
-                    error!("Tried to bind FBO without FBO support!");
+                if let Some(ref view) = *depth_stencil {
+                    let aspects = view.aspects();
+                    let attachment = if aspects == hal::format::Aspects::DEPTH {
+                        glow::DEPTH_ATTACHMENT
+                    } else if aspects == hal::format::Aspects::STENCIL {
+                        glow::STENCIL_ATTACHMENT
+                    } else {
+                        glow::DEPTH_STENCIL_ATTACHMENT
+                    };
+                    self.bind_target(target, attachment, view);
                 }
             }
-            com::Command::BindTargetView(point, attachment, ref view) => {
-                self.bind_target(point, attachment, view)
-            }
-            com::Command::SetDrawColorBuffers(num) => {
-                state::bind_draw_color_buffers(&self.share.context, num);
+            com::Command::SetDrawColorBuffers(ref indices) => {
+                let gl_indices = indices
+                    .iter()
+                    .map(|&i| glow::COLOR_ATTACHMENT0 + i as u32)
+                    .collect::<ArrayVec<[_; MAX_COLOR_ATTACHMENTS]>>();
+                unsafe { self.share.context.draw_buffers(&gl_indices) };
             }
             com::Command::SetPatchSize(num) => unsafe {
                 self.share

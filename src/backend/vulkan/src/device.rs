@@ -1,9 +1,5 @@
 use arrayvec::ArrayVec;
-use ash::{
-    extensions::khr,
-    version::DeviceV1_0,
-    vk::{self, Handle},
-};
+use ash::{extensions::khr, version::DeviceV1_0, vk};
 use smallvec::SmallVec;
 
 use hal::{
@@ -16,7 +12,7 @@ use hal::{
 
 use std::{
     borrow::{Borrow, BorrowMut},
-    ffi::{CStr, CString},
+    ffi::CString,
     mem,
     ops::Range,
     pin::Pin,
@@ -25,8 +21,7 @@ use std::{
 };
 
 use crate::{
-    command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B,
-    DebugMessenger, Device,
+    command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B, Device,
 };
 
 #[derive(Debug, Default)]
@@ -290,9 +285,7 @@ impl GraphicsPipelineInfoBuf {
                 ];
                 vk::PipelineMultisampleStateCreateInfo::builder()
                     .flags(vk::PipelineMultisampleStateCreateFlags::empty())
-                    .rasterization_samples(vk::SampleCountFlags::from_raw(
-                        (ms.rasterization_samples as u32) & vk::SampleCountFlags::all().as_raw(),
-                    ))
+                    .rasterization_samples(conv::map_sample_count_flags(ms.rasterization_samples))
                     .sample_shading_enable(ms.sample_shading.is_some())
                     .min_sample_shading(ms.sample_shading.unwrap_or(0.0))
                     .sample_mask(&this.sample_mask)
@@ -517,6 +510,7 @@ impl d::Device<B> for Device {
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
         IA: IntoIterator,
+        IA::IntoIter: ExactSizeIterator,
         IA::Item: Borrow<pass::Attachment>,
         IA::IntoIter: ExactSizeIterator,
         IS: IntoIterator,
@@ -533,9 +527,7 @@ impl d::Device<B> for Device {
                 format: attachment
                     .format
                     .map_or(vk::Format::UNDEFINED, conv::map_format),
-                samples: vk::SampleCountFlags::from_raw(
-                    (attachment.samples as u32) & vk::SampleCountFlags::all().as_raw(),
-                ),
+                samples: conv::map_sample_count_flags(attachment.samples),
                 load_op: conv::map_attachment_load_op(attachment.ops.load),
                 store_op: conv::map_attachment_store_op(attachment.ops.store),
                 stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
@@ -562,95 +554,75 @@ impl d::Device<B> for Device {
             }
         });
 
-        let (clear_attachments_mask, result) =
-            inplace_it::inplace_or_alloc_array(attachments.len(), |uninit_guard| {
-                let attachments = uninit_guard.init_with_iter(attachments);
+        let attachment_count = attachments.len();
+        let result = inplace_it::inplace_or_alloc_array(attachment_count, |uninit_guard| {
+            let attachments = uninit_guard.init_with_iter(attachments);
+            let attachment_refs = subpasses
+                .into_iter()
+                .map(|subpass| {
+                    let subpass = subpass.borrow();
+                    fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
+                        vk::AttachmentReference {
+                            attachment: id as _,
+                            layout: conv::map_image_layout(layout),
+                        }
+                    }
+                    let colors = subpass.colors.iter().map(make_ref).collect::<Box<[_]>>();
+                    let depth_stencil = subpass.depth_stencil.map(make_ref);
+                    let inputs = subpass.inputs.iter().map(make_ref).collect::<Box<[_]>>();
+                    let preserves = subpass
+                        .preserves
+                        .iter()
+                        .map(|&id| id as u32)
+                        .collect::<Box<[_]>>();
+                    let resolves = subpass.resolves.iter().map(make_ref).collect::<Box<[_]>>();
 
-                let clear_attachments_mask = attachments
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, at)| {
-                        if at.load_op == vk::AttachmentLoadOp::CLEAR
-                            || at.stencil_load_op == vk::AttachmentLoadOp::CLEAR
-                        {
-                            Some(1 << i as u64)
+                    (colors, depth_stencil, inputs, preserves, resolves)
+                })
+                .collect::<Box<[_]>>();
+
+            let subpasses = attachment_refs
+                .iter()
+                .map(|(colors, depth_stencil, inputs, preserves, resolves)| {
+                    vk::SubpassDescription {
+                        flags: vk::SubpassDescriptionFlags::empty(),
+                        pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
+                        input_attachment_count: inputs.len() as u32,
+                        p_input_attachments: inputs.as_ptr(),
+                        color_attachment_count: colors.len() as u32,
+                        p_color_attachments: colors.as_ptr(),
+                        p_resolve_attachments: if resolves.is_empty() {
+                            ptr::null()
                         } else {
-                            None
-                        }
-                    })
-                    .sum();
+                            resolves.as_ptr()
+                        },
+                        p_depth_stencil_attachment: match depth_stencil {
+                            Some(ref aref) => aref as *const _,
+                            None => ptr::null(),
+                        },
+                        preserve_attachment_count: preserves.len() as u32,
+                        p_preserve_attachments: preserves.as_ptr(),
+                    }
+                })
+                .collect::<Box<[_]>>();
 
-                let attachment_refs = subpasses
-                    .into_iter()
-                    .map(|subpass| {
-                        let subpass = subpass.borrow();
-                        fn make_ref(
-                            &(id, layout): &pass::AttachmentRef,
-                        ) -> vk::AttachmentReference {
-                            vk::AttachmentReference {
-                                attachment: id as _,
-                                layout: conv::map_image_layout(layout),
-                            }
-                        }
-                        let colors = subpass.colors.iter().map(make_ref).collect::<Box<[_]>>();
-                        let depth_stencil = subpass.depth_stencil.map(make_ref);
-                        let inputs = subpass.inputs.iter().map(make_ref).collect::<Box<[_]>>();
-                        let preserves = subpass
-                            .preserves
-                            .iter()
-                            .map(|&id| id as u32)
-                            .collect::<Box<[_]>>();
-                        let resolves = subpass.resolves.iter().map(make_ref).collect::<Box<[_]>>();
+            inplace_it::inplace_or_alloc_array(dependencies.len(), |uninit_guard| {
+                let dependencies = uninit_guard.init_with_iter(dependencies);
 
-                        (colors, depth_stencil, inputs, preserves, resolves)
-                    })
-                    .collect::<Box<[_]>>();
+                let info = vk::RenderPassCreateInfo::builder()
+                    .flags(vk::RenderPassCreateFlags::empty())
+                    .attachments(&attachments)
+                    .subpasses(&subpasses)
+                    .dependencies(&dependencies);
 
-                let subpasses = attachment_refs
-                    .iter()
-                    .map(|(colors, depth_stencil, inputs, preserves, resolves)| {
-                        vk::SubpassDescription {
-                            flags: vk::SubpassDescriptionFlags::empty(),
-                            pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
-                            input_attachment_count: inputs.len() as u32,
-                            p_input_attachments: inputs.as_ptr(),
-                            color_attachment_count: colors.len() as u32,
-                            p_color_attachments: colors.as_ptr(),
-                            p_resolve_attachments: if resolves.is_empty() {
-                                ptr::null()
-                            } else {
-                                resolves.as_ptr()
-                            },
-                            p_depth_stencil_attachment: match depth_stencil {
-                                Some(ref aref) => aref as *const _,
-                                None => ptr::null(),
-                            },
-                            preserve_attachment_count: preserves.len() as u32,
-                            p_preserve_attachments: preserves.as_ptr(),
-                        }
-                    })
-                    .collect::<Box<[_]>>();
-
-                let result =
-                    inplace_it::inplace_or_alloc_array(dependencies.len(), |uninit_guard| {
-                        let dependencies = uninit_guard.init_with_iter(dependencies);
-
-                        let info = vk::RenderPassCreateInfo::builder()
-                            .flags(vk::RenderPassCreateFlags::empty())
-                            .attachments(&attachments)
-                            .subpasses(&subpasses)
-                            .dependencies(&dependencies);
-
-                        self.shared.raw.create_render_pass(&info, None)
-                    });
-
-                (clear_attachments_mask, result)
-            });
+                self.shared.raw.create_render_pass(&info, None)
+            })
+        });
 
         match result {
             Ok(renderpass) => Ok(n::RenderPass {
                 raw: renderpass,
-                clear_attachments_mask,
+                attachment_count,
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device),
@@ -1034,7 +1006,8 @@ impl d::Device<B> for Device {
         ) {
             vk::Result::SUCCESS => {
                 if let Some(name) = desc.label {
-                    self.set_object_name(vk::ObjectType::PIPELINE, pipeline.as_raw(), name);
+                    self.shared
+                        .set_object_name(vk::ObjectType::PIPELINE, pipeline, name);
                 }
                 Ok(n::ComputePipeline(pipeline))
             }
@@ -1142,7 +1115,8 @@ impl d::Device<B> for Device {
                 } else {
                     let desc = desc_pair.0.borrow();
                     if let Some(name) = desc.label {
-                        self.set_object_name(vk::ObjectType::PIPELINE, pso.as_raw(), name);
+                        self.shared
+                            .set_object_name(vk::ObjectType::PIPELINE, pso, name);
                     }
                     Ok(n::ComputePipeline(pso))
                 }
@@ -1157,43 +1131,54 @@ impl d::Device<B> for Device {
         extent: image::Extent,
     ) -> Result<n::Framebuffer, d::OutOfMemory>
     where
-        T: IntoIterator,
-        T::Item: Borrow<n::ImageView>,
+        T: IntoIterator<Item = image::FramebufferAttachment>,
     {
-        let mut framebuffers_ptr = None;
-        let mut raw_attachments = SmallVec::<[_; 4]>::new();
-        for attachment in attachments {
-            let at = attachment.borrow();
-            raw_attachments.push(at.view);
-            match at.owner {
-                n::ImageViewOwner::User => {}
-                n::ImageViewOwner::Surface(ref fbo_ptr) => {
-                    framebuffers_ptr = Some(Arc::clone(&fbo_ptr.0));
-                }
-            }
+        if !self.shared.imageless_framebuffers {
+            return Ok(n::Framebuffer::Legacy {
+                name: String::new(),
+                map: Default::default(),
+                extent,
+            });
         }
 
-        let info = vk::FramebufferCreateInfo::builder()
-            .flags(vk::FramebufferCreateFlags::empty())
+        // guarantee that we don't reallocate it
+        let mut view_formats =
+            SmallVec::<[vk::Format; 5]>::with_capacity(renderpass.attachment_count);
+        let attachment_infos = attachments
+            .into_iter()
+            .map(|fat| {
+                let mut info = vk::FramebufferAttachmentImageInfo::builder()
+                    .usage(conv::map_image_usage(fat.usage))
+                    .flags(conv::map_view_capabilities(fat.view_caps))
+                    .width(extent.width)
+                    .height(extent.height)
+                    .layer_count(extent.depth)
+                    .build();
+                info.view_format_count = 1;
+                info.p_view_formats = view_formats.as_ptr().add(view_formats.len());
+                view_formats.push(conv::map_format(fat.format));
+                info
+            })
+            .collect::<SmallVec<[_; 5]>>();
+
+        let mut attachments_info = vk::FramebufferAttachmentsCreateInfo::builder()
+            .attachment_image_infos(&attachment_infos)
+            .build();
+
+        let mut info = vk::FramebufferCreateInfo::builder()
+            .flags(vk::FramebufferCreateFlags::IMAGELESS_KHR)
             .render_pass(renderpass.raw)
-            .attachments(&raw_attachments)
             .width(extent.width)
             .height(extent.height)
-            .layers(extent.depth);
+            .layers(extent.depth)
+            .push_next(&mut attachments_info);
+        info.attachment_count = renderpass.attachment_count as u32;
+        info.p_attachments = ptr::null();
 
         let result = self.shared.raw.create_framebuffer(&info, None);
 
         match result {
-            Ok(raw) => Ok(n::Framebuffer {
-                raw,
-                owned: match framebuffers_ptr {
-                    Some(fbo_ptr) => {
-                        fbo_ptr.lock().unwrap().framebuffers.push(raw);
-                        false
-                    }
-                    None => true,
-                },
-            }),
+            Ok(raw) => Ok(n::Framebuffer::ImageLess(raw)),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device),
             _ => unreachable!(),
@@ -1388,7 +1373,7 @@ impl d::Device<B> for Device {
         let flags = conv::map_view_capabilities(view_caps);
         let extent = conv::map_extent(kind.extent());
         let array_layers = kind.num_layers();
-        let samples = kind.num_samples() as u32;
+        let samples = kind.num_samples();
         let image_type = match kind {
             image::Kind::D1(..) => vk::ImageType::TYPE_1D,
             image::Kind::D2(..) => vk::ImageType::TYPE_2D,
@@ -1402,9 +1387,7 @@ impl d::Device<B> for Device {
             .extent(extent.clone())
             .mip_levels(mip_levels as u32)
             .array_layers(array_layers as u32)
-            .samples(vk::SampleCountFlags::from_raw(
-                samples & vk::SampleCountFlags::all().as_raw(),
-            ))
+            .samples(conv::map_sample_count_flags(samples))
             .tiling(conv::map_tiling(tiling))
             .usage(conv::map_image_usage(usage))
             .sharing_mode(vk::SharingMode::EXCLUSIVE) // TODO:
@@ -1497,11 +1480,10 @@ impl d::Device<B> for Device {
         let result = self.shared.raw.create_image_view(&info, None);
 
         match result {
-            Ok(view) => Ok(n::ImageView {
+            Ok(raw) => Ok(n::ImageView {
                 image: image.raw,
-                view,
+                raw,
                 range,
-                owner: n::ImageViewOwner::User,
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
@@ -1685,7 +1667,7 @@ impl d::Device<B> for Device {
                     image_infos.push(
                         vk::DescriptorImageInfo::builder()
                             .sampler(vk::Sampler::null())
-                            .image_view(view.view)
+                            .image_view(view.raw)
                             .image_layout(conv::map_image_layout(layout))
                             .build(),
                     );
@@ -1694,7 +1676,7 @@ impl d::Device<B> for Device {
                     image_infos.push(
                         vk::DescriptorImageInfo::builder()
                             .sampler(sampler.0)
-                            .image_view(view.view)
+                            .image_view(view.raw)
                             .image_layout(conv::map_image_layout(layout))
                             .build(),
                     );
@@ -2050,8 +2032,15 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_framebuffer(&self, fb: n::Framebuffer) {
-        if fb.owned {
-            self.shared.raw.destroy_framebuffer(fb.raw, None);
+        match fb {
+            n::Framebuffer::ImageLess(raw) => {
+                self.shared.raw.destroy_framebuffer(raw, None);
+            }
+            n::Framebuffer::Legacy { map, .. } => {
+                for (_, raw) in map.into_inner() {
+                    self.shared.raw.destroy_framebuffer(raw, None);
+                }
+            }
         }
     }
 
@@ -2068,14 +2057,7 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_image_view(&self, view: n::ImageView) {
-        match view.owner {
-            n::ImageViewOwner::User => {
-                self.shared.raw.destroy_image_view(view.view, None);
-            }
-            n::ImageViewOwner::Surface(_fbo_cache) => {
-                //TODO: mark as deleted?
-            }
-        }
+        self.shared.raw.destroy_image_view(view.raw, None);
     }
 
     unsafe fn destroy_sampler(&self, sampler: n::Sampler) {
@@ -2114,43 +2096,59 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn set_image_name(&self, image: &mut n::Image, name: &str) {
-        self.set_object_name(vk::ObjectType::IMAGE, image.raw.as_raw(), name)
+        self.shared
+            .set_object_name(vk::ObjectType::IMAGE, image.raw, name)
     }
 
     unsafe fn set_buffer_name(&self, buffer: &mut n::Buffer, name: &str) {
-        self.set_object_name(vk::ObjectType::BUFFER, buffer.raw.as_raw(), name)
+        self.shared
+            .set_object_name(vk::ObjectType::BUFFER, buffer.raw, name)
     }
 
     unsafe fn set_command_buffer_name(&self, command_buffer: &mut cmd::CommandBuffer, name: &str) {
-        self.set_object_name(
-            vk::ObjectType::COMMAND_BUFFER,
-            command_buffer.raw.as_raw(),
-            name,
-        )
+        self.shared
+            .set_object_name(vk::ObjectType::COMMAND_BUFFER, command_buffer.raw, name)
     }
 
     unsafe fn set_semaphore_name(&self, semaphore: &mut n::Semaphore, name: &str) {
-        self.set_object_name(vk::ObjectType::SEMAPHORE, semaphore.0.as_raw(), name)
+        self.shared
+            .set_object_name(vk::ObjectType::SEMAPHORE, semaphore.0, name)
     }
 
     unsafe fn set_fence_name(&self, fence: &mut n::Fence, name: &str) {
-        self.set_object_name(vk::ObjectType::FENCE, fence.0.as_raw(), name)
+        self.shared
+            .set_object_name(vk::ObjectType::FENCE, fence.0, name)
     }
 
     unsafe fn set_framebuffer_name(&self, framebuffer: &mut n::Framebuffer, name: &str) {
-        self.set_object_name(vk::ObjectType::FRAMEBUFFER, framebuffer.raw.as_raw(), name)
+        match *framebuffer {
+            n::Framebuffer::ImageLess(raw) => {
+                self.shared
+                    .set_object_name(vk::ObjectType::FRAMEBUFFER, raw, name);
+            }
+            n::Framebuffer::Legacy {
+                name: ref mut old_name,
+                ref mut map,
+                extent: _,
+            } => {
+                old_name.clear();
+                old_name.push_str(name);
+                for &raw in map.get_mut().values() {
+                    self.shared
+                        .set_object_name(vk::ObjectType::FRAMEBUFFER, raw, name);
+                }
+            }
+        }
     }
 
     unsafe fn set_render_pass_name(&self, render_pass: &mut n::RenderPass, name: &str) {
-        self.set_object_name(vk::ObjectType::RENDER_PASS, render_pass.raw.as_raw(), name)
+        self.shared
+            .set_object_name(vk::ObjectType::RENDER_PASS, render_pass.raw, name)
     }
 
     unsafe fn set_descriptor_set_name(&self, descriptor_set: &mut n::DescriptorSet, name: &str) {
-        self.set_object_name(
-            vk::ObjectType::DESCRIPTOR_SET,
-            descriptor_set.raw.as_raw(),
-            name,
-        )
+        self.shared
+            .set_object_name(vk::ObjectType::DESCRIPTOR_SET, descriptor_set.raw, name)
     }
 
     unsafe fn set_descriptor_set_layout_name(
@@ -2158,19 +2156,16 @@ impl d::Device<B> for Device {
         descriptor_set_layout: &mut n::DescriptorSetLayout,
         name: &str,
     ) {
-        self.set_object_name(
+        self.shared.set_object_name(
             vk::ObjectType::DESCRIPTOR_SET_LAYOUT,
-            descriptor_set_layout.raw.as_raw(),
+            descriptor_set_layout.raw,
             name,
         )
     }
 
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut n::PipelineLayout, name: &str) {
-        self.set_object_name(
-            vk::ObjectType::PIPELINE_LAYOUT,
-            pipeline_layout.raw.as_raw(),
-            name,
-        )
+        self.shared
+            .set_object_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.raw, name)
     }
 }
 
@@ -2202,42 +2197,6 @@ impl Device {
             }
         }
         panic!("Unable to get Ash memory type for {:?}", hal_type);
-    }
-
-    unsafe fn set_object_name(&self, object_type: vk::ObjectType, object_handle: u64, name: &str) {
-        let instance = &self.shared.instance;
-        if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.debug_messenger {
-            // Keep variables outside the if-else block to ensure they do not
-            // go out of scope while we hold a pointer to them
-            let mut buffer: [u8; 64] = [0u8; 64];
-            let buffer_vec: Vec<u8>;
-
-            // Append a null terminator to the string
-            let name_cstr = if name.len() < 64 {
-                // Common case, string is very small. Allocate a copy on the stack.
-                std::ptr::copy_nonoverlapping(name.as_ptr(), buffer.as_mut_ptr(), name.len());
-                // Add null terminator
-                buffer[name.len()] = 0;
-                CStr::from_bytes_with_nul(&buffer[..name.len() + 1]).unwrap()
-            } else {
-                // Less common case, the string is large.
-                // This requires a heap allocation.
-                buffer_vec = name
-                    .as_bytes()
-                    .iter()
-                    .cloned()
-                    .chain(std::iter::once(0))
-                    .collect::<Vec<u8>>();
-                CStr::from_bytes_with_nul(&buffer_vec).unwrap()
-            };
-            let _result = debug_utils_ext.debug_utils_set_object_name(
-                self.shared.raw.handle(),
-                &vk::DebugUtilsObjectNameInfoEXT::builder()
-                    .object_type(object_type)
-                    .object_handle(object_handle)
-                    .object_name(name_cstr),
-            );
-        }
     }
 
     pub(crate) unsafe fn create_swapchain(

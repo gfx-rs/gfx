@@ -9,7 +9,7 @@ use crate::{
 use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
 use hal::{
     buffer, device as d,
-    format::{Aspects, Format, Swizzle},
+    format::{Format, Swizzle},
     image as i, memory, pass,
     pool::CommandPoolCreateFlags,
     pso, query, queue,
@@ -190,7 +190,7 @@ impl Device {
         Ok((program, sampler_map))
     }
 
-    fn bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
+    fn _bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
         match *view {
             n::ImageView::Renderbuffer { raw: rb, .. } => unsafe {
                 gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
@@ -1053,25 +1053,24 @@ impl d::Device<B> for Device {
 
     unsafe fn create_framebuffer<I>(
         &self,
-        pass: &n::RenderPass,
-        attachments: I,
+        _render_pass: &n::RenderPass,
+        _attachments: I,
         _extent: i::Extent,
-    ) -> Result<n::FrameBuffer, d::OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<n::ImageView>,
-    {
+    ) -> Result<n::Framebuffer, d::OutOfMemory> {
         if !self.share.private_caps.framebuffer {
             return Err(d::OutOfMemory::Host);
         }
 
+        let gl = &self.share.context;
+        let raw = gl.create_framebuffer().unwrap();
+
+        /*
         let attachments: Vec<_> = attachments
             .into_iter()
             .map(|at| at.borrow().clone())
             .collect();
         debug!("create_framebuffer {:?}", attachments);
 
-        let gl = &self.share.context;
         let target = glow::DRAW_FRAMEBUFFER;
 
         let fbos = pass.subpasses.iter().map(|subpass| {
@@ -1132,9 +1131,9 @@ impl d::Device<B> for Device {
             Some(name)
         }).collect();
 
-        gl.bind_framebuffer(target, None);
+        gl.bind_framebuffer(target, None);*/
 
-        Ok(n::FrameBuffer { fbos })
+        Ok(n::Framebuffer { raw })
     }
 
     unsafe fn create_shader_module(
@@ -1948,13 +1947,8 @@ impl d::Device<B> for Device {
         self.share.context.delete_program(pipeline.program);
     }
 
-    unsafe fn destroy_framebuffer(&self, frame_buffer: n::FrameBuffer) {
-        let gl = &self.share.context;
-        for f in frame_buffer.fbos {
-            if let Some(f) = f {
-                gl.delete_framebuffer(f);
-            }
-        }
+    unsafe fn destroy_framebuffer(&self, framebuffer: n::Framebuffer) {
+        self.share.context.delete_framebuffer(framebuffer.raw);
     }
 
     unsafe fn destroy_buffer(&self, _buffer: n::Buffer) {
@@ -2041,7 +2035,7 @@ impl d::Device<B> for Device {
         // TODO
     }
 
-    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut n::FrameBuffer, _name: &str) {
+    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut n::Framebuffer, _name: &str) {
         // TODO
     }
 

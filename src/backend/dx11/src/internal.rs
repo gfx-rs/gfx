@@ -1207,7 +1207,7 @@ impl Internal {
 
                     let attachment = {
                         let rtv_id = subpass.color_attachments[index];
-                        &cache.framebuffer.attachments[rtv_id.0]
+                        &cache.attachments[rtv_id.0].view
                     };
 
                     unsafe {
@@ -1256,7 +1256,7 @@ impl Internal {
 
                     let attachment = {
                         let dsv_id = subpass.depth_stencil_attachment.unwrap();
-                        &cache.framebuffer.attachments[dsv_id.0]
+                        &cache.attachments[dsv_id.0].view
                     };
 
                     unsafe {

@@ -276,7 +276,7 @@ unsafe impl Sync for CommandBuffer {}
 struct Temp {
     clear_vertices: Vec<ClearVertex>,
     blit_vertices: FastHashMap<(Aspects, i::Level), Vec<BlitVertex>>,
-    clear_values: Vec<Option<com::ClearValue>>,
+    render_attachments: Vec<(metal::Texture, com::ClearValue)>,
 }
 
 type VertexBufferMaybeVec = Vec<Option<(pso::VertexBufferDesc, pso::ElemOffset)>>;
@@ -2523,7 +2523,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
             temp: Temp {
                 clear_vertices: Vec::new(),
                 blit_vertices: FastHashMap::default(),
-                clear_values: Vec::new(),
+                render_attachments: Vec::new(),
             },
             name: String::new(),
         }
@@ -3512,30 +3512,23 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         self.update_depth_stencil();
     }
 
-    unsafe fn begin_render_pass<T>(
+    unsafe fn begin_render_pass<'a, T>(
         &mut self,
         render_pass: &native::RenderPass,
         framebuffer: &native::Framebuffer,
         _render_area: pso::Rect,
-        clear_values: T,
+        attachments: T,
         first_subpass_contents: com::SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::ClearValue>,
+        T: IntoIterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
     {
         // fill out temporary clear values per attachment
-        self.temp
-            .clear_values
-            .resize(render_pass.attachments.len(), None);
-        for ((out_val, _), in_val) in self
-            .temp
-            .clear_values
-            .iter_mut()
-            .zip(&render_pass.attachments)
-            .filter(|(_, rat)| rat.has_clears())
-            .zip(clear_values)
-        {
-            *out_val = Some(*in_val.borrow());
+        self.temp.render_attachments.clear();
+        for attachment in attachments {
+            let v = attachment.image_view.borrow();
+            self.temp
+                .render_attachments
+                .push((v.texture.clone(), attachment.clear_value));
         }
 
         self.state.pending_subpasses.clear();
@@ -3557,24 +3550,23 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
                 for (i, at) in subpass.attachments.colors.iter().enumerate() {
                     let rat = &render_pass.attachments[at.id];
-                    let texture = framebuffer.attachments[at.id].as_ref();
+                    let &(ref texture, ref clear_value) = &self.temp.render_attachments[at.id];
                     let desc = descriptor.color_attachments().object_at(i as _).unwrap();
 
                     combined_aspects |= Aspects::COLOR;
                     sample_count = sample_count.max(rat.samples);
-                    desc.set_texture(Some(texture));
+                    desc.set_texture(Some(texture.as_ref()));
 
                     if at.ops.contains(native::AttachmentOps::LOAD) {
                         desc.set_load_action(conv::map_load_operation(rat.ops.load));
                         if rat.ops.load == AttachmentLoadOp::Clear {
-                            let raw = self.temp.clear_values[at.id].unwrap().color;
-                            desc.set_clear_color(at.channel.interpret(raw));
+                            desc.set_clear_color(at.channel.interpret(clear_value.color));
                         }
                     }
                     if let Some(id) = at.resolve_id {
-                        let resolve = &framebuffer.attachments[id];
+                        let &(ref resolve_texture, _) = &self.temp.render_attachments[id];
                         //Note: the selection of levels and slices is already handled by `ImageView`
-                        desc.set_resolve_texture(Some(resolve));
+                        desc.set_resolve_texture(Some(resolve_texture.as_ref()));
                         desc.set_store_action(conv::map_resolved_store_operation(rat.ops.store));
                     } else if at.ops.contains(native::AttachmentOps::STORE) {
                         desc.set_store_action(conv::map_store_operation(rat.ops.store));
@@ -3583,20 +3575,19 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
                 if let Some(ref at) = subpass.attachments.depth_stencil {
                     let rat = &render_pass.attachments[at.id];
-                    let texture = framebuffer.attachments[at.id].as_ref();
+                    let &(ref texture, ref clear_value) = &self.temp.render_attachments[at.id];
                     let aspects = rat.format.unwrap().surface_desc().aspects;
                     sample_count = sample_count.max(rat.samples);
                     combined_aspects |= aspects;
 
                     if aspects.contains(Aspects::DEPTH) {
                         let desc = descriptor.depth_attachment().unwrap();
-                        desc.set_texture(Some(texture));
+                        desc.set_texture(Some(texture.as_ref()));
 
                         if at.ops.contains(native::AttachmentOps::LOAD) {
                             desc.set_load_action(conv::map_load_operation(rat.ops.load));
                             if rat.ops.load == AttachmentLoadOp::Clear {
-                                let raw = self.temp.clear_values[at.id].unwrap().depth_stencil;
-                                desc.set_clear_depth(raw.depth as f64);
+                                desc.set_clear_depth(clear_value.depth_stencil.depth as f64);
                             }
                         }
                         if at.ops.contains(native::AttachmentOps::STORE) {
@@ -3605,13 +3596,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     }
                     if aspects.contains(Aspects::STENCIL) {
                         let desc = descriptor.stencil_attachment().unwrap();
-                        desc.set_texture(Some(texture));
+                        desc.set_texture(Some(texture.as_ref()));
 
                         if at.ops.contains(native::AttachmentOps::LOAD) {
                             desc.set_load_action(conv::map_load_operation(rat.stencil_ops.load));
                             if rat.stencil_ops.load == AttachmentLoadOp::Clear {
-                                let raw = self.temp.clear_values[at.id].unwrap().depth_stencil;
-                                desc.set_clear_stencil(raw.stencil);
+                                desc.set_clear_stencil(clear_value.depth_stencil.stencil);
                             }
                         }
                         if at.ops.contains(native::AttachmentOps::STORE) {

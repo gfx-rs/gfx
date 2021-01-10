@@ -1198,18 +1198,20 @@ impl queue::CommandQueue<Backend> for CommandQueue {
 }
 
 #[derive(Debug)]
-pub struct AttachmentClear {
+pub struct AttachmentInfo {
     subpass_id: Option<pass::SubpassId>,
-    attachment_id: usize,
-    raw: command::AttachmentClear,
+    view: ImageView,
+    clear_color: Option<(usize, command::ClearColor)>,
+    clear_depth: Option<f32>,
+    clear_stencil: Option<u32>,
 }
 
 #[derive(Debug)]
 pub struct RenderPassCache {
     pub render_pass: RenderPass,
-    pub framebuffer: Framebuffer,
-    pub attachment_clear_values: Vec<AttachmentClear>,
+    pub attachments: Vec<AttachmentInfo>,
     pub target_rect: pso::Rect,
+    pub num_layers: image::Layer,
     pub current_subpass: pass::SubpassId,
 }
 
@@ -1220,11 +1222,20 @@ impl RenderPassCache {
         context: &ComPtr<d3d11::ID3D11DeviceContext>,
         cache: &mut CommandBufferState,
     ) {
-        let attachments = self
-            .attachment_clear_values
-            .iter()
-            .filter(|clear| clear.subpass_id == Some(self.current_subpass))
-            .map(|clear| clear.raw);
+        let mut clears = Vec::new();
+        for at in self.attachments.iter() {
+            if at.subpass_id == Some(self.current_subpass) {
+                if let Some((index, value)) = at.clear_color {
+                    clears.push(command::AttachmentClear::Color { index, value });
+                }
+                if at.clear_depth.is_some() || at.clear_stencil.is_some() {
+                    clears.push(command::AttachmentClear::DepthStencil {
+                        depth: at.clear_depth,
+                        stencil: at.clear_stencil,
+                    });
+                }
+            }
+        }
 
         cache.dirty_flag.insert(
             DirtyStateFlag::GRAPHICS_PIPELINE
@@ -1235,7 +1246,7 @@ impl RenderPassCache {
         );
         internal.clear_attachments(
             context,
-            attachments,
+            clears,
             &[pso::ClearRect {
                 rect: self.target_rect,
                 layers: 0..1,
@@ -1247,11 +1258,11 @@ impl RenderPassCache {
         let color_views = subpass
             .color_attachments
             .iter()
-            .map(|&(id, _)| self.framebuffer.attachments[id].rtv_handle.unwrap())
+            .map(|&(id, _)| self.attachments[id].view.rtv_handle.unwrap())
             .collect::<Vec<_>>();
         let (ds_view, rods_view) = match subpass.depth_stencil_attachment {
             Some((id, _)) => {
-                let attachment = &self.framebuffer.attachments[id];
+                let attachment = &self.attachments[id].view;
                 let ds_view = attachment.dsv_handle.unwrap();
 
                 let rods_view = attachment.rodsv_handle.unwrap();
@@ -1277,28 +1288,28 @@ impl RenderPassCache {
                 continue;
             }
 
-            let color_framebuffer = &self.framebuffer.attachments[color_id];
-            let resolve_framebuffer = &self.framebuffer.attachments[resolve_id];
+            let color_view = &self.attachments[color_id].view;
+            let resolve_view = &self.attachments[resolve_id].view;
 
             let mut color_resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
             let mut resolve_resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
 
             unsafe {
-                (&*color_framebuffer
+                (&*color_view
                     .rtv_handle
                     .expect("Framebuffer must have COLOR_ATTACHMENT usage"))
                     .GetResource(&mut color_resource as *mut *mut _);
-                (&*resolve_framebuffer
+                (&*resolve_view
                     .rtv_handle
                     .expect("Resolve texture must have COLOR_ATTACHMENT usage"))
                     .GetResource(&mut resolve_resource as *mut *mut _);
 
                 context.ResolveSubresource(
                     resolve_resource,
-                    resolve_framebuffer.subresource,
+                    resolve_view.subresource,
                     color_resource,
-                    color_framebuffer.subresource,
-                    conv::map_format(color_framebuffer.format).unwrap(),
+                    color_view.subresource,
+                    conv::map_format(color_view.format).unwrap(),
                 );
 
                 (&*color_resource).Release();
@@ -2067,105 +2078,58 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         self.reset();
     }
 
-    unsafe fn begin_render_pass<T>(
+    unsafe fn begin_render_pass<'a, T>(
         &mut self,
         render_pass: &RenderPass,
         framebuffer: &Framebuffer,
         target_rect: pso::Rect,
-        clear_values: T,
+        attachment_infos: T,
         _first_subpass: command::SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::ClearValue>,
+        T: IntoIterator<Item = command::RenderAttachmentInfo<'a, Backend>>,
     {
         use pass::AttachmentLoadOp as Alo;
 
-        let mut clear_iter = clear_values.into_iter();
-        let mut attachment_clears = Vec::new();
+        let mut attachments = Vec::new();
 
-        for (idx, attachment) in render_pass.attachments.iter().enumerate() {
-            //let attachment = render_pass.attachments[attachment_ref];
+        for (idx, (info, attachment)) in attachment_infos
+            .into_iter()
+            .zip(render_pass.attachments.iter())
+            .enumerate()
+        {
             let format = attachment.format.unwrap();
 
-            let subpass_id = render_pass
-                .subpasses
-                .iter()
-                .position(|sp| sp.is_using(idx))
-                .map(|i| i as pass::SubpassId);
+            let mut at = AttachmentInfo {
+                subpass_id: render_pass
+                    .subpasses
+                    .iter()
+                    .position(|sp| sp.is_using(idx))
+                    .map(|i| i as pass::SubpassId),
+                view: info.image_view.clone(),
+                clear_color: None,
+                clear_depth: None,
+                clear_stencil: None,
+            };
 
-            if attachment.has_clears() {
-                let value = *clear_iter.next().unwrap().borrow();
-
-                match (attachment.ops.load, attachment.stencil_ops.load) {
-                    (Alo::Clear, Alo::Clear) if format.is_depth() => {
-                        attachment_clears.push(AttachmentClear {
-                            subpass_id,
-                            attachment_id: idx,
-                            raw: command::AttachmentClear::DepthStencil {
-                                depth: Some(value.depth_stencil.depth),
-                                stencil: Some(value.depth_stencil.stencil),
-                            },
-                        });
-                    }
-                    (Alo::Clear, Alo::Clear) => {
-                        attachment_clears.push(AttachmentClear {
-                            subpass_id,
-                            attachment_id: idx,
-                            raw: command::AttachmentClear::Color {
-                                index: idx,
-                                value: value.color,
-                            },
-                        });
-
-                        attachment_clears.push(AttachmentClear {
-                            subpass_id,
-                            attachment_id: idx,
-                            raw: command::AttachmentClear::DepthStencil {
-                                depth: None,
-                                stencil: Some(value.depth_stencil.stencil),
-                            },
-                        });
-                    }
-                    (Alo::Clear, _) if format.is_depth() => {
-                        attachment_clears.push(AttachmentClear {
-                            subpass_id,
-                            attachment_id: idx,
-                            raw: command::AttachmentClear::DepthStencil {
-                                depth: Some(value.depth_stencil.depth),
-                                stencil: None,
-                            },
-                        });
-                    }
-                    (Alo::Clear, _) => {
-                        attachment_clears.push(AttachmentClear {
-                            subpass_id,
-                            attachment_id: idx,
-                            raw: command::AttachmentClear::Color {
-                                index: idx,
-                                value: value.color,
-                            },
-                        });
-                    }
-                    (_, Alo::Clear) => {
-                        attachment_clears.push(AttachmentClear {
-                            subpass_id,
-                            attachment_id: idx,
-                            raw: command::AttachmentClear::DepthStencil {
-                                depth: None,
-                                stencil: Some(value.depth_stencil.stencil),
-                            },
-                        });
-                    }
-                    _ => {}
+            if attachment.ops.load == Alo::Clear {
+                if format.is_depth() {
+                    at.clear_depth = Some(info.clear_value.depth_stencil.depth);
+                } else {
+                    at.clear_color = Some((idx, info.clear_value.color));
                 }
             }
+            if attachment.stencil_ops.load == Alo::Clear {
+                at.clear_stencil = Some(info.clear_value.depth_stencil.stencil);
+            }
+
+            attachments.push(at);
         }
 
         self.render_pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
-            framebuffer: framebuffer.clone(),
-            attachment_clear_values: attachment_clears,
+            attachments,
             target_rect,
+            num_layers: framebuffer.layers,
             current_subpass: 0,
         });
 
@@ -3410,7 +3374,6 @@ pub struct RenderPass {
 
 #[derive(Clone, Debug)]
 pub struct Framebuffer {
-    attachments: Vec<ImageView>,
     layers: image::Layer,
 }
 

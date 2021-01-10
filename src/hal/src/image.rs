@@ -328,6 +328,7 @@ pub enum ViewKind {
 bitflags!(
     /// Capabilities to create views into an image.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[derive(Default)]
     pub struct ViewCapabilities: u32 {
         /// Support creation of views with different formats.
         const MUTABLE_FORMAT = 0x0000_0008;
@@ -697,4 +698,17 @@ pub struct SubresourceFootprint {
     pub array_pitch: RawOffset,
     /// Byte distance between depth slices.
     pub depth_pitch: RawOffset,
+}
+
+/// Description of a framebuffer attachment.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct FramebufferAttachment {
+    /// Usage that an image is created with.
+    pub usage: Usage,
+    /// View capabilities that an image is created with.
+    pub view_caps: ViewCapabilities,
+    //TODO: make this a list
+    /// The image view format.
+    pub format: format::Format,
 }

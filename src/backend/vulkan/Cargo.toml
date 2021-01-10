@@ -26,6 +26,7 @@ log = { version = "0.4" }
 shared_library = { version = "0.1.9", optional = true }
 ash = "0.31"
 hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
+parking_lot = "0.11"
 smallvec = "1.0"
 raw-window-handle = "0.3"
 inplace_it = "0.3.2"

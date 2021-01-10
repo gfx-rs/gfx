@@ -1,3 +1,22 @@
+/*!
+# Vulkan backend internals.
+
+## Stack memory
+
+Most of the code just passes the data through. The only problem
+that affects all the pieces is related to memory allocation:
+Vulkan expects slices, but the API gives us `ExactSizeIterator`.
+So we end up using a lot of `inplace_it` to get things collected on stack.
+
+## Framebuffers
+
+One part that has actual logic is related to framebuffers. HAL is modelled
+after image-less framebuffers. If the the Vulkan implementation supports it,
+we map it 1:1, and everything is great. If it doesn't expose
+`KHR_imageless_framebuffer`, however, than we have to keep all the created
+framebuffers internally in an internally-synchronized map, per `B::Framebuffer`.
+!*/
+
 #![allow(non_snake_case)]
 
 #[macro_use]
@@ -51,6 +70,9 @@ mod info;
 mod native;
 mod pool;
 mod window;
+
+// Sets up the maximum count we expect in most cases, but maybe not all of them.
+const ROUGH_MAX_ATTACHMENT_COUNT: usize = 5;
 
 pub struct RawInstance {
     inner: ash::Instance,
@@ -659,6 +681,7 @@ pub struct DeviceCreationFeatures {
     core: vk::PhysicalDeviceFeatures,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
     mesh_shaders: Option<vk::PhysicalDeviceMeshShaderFeaturesNV>,
+    imageless_framebuffers: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
 }
 
 impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
@@ -682,12 +705,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return Err(DeviceCreationError::MissingFeature);
         }
 
-        let maintenance_level = if self.supports_extension(vk::KhrMaintenance1Fn::name()) {
+        let imageless_framebuffers = self.supports_extension(vk::KhrImagelessFramebufferFn::name());
+        let maintenance_level = if imageless_framebuffers {
+            2
+        } else if self.supports_extension(vk::KhrMaintenance1Fn::name()) {
             1
         } else {
             0
         };
-        let mut enabled_features = conv::map_device_features(requested_features);
+
+        let mut enabled_features =
+            conv::map_device_features(requested_features, imageless_framebuffers);
         let enabled_extensions = {
             let mut enabled_extensions: Vec<&'static CStr> = Vec::new();
             enabled_extensions.push(extensions::khr::Swapchain::name());
@@ -701,7 +729,15 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 1 => {
                     enabled_extensions.push(vk::KhrMaintenance1Fn::name());
                 }
+                2 => {
+                    enabled_extensions.push(vk::KhrMaintenance2Fn::name());
+                }
                 _ => unreachable!(),
+            }
+
+            if imageless_framebuffers {
+                enabled_extensions.push(vk::KhrImageFormatListFn::name());
+                enabled_extensions.push(vk::KhrImagelessFramebufferFn::name());
             }
 
             if requested_features.intersects(
@@ -751,23 +787,19 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 })
                 .collect::<Vec<_>>();
 
-            let info = vk::DeviceCreateInfo::builder()
+            let mut info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(&family_infos)
                 .enabled_extension_names(&str_pointers)
                 .enabled_features(&enabled_features.core);
-
-            let info =
-                if let Some(ref mut descriptor_indexing) = enabled_features.descriptor_indexing {
-                    info.push_next(descriptor_indexing)
-                } else {
-                    info
-                };
-
-            let info = if let Some(ref mut mesh_shaders) = enabled_features.mesh_shaders {
-                info.push_next(mesh_shaders)
-            } else {
-                info
-            };
+            if let Some(ref mut feature) = enabled_features.descriptor_indexing {
+                info = info.push_next(feature);
+            }
+            if let Some(ref mut feature) = enabled_features.mesh_shaders {
+                info = info.push_next(feature);
+            }
+            if let Some(ref mut feature) = enabled_features.imageless_framebuffers {
+                info = info.push_next(feature);
+            }
 
             match self.instance.inner.create_device(self.handle, &info, None) {
                 Ok(device) => device,
@@ -815,6 +847,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     draw_indirect_count: indirect_count_fn,
                 },
                 maintenance_level,
+                imageless_framebuffers,
             }),
             vendor_id: self.properties.vendor_id,
             valid_ash_memory_types,
@@ -915,7 +948,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .iter()
             .map(|mem| adapter::MemoryHeap {
                 size: mem.size,
-                flags: conv::map_memory_heap_flags(mem.flags),
+                flags: conv::map_vk_memory_heap_flags(mem.flags),
             })
             .collect();
         let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize]
@@ -923,7 +956,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .filter_map(|mem| {
                 if self.known_memory_flags.contains(mem.property_flags) {
                     Some(adapter::MemoryType {
-                        properties: conv::map_memory_properties(mem.property_flags),
+                        properties: conv::map_vk_memory_properties(mem.property_flags),
                         heap_index: mem.heap_index as usize,
                     })
                 } else {
@@ -1380,6 +1413,7 @@ pub struct RawDevice {
     instance: Arc<RawInstance>,
     extension_fns: DeviceExtensionFunctions,
     maintenance_level: u8,
+    imageless_framebuffers: bool,
 }
 
 impl fmt::Debug for RawDevice {
@@ -1404,6 +1438,47 @@ impl RawDevice {
         let flip_y = self.features.contains(hal::Features::NDC_Y_UP);
         let shift_y = flip_y && self.maintenance_level != 0;
         conv::map_viewport(rect, flip_y, shift_y)
+    }
+
+    unsafe fn set_object_name(
+        &self,
+        object_type: vk::ObjectType,
+        object: impl vk::Handle,
+        name: &str,
+    ) {
+        let instance = &self.instance;
+        if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.debug_messenger {
+            // Keep variables outside the if-else block to ensure they do not
+            // go out of scope while we hold a pointer to them
+            let mut buffer: [u8; 64] = [0u8; 64];
+            let buffer_vec: Vec<u8>;
+
+            // Append a null terminator to the string
+            let name_cstr = if name.len() < 64 {
+                // Common case, string is very small. Allocate a copy on the stack.
+                std::ptr::copy_nonoverlapping(name.as_ptr(), buffer.as_mut_ptr(), name.len());
+                // Add null terminator
+                buffer[name.len()] = 0;
+                CStr::from_bytes_with_nul(&buffer[..name.len() + 1]).unwrap()
+            } else {
+                // Less common case, the string is large.
+                // This requires a heap allocation.
+                buffer_vec = name
+                    .as_bytes()
+                    .iter()
+                    .cloned()
+                    .chain(std::iter::once(0))
+                    .collect::<Vec<u8>>();
+                CStr::from_bytes_with_nul(&buffer_vec).unwrap()
+            };
+            let _result = debug_utils_ext.debug_utils_set_object_name(
+                self.raw.handle(),
+                &vk::DebugUtilsObjectNameInfoEXT::builder()
+                    .object_type(object_type)
+                    .object_handle(object.as_raw())
+                    .object_name(name_cstr),
+            );
+        }
     }
 }
 
