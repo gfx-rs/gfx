@@ -18,7 +18,7 @@ use ash::{
         nv::MeshShader,
     },
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-    vk, LoadingError,
+    vk,
 };
 
 use hal::{
@@ -289,18 +289,19 @@ unsafe extern "system" fn debug_report_callback(
 impl hal::Instance<Backend> for Instance {
     fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
         #[cfg(not(feature = "use-rtld-next"))]
-        let vk_entry = Entry::new();
+        let entry = match Entry::new() {
+            Ok(entry) => entry,
+            Err(err) => {
+                info!("Missing Vulkan entry points: {:?}", err);
+                return Err(hal::UnsupportedBackend);
+            }
+        };
 
         #[cfg(feature = "use-rtld-next")]
-        let vk_entry = Ok(EntryCustom::new_custom((), |_, name| unsafe {
+        let entry = EntryCustom::new_custom((), |_, name| unsafe {
             DynamicLibrary::symbol_special(SpecialHandles::Next, &*name.to_string_lossy())
                 .unwrap_or(std::ptr::null_mut())
-        }));
-
-        let entry = vk_entry.map_err(|e: LoadingError| {
-            info!("Missing Vulkan entry points: {:?}", e);
-            hal::UnsupportedBackend
-        })?;
+        });
 
         let app_name = CString::new(name).unwrap();
         let app_info = vk::ApplicationInfo::builder()
