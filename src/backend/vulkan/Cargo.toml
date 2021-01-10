@@ -23,7 +23,6 @@ name = "gfx_backend_vulkan"
 arrayvec = "0.5"
 byteorder = "1"
 log = { version = "0.4" }
-lazy_static = "1"
 shared_library = { version = "0.1.9", optional = true }
 ash = "0.31"
 hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }

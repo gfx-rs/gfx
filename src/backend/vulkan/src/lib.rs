@@ -2,8 +2,6 @@
 
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate lazy_static;
 
 #[cfg(target_os = "macos")]
 #[macro_use]
@@ -20,7 +18,7 @@ use ash::{
         nv::MeshShader,
     },
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-    vk, LoadingError,
+    vk,
 };
 
 use hal::{
@@ -53,25 +51,6 @@ mod info;
 mod native;
 mod pool;
 mod window;
-
-#[cfg(not(feature = "use-rtld-next"))]
-lazy_static! {
-    // Entry function pointers
-    pub static ref VK_ENTRY: Result<Entry, LoadingError> = Entry::new();
-}
-
-#[cfg(feature = "use-rtld-next")]
-lazy_static! {
-    // Entry function pointers
-    pub static ref VK_ENTRY: Result<EntryCustom<()>, LoadingError>
-        = Ok(EntryCustom::new_custom(
-            (),
-            |_, name| unsafe {
-                DynamicLibrary::symbol_special(SpecialHandles::Next, &*name.to_string_lossy())
-                    .unwrap_or(std::ptr::null_mut())
-            }
-        ));
-}
 
 pub struct RawInstance {
     inner: ash::Instance,
@@ -106,6 +85,12 @@ pub struct Instance {
 
     /// Supported extensions of this instance.
     pub extensions: Vec<&'static CStr>,
+
+    #[cfg(not(feature = "use-rtld-next"))]
+    pub entry: Entry,
+
+    #[cfg(feature = "use-rtld-next")]
+    pub entry: EntryCustom<()>,
 }
 
 impl fmt::Debug for Instance {
@@ -162,7 +147,7 @@ unsafe fn display_debug_utils_object_name_info_ext(
         return None;
     }
 
-    //TODO: use color field of vk::DebugUtilsLabelsExt in a meaningful way?
+    //TODO: use color field of vk::DebugUtilsLabelExt in a meaningful way?
     Some(
         slice::from_raw_parts::<vk::DebugUtilsObjectNameInfoEXT>(info_structs, count)
             .iter()
@@ -303,11 +288,20 @@ unsafe extern "system" fn debug_report_callback(
 
 impl hal::Instance<Backend> for Instance {
     fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
-        // TODO: return errors instead of panic
-        let entry = VK_ENTRY.as_ref().map_err(|e| {
-            info!("Missing Vulkan entry points: {:?}", e);
-            hal::UnsupportedBackend
-        })?;
+        #[cfg(not(feature = "use-rtld-next"))]
+        let entry = match Entry::new() {
+            Ok(entry) => entry,
+            Err(err) => {
+                info!("Missing Vulkan entry points: {:?}", err);
+                return Err(hal::UnsupportedBackend);
+            }
+        };
+
+        #[cfg(feature = "use-rtld-next")]
+        let entry = EntryCustom::new_custom((), |_, name| unsafe {
+            DynamicLibrary::symbol_special(SpecialHandles::Next, &*name.to_string_lossy())
+                .unwrap_or(std::ptr::null_mut())
+        });
 
         let app_name = CString::new(name).unwrap();
         let app_info = vk::ApplicationInfo::builder()
@@ -442,7 +436,7 @@ impl hal::Instance<Backend> for Instance {
             if instance_extensions.iter().any(|props| unsafe {
                 CStr::from_ptr(props.extension_name.as_ptr()) == DebugUtils::name()
             }) {
-                let ext = DebugUtils::new(entry, &instance);
+                let ext = DebugUtils::new(&entry, &instance);
                 let info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
                     .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
                     .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
@@ -455,7 +449,7 @@ impl hal::Instance<Backend> for Instance {
                     CStr::from_ptr(props.extension_name.as_ptr()) == DebugReport::name()
                 })
             {
-                let ext = DebugReport::new(entry, &instance);
+                let ext = DebugReport::new(&entry, &instance);
                 let info = vk::DebugReportCallbackCreateInfoEXT::builder()
                     .flags(vk::DebugReportFlagsEXT::all())
                     .pfn_callback(Some(debug_report_callback));
@@ -473,6 +467,7 @@ impl hal::Instance<Backend> for Instance {
                 get_physical_device_properties,
             }),
             extensions,
+            entry,
         })
     }
 

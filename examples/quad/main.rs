@@ -122,15 +122,15 @@ fn main() {
             .expect("Failed to create a surface!")
     };
 
-    let mut adapters = instance.enumerate_adapters();
+    let adapter = {
+        let mut adapters = instance.enumerate_adapters();
+        for adapter in &adapters {
+            println!("{:?}", adapter.info);
+        }
+        adapters.remove(0)
+    };
 
-    for adapter in &adapters {
-        println!("{:?}", adapter.info);
-    }
-
-    let adapter = adapters.remove(0);
-
-    let mut renderer = Renderer::new(Some(instance), surface, adapter);
+    let mut renderer = Renderer::new(instance, surface, adapter);
 
     renderer.render();
 
@@ -171,19 +171,15 @@ fn main() {
 }
 
 struct Renderer<B: hal::Backend> {
-    instance: Option<B::Instance>,
-    device: B::Device,
-    queue_group: QueueGroup<B>,
     desc_pool: ManuallyDrop<B::DescriptorPool>,
     surface: ManuallyDrop<B::Surface>,
-    adapter: hal::adapter::Adapter<B>,
     format: hal::format::Format,
     dimensions: window::Extent2D,
     viewport: pso::Viewport,
     render_pass: ManuallyDrop<B::RenderPass>,
     pipeline: ManuallyDrop<B::GraphicsPipeline>,
     pipeline_layout: ManuallyDrop<B::PipelineLayout>,
-    desc_set: B::DescriptorSet,
+    desc_set: Option<B::DescriptorSet>,
     set_layout: ManuallyDrop<B::DescriptorSetLayout>,
     submission_complete_semaphores: Vec<B::Semaphore>,
     submission_complete_fences: Vec<B::Fence>,
@@ -199,6 +195,11 @@ struct Renderer<B: hal::Backend> {
     sampler: ManuallyDrop<B::Sampler>,
     frames_in_flight: usize,
     frame: u64,
+    // These members are dropped in the declaration order.
+    device: B::Device,
+    adapter: hal::adapter::Adapter<B>,
+    queue_group: QueueGroup<B>,
+    instance: B::Instance,
 }
 
 impl<B> Renderer<B>
@@ -206,7 +207,7 @@ where
     B: hal::Backend,
 {
     fn new(
-        instance: Option<B::Instance>,
+        instance: B::Instance,
         mut surface: B::Surface,
         adapter: hal::adapter::Adapter<B>,
     ) -> Renderer<B> {
@@ -737,7 +738,7 @@ where
             render_pass,
             pipeline,
             pipeline_layout,
-            desc_set,
+            desc_set: Some(desc_set),
             set_layout,
             submission_complete_semaphores,
             submission_complete_fences,
@@ -833,7 +834,7 @@ where
             cmd_buffer.bind_graphics_descriptor_sets(
                 &self.pipeline_layout,
                 0,
-                iter::once(&self.desc_set),
+                self.desc_set.as_ref(),
                 &[],
             );
 
@@ -889,6 +890,7 @@ where
         self.device.wait_idle().unwrap();
         unsafe {
             // TODO: When ManuallyDrop::take (soon to be renamed to ManuallyDrop::read) is stabilized we should use that instead.
+            let _ = self.desc_set.take();
             self.device
                 .destroy_descriptor_pool(ManuallyDrop::into_inner(ptr::read(&self.desc_pool)));
             self.device
@@ -933,10 +935,8 @@ where
                 .destroy_pipeline_layout(ManuallyDrop::into_inner(ptr::read(
                     &self.pipeline_layout,
                 )));
-            if let Some(instance) = &self.instance {
-                let surface = ManuallyDrop::into_inner(ptr::read(&self.surface));
-                instance.destroy_surface(surface);
-            }
+            let surface = ManuallyDrop::into_inner(ptr::read(&self.surface));
+            self.instance.destroy_surface(surface);
         }
         println!("DROPPED!");
     }
