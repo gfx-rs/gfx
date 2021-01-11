@@ -68,13 +68,12 @@ use cocoa_foundation::foundation::NSInteger;
 #[cfg(feature = "dispatch")]
 use dispatch;
 use foreign_types::ForeignTypeRef;
-use lazy_static::lazy_static;
 use metal::MTLFeatureSet;
 use metal::MTLLanguageVersion;
 use metal::{CGFloat, CGSize, MetalLayer, MetalLayerRef};
 use objc::{
     declare::ClassDecl,
-    runtime::{Class, Object, Sel, BOOL, YES},
+    runtime::{Object, Sel, BOOL, YES},
 };
 use parking_lot::{Condvar, Mutex};
 
@@ -302,18 +301,6 @@ impl hal::Instance<Backend> for Instance {
     }
 }
 
-lazy_static! {
-    static ref GFX_MANAGED_METAL_LAYER_DELEGATE_CLASS: &'static Class = unsafe {
-        let mut decl = ClassDecl::new("GfxManagedMetalLayerDelegate", class!(NSObject)).unwrap();
-        decl.add_method(
-            sel!(layer:shouldInheritContentsScale:fromWindow:),
-            layer_should_inherit_contents_scale_from_window
-                as extern "C" fn(&Object, Sel, *mut Object, CGFloat, *mut Object) -> BOOL,
-        );
-        decl.register()
-    };
-}
-
 extern "C" fn layer_should_inherit_contents_scale_from_window(
     _: &Object,
     _: Sel,
@@ -330,8 +317,14 @@ struct GfxManagedMetalLayerDelegate(*mut Object);
 impl GfxManagedMetalLayerDelegate {
     pub fn new() -> Self {
         unsafe {
+            let mut decl = ClassDecl::new("GfxManagedMetalLayerDelegate", class!(NSObject)).unwrap();
+            decl.add_method(
+                sel!(layer:shouldInheritContentsScale:fromWindow:),
+                layer_should_inherit_contents_scale_from_window
+                    as extern "C" fn(&Object, Sel, *mut Object, CGFloat, *mut Object) -> BOOL,
+            );
             let mut delegate: *mut Object =
-                msg_send![*GFX_MANAGED_METAL_LAYER_DELEGATE_CLASS, alloc];
+                msg_send![decl.register(), alloc];
             delegate = msg_send![delegate, init];
             Self(delegate)
         }
