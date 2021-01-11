@@ -706,6 +706,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         let imageless_framebuffers = self.supports_extension(vk::KhrImagelessFramebufferFn::name());
+        let minmax_samplers = self.supports_extension(vk::ExtSamplerFilterMinmaxFn::name());
         let maintenance_level = if imageless_framebuffers {
             2
         } else if self.supports_extension(vk::KhrMaintenance1Fn::name()) {
@@ -738,6 +739,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             if imageless_framebuffers {
                 enabled_extensions.push(vk::KhrImageFormatListFn::name());
                 enabled_extensions.push(vk::KhrImagelessFramebufferFn::name());
+            }
+            if minmax_samplers {
+                enabled_extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
             }
 
             if requested_features.intersects(
@@ -884,10 +888,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 format.map_or(vk::Format::UNDEFINED, conv::map_format),
             )
         };
+        let supports_transfer_bits = self.supports_extension(vk::KhrMaintenance1Fn::name());
 
         format::Properties {
-            linear_tiling: conv::map_image_features(properties.linear_tiling_features),
-            optimal_tiling: conv::map_image_features(properties.optimal_tiling_features),
+            linear_tiling: conv::map_image_features(
+                properties.linear_tiling_features,
+                supports_transfer_bits,
+            ),
+            optimal_tiling: conv::map_image_features(
+                properties.optimal_tiling_features,
+                supports_transfer_bits,
+            ),
             buffer_features: conv::map_buffer_features(properties.buffer_features),
         }
     }

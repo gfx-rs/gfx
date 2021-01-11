@@ -585,14 +585,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, _: Option<hal::format::Format>) -> hal::format::Properties {
-        use hal::format::BufferFeature;
-        use hal::format::ImageFeature;
+        use hal::format::{BufferFeature as Bf, ImageFeature as If};
 
         // TODO: These are for show
         hal::format::Properties {
-            linear_tiling: ImageFeature::SAMPLED,
-            optimal_tiling: ImageFeature::SAMPLED,
-            buffer_features: BufferFeature::VERTEX,
+            linear_tiling: If::TRANSFER_SRC | If::TRANSFER_DST | If::empty(),
+            optimal_tiling: If::TRANSFER_SRC | If::TRANSFER_DST | If::SAMPLED,
+            buffer_features: Bf::VERTEX,
         }
     }
 

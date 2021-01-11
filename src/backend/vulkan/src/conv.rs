@@ -377,13 +377,19 @@ pub fn map_query_result_flags(flags: query::ResultFlags) -> vk::QueryResultFlags
     vk::QueryResultFlags::from_raw(flags.bits() & vk::QueryResultFlags::all().as_raw())
 }
 
-pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {
+pub fn map_image_features(
+    features: vk::FormatFeatureFlags,
+    supports_transfer_bits: bool,
+) -> format::ImageFeature {
     let mut mapped_flags = format::ImageFeature::empty();
     if features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE) {
         mapped_flags |= format::ImageFeature::SAMPLED;
     }
     if features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR) {
         mapped_flags |= format::ImageFeature::SAMPLED_LINEAR;
+    }
+    if features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX) {
+        mapped_flags |= format::ImageFeature::SAMPLED_MINMAX;
     }
 
     if features.contains(vk::FormatFeatureFlags::STORAGE_IMAGE) {
@@ -406,9 +412,23 @@ pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeat
 
     if features.contains(vk::FormatFeatureFlags::BLIT_SRC) {
         mapped_flags |= format::ImageFeature::BLIT_SRC;
+        if !supports_transfer_bits {
+            mapped_flags |= format::ImageFeature::TRANSFER_SRC;
+        }
     }
     if features.contains(vk::FormatFeatureFlags::BLIT_DST) {
         mapped_flags |= format::ImageFeature::BLIT_DST;
+        if !supports_transfer_bits {
+            mapped_flags |= format::ImageFeature::TRANSFER_DST;
+        }
+    }
+    if supports_transfer_bits {
+        if features.contains(vk::FormatFeatureFlags::TRANSFER_SRC) {
+            mapped_flags |= format::ImageFeature::TRANSFER_SRC;
+        }
+        if features.contains(vk::FormatFeatureFlags::TRANSFER_DST) {
+            mapped_flags |= format::ImageFeature::TRANSFER_DST;
+        }
     }
 
     mapped_flags

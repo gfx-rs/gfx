@@ -355,11 +355,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 image::Tiling::Linear => format_info.properties.linear_tiling,
             };
             let mut flags = U::empty();
-            // Note: these checks would have been nicer if we had explicit BLIT usage
-            if props.contains(f::ImageFeature::BLIT_SRC) {
+            if props.contains(f::ImageFeature::TRANSFER_SRC) {
                 flags |= U::TRANSFER_SRC;
             }
-            if props.contains(f::ImageFeature::BLIT_DST) {
+            if props.contains(f::ImageFeature::TRANSFER_DST) {
                 flags |= U::TRANSFER_DST;
             }
             if props.contains(f::ImageFeature::SAMPLED) {
@@ -1416,10 +1415,15 @@ impl FormatProperties {
                         | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
             let can_linear = can_image && !is_compressed;
             if can_image {
-                props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
+                props.optimal_tiling |= f::ImageFeature::TRANSFER_SRC
+                    | f::ImageFeature::TRANSFER_DST
+                    | f::ImageFeature::SAMPLED;
             }
             if can_linear {
-                props.linear_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
+                props.linear_tiling |= f::ImageFeature::TRANSFER_SRC
+                    | f::ImageFeature::TRANSFER_DST
+                    | f::ImageFeature::SAMPLED
+                    | f::ImageFeature::BLIT_SRC;
             }
             if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER != 0 {
                 props.buffer_features |= f::BufferFeature::VERTEX;
