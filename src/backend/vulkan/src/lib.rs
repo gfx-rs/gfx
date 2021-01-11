@@ -1021,6 +1021,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             | Features::SAMPLER_MIP_LOD_BIAS
             | Features::SAMPLER_BORDER_COLOR
             | Features::MUTABLE_COMPARISON_SAMPLER
+            | Features::MUTABLE_UNNORMALIZED_SAMPLER
             | Features::TEXTURE_DESCRIPTOR_ARRAY;
 
         if self.supports_extension(vk::AmdNegativeViewportHeightFn::name())
