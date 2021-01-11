@@ -2132,7 +2132,7 @@ impl hal::device::Device<Backend> for Device {
                 data: msl::SamplerData,
                 binding: pso::DescriptorBinding,
                 array_index: pso::DescriptorArrayIndex,
-            };
+            }
             let mut immutable_sampler_iter = immutable_samplers.into_iter();
             let mut tmp_samplers = Vec::new();
             let mut desc_layouts = Vec::new();
