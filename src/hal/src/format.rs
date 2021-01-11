@@ -151,7 +151,7 @@ bitflags!(
         const SAMPLED = 0x1;
         /// Image can be sampled with a linear sampler or as blit source with linear sampling.
         const SAMPLED_LINEAR = 0x2;
-        /// Image can be sampled with a
+        /// Image can be sampled with a min/max reduction sampler.
         const SAMPLED_MINMAX = 0x4;
 
         /// Image view can be used as storage image with exclusive read & write access.

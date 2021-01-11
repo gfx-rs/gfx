@@ -1,8 +1,34 @@
 # Change Log
 
 ### hal-unreleased
-  - use `thiserror` for errors
-  - error variants and a few names are refactored
+  - error improvements:
+    - use `thiserror` for errors
+    - variants and a few names are refactored
+  - API external synchronization constraints now match Vulkan, `&mut` changes affected the following parameters:
+    - event in `Device::set_event` and `Device::reset_event`
+    - fence in `Device::reset_fences` and `Queue::submit`
+    - destination sets in `write_descriptor_sets` and `copy_descriptor_sets`
+    - memory in `map_memory` and `unmap_memory`
+    - queue in `Queue::wait_idle`
+    - semaphore in `Queue::present`
+  - `ImageFeature` improvements:
+    - new `STORAGE_READ_WRITE` bit, indicating that the storage can be read and written within the same draw/dispatch call
+    - new `TRANSFER_SRC` and `TRANSFER_DST` bits, following `VK_KHR_maintenance1`
+    - new `SAMPLED_MINMAX` bit, following `VK_EXT_sampling_minmax`
+  - Framebuffers become image-less, following `VK_KHR_imageless_framebuffer`
+  - the old swapchain model is removed, and the new one is updated to match the backends even better
+  - debug names are supported for all objectr
+  - other API changes:
+    - `bind_index_buffer` now doesn't need a separate structure
+    - swapchain images can be used for transfer operations
+    - separate feature for comparison mutable samplers
+    - pipeline descriptor vectors are replaced with slices
+  - OpenGL backend improvements:
+    - finally has the API fully matching gfx-hal
+    - now only uses OpenGL ES on Linux/Android/Web targets
+    - binding model has been completely rewritten
+    - various number of fixed in rendering, memory mapping, and other areas
+
 
 ### backend-dx12-unreleased
   - fix SPIR-V entry point selection
