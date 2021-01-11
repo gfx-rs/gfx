@@ -265,12 +265,52 @@ bitflags! {
 }
 
 bitflags! {
-    /// Features that the device supports natively, but is able to emulate.
+    /// Features that the device doesn't support natively, but is able to emulate
+    /// at some performance cost.
+    #[derive(Default)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct Hints: u32 {
-        /// Support indexed, instanced drawing with base vertex and instance.
+    pub struct PerformanceCaveats: u32 {
+        /// Emulate indexed, instanced drawing with base vertex and instance.
         const BASE_VERTEX_INSTANCE_DRAWING = 0x0001;
     }
+}
+
+bitflags! {
+    /// Dynamic pipeline states.
+    #[derive(Default)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct DynamicStates: u32 {
+        /// Supports `BakedStates::viewport == None`
+        const VIEWPORT = 0x0001;
+        /// Supports `BakedStates::scissor == None`
+        const SCISSOR = 0x0002;
+        /// Supports `Rasterizer::line_width == State::Dynamic(_)`
+        const LINE_WIDTH = 0x0004;
+        /// Supports `BakedStates::blend_color == None`
+        const BLEND_COLOR = 0x0008;
+        /// Supports `Rasterizer::depth_bias == Some(State::Dynamic(_))`
+        const DEPTH_BIAS = 0x0010;
+        /// Supports `BakedStates::depth_bounds == None`
+        const DEPTH_BOUNDS = 0x0020;
+        /// Supports `StencilTest::read_masks == State::Dynamic(_)`
+        const STENCIL_READ_MASK = 0x0100;
+        /// Supports `StencilTest::write_masks == State::Dynamic(_)`
+        const STENCIL_WRITE_MASK = 0x0200;
+        /// Supports `StencilTest::reference_values == State::Dynamic(_)`
+        const STENCIL_REFERENCE = 0x0400;
+    }
+}
+
+/// Capabilities of physical devices that are exposed but
+/// do not need to be explicitly opted into.
+//TODO: should we move `Limits` in here?
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Capabilities {
+    /// Performance caveats.
+    pub performance_caveats: PerformanceCaveats,
+    /// Dynamic pipeline states.
+    pub dynamic_pipeline_states: DynamicStates,
 }
 
 /// Resource limits of a particular graphics device.

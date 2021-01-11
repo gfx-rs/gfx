@@ -1,6 +1,6 @@
 use crate::{Error, GlContainer, MAX_COLOR_ATTACHMENTS};
 use glow::HasContext;
-use hal::{Features, Hints, Limits};
+use hal::{Capabilities, DynamicStates, Features, Limits, PerformanceCaveats};
 use std::{collections::HashSet, fmt, str};
 
 /// A version number for a specific component of an OpenGL implementation
@@ -343,7 +343,14 @@ impl Info {
 /// capabilities.
 pub(crate) fn query_all(
     gl: &GlContainer,
-) -> (Info, Features, LegacyFeatures, Hints, Limits, PrivateCaps) {
+) -> (
+    Info,
+    Features,
+    LegacyFeatures,
+    Limits,
+    Capabilities,
+    PrivateCaps,
+) {
     use self::Requirement::*;
     let info = Info::get(gl);
     let max_texture_size = get_usize(gl, glow::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
@@ -491,11 +498,15 @@ pub(crate) fn query_all(
         legacy |= LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING;
     }
 
-    let mut hints = Hints::empty();
-    if info.is_supported(&[Core(4, 2)]) {
-        // TODO: extension
-        hints |= Hints::BASE_VERTEX_INSTANCE_DRAWING;
+    let mut performance_caveats = PerformanceCaveats::empty();
+    //TODO: extension
+    if !info.is_supported(&[Core(4, 2)]) {
+        performance_caveats |= PerformanceCaveats::BASE_VERTEX_INSTANCE_DRAWING;
     }
+    let capabilities = Capabilities {
+        performance_caveats,
+        dynamic_pipeline_states: DynamicStates::all(),
+    };
 
     let buffer_storage = info.is_supported(&[
         Core(4, 4),
@@ -523,7 +534,7 @@ pub(crate) fn query_all(
         draw_buffers: info.is_supported(&[Core(2, 0), Es(3, 0)]),
     };
 
-    (info, features, legacy, hints, limits, private)
+    (info, features, legacy, limits, capabilities, private)
 }
 
 #[cfg(test)]

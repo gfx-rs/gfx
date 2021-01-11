@@ -297,7 +297,7 @@ impl CommandQueue {
             } => {
                 let gl = &self.share.context;
                 let legacy = &self.share.legacy_features;
-                let hints = &self.share.hints;
+                let caveats = &self.share.public_caps.performance_caveats;
 
                 if instances == &(0u32..1) {
                     if base_vertex == 0 {
@@ -348,7 +348,12 @@ impl CommandQueue {
                         }
                     } else if instances.start == 0 {
                         error!("Base vertex with instanced indexed drawing is not supported");
-                    } else if hints.contains(hal::Hints::BASE_VERTEX_INSTANCE_DRAWING) {
+                    } else if caveats
+                        .contains(hal::PerformanceCaveats::BASE_VERTEX_INSTANCE_DRAWING)
+                    {
+                        //TODO: this is supposed to be a workaround, not an error
+                        error!("Instance bases with instanced indexed drawing is not supported");
+                    } else {
                         unsafe {
                             gl.draw_elements_instanced_base_vertex_base_instance(
                                 primitive,
@@ -360,8 +365,6 @@ impl CommandQueue {
                                 instances.start as _,
                             );
                         }
-                    } else {
-                        error!("Instance bases with instanced indexed drawing is not supported");
                     }
                 } else {
                     error!("Instanced indexed drawing is not supported");

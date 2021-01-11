@@ -11,7 +11,7 @@
 use crate::{
     device, format, image, memory,
     queue::{QueueGroup, QueuePriority},
-    Backend, Features, Hints, Limits,
+    Backend, Capabilities, Features, Limits,
 };
 
 use std::{any::Any, fmt};
@@ -116,11 +116,12 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     fn memory_properties(&self) -> MemoryProperties;
 
     /// Returns the features of this `PhysicalDevice`. This usually depends on the graphics API being
-    /// used.
+    /// used, as well as the actual platform underneath.
     fn features(&self) -> Features;
 
-    /// Returns the performance hints of this `PhysicalDevice`.
-    fn hints(&self) -> Hints;
+    /// Returns the capabilities of this `PhysicalDevice`. Similarly to `Features`, they
+    // depend on the platform, but unlike features, these are immutable and can't be switched on.
+    fn capabilities(&self) -> Capabilities;
 
     /// Returns the resource limits of this `PhysicalDevice`.
     fn limits(&self) -> Limits;

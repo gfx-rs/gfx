@@ -189,7 +189,7 @@ impl hal::adapter::PhysicalDevice<Backend> for PhysicalDevice {
         todo!()
     }
 
-    fn hints(&self) -> hal::Hints {
+    fn capabilities(&self) -> hal::Capabilities {
         todo!()
     }
 

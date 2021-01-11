@@ -203,8 +203,8 @@ struct Share {
     info: Info,
     supported_features: hal::Features,
     legacy_features: info::LegacyFeatures,
-    hints: hal::Hints,
     limits: hal::Limits,
+    public_caps: hal::Capabilities,
     private_caps: info::PrivateCaps,
     // Indicates if there is an active logical device.
     open: Cell<bool>,
@@ -354,7 +354,7 @@ impl PhysicalDevice {
     fn new_adapter(context: GlContext) -> adapter::Adapter<Backend> {
         let gl = GlContainer { context };
         // query information
-        let (info, supported_features, legacy_features, hints, limits, private_caps) =
+        let (info, supported_features, legacy_features, limits, public_caps, private_caps) =
             info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
         info!("Renderer: {:?}", info.platform_name.renderer);
@@ -362,6 +362,7 @@ impl PhysicalDevice {
         info!("Shading Language: {:?}", info.shading_language);
         info!("Supported Features: {:?}", supported_features);
         info!("Legacy Features: {:?}", legacy_features);
+        debug!("Public capabilities: {:#?}", public_caps);
         debug!("Private capabilities: {:#?}", private_caps);
         debug!("Loaded Extensions:");
         for extension in info.extensions.iter() {
@@ -431,8 +432,8 @@ impl PhysicalDevice {
             info,
             supported_features,
             legacy_features,
-            hints,
             limits,
+            public_caps,
             private_caps,
             open: Cell::new(false),
             memory_types,
@@ -642,8 +643,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.0.supported_features
     }
 
-    fn hints(&self) -> hal::Hints {
-        self.0.hints
+    fn capabilities(&self) -> hal::Capabilities {
+        self.0.public_caps
     }
 
     fn limits(&self) -> hal::Limits {

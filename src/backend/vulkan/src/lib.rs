@@ -47,7 +47,7 @@ use hal::{
     pso::{PatchSize, PipelineStage},
     queue,
     window::{OutOfDate, PresentError, Suboptimal, SurfaceLost},
-    Features, Hints, Limits,
+    Capabilities, DynamicStates, Features, Limits,
 };
 
 use std::{
@@ -1220,8 +1220,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         bits
     }
 
-    fn hints(&self) -> Hints {
-        Hints::BASE_VERTEX_INSTANCE_DRAWING
+    fn capabilities(&self) -> Capabilities {
+        Capabilities {
+            performance_caveats: Default::default(),
+            dynamic_pipeline_states: DynamicStates::all(),
+        }
     }
 
     fn limits(&self) -> Limits {
