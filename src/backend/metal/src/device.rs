@@ -442,11 +442,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             | F::NDC_Y_UP
     }
 
-    fn hints(&self) -> hal::Hints {
-        if self.shared.private_caps.base_vertex_instance_drawing {
-            hal::Hints::BASE_VERTEX_INSTANCE_DRAWING
-        } else {
-            hal::Hints::empty()
+    fn capabilities(&self) -> hal::Capabilities {
+        let mut caveats = hal::PerformanceCaveats::empty();
+        if !self.shared.private_caps.base_vertex_instance_drawing {
+            caveats |= hal::PerformanceCaveats::BASE_VERTEX_INSTANCE_DRAWING;
+        }
+        hal::Capabilities {
+            performance_caveats: caveats,
+            dynamic_pipeline_states: hal::DynamicStates::all(),
         }
     }
 

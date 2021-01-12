@@ -142,11 +142,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn features(&self) -> hal::Features {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+        hal::Features::empty()
     }
 
-    fn hints(&self) -> hal::Hints {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    fn capabilities(&self) -> hal::Capabilities {
+        Default::default()
     }
 
     fn limits(&self) -> hal::Limits {
