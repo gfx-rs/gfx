@@ -343,87 +343,91 @@ fn get_format_properties(
                 mem::size_of::<d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT>() as UINT,
             )
         };
+        if hr != winerror::S_OK {
+            warn!("Format {:?} can't check the features-1: 0x{:x}", format, hr);
+            continue;
+        }
 
-        if hr == winerror::S_OK {
-            let can_buffer = 0 != support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_BUFFER;
-            let can_image = 0
-                != support.OutFormatSupport
-                    & (d3d11::D3D11_FORMAT_SUPPORT_TEXTURE1D
-                        | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE2D
-                        | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE3D
-                        | d3d11::D3D11_FORMAT_SUPPORT_TEXTURECUBE);
-            let can_linear = can_image && !format.surface_desc().is_compressed();
-            if can_image {
-                props.optimal_tiling |=
-                    format::ImageFeature::SAMPLED | format::ImageFeature::BLIT_SRC;
-            }
+        let can_buffer = 0 != support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_BUFFER;
+        let can_image = 0
+            != support.OutFormatSupport
+                & (d3d11::D3D11_FORMAT_SUPPORT_TEXTURE1D
+                    | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE2D
+                    | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE3D
+                    | d3d11::D3D11_FORMAT_SUPPORT_TEXTURECUBE);
+        let can_linear = can_image && !format.surface_desc().is_compressed();
+        if can_image {
+            props.optimal_tiling |= format::ImageFeature::TRANSFER_SRC
+                | format::ImageFeature::TRANSFER_DST
+                | format::ImageFeature::SAMPLED
+                | format::ImageFeature::BLIT_SRC;
+        }
+        if can_linear {
+            props.linear_tiling |= format::ImageFeature::TRANSFER_SRC
+                | format::ImageFeature::TRANSFER_DST
+                | format::ImageFeature::SAMPLED
+                | format::ImageFeature::BLIT_SRC;
+        }
+        if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_IA_VERTEX_BUFFER != 0 {
+            props.buffer_features |= format::BufferFeature::VERTEX;
+        }
+        if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_SHADER_SAMPLE != 0 {
+            props.optimal_tiling |= format::ImageFeature::SAMPLED_LINEAR;
+        }
+        if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_RENDER_TARGET != 0 {
+            props.optimal_tiling |=
+                format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::BLIT_DST;
             if can_linear {
                 props.linear_tiling |=
-                    format::ImageFeature::SAMPLED | format::ImageFeature::BLIT_SRC;
-            }
-            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_IA_VERTEX_BUFFER != 0 {
-                props.buffer_features |= format::BufferFeature::VERTEX;
-            }
-            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_SHADER_SAMPLE != 0 {
-                props.optimal_tiling |= format::ImageFeature::SAMPLED_LINEAR;
-            }
-            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_RENDER_TARGET != 0 {
-                props.optimal_tiling |=
                     format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::BLIT_DST;
-                if can_linear {
-                    props.linear_tiling |=
-                        format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::BLIT_DST;
-                }
             }
-            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_BLENDABLE != 0 {
-                props.optimal_tiling |= format::ImageFeature::COLOR_ATTACHMENT_BLEND;
-            }
-            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_DEPTH_STENCIL != 0 {
-                props.optimal_tiling |= format::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
-            }
-            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_SHADER_LOAD != 0 {
-                //TODO: check d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD ?
-                if can_buffer {
-                    props.buffer_features |= format::BufferFeature::UNIFORM_TEXEL;
-                }
-            }
-
-            let hr = unsafe {
-                device.CheckFeatureSupport(
-                    d3d11::D3D11_FEATURE_FORMAT_SUPPORT2,
-                    &mut support_2 as *mut _ as *mut _,
-                    mem::size_of::<d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT2>() as UINT,
-                )
-            };
-            if hr == winerror::S_OK {
-                if support_2.OutFormatSupport2 & d3d11::D3D11_FORMAT_SUPPORT2_UAV_ATOMIC_ADD != 0 {
-                    //TODO: other atomic flags?
-                    if can_buffer {
-                        props.buffer_features |= format::BufferFeature::STORAGE_TEXEL_ATOMIC;
-                    }
-                    if can_image {
-                        props.optimal_tiling |= format::ImageFeature::STORAGE_ATOMIC;
-                    }
-                }
-                if support_2.OutFormatSupport2 & d3d11::D3D11_FORMAT_SUPPORT2_UAV_TYPED_STORE != 0 {
-                    if can_buffer {
-                        props.buffer_features |= format::BufferFeature::STORAGE_TEXEL;
-                    }
-                    if can_image {
-                        // Since read-only storage is exposed as SRV, we can guarantee read-only storage without checking D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD first.
-                        props.optimal_tiling |= format::ImageFeature::STORAGE;
-
-                        if support_2.OutFormatSupport2 & d3d11::D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD
-                            != 0
-                        {
-                            props.optimal_tiling |= format::ImageFeature::STORAGE_READ_WRITE;
-                        }
-                    }
-                }
+        }
+        if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_BLENDABLE != 0 {
+            props.optimal_tiling |= format::ImageFeature::COLOR_ATTACHMENT_BLEND;
+        }
+        if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_DEPTH_STENCIL != 0 {
+            props.optimal_tiling |= format::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
+        }
+        if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_SHADER_LOAD != 0 {
+            //TODO: check d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD ?
+            if can_buffer {
+                props.buffer_features |= format::BufferFeature::UNIFORM_TEXEL;
             }
         }
 
-        //TODO: blits, linear tiling
+        let hr = unsafe {
+            device.CheckFeatureSupport(
+                d3d11::D3D11_FEATURE_FORMAT_SUPPORT2,
+                &mut support_2 as *mut _ as *mut _,
+                mem::size_of::<d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT2>() as UINT,
+            )
+        };
+        if hr != winerror::S_OK {
+            warn!("Format {:?} can't check the features-2: 0x{:X}", format, hr);
+            continue;
+        }
+        if support_2.OutFormatSupport2 & d3d11::D3D11_FORMAT_SUPPORT2_UAV_ATOMIC_ADD != 0 {
+            //TODO: other atomic flags?
+            if can_buffer {
+                props.buffer_features |= format::BufferFeature::STORAGE_TEXEL_ATOMIC;
+            }
+            if can_image {
+                props.optimal_tiling |= format::ImageFeature::STORAGE_ATOMIC;
+            }
+        }
+        if support_2.OutFormatSupport2 & d3d11::D3D11_FORMAT_SUPPORT2_UAV_TYPED_STORE != 0 {
+            if can_buffer {
+                props.buffer_features |= format::BufferFeature::STORAGE_TEXEL;
+            }
+            if can_image {
+                // Since read-only storage is exposed as SRV, we can guarantee read-only storage without checking D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD first.
+                props.optimal_tiling |= format::ImageFeature::STORAGE;
+
+                if support_2.OutFormatSupport2 & d3d11::D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0 {
+                    props.optimal_tiling |= format::ImageFeature::STORAGE_READ_WRITE;
+                }
+            }
+        }
     }
 
     format_properties
