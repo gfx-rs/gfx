@@ -253,6 +253,8 @@ bitflags! {
         const SAMPLER_BORDER_COLOR = 0x0010 << 64;
         /// Can create comparison samplers in regular descriptor sets.
         const MUTABLE_COMPARISON_SAMPLER = 0x0020 << 64;
+        /// Can create non-normalized samplers in regular descriptor sets.
+        const MUTABLE_UNNORMALIZED_SAMPLER = 0x0040 << 64;
 
         /// Make the NDC coordinate system pointing Y up, to match D3D and Metal.
         const NDC_Y_UP = 0x0001 << 80;
