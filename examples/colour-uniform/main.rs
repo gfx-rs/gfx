@@ -1100,7 +1100,7 @@ impl<B: Backend> ImageState<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
-                &[image_barrier],
+                iter::once(image_barrier),
             );
 
             cmd_buffer.copy_buffer_to_image(
@@ -1138,7 +1138,7 @@ impl<B: Backend> ImageState<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER..pso::PipelineStage::FRAGMENT_SHADER,
                 m::Dependencies::empty(),
-                &[image_barrier],
+                iter::once(image_barrier),
             );
 
             cmd_buffer.finish();

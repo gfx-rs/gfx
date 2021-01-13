@@ -23,6 +23,9 @@
     - swapchain images can be used for transfer operations
     - separate feature for comparison mutable samplers
     - pipeline descriptor vectors are replaced with slices
+    - `Borrow` generics are removed on structures with a lifetime
+    - features for non-normalized mutable samplers
+    - `Capabilities` structure with supported dynamic state flags
   - OpenGL backend improvements:
     - finally has the API fully matching gfx-hal
     - now only uses OpenGL ES on Linux/Android/Web targets

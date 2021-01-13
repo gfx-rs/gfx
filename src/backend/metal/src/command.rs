@@ -2678,8 +2678,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _dependencies: memory::Dependencies,
         _barriers: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T: IntoIterator<Item = memory::Barrier<'a, Backend>>,
     {
     }
 
@@ -4582,8 +4581,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         I: IntoIterator,
         I::Item: Borrow<native::Event>,
-        J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J: IntoIterator<Item = memory::Barrier<'a, Backend>>,
     {
         let mut need_barrier = false;
 

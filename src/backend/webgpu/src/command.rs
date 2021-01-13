@@ -106,8 +106,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _dependencies: Dependencies,
         _barriers: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<Barrier<'a, Backend>>,
+        T: IntoIterator<Item = Barrier<'a, Backend>>,
     {
         todo!()
     }
@@ -480,8 +479,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
     ) where
         I: IntoIterator,
         I::Item: Borrow<<Backend as hal::Backend>::Event>,
-        J: IntoIterator,
-        J::Item: Borrow<Barrier<'a, Backend>>,
+        J: IntoIterator<Item = Barrier<'a, Backend>>,
     {
         todo!()
     }

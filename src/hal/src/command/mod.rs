@@ -136,8 +136,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         dependencies: Dependencies,
         barriers: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<Barrier<'a, B>>;
+        T: IntoIterator<Item = Barrier<'a, B>>;
 
     /// Fill a buffer with the given `u32` value.
     unsafe fn fill_buffer(&mut self, buffer: &B::Buffer, range: buffer::SubRange, data: u32);
@@ -586,8 +585,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         I: IntoIterator,
         I::Item: Borrow<B::Event>,
         I::IntoIter: ExactSizeIterator,
-        J: IntoIterator,
-        J::Item: Borrow<Barrier<'a, B>>,
+        J: IntoIterator<Item = Barrier<'a, B>>,
         J::IntoIter: ExactSizeIterator;
 
     /// Begins a query operation.  Queries count operations or record timestamps

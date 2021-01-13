@@ -67,15 +67,14 @@ struct BarrierSet {
 
 fn destructure_barriers<'a, T>(barriers: T) -> BarrierSet
 where
-    T: IntoIterator,
-    T::Item: Borrow<memory::Barrier<'a, Backend>>,
+    T: IntoIterator<Item = memory::Barrier<'a, Backend>>,
 {
     let mut global: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
     let mut buffer: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
     let mut image: SmallVec<[vk::ImageMemoryBarrier; 4]> = SmallVec::new();
 
     for barrier in barriers {
-        match *barrier.borrow() {
+        match barrier {
             memory::Barrier::AllBuffers(ref access) => {
                 global.push(
                     vk::MemoryBarrier::builder()
@@ -322,8 +321,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dependencies: memory::Dependencies,
         barriers: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T: IntoIterator<Item = memory::Barrier<'a, Backend>>,
     {
         let BarrierSet {
             global,
@@ -1019,8 +1017,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator,
         I::Item: Borrow<n::Event>,
         I::IntoIter: ExactSizeIterator,
-        J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J: IntoIterator<Item = memory::Barrier<'a, Backend>>,
     {
         let events = events.into_iter().map(|e| e.borrow().0);
 

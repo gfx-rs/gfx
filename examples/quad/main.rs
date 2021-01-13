@@ -471,7 +471,7 @@ where
             cmd_buffer.pipeline_barrier(
                 PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
-                &[image_barrier],
+                iter::once(image_barrier),
             );
 
             cmd_buffer.copy_buffer_to_image(
@@ -509,7 +509,7 @@ where
             cmd_buffer.pipeline_barrier(
                 PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
                 m::Dependencies::empty(),
-                &[image_barrier],
+                iter::once(image_barrier),
             );
 
             cmd_buffer.finish();

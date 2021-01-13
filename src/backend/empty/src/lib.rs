@@ -620,8 +620,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: hal::memory::Dependencies,
         _: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<hal::memory::Barrier<'a, Backend>>,
+        T: IntoIterator<Item = hal::memory::Barrier<'a, Backend>>,
     {
     }
 
@@ -873,8 +872,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
     where
-        J: IntoIterator,
-        J::Item: Borrow<hal::memory::Barrier<'a, Backend>>,
+        J: IntoIterator<Item = hal::memory::Barrier<'a, Backend>>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }

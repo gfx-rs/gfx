@@ -323,7 +323,7 @@ impl<B: hal::Backend> Scene<B> {
                                     pso::PipelineStage::TOP_OF_PIPE
                                         ..pso::PipelineStage::BOTTOM_OF_PIPE,
                                     memory::Dependencies::empty(),
-                                    &[buffer_barrier],
+                                    iter::once(buffer_barrier),
                                 );
                             }
                         }
@@ -368,7 +368,7 @@ impl<B: hal::Backend> Scene<B> {
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                                 memory::Dependencies::empty(),
-                                &[pre_barrier],
+                                iter::once(pre_barrier),
                             );
                         }
                         let copy = c::BufferCopy {
@@ -387,7 +387,7 @@ impl<B: hal::Backend> Scene<B> {
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
-                                &[post_barrier],
+                                iter::once(post_barrier),
                             );
                         }
                         // done
@@ -468,7 +468,7 @@ impl<B: hal::Backend> Scene<B> {
                                 pso::PipelineStage::BOTTOM_OF_PIPE
                                     ..pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                                 memory::Dependencies::empty(),
-                                &[image_barrier],
+                                iter::once(image_barrier),
                             );
                         }
                         (access, layout)
@@ -537,7 +537,7 @@ impl<B: hal::Backend> Scene<B> {
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                                 memory::Dependencies::empty(),
-                                &[pre_barrier],
+                                iter::once(pre_barrier),
                             );
                         }
 
@@ -576,7 +576,7 @@ impl<B: hal::Backend> Scene<B> {
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
-                                &[post_barrier],
+                                iter::once(post_barrier),
                             );
                         }
                         // done
@@ -1544,7 +1544,7 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
-                &[pre_barrier],
+                iter::once(pre_barrier),
             );
 
             let copy = c::BufferCopy {
@@ -1561,7 +1561,7 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
-                &[post_barrier],
+                iter::once(post_barrier),
             );
             cmd_buffer.end_debug_marker();
             cmd_buffer.finish()
@@ -1664,7 +1664,7 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
-                &[pre_barrier],
+                iter::once(pre_barrier),
             );
 
             let copy = c::BufferImageCopy {
@@ -1703,7 +1703,7 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
-                &[post_barrier],
+                iter::once(post_barrier),
             );
             cmd_buffer.end_debug_marker();
             cmd_buffer.finish();
