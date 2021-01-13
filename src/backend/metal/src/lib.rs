@@ -73,7 +73,7 @@ use metal::MTLLanguageVersion;
 use metal::{CGFloat, CGSize, MetalLayer, MetalLayerRef};
 use objc::{
     declare::ClassDecl,
-    runtime::{Object, Sel, BOOL, YES},
+    runtime::{Class, Object, Sel, BOOL, YES},
 };
 use parking_lot::{Condvar, Mutex};
 
@@ -312,35 +312,27 @@ extern "C" fn layer_should_inherit_contents_scale_from_window(
 }
 
 #[derive(Debug)]
-struct GfxManagedMetalLayerDelegate(*mut Object);
+struct GfxManagedMetalLayerDelegate(&'static Class);
 
 impl GfxManagedMetalLayerDelegate {
     pub fn new() -> Self {
-        unsafe {
-            let mut decl = ClassDecl::new("GfxManagedMetalLayerDelegate", class!(NSObject)).unwrap();
-            decl.add_method(
-                sel!(layer:shouldInheritContentsScale:fromWindow:),
-                layer_should_inherit_contents_scale_from_window
-                    as extern "C" fn(&Object, Sel, *mut Object, CGFloat, *mut Object) -> BOOL,
-            );
-            let mut delegate: *mut Object =
-                msg_send![decl.register(), alloc];
-            delegate = msg_send![delegate, init];
-            Self(delegate)
-        }
+        GfxManagedMetalLayerDelegate(match Class::get("GfxManagedMetalLayerDelegate") {
+            Some(class) => class,
+            None => {
+                type Fun = extern "C" fn(&Object, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
+                let mut decl =
+                    ClassDecl::new("GfxManagedMetalLayerDelegate", class!(NSObject)).unwrap();
+                unsafe {
+                    decl.add_method(
+                        sel!(layer:shouldInheritContentsScale:fromWindow:),
+                        layer_should_inherit_contents_scale_from_window as Fun,
+                    );
+                }
+                decl.register()
+            }
+        })
     }
 }
-
-impl Drop for GfxManagedMetalLayerDelegate {
-    fn drop(&mut self) {
-        unsafe {
-            let () = msg_send![self.0, release];
-        }
-    }
-}
-
-unsafe impl Send for GfxManagedMetalLayerDelegate {}
-unsafe impl Sync for GfxManagedMetalLayerDelegate {}
 
 impl Instance {
     #[cfg(target_os = "ios")]
