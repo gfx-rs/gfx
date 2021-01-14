@@ -222,7 +222,7 @@ impl SwapchainImage {
             },
             view: ImageView::Renderbuffer {
                 raw: renderbuffer,
-                aspects: format::Aspects::empty(),
+                aspects: format::Aspects::COLOR,
             },
         }
     }
