@@ -127,8 +127,14 @@ impl Device {
         let mut name_binding_map = FastHashMap::<String, (n::BindingRegister, u8)>::default();
         let mut sampler_map = [None; MAX_TEXTURE_SLOTS];
 
+        let mut is_fragment_stage_exists = false;
+
         for &(stage, point_maybe) in shaders {
             if let Some(point) = point_maybe {
+                if stage == ShaderStage::Fragment {
+                    is_fragment_stage_exists = true;
+                }
+
                 let shader = self.compile_shader(
                     point,
                     stage,
@@ -140,6 +146,29 @@ impl Device {
                     gl.attach_shader(program, shader);
                     gl.delete_shader(shader);
                 }
+            }
+        }
+
+        // Create empty fragment shader if only vertex shader is present
+        if is_fragment_stage_exists == false {
+            let sl = &self.share.info.shading_language;
+            let version = (sl.major * 100 + sl.minor * 10) as u16;
+            let shader_type = if sl.is_embedded { "es" } else { "" };
+            let shader_src = format!(
+                "#version {version} {shader_type} \n void main(void) {{}}",
+                version = version,
+                shader_type = shader_type
+            );
+            debug!(
+                "Only vertex shader is present. Creating empty fragment shader:\n{}",
+                shader_src
+            );
+            let shader = self
+                .create_shader_module_raw(&shader_src, ShaderStage::Fragment)
+                .unwrap();
+            unsafe {
+                gl.attach_shader(program, shader);
+                gl.delete_shader(shader);
             }
         }
 
@@ -290,9 +319,11 @@ impl Device {
         let version = self.share.info.shading_language.tuple();
         compile_options.version = if is_embedded {
             match version {
-                (3, 00) => glsl::Version::V3_00Es,
+                (3, 20) | (3, 2) => glsl::Version::V3_20Es,
+                (3, 10) | (3, 1) => glsl::Version::V3_10Es,
+                (3, 00) | (3, 0) => glsl::Version::V3_00Es,
                 (1, 00) => glsl::Version::V1_00Es,
-                other if other > (3, 0) => glsl::Version::V3_00Es,
+                other if other > (3, 20) => glsl::Version::V3_20Es,
                 other => panic!("GLSL version is not recognized: {:?}", other),
             }
         } else {
@@ -325,7 +356,7 @@ impl Device {
                 _ => {
                     return Err(d::ShaderError::CompilationFailed(
                         "Unsupported execution model".into(),
-                    ))
+                    ));
                 }
             },
         ));
@@ -967,7 +998,7 @@ impl d::Device<B> for Device {
                     )
                 }
                 pso::PrimitiveAssemblerDesc::Mesh { .. } => {
-                    return Err(pso::CreationError::UnsupportedPipeline)
+                    return Err(pso::CreationError::UnsupportedPipeline);
                 }
             };
 
