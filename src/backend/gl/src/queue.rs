@@ -978,7 +978,7 @@ impl CommandQueue {
             }
             com::Command::SetColorMask(slot, mask) => unsafe {
                 use hal::pso::ColorMask as Cm;
-                if let Some(slot) = slot {
+                if let (true, Some(slot)) = (self.share.private_caps.per_slot_color_mask, slot) {
                     self.share.context.color_mask_draw_buffer(
                         slot,
                         mask.contains(Cm::RED) as _,
@@ -987,6 +987,11 @@ impl CommandQueue {
                         mask.contains(Cm::ALPHA) as _,
                     );
                 } else {
+                    if slot.is_some() {
+                        /// TODO: the generator of these commands should coalesce identical masks to prevent this warning
+                        ///       as much as is possible.
+                        warn!("GLES and WebGL do not support per-target color masks. Falling back on global mask.");
+                    }
                     self.share.context.color_mask(
                         mask.contains(Cm::RED) as _,
                         mask.contains(Cm::GREEN) as _,
