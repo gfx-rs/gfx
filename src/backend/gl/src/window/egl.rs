@@ -308,7 +308,7 @@ impl hal::Instance<crate::Backend> for Instance {
         use raw_window_handle::RawWindowHandle as Rwh;
 
         let mut inner = self.inner.lock();
-        let mut native_window_ptr = match has_handle.raw_window_handle() {
+        let native_window_ptr = match has_handle.raw_window_handle() {
             #[cfg(not(target_os = "android"))]
             Rwh::Xlib(handle) => handle.window as *mut std::ffi::c_void,
             #[cfg(not(target_os = "android"))]
