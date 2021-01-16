@@ -30,6 +30,7 @@ pub struct Inner {
     display: egl::Display,
     config: egl::Config,
     context: egl::Context,
+    pbuffer: egl::Surface,
     wl_display: Option<*mut raw::c_void>,
 }
 
@@ -113,13 +114,6 @@ impl Inner {
             log::error!("EGL supported version is only {:?}", version);
             return Err(hal::UnsupportedBackend);
         }
-        let display_ext_list = display_extensions.split_whitespace().collect::<Vec<_>>();
-        let required_display_extensions = ["EGL_KHR_create_context", "EGL_KHR_surfaceless_context"];
-        for required_ext in required_display_extensions.iter() {
-            if !display_ext_list.contains(required_ext) {
-                log::warn!("{} is not present", required_ext);
-            }
-        }
 
         if log::max_level() >= log::LevelFilter::Trace {
             log::trace!("Configurations:");
@@ -195,6 +189,15 @@ impl Inner {
             }
         };
 
+        let pbuffer = {
+            let attributes = [egl::WIDTH, 1, egl::HEIGHT, 1, egl::NONE];
+            egl.create_pbuffer_surface(display, config, &attributes)
+                .map_err(|e| {
+                    log::warn!("Error in create_pbuffer_surface: {:?}", e);
+                    hal::UnsupportedBackend
+                })?
+        };
+
         Ok(Self {
             egl,
             display,
@@ -202,6 +205,7 @@ impl Inner {
             supports_native_window,
             config,
             context,
+            pbuffer,
             wl_display: None,
         })
     }
@@ -287,8 +291,14 @@ impl hal::Instance<crate::Backend> for Instance {
         let inner = self.inner.lock();
         inner
             .egl
-            .make_current(inner.display, None, None, Some(inner.context))
+            .make_current(
+                inner.display,
+                Some(inner.pbuffer),
+                Some(inner.pbuffer),
+                Some(inner.context),
+            )
             .unwrap();
+
         let context = unsafe {
             glow::Context::from_loader_function(|name| {
                 inner
@@ -419,6 +429,7 @@ impl hal::Instance<crate::Backend> for Instance {
             display: inner.display,
             context: inner.context,
             presentable: inner.supports_native_window,
+            pbuffer: inner.pbuffer,
             wl_window,
             swapchain: None,
         })
@@ -448,6 +459,7 @@ pub struct Surface {
     raw: egl::Surface,
     display: egl::Display,
     context: egl::Context,
+    pbuffer: egl::Surface,
     presentable: bool,
     wl_window: Option<*mut raw::c_void>,
     pub(crate) swapchain: Option<Swapchain>,
@@ -596,8 +608,14 @@ impl Surface {
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, None);
 
         self.egl.swap_buffers(self.display, self.raw).unwrap();
+
         self.egl
-            .make_current(self.display, None, None, Some(self.context))
+            .make_current(
+                self.display,
+                Some(self.pbuffer),
+                Some(self.pbuffer),
+                Some(self.context),
+            )
             .unwrap();
 
         Ok(None)
