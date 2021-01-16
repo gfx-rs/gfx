@@ -319,29 +319,29 @@ impl Device {
         let version = self.share.info.shading_language.tuple();
         compile_options.version = if is_embedded {
             match version {
-                (3, 20) | (3, 2) => glsl::Version::V3_20Es,
-                (3, 10) | (3, 1) => glsl::Version::V3_10Es,
-                (3, 00) | (3, 0) => glsl::Version::V3_00Es,
-                (1, 00) => glsl::Version::V1_00Es,
-                other if other > (3, 20) => glsl::Version::V3_20Es,
+                (3, 2) => glsl::Version::V3_20Es,
+                (3, 1) => glsl::Version::V3_10Es,
+                (3, 0) => glsl::Version::V3_00Es,
+                (1, 0) => glsl::Version::V1_00Es,
+                other if other > (3, 2) => glsl::Version::V3_20Es,
                 other => panic!("GLSL version is not recognized: {:?}", other),
             }
         } else {
             match version {
-                (4, 60) => glsl::Version::V4_60,
-                (4, 50) => glsl::Version::V4_50,
-                (4, 40) => glsl::Version::V4_40,
-                (4, 30) => glsl::Version::V4_30,
-                (4, 20) => glsl::Version::V4_20,
-                (4, 10) => glsl::Version::V4_10,
-                (4, 00) => glsl::Version::V4_00,
-                (3, 30) => glsl::Version::V3_30,
-                (1, 50) => glsl::Version::V1_50,
-                (1, 40) => glsl::Version::V1_40,
-                (1, 30) => glsl::Version::V1_30,
-                (1, 20) => glsl::Version::V1_20,
-                (1, 10) => glsl::Version::V1_10,
-                other if other > (4, 60) => glsl::Version::V4_60,
+                (4, 6) => glsl::Version::V4_60,
+                (4, 5) => glsl::Version::V4_50,
+                (4, 4) => glsl::Version::V4_40,
+                (4, 3) => glsl::Version::V4_30,
+                (4, 2) => glsl::Version::V4_20,
+                (4, 1) => glsl::Version::V4_10,
+                (4, 0) => glsl::Version::V4_00,
+                (3, 3) => glsl::Version::V3_30,
+                (1, 5) => glsl::Version::V1_50,
+                (1, 4) => glsl::Version::V1_40,
+                (1, 3) => glsl::Version::V1_30,
+                (1, 2) => glsl::Version::V1_20,
+                (1, 1) => glsl::Version::V1_10,
+                other if other > (4, 6) => glsl::Version::V4_60,
                 other => panic!("GLSL version is not recognized: {:?}", other),
             }
         };
