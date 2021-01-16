@@ -731,6 +731,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     enabled_extensions.push(vk::KhrMaintenance1Fn::name());
                 }
                 2 => {
+                    enabled_extensions.push(vk::KhrMaintenance1Fn::name());
                     enabled_extensions.push(vk::KhrMaintenance2Fn::name());
                 }
                 _ => unreachable!(),
