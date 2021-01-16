@@ -14,7 +14,7 @@ use crate::{
     window::{PresentError, PresentationSurface, Suboptimal},
     Backend,
 };
-use std::{any::Any, borrow::Borrow, fmt, iter};
+use std::{any::Any, fmt};
 
 pub use self::family::{QueueFamily, QueueFamilyId, QueueGroup};
 
@@ -57,19 +57,6 @@ impl QueueType {
 /// `1.0` (high).
 pub type QueuePriority = f32;
 
-/// Submission information for a [command queue][CommandQueue].
-///
-/// The submission is sent to the device through the [`submit`][CommandQueue::submit] method.
-#[derive(Debug)]
-pub struct Submission<Ic, Iw, Is> {
-    /// Command buffers to submit.
-    pub command_buffers: Ic,
-    /// Semaphores to wait being signalled before submission.
-    pub wait_semaphores: Iw,
-    /// Semaphores to signal after all command buffers in the submission have finished execution.
-    pub signal_semaphores: Is,
-}
-
 /// Abstraction for an internal GPU execution engine.
 ///
 /// Commands are executed on the the device by submitting
@@ -82,8 +69,10 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///
     /// # Arguments
     ///
-    /// * `submission` - information about which command buffers to submit,
-    ///   as well as what semaphores to wait for or to signal when done.
+    /// * `command_buffers` - command buffers to submit.
+    /// * `wait_semaphores` - semaphores to wait being signalled before submission.
+    /// * `signal_semaphores` - semaphores to signal after all command buffers
+    ///   in the submission have finished execution.
     /// * `fence` - must be in unsignaled state, and will be signaled after
     ///   all command buffers in the submission have finished execution.
     ///
@@ -93,33 +82,19 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///
     /// For example, trying to submit compute commands to a graphics queue
     /// will result in undefined behavior.
-    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
-        &mut self,
-        submission: Submission<Ic, Iw, Is>,
-        fence: Option<&mut B::Fence>,
-    ) where
-        T: 'a + Borrow<B::CommandBuffer>,
-        Ic: IntoIterator<Item = &'a T>,
-        S: 'a + Borrow<B::Semaphore>,
-        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
-        Is: IntoIterator<Item = &'a S>;
-
-    /// Simplified version of `submit` that doesn't expect any semaphores.
-    unsafe fn submit_without_semaphores<'a, T, Ic>(
+    unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
         command_buffers: Ic,
+        wait_semaphores: Iw,
+        signal_semaphores: Is,
         fence: Option<&mut B::Fence>,
     ) where
-        T: 'a + Borrow<B::CommandBuffer>,
-        Ic: IntoIterator<Item = &'a T>,
-    {
-        let submission = Submission {
-            command_buffers,
-            wait_semaphores: iter::empty(),
-            signal_semaphores: iter::empty(),
-        };
-        self.submit::<_, _, B::Semaphore, _, _>(submission, fence)
-    }
+        Ic: IntoIterator<Item = &'a B::CommandBuffer>,
+        Ic::IntoIter: ExactSizeIterator,
+        Iw: IntoIterator<Item = (&'a B::Semaphore, pso::PipelineStage)>,
+        Iw::IntoIter: ExactSizeIterator,
+        Is: IntoIterator<Item = &'a B::Semaphore>,
+        Is::IntoIter: ExactSizeIterator;
 
     /// Present a swapchain image directly to a surface, after waiting on `wait_semaphore`.
     ///

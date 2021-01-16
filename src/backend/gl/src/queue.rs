@@ -1074,21 +1074,21 @@ impl CommandQueue {
 }
 
 impl hal::queue::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+    unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
-        submit_info: hal::queue::Submission<Ic, Iw, Is>,
+        command_buffers: Ic,
+        _wait_semaphores: Iw,
+        _signal_semaphores: Is,
         fence: Option<&mut native::Fence>,
     ) where
-        T: 'a + Borrow<com::CommandBuffer>,
-        Ic: IntoIterator<Item = &'a T>,
-        S: 'a + Borrow<native::Semaphore>,
-        Iw: IntoIterator<Item = (&'a S, hal::pso::PipelineStage)>,
-        Is: IntoIterator<Item = &'a S>,
+        Ic: IntoIterator<Item = &'a com::CommandBuffer>,
+        Iw: IntoIterator<Item = (&'a native::Semaphore, hal::pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a native::Semaphore>,
     {
         use crate::pool::BufferMemory;
         {
-            for buf in submit_info.command_buffers {
-                let cb = &buf.borrow().data;
+            for cmd_buf in command_buffers {
+                let cb = &cmd_buf.data;
                 let memory = cb
                     .memory
                     .try_lock()

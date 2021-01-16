@@ -49,7 +49,6 @@ use winapi::{
 };
 
 use std::{
-    borrow::Borrow,
     ffi::OsString,
     fmt,
     mem,
@@ -497,16 +496,16 @@ unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
 impl q::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+    unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
-        submission: q::Submission<Ic, Iw, Is>,
+        command_buffers: Ic,
+        _wait_semaphores: Iw,
+        _signal_semaphores: Is,
         fence: Option<&mut resource::Fence>,
     ) where
-        T: 'a + Borrow<command::CommandBuffer>,
-        Ic: IntoIterator<Item = &'a T>,
-        S: 'a + Borrow<resource::Semaphore>,
-        Iw: IntoIterator<Item = (&'a S, PipelineStage)>,
-        Is: IntoIterator<Item = &'a S>,
+        Ic: IntoIterator<Item = &'a command::CommandBuffer>,
+        Iw: IntoIterator<Item = (&'a resource::Semaphore, PipelineStage)>,
+        Is: IntoIterator<Item = &'a resource::Semaphore>,
     {
         // Reset idle fence and event
         // That's safe here due to exclusive access to the queue
@@ -514,10 +513,9 @@ impl q::CommandQueue<Backend> for CommandQueue {
         synchapi::ResetEvent(self.idle_event.0);
 
         // TODO: semaphores
-        let lists = submission
-            .command_buffers
+        let lists = command_buffers
             .into_iter()
-            .map(|cmd_buf| cmd_buf.borrow().as_raw_list())
+            .map(|cmd_buf| cmd_buf.as_raw_list())
             .collect::<SmallVec<[_; 4]>>();
         self.raw
             .ExecuteCommandLists(lists.len() as _, lists.as_ptr());

@@ -20,7 +20,7 @@ extern crate gfx_backend_metal as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
 
-use std::{fs, ptr, slice, str::FromStr};
+use std::{fs, iter, ptr, slice, str::FromStr};
 
 use hal::{adapter::MemoryType, buffer, command, memory, pool, prelude::*, pso};
 
@@ -231,7 +231,12 @@ fn main() {
         );
         command_buffer.finish();
 
-        queue_group.queues[0].submit_without_semaphores(Some(&command_buffer), Some(&mut fence));
+        queue_group.queues[0].submit(
+            iter::once(&command_buffer),
+            iter::empty(),
+            iter::empty(),
+            Some(&mut fence),
+        );
 
         device.wait_for_fence(&fence, !0).unwrap();
         command_pool.free(Some(command_buffer));

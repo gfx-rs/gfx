@@ -1778,7 +1778,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             rtv: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
             viewport: d3d12::D3D12_VIEWPORT,
             data: internal::BlitData,
-        };
+        }
         let mut instances = FastHashMap::<internal::BlitKey, Vec<Instance>>::default();
         let mut barriers = Vec::new();
 

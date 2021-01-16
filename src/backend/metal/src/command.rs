@@ -2192,27 +2192,23 @@ impl CommandQueue {
 }
 
 impl hal::queue::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+    unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
-        hal::queue::Submission {
-            command_buffers,
-            wait_semaphores,
-            signal_semaphores,
-        }: hal::queue::Submission<Ic, Iw, Is>,
+        command_buffers: Ic,
+        wait_semaphores: Iw,
+        signal_semaphores: Is,
         fence: Option<&mut native::Fence>,
     ) where
-        T: 'a + Borrow<CommandBuffer>,
-        Ic: IntoIterator<Item = &'a T>,
-        S: 'a + Borrow<native::Semaphore>,
-        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
-        Is: IntoIterator<Item = &'a S>,
+        Ic: IntoIterator<Item = &'a CommandBuffer>,
+        Iw: IntoIterator<Item = (&'a native::Semaphore, pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a native::Semaphore>,
     {
         debug!("submitting with fence {:?}", fence);
         self.wait(wait_semaphores.into_iter().map(|(s, _)| s));
 
         let system_semaphores = signal_semaphores
             .into_iter()
-            .filter_map(|sem| sem.borrow().system.clone())
+            .filter_map(|sem| sem.system.clone())
             .collect::<Vec<_>>();
 
         #[allow(unused_mut)]
@@ -2228,7 +2224,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
             let mut release_sinks = Vec::new();
 
             for cmd_buffer in command_buffers {
-                let mut inner = cmd_buffer.borrow().inner.borrow_mut();
+                let mut inner = cmd_buffer.inner.borrow_mut();
                 let CommandBufferInner {
                     ref sink,
                     ref mut retained_buffers,

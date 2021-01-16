@@ -23,16 +23,14 @@ use crate::Backend;
 pub struct CommandQueue;
 
 impl hal::queue::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+    unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
-        _submission: Submission<Ic, Iw, Is>,
+        _: Ic,
+        _: Iw,
+        _: Is,
         _fence: Option<&mut <Backend as hal::Backend>::Fence>,
     ) where
-        T: 'a + Borrow<<Backend as hal::Backend>::CommandBuffer>,
-        Ic: IntoIterator<Item = &'a T>,
-        S: 'a + Borrow<<Backend as hal::Backend>::Semaphore>,
-        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
-        Is: IntoIterator<Item = &'a S>,
+        Ic: IntoIterator<Item = &'a <Backend as hal::Backend>::CommandBuffer>,
     {
         todo!()
     }

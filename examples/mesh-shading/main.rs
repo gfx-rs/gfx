@@ -31,16 +31,8 @@ pub fn wasm_main() {
 }
 
 use hal::{
-    buffer, command, format as f,
-    format::ChannelType,
-    image as i, memory as m, pass,
-    pass::Subpass,
-    pool,
-    prelude::*,
-    pso,
-    pso::ShaderStageFlags,
-    queue::{QueueGroup, Submission},
-    window,
+    buffer, command, format as f, format::ChannelType, image as i, memory as m, pass,
+    pass::Subpass, pool, prelude::*, pso, pso::ShaderStageFlags, queue::QueueGroup, window,
 };
 
 use std::{
@@ -643,13 +635,10 @@ where
             cmd_buffer.end_render_pass();
             cmd_buffer.finish();
 
-            let submission = Submission {
-                command_buffers: iter::once(&*cmd_buffer),
-                wait_semaphores: None,
-                signal_semaphores: iter::once(&self.submission_complete_semaphores[frame_idx]),
-            };
             self.queue_group.queues[0].submit(
-                submission,
+                iter::once(&*cmd_buffer),
+                iter::empty(),
+                iter::once(&self.submission_complete_semaphores[frame_idx]),
                 Some(&mut self.submission_complete_fences[frame_idx]),
             );
 

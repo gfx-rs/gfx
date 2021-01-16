@@ -162,13 +162,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 #[derive(Debug)]
 pub struct CommandQueue;
 impl queue::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
-        &mut self,
-        _: queue::Submission<Ic, Iw, Is>,
-        _: Option<&mut ()>,
-    ) where
-        T: 'a + Borrow<CommandBuffer>,
-        S: 'a + Borrow<()>,
+    unsafe fn submit<'a, Ic, Iw, Is>(&mut self, _: Ic, _: Iw, _: Is, _: Option<&mut ()>)
+    where
+        Ic: IntoIterator<Item = &'a CommandBuffer>,
     {
     }
 

@@ -48,7 +48,7 @@ use hal::{
     image as i, memory as m, pass, pool,
     prelude::*,
     pso,
-    queue::{QueueGroup, Submission},
+    queue::QueueGroup,
     window as w, Backend,
 };
 
@@ -422,13 +422,12 @@ impl<B: Backend> RendererState<B> {
             cmd_buffer.insert_debug_marker("done", 0);
             cmd_buffer.finish();
 
-            let submission = Submission {
-                command_buffers: iter::once(&cmd_buffer),
-                wait_semaphores: None,
-                signal_semaphores: iter::once(&*sem_image_present),
-            };
-
-            self.device.borrow_mut().queues.queues[0].submit(submission, None);
+            self.device.borrow_mut().queues.queues[0].submit(
+                iter::once(&cmd_buffer),
+                iter::empty(),
+                iter::once(&*sem_image_present),
+                None,
+            );
             command_buffers.push(cmd_buffer);
 
             // present frame
@@ -1143,8 +1142,10 @@ impl<B: Backend> ImageState<B> {
 
             cmd_buffer.finish();
 
-            device_state.queues.queues[0].submit_without_semaphores(
+            device_state.queues.queues[0].submit(
                 iter::once(&cmd_buffer),
+                iter::empty(),
+                iter::empty(),
                 Some(&mut transfered_image_fence),
             );
         }

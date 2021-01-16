@@ -1137,21 +1137,17 @@ unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
 impl queue::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+    unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
-        submission: queue::Submission<Ic, Iw, Is>,
+        command_buffers: Ic,
+        _wait_semaphores: Iw,
+        _signal_semaphores: Is,
         fence: Option<&mut Fence>,
     ) where
-        T: 'a + Borrow<CommandBuffer>,
-        Ic: IntoIterator<Item = &'a T>,
-        S: 'a + Borrow<Semaphore>,
-        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
-        Is: IntoIterator<Item = &'a S>,
+        Ic: IntoIterator<Item = &'a CommandBuffer>,
     {
         let _scope = debug_scope!(&self.context, "Submit(fence={:?})", fence);
-        for cmd_buf in submission.command_buffers {
-            let cmd_buf = cmd_buf.borrow();
-
+        for cmd_buf in command_buffers {
             let _scope = debug_scope!(
                 &self.context,
                 "CommandBuffer ({}/{})",
