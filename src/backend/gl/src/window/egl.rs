@@ -24,7 +24,7 @@ pub struct Instance {
 
 #[derive(Debug)]
 pub struct Inner {
-    egl: Starc<egl::DynamicInstance>,
+    egl: Starc<egl::DynamicInstance<egl::EGL1_4>>,
     version: (i32, i32),
     supports_native_window: bool,
     display: egl::Display,
@@ -92,7 +92,7 @@ fn test_wayland_display() -> Option<libloading::Library> {
 
 impl Inner {
     fn create(
-        egl: Starc<egl::DynamicInstance>,
+        egl: Starc<egl::DynamicInstance<egl::EGL1_4>>,
         display: egl::Display,
         wsi_library: Option<&libloading::Library>,
     ) -> Result<Self, hal::UnsupportedBackend> {
@@ -110,10 +110,6 @@ impl Inner {
             version,
             display_extensions
         );
-        if version < (1, 4) {
-            log::error!("EGL supported version is only {:?}", version);
-            return Err(hal::UnsupportedBackend);
-        }
 
         if log::max_level() >= log::LevelFilter::Trace {
             log::trace!("Configurations:");
@@ -224,7 +220,7 @@ impl Drop for Inner {
 
 impl hal::Instance<crate::Backend> for Instance {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
-        let egl = match unsafe { egl::DynamicInstance::load() } {
+        let egl = match unsafe { egl::DynamicInstance::<egl::EGL1_4>::load_required() } {
             Ok(egl) => Starc::new(egl),
             Err(e) => {
                 log::warn!("Unable to open libEGL.so: {:?}", e);
@@ -254,30 +250,33 @@ impl hal::Instance<crate::Backend> for Instance {
             None
         };
 
-        let display = if let Some(library) = wayland_display {
-            log::info!("Using Wayland platform");
-            let display_attributes = [egl::ATTRIB_NONE];
-            wsi_library = Some(library);
-            egl.get_platform_display(
-                EGL_PLATFORM_WAYLAND_KHR,
-                egl::DEFAULT_DISPLAY,
-                &display_attributes,
-            )
-            .unwrap()
-        } else if let Some((x11_display, library)) = x11_display {
-            log::info!("Using X11 platform");
-            let display_attributes = [egl::ATTRIB_NONE];
-            wsi_library = Some(library);
-            egl.get_platform_display(
-                EGL_PLATFORM_X11_KHR,
-                x11_display.as_ptr(),
-                &display_attributes,
-            )
-            .unwrap()
-        } else {
-            log::info!("Using default platform");
-            egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
-        };
+        let display =
+            if let (Some(library), Some(egl)) = (wayland_display, egl.upcast::<egl::EGL1_5>()) {
+                log::info!("Using Wayland platform");
+                let display_attributes = [egl::ATTRIB_NONE];
+                wsi_library = Some(library);
+                egl.get_platform_display(
+                    EGL_PLATFORM_WAYLAND_KHR,
+                    egl::DEFAULT_DISPLAY,
+                    &display_attributes,
+                )
+                .unwrap()
+            } else if let (Some((x11_display, library)), Some(egl)) =
+                (x11_display, egl.upcast::<egl::EGL1_5>())
+            {
+                log::info!("Using X11 platform");
+                let display_attributes = [egl::ATTRIB_NONE];
+                wsi_library = Some(library);
+                egl.get_platform_display(
+                    EGL_PLATFORM_X11_KHR,
+                    x11_display.as_ptr(),
+                    &display_attributes,
+                )
+                .unwrap()
+            } else {
+                log::info!("Using default platform");
+                egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
+            };
 
         let inner = Inner::create(egl.clone(), display, wsi_library.as_ref())?;
 
@@ -342,6 +341,8 @@ impl hal::Instance<crate::Backend> for Instance {
                     let display_attributes = [egl::ATTRIB_NONE];
                     let display = inner
                         .egl
+                        .upcast::<egl::EGL1_5>()
+                        .unwrap()
                         .get_platform_display(
                             EGL_PLATFORM_WAYLAND_KHR,
                             handle.display,
@@ -388,19 +389,17 @@ impl hal::Instance<crate::Backend> for Instance {
         }
         attributes.push(egl::ATTRIB_NONE);
 
-        let raw = if inner.version >= (1, 5) {
-            inner
-                .egl
-                .create_platform_window_surface(
-                    inner.display,
-                    inner.config,
-                    native_window_ptr,
-                    &attributes,
-                )
-                .map_err(|e| {
-                    log::warn!("Error in create_platform_window_surface: {:?}", e);
-                    w::InitError::UnsupportedWindowHandle
-                })
+        let raw = if let Some(egl) = inner.egl.upcast::<egl::EGL1_5>() {
+            egl.create_platform_window_surface(
+                inner.display,
+                inner.config,
+                native_window_ptr,
+                &attributes,
+            )
+            .map_err(|e| {
+                log::warn!("Error in create_platform_window_surface: {:?}", e);
+                w::InitError::UnsupportedWindowHandle
+            })
         } else {
             let attributes_i32: Vec<i32> = attributes.iter().map(|a| (*a as i32).into()).collect();
             inner
@@ -455,7 +454,7 @@ impl hal::Instance<crate::Backend> for Instance {
 
 #[derive(Debug)]
 pub struct Surface {
-    egl: Starc<egl::DynamicInstance>,
+    egl: Starc<egl::DynamicInstance<egl::EGL1_4>>,
     raw: egl::Surface,
     display: egl::Display,
     context: egl::Context,
