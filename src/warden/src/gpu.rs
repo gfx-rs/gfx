@@ -377,7 +377,7 @@ impl<B: hal::Backend> Scene<B> {
                             size: size as _,
                         };
                         unsafe {
-                            init_cmd.copy_buffer(&upload_buffer, &buffer, &[copy]);
+                            init_cmd.copy_buffer(&upload_buffer, &buffer, iter::once(copy));
                         }
                         let post_barrier = memory::Barrier::whole_buffer(
                             &buffer,
@@ -559,7 +559,7 @@ impl<B: hal::Backend> Scene<B> {
                                 &upload_buffer,
                                 &image,
                                 i::Layout::TransferDstOptimal,
-                                &[copy],
+                                iter::once(copy),
                             );
                         }
                         let post_barrier = memory::Barrier::Image {
@@ -1023,7 +1023,11 @@ impl<B: hal::Backend> Scene<B> {
                                             ),
                                         ),
                                 );
-                                command_buf.copy_buffer(&sb.handle, &db.handle, regions);
+                                command_buf.copy_buffer(
+                                    &sb.handle,
+                                    &db.handle,
+                                    regions.iter().cloned(),
+                                );
                             },
                             Tc::CopyImage {
                                 ref src,
@@ -1058,7 +1062,7 @@ impl<B: hal::Backend> Scene<B> {
                                     i::Layout::TransferSrcOptimal,
                                     &dt.handle,
                                     i::Layout::TransferDstOptimal,
-                                    regions,
+                                    regions.iter().cloned(),
                                 );
                             },
                             Tc::CopyBufferToImage {
@@ -1089,7 +1093,7 @@ impl<B: hal::Backend> Scene<B> {
                                     &sb.handle,
                                     &dt.handle,
                                     i::Layout::TransferDstOptimal,
-                                    regions,
+                                    regions.iter().cloned(),
                                 );
                             },
                             Tc::CopyImageToBuffer {
@@ -1122,7 +1126,7 @@ impl<B: hal::Backend> Scene<B> {
                                     &st.handle,
                                     i::Layout::TransferSrcOptimal,
                                     &db.handle,
-                                    regions,
+                                    regions.iter().cloned(),
                                 );
                             },
                             Tc::ClearImage {
@@ -1147,7 +1151,7 @@ impl<B: hal::Backend> Scene<B> {
                                     &img.handle,
                                     i::Layout::TransferDstOptimal,
                                     value.to_raw(),
-                                    ranges,
+                                    ranges.iter().cloned(),
                                 );
                             },
                             Tc::BlitImage {
@@ -1185,7 +1189,7 @@ impl<B: hal::Backend> Scene<B> {
                                     &dt.handle,
                                     i::Layout::TransferDstOptimal,
                                     filter,
-                                    regions,
+                                    regions.iter().cloned(),
                                 );
                             },
                             Tc::FillBuffer {
@@ -1370,7 +1374,7 @@ impl<B: hal::Backend> Scene<B> {
                                                 ))
                                                 .handle
                                         }),
-                                        &[],
+                                        iter::empty(),
                                     );
                                 }
                                 Dc::Draw {
@@ -1391,10 +1395,10 @@ impl<B: hal::Backend> Scene<B> {
                                     );
                                 }
                                 Dc::SetViewports(ref viewports) => {
-                                    command_buf.set_viewports(0, viewports);
+                                    command_buf.set_viewports(0, viewports.iter().cloned());
                                 }
                                 Dc::SetScissors(ref scissors) => {
-                                    command_buf.set_scissors(0, scissors);
+                                    command_buf.set_scissors(0, scissors.iter().cloned());
                                 }
                             }
                         }
@@ -1441,7 +1445,7 @@ impl<B: hal::Backend> Scene<B> {
                                 .expect(&format!("Missing descriptor set: {}", name))
                                 .handle
                         }),
-                        &[],
+                        iter::empty(),
                     );
                     command_buf.dispatch(dispatch);
                 },
@@ -1560,7 +1564,7 @@ impl<B: hal::Backend> Scene<B> {
                 dst: 0,
                 size: buffer.size as _,
             };
-            cmd_buffer.copy_buffer(&buffer.handle, &down_buffer, &[copy]);
+            cmd_buffer.copy_buffer(&buffer.handle, &down_buffer, iter::once(copy));
 
             let post_barrier = memory::Barrier::whole_buffer(
                 &buffer.handle,
@@ -1699,7 +1703,7 @@ impl<B: hal::Backend> Scene<B> {
                 &image.handle,
                 i::Layout::TransferSrcOptimal,
                 &down_buffer,
-                &[copy],
+                iter::once(copy),
             );
 
             let post_barrier = memory::Barrier::Image {

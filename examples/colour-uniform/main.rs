@@ -385,8 +385,8 @@ impl<B: Backend> RendererState<B> {
             };
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
             cmd_buffer.begin_debug_marker("setup", 0);
-            cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+            cmd_buffer.set_viewports(0, iter::once(self.viewport.clone()));
+            cmd_buffer.set_scissors(0, iter::once(self.viewport.rect));
             cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(
                 0,
@@ -399,7 +399,7 @@ impl<B: Backend> RendererState<B> {
                     self.image.desc.set.as_ref().unwrap(),
                     self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap(),
                 ],
-                &[],
+                iter::empty(),
             ); //TODO
             cmd_buffer.end_debug_marker();
 
@@ -1105,7 +1105,7 @@ impl<B: Backend> ImageState<B> {
                 buffer.as_ref().unwrap().get_buffer(),
                 &image,
                 i::Layout::TransferDstOptimal,
-                &[command::BufferImageCopy {
+                iter::once(command::BufferImageCopy {
                     buffer_offset: 0,
                     buffer_width: row_pitch / (stride as u32),
                     buffer_height: dims.height as u32,
@@ -1120,7 +1120,7 @@ impl<B: Backend> ImageState<B> {
                         height: dims.height,
                         depth: 1,
                     },
-                }],
+                }),
             );
 
             let image_barrier = m::Barrier::Image {

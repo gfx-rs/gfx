@@ -478,7 +478,7 @@ where
                 &image_upload_buffer,
                 &image_logo,
                 i::Layout::TransferDstOptimal,
-                &[command::BufferImageCopy {
+                iter::once(command::BufferImageCopy {
                     buffer_offset: 0,
                     buffer_width: row_pitch / (image_stride as u32),
                     buffer_height: height as u32,
@@ -493,7 +493,7 @@ where
                         height,
                         depth: 1,
                     },
-                }],
+                }),
             );
 
             let image_barrier = m::Barrier::Image {
@@ -851,8 +851,8 @@ where
         unsafe {
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
-            cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+            cmd_buffer.set_viewports(0, iter::once(self.viewport.clone()));
+            cmd_buffer.set_scissors(0, iter::once(self.viewport.rect));
             cmd_buffer.bind_graphics_pipeline(&self.pipeline);
             cmd_buffer.bind_vertex_buffers(
                 0,
@@ -862,7 +862,7 @@ where
                 &self.pipeline_layout,
                 0,
                 self.desc_set.as_ref(),
-                &[],
+                iter::empty(),
             );
 
             cmd_buffer.begin_render_pass(

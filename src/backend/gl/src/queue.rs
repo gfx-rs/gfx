@@ -5,9 +5,8 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use glow::HasContext;
-use smallvec::SmallVec;
 
-use std::{borrow::Borrow, mem, slice};
+use std::{mem, slice};
 
 // State caching system for command queue.
 //
@@ -206,33 +205,21 @@ impl CommandQueue {
         self.state.index_buffer = None;
 
         // Reset viewports
-        if self.state.num_viewports == 1 {
-            unsafe {
-                gl.viewport(0, 0, 0, 0);
-                gl.depth_range_f32(0.0, 1.0);
-            };
-        } else if self.state.num_viewports > 1 {
-            // 16 viewports is a common limit set in drivers.
-            let viewports: SmallVec<[[f32; 4]; 16]> = (0..self.state.num_viewports)
-                .map(|_| [0.0, 0.0, 0.0, 0.0])
-                .collect();
-            let depth_ranges: SmallVec<[[f64; 2]; 16]> =
-                (0..self.state.num_viewports).map(|_| [0.0, 0.0]).collect();
-            unsafe {
-                gl.viewport_f32_slice(0, viewports.len() as i32, &viewports);
-                gl.depth_range_f64_slice(0, depth_ranges.len() as i32, &depth_ranges);
-            }
-        }
+        debug_assert_eq!(
+            self.state.num_viewports, 1,
+            "Limits::max_viewports is not respected for viewports"
+        );
+        unsafe {
+            gl.viewport(0, 0, 0, 0);
+            gl.depth_range_f32(0.0, 1.0);
+        };
 
         // Reset scissors
-        if self.state.num_scissors == 1 {
-            unsafe { gl.scissor(0, 0, 0, 0) };
-        } else if self.state.num_scissors > 1 {
-            // 16 viewports is a common limit set in drivers.
-            let scissors: SmallVec<[[i32; 4]; 16]> =
-                (0..self.state.num_scissors).map(|_| [0, 0, 0, 0]).collect();
-            unsafe { gl.scissor_slice(0, scissors.len() as i32, scissors.as_slice()) };
-        }
+        debug_assert_eq!(
+            self.state.num_scissors, 1,
+            "Limits::max_viewports is not respected for scissors"
+        );
+        unsafe { gl.scissor(0, 0, 0, 0) };
     }
 
     fn process(&mut self, cmd: &com::Command, data_buf: &[u8]) {

@@ -17,7 +17,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use parking_lot::Mutex;
 
-use std::{borrow::Borrow, iter, mem, ops::Range, slice, sync::Arc};
+use std::{iter, mem, ops::Range, slice, sync::Arc};
 
 // Command buffer implementation details:
 //
@@ -665,17 +665,15 @@ impl CommandBuffer {
         }
     }
 
-    fn bind_descriptor_sets<I, J>(
+    fn bind_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<n::DescriptorSet>,
-        J: IntoIterator,
-        J::Item: Borrow<command::DescriptorSetOffset>,
+        I: IntoIterator<Item = &'a n::DescriptorSet>,
+        J: IntoIterator<Item = command::DescriptorSetOffset>,
     {
         if let Some(_) = offsets.into_iter().next() {
             warn!("Dynamic offsets are not supported yet");
@@ -685,7 +683,6 @@ impl CommandBuffer {
         let mut dirty_samplers = 0u32;
         let mut set = first_set as usize;
         for desc_set in sets {
-            let desc_set = desc_set.borrow();
             for (binding_layout, new_binding) in
                 desc_set.layout.iter().zip(desc_set.bindings.iter())
             {
@@ -863,8 +860,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         value: command::ClearValue,
         _subresource_ranges: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<image::SubresourceRange>,
+        T: IntoIterator<Item = image::SubresourceRange>,
     {
         // TODO: clearing strategies
         //  1.  < GL 3.0 / GL ES 3.0: glClear
@@ -955,10 +951,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn clear_attachments<T, U>(&mut self, _: T, _: U)
     where
-        T: IntoIterator,
-        T::Item: Borrow<command::AttachmentClear>,
-        U: IntoIterator,
-        U::Item: Borrow<pso::ClearRect>,
+        T: IntoIterator<Item = command::AttachmentClear>,
+        U: IntoIterator<Item = pso::ClearRect>,
     {
         unimplemented!()
     }
@@ -971,8 +965,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _dst_layout: image::Layout,
         _regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::ImageResolve>,
+        T: IntoIterator<Item = command::ImageResolve>,
     {
         unimplemented!()
     }
@@ -986,8 +979,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _filter: image::Filter,
         _regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::ImageBlit>,
+        T: IntoIterator<Item = command::ImageBlit>,
     {
         unimplemented!()
     }
@@ -1004,10 +996,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         self.data.push_cmd(Command::BindIndexBuffer(raw_buffer));
     }
 
-    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
+    unsafe fn bind_vertex_buffers<'a, T>(&mut self, first_binding: pso::BufferIndex, buffers: T)
     where
-        I: IntoIterator<Item = (T, buffer::SubRange)>,
-        T: Borrow<n::Buffer>,
+        T: IntoIterator<Item = (&'a n::Buffer, buffer::SubRange)>,
     {
         for (i, (buffer, sub)) in buffers.into_iter().enumerate() {
             let index = first_binding as usize + i;
@@ -1015,7 +1006,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 self.cache.vertex_buffers.resize(index + 1, None);
             }
 
-            let (raw_buffer, range) = buffer.borrow().as_bound();
+            let (raw_buffer, range) = buffer.as_bound();
             self.cache.vertex_buffers[index] =
                 Some((raw_buffer, crate::resolve_sub_range(&sub, range)));
         }
@@ -1023,8 +1014,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
-        T: IntoIterator,
-        T::Item: Borrow<pso::Viewport>,
+        T: IntoIterator<Item = pso::Viewport>,
     {
         // OpenGL has two functions for setting the viewports.
         // Configuring the rectangle area and setting the depth bounds are separated.
@@ -1036,7 +1026,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         let mut len = 0;
         for viewport in viewports {
-            let viewport = viewport.borrow();
             let viewport_rect = &[
                 viewport.rect.x as f32,
                 viewport.rect.y as f32,
@@ -1070,13 +1059,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
-        T: IntoIterator,
-        T::Item: Borrow<pso::Rect>,
+        T: IntoIterator<Item = pso::Rect>,
     {
         let mut scissors_ptr = BufferSlice { offset: 0, size: 0 };
         let mut len = 0;
         for scissor in scissors {
-            let scissor = scissor.borrow();
             let scissor = &[
                 scissor.x as i32,
                 scissor.y as i32,
@@ -1191,10 +1178,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         self.cache.depth_mask = pipeline.depth.map(|d| d.write);
 
         if let Some(ref vp) = pipeline.baked_states.viewport {
-            self.set_viewports(0, iter::once(vp));
+            self.set_viewports(0, iter::once(vp.clone()));
         }
         if let Some(ref rect) = pipeline.baked_states.scissor {
-            self.set_scissors(0, iter::once(rect));
+            self.set_scissors(0, iter::once(rect.clone()));
         }
         if let Some(color) = pipeline.baked_states.blend_color {
             self.set_blend_constants(color);
@@ -1221,17 +1208,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn bind_graphics_descriptor_sets<I, J>(
+    unsafe fn bind_graphics_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<n::DescriptorSet>,
-        J: IntoIterator,
-        J::Item: Borrow<command::DescriptorSetOffset>,
+        I: IntoIterator<Item = &'a n::DescriptorSet>,
+        J: IntoIterator<Item = command::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(layout, first_set, sets, offsets)
     }
@@ -1243,17 +1228,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn bind_compute_descriptor_sets<I, J>(
+    unsafe fn bind_compute_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<n::DescriptorSet>,
-        J: IntoIterator,
-        J::Item: Borrow<command::DescriptorSetOffset>,
+        I: IntoIterator<Item = &'a n::DescriptorSet>,
+        J: IntoIterator<Item = command::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(layout, first_set, sets, offsets)
     }
@@ -1263,22 +1246,20 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
-        let (raw_buffer, range) = buffer.borrow().as_bound();
+        let (raw_buffer, range) = buffer.as_bound();
         self.data
             .push_cmd(Command::DispatchIndirect(raw_buffer, range.start + offset));
     }
 
     unsafe fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
     where
-        T: IntoIterator,
-        T::Item: Borrow<command::BufferCopy>,
+        T: IntoIterator<Item = command::BufferCopy>,
     {
         let old_size = self.data.buf.size;
 
         let (src_raw, src_range) = src.as_bound();
         let (dst_raw, dst_range) = dst.as_bound();
-        for region in regions {
-            let mut r = region.borrow().clone();
+        for mut r in regions {
             r.src += src_range.start;
             r.dst += dst_range.start;
             let cmd = Command::CopyBufferToBuffer(src_raw, dst_raw, r);
@@ -1298,13 +1279,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _dst_layout: image::Layout,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::ImageCopy>,
+        T: IntoIterator<Item = command::ImageCopy>,
     {
         let old_size = self.data.buf.size;
 
-        for region in regions {
-            let r = region.borrow().clone();
+        for r in regions {
             let cmd = match dst.object_type {
                 n::ImageType::Renderbuffer { raw, format } => Command::CopyImageToRenderbuffer {
                     src_image: src.object_type,
@@ -1331,14 +1310,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: image::Layout,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::BufferImageCopy>,
+        T: IntoIterator<Item = command::BufferImageCopy>,
     {
         let old_size = self.data.buf.size;
 
         let (src_raw, src_range) = src.as_bound();
-        for region in regions {
-            let mut r = region.borrow().clone();
+        for mut r in regions {
             r.buffer_offset += src_range.start;
             let cmd = match dst.object_type {
                 n::ImageType::Renderbuffer { raw, .. } => {
@@ -1374,14 +1351,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         dst: &n::Buffer,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::BufferImageCopy>,
+        T: IntoIterator<Item = command::BufferImageCopy>,
     {
         let old_size = self.data.buf.size;
         let (dst_raw, dst_range) = dst.as_bound();
 
-        for region in regions {
-            let mut r = region.borrow().clone();
+        for mut r in regions {
             r.buffer_offset += dst_range.start;
             let cmd = match src.object_type {
                 n::ImageType::Renderbuffer { raw, .. } => {
@@ -1575,8 +1550,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
     where
-        I: IntoIterator,
-        I::Item: Borrow<()>,
+        I: IntoIterator<Item = &'a ()>,
         J: IntoIterator<Item = memory::Barrier<'a, Backend>>,
     {
         unimplemented!()
@@ -1648,10 +1622,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn execute_commands<'a, T, I>(&mut self, _buffers: I)
+    unsafe fn execute_commands<'a, T>(&mut self, _buffers: T)
     where
-        T: 'a + Borrow<CommandBuffer>,
-        I: IntoIterator<Item = &'a T>,
+        T: IntoIterator<Item = &'a CommandBuffer>,
     {
         unimplemented!()
     }

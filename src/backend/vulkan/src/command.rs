@@ -1,8 +1,6 @@
 use ash::{version::DeviceV1_0, vk};
 use smallvec::SmallVec;
-use std::{
-    borrow::Borrow, collections::hash_map::Entry, ffi::CString, mem, ops::Range, slice, sync::Arc,
-};
+use std::{collections::hash_map::Entry, ffi::CString, mem, ops::Range, slice, sync::Arc};
 
 use inplace_it::inplace_or_alloc_array;
 
@@ -41,12 +39,10 @@ fn map_buffer_image_regions<T>(
     regions: T,
 ) -> impl ExactSizeIterator<Item = vk::BufferImageCopy>
 where
-    T: IntoIterator,
-    T::Item: Borrow<com::BufferImageCopy>,
+    T: IntoIterator<Item = com::BufferImageCopy>,
     T::IntoIter: ExactSizeIterator,
 {
-    regions.into_iter().map(|region| {
-        let r = region.borrow();
+    regions.into_iter().map(|r| {
         let image_subresource = conv::map_subresource_layers(&r.image_layers);
         vk::BufferImageCopy {
             buffer_offset: r.buffer_offset,
@@ -148,7 +144,7 @@ where
 }
 
 impl CommandBuffer {
-    fn bind_descriptor_sets<I, J>(
+    fn bind_descriptor_sets<'a, I, J>(
         &mut self,
         bind_point: vk::PipelineBindPoint,
         layout: &n::PipelineLayout,
@@ -156,15 +152,13 @@ impl CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator<Item = &'a n::DescriptorSet>,
         I::IntoIter: ExactSizeIterator,
-        J: IntoIterator,
-        J::Item: Borrow<com::DescriptorSetOffset>,
+        J: IntoIterator<Item = com::DescriptorSetOffset>,
         J::IntoIter: ExactSizeIterator,
     {
-        let sets = sets.into_iter().map(|set| set.borrow().raw);
-        let dynamic_offsets = offsets.into_iter().map(|offset| *offset.borrow());
+        let sets = sets.into_iter().map(|set| set.raw);
+        let dynamic_offsets = offsets.into_iter();
 
         inplace_or_alloc_array(sets.len(), |uninit_guard| {
             let sets = uninit_guard.init_with_iter(sets);
@@ -363,16 +357,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         value: com::ClearValue,
         subresource_ranges: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<SubresourceRange>,
+        T: IntoIterator<Item = SubresourceRange>,
     {
         let mut color_ranges = Vec::new();
         let mut ds_ranges = Vec::new();
 
-        for subresource_range in subresource_ranges {
-            let sub = subresource_range.borrow();
+        for sub in subresource_ranges {
             let aspect_ds = sub.aspects & (Aspects::DEPTH | Aspects::STENCIL);
-            let vk_range = conv::map_subresource_range(sub);
+            let vk_range = conv::map_subresource_range(&sub);
             if sub.aspects.contains(Aspects::COLOR) {
                 color_ranges.push(vk::ImageSubresourceRange {
                     aspect_mask: conv::map_image_aspects(Aspects::COLOR),
@@ -416,14 +408,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
-        T: IntoIterator,
-        T::Item: Borrow<com::AttachmentClear>,
+        T: IntoIterator<Item = com::AttachmentClear>,
         T::IntoIter: ExactSizeIterator,
-        U: IntoIterator,
-        U::Item: Borrow<pso::ClearRect>,
+        U: IntoIterator<Item = pso::ClearRect>,
         U::IntoIter: ExactSizeIterator,
     {
-        let clears = clears.into_iter().map(|clear| match *clear.borrow() {
+        let clears = clears.into_iter().map(|clear| match clear {
             com::AttachmentClear::Color { index, value } => vk::ClearAttachment {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 color_attachment: index as _,
@@ -451,9 +441,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             },
         });
 
-        let rects = rects
-            .into_iter()
-            .map(|rect| conv::map_clear_rect(rect.borrow()));
+        let rects = rects.into_iter().map(|rect| conv::map_clear_rect(&rect));
 
         inplace_or_alloc_array(clears.len(), |uninit_guard| {
             let clears = uninit_guard.init_with_iter(clears);
@@ -476,19 +464,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dst_layout: Layout,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::ImageResolve>,
+        T: IntoIterator<Item = com::ImageResolve>,
         T::IntoIter: ExactSizeIterator,
     {
-        let regions = regions.into_iter().map(|region| {
-            let r = region.borrow();
-            vk::ImageResolve {
-                src_subresource: conv::map_subresource_layers(&r.src_subresource),
-                src_offset: conv::map_offset(r.src_offset),
-                dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
-                dst_offset: conv::map_offset(r.dst_offset),
-                extent: conv::map_extent(r.extent),
-            }
+        let regions = regions.into_iter().map(|r| vk::ImageResolve {
+            src_subresource: conv::map_subresource_layers(&r.src_subresource),
+            src_offset: conv::map_offset(r.src_offset),
+            dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
+            dst_offset: conv::map_offset(r.dst_offset),
+            extent: conv::map_extent(r.extent),
         });
 
         inplace_or_alloc_array(regions.len(), |uninit_guard| {
@@ -514,24 +498,20 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         filter: Filter,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::ImageBlit>,
+        T: IntoIterator<Item = com::ImageBlit>,
         T::IntoIter: ExactSizeIterator,
     {
-        let regions = regions.into_iter().map(|region| {
-            let r = region.borrow();
-            vk::ImageBlit {
-                src_subresource: conv::map_subresource_layers(&r.src_subresource),
-                src_offsets: [
-                    conv::map_offset(r.src_bounds.start),
-                    conv::map_offset(r.src_bounds.end),
-                ],
-                dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
-                dst_offsets: [
-                    conv::map_offset(r.dst_bounds.start),
-                    conv::map_offset(r.dst_bounds.end),
-                ],
-            }
+        let regions = regions.into_iter().map(|r| vk::ImageBlit {
+            src_subresource: conv::map_subresource_layers(&r.src_subresource),
+            src_offsets: [
+                conv::map_offset(r.src_bounds.start),
+                conv::map_offset(r.src_bounds.end),
+            ],
+            dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
+            dst_offsets: [
+                conv::map_offset(r.dst_bounds.start),
+                conv::map_offset(r.dst_bounds.end),
+            ],
         });
 
         inplace_or_alloc_array(regions.len(), |uninit_guard| {
@@ -563,15 +543,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
+    unsafe fn bind_vertex_buffers<'a, T>(&mut self, first_binding: pso::BufferIndex, buffers: T)
     where
-        I: IntoIterator<Item = (T, buffer::SubRange)>,
-        T: Borrow<n::Buffer>,
+        T: IntoIterator<Item = (&'a n::Buffer, buffer::SubRange)>,
     {
         let (buffers, offsets): (SmallVec<[vk::Buffer; 16]>, SmallVec<[vk::DeviceSize; 16]>) =
             buffers
                 .into_iter()
-                .map(|(buffer, sub)| (buffer.borrow().raw, sub.offset))
+                .map(|(buffer, sub)| (buffer.raw, sub.offset))
                 .unzip();
 
         self.device
@@ -581,13 +560,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
-        T: IntoIterator,
-        T::Item: Borrow<pso::Viewport>,
+        T: IntoIterator<Item = pso::Viewport>,
         T::IntoIter: ExactSizeIterator,
     {
         let viewports = viewports
             .into_iter()
-            .map(|viewport| self.device.map_viewport(viewport.borrow()));
+            .map(|ref viewport| self.device.map_viewport(viewport));
 
         inplace_or_alloc_array(viewports.len(), |uninit_guard| {
             let viewports = uninit_guard.init_with_iter(viewports);
@@ -599,13 +577,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
-        T: IntoIterator,
-        T::Item: Borrow<pso::Rect>,
+        T: IntoIterator<Item = pso::Rect>,
         T::IntoIter: ExactSizeIterator,
     {
         let scissors = scissors
             .into_iter()
-            .map(|scissor| conv::map_rect(scissor.borrow()));
+            .map(|ref scissor| conv::map_rect(scissor));
 
         inplace_or_alloc_array(scissors.len(), |uninit_guard| {
             let scissors = uninit_guard.init_with_iter(scissors);
@@ -666,18 +643,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .cmd_bind_pipeline(self.raw, vk::PipelineBindPoint::GRAPHICS, pipeline.0)
     }
 
-    unsafe fn bind_graphics_descriptor_sets<I, J>(
+    unsafe fn bind_graphics_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator<Item = &'a n::DescriptorSet>,
         I::IntoIter: ExactSizeIterator,
-        J: IntoIterator,
-        J::Item: Borrow<com::DescriptorSetOffset>,
+        J: IntoIterator<Item = com::DescriptorSetOffset>,
         J::IntoIter: ExactSizeIterator,
     {
         self.bind_descriptor_sets(
@@ -695,18 +670,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .cmd_bind_pipeline(self.raw, vk::PipelineBindPoint::COMPUTE, pipeline.0)
     }
 
-    unsafe fn bind_compute_descriptor_sets<I, J>(
+    unsafe fn bind_compute_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<n::DescriptorSet>,
+        I: IntoIterator<Item = &'a n::DescriptorSet>,
         I::IntoIter: ExactSizeIterator,
-        J: IntoIterator,
-        J::Item: Borrow<com::DescriptorSetOffset>,
+        J: IntoIterator<Item = com::DescriptorSetOffset>,
         J::IntoIter: ExactSizeIterator,
     {
         self.bind_descriptor_sets(
@@ -732,17 +705,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
     where
-        T: IntoIterator,
-        T::Item: Borrow<com::BufferCopy>,
+        T: IntoIterator<Item = com::BufferCopy>,
         T::IntoIter: ExactSizeIterator,
     {
-        let regions = regions.into_iter().map(|region| {
-            let region = region.borrow();
-            vk::BufferCopy {
-                src_offset: region.src,
-                dst_offset: region.dst,
-                size: region.size,
-            }
+        let regions = regions.into_iter().map(|r| vk::BufferCopy {
+            src_offset: r.src,
+            dst_offset: r.dst,
+            size: r.size,
         });
 
         inplace_or_alloc_array(regions.len(), |uninit_guard| {
@@ -761,19 +730,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dst_layout: Layout,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::ImageCopy>,
+        T: IntoIterator<Item = com::ImageCopy>,
         T::IntoIter: ExactSizeIterator,
     {
-        let regions = regions.into_iter().map(|region| {
-            let r = region.borrow();
-            vk::ImageCopy {
-                src_subresource: conv::map_subresource_layers(&r.src_subresource),
-                src_offset: conv::map_offset(r.src_offset),
-                dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
-                dst_offset: conv::map_offset(r.dst_offset),
-                extent: conv::map_extent(r.extent),
-            }
+        let regions = regions.into_iter().map(|r| vk::ImageCopy {
+            src_subresource: conv::map_subresource_layers(&r.src_subresource),
+            src_offset: conv::map_offset(r.src_offset),
+            dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
+            dst_offset: conv::map_offset(r.dst_offset),
+            extent: conv::map_extent(r.extent),
         });
 
         inplace_or_alloc_array(regions.len(), |uninit_guard| {
@@ -796,8 +761,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dst_layout: Layout,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::BufferImageCopy>,
+        T: IntoIterator<Item = com::BufferImageCopy>,
         T::IntoIter: ExactSizeIterator,
     {
         let regions_iter = map_buffer_image_regions(dst, regions);
@@ -822,8 +786,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dst: &n::Buffer,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::BufferImageCopy>,
+        T: IntoIterator<Item = com::BufferImageCopy>,
         T::IntoIter: ExactSizeIterator,
     {
         let regions_iter = map_buffer_image_regions(src, regions);
@@ -1014,12 +977,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         stages: Range<pso::PipelineStage>,
         barriers: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<n::Event>,
+        I: IntoIterator<Item = &'a n::Event>,
         I::IntoIter: ExactSizeIterator,
         J: IntoIterator<Item = memory::Barrier<'a, Backend>>,
     {
-        let events = events.into_iter().map(|e| e.borrow().0);
+        let events = events.into_iter().map(|e| e.0);
 
         let BarrierSet {
             global,
@@ -1128,14 +1090,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn execute_commands<'a, T, I>(&mut self, buffers: I)
+    unsafe fn execute_commands<'a, T>(&mut self, buffers: T)
     where
-        T: 'a + Borrow<CommandBuffer>,
-        I: IntoIterator,
-        I: IntoIterator<Item = &'a T>,
-        I::IntoIter: ExactSizeIterator,
+        T: IntoIterator<Item = &'a CommandBuffer>,
+        T::IntoIter: ExactSizeIterator,
     {
-        let command_buffers = buffers.into_iter().map(|b| b.borrow().raw);
+        let command_buffers = buffers.into_iter().map(|b| b.raw);
 
         inplace_or_alloc_array(command_buffers.len(), |uninit_guard| {
             let command_buffers = uninit_guard.init_with_iter(command_buffers);

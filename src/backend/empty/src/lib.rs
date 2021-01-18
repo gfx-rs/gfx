@@ -684,7 +684,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn bind_vertex_buffers<I, T>(&mut self, _: u32, _: I) {}
+    unsafe fn bind_vertex_buffers<'a, T>(&mut self, _: u32, _: T)
+    where
+        T: IntoIterator<Item = (&'a Buffer, hal::buffer::SubRange)>,
+    {
+    }
 
     unsafe fn set_viewports<T>(&mut self, _: u32, _: T) {}
 
@@ -738,7 +742,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_graphics_pipeline(&mut self, _: &()) {}
 
-    unsafe fn bind_graphics_descriptor_sets<I, J>(&mut self, _: &(), _: usize, _: I, _: J) {
+    unsafe fn bind_graphics_descriptor_sets<'a, I, J>(&mut self, _: &(), _: usize, _: I, _: J)
+    where
+        I: IntoIterator<Item = &'a DescriptorSet>,
+    {
         // Do nothing
     }
 
@@ -746,7 +753,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn bind_compute_descriptor_sets<I, J>(&mut self, _: &(), _: usize, _: I, _: J) {
+    unsafe fn bind_compute_descriptor_sets<'a, I, J>(&mut self, _: &(), _: usize, _: I, _: J)
+    where
+        I: IntoIterator<Item = &'a DescriptorSet>,
+    {
         // Do nothing
     }
 
@@ -925,10 +935,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn execute_commands<'a, T, I>(&mut self, _: I)
+    unsafe fn execute_commands<'a, T>(&mut self, _: T)
     where
-        T: 'a + Borrow<CommandBuffer>,
-        I: IntoIterator<Item = &'a T>,
+        T: IntoIterator<Item = &'a CommandBuffer>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }

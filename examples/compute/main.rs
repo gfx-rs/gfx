@@ -190,11 +190,11 @@ fn main() {
         command_buffer.copy_buffer(
             &staging_buffer,
             &device_buffer,
-            &[command::BufferCopy {
+            iter::once(command::BufferCopy {
                 src: 0,
                 dst: 0,
                 size: stride as u64 * numbers.len() as u64,
-            }],
+            }),
         );
         command_buffer.pipeline_barrier(
             pso::PipelineStage::TRANSFER..pso::PipelineStage::COMPUTE_SHADER,
@@ -208,7 +208,12 @@ fn main() {
             }),
         );
         command_buffer.bind_compute_pipeline(&pipeline);
-        command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[desc_set], &[]);
+        command_buffer.bind_compute_descriptor_sets(
+            &pipeline_layout,
+            0,
+            iter::once(&desc_set),
+            iter::empty(),
+        );
         command_buffer.dispatch([numbers.len() as u32, 1, 1]);
         command_buffer.pipeline_barrier(
             pso::PipelineStage::COMPUTE_SHADER..pso::PipelineStage::TRANSFER,
@@ -224,11 +229,11 @@ fn main() {
         command_buffer.copy_buffer(
             &device_buffer,
             &staging_buffer,
-            &[command::BufferCopy {
+            iter::once(command::BufferCopy {
                 src: 0,
                 dst: 0,
                 size: stride as u64 * numbers.len() as u64,
-            }],
+            }),
         );
         command_buffer.finish();
 

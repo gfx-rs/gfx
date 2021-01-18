@@ -613,14 +613,14 @@ where
         unsafe {
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
-            cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+            cmd_buffer.set_viewports(0, iter::once(self.viewport.clone()));
+            cmd_buffer.set_scissors(0, iter::once(self.viewport.rect));
             cmd_buffer.bind_graphics_pipeline(&self.pipeline);
             cmd_buffer.bind_graphics_descriptor_sets(
                 &self.pipeline_layout,
                 0,
                 iter::once(&self.desc_set),
-                &[],
+                iter::empty(),
             );
 
             cmd_buffer.begin_render_pass(
