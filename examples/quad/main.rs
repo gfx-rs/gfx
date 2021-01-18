@@ -291,7 +291,7 @@ where
             }
             .expect("Can't create descriptor pool"),
         );
-        let mut desc_set = unsafe { desc_pool.allocate_set(&set_layout) }.unwrap();
+        let mut desc_set = unsafe { desc_pool.allocate_one(&set_layout) }.unwrap();
 
         // Buffer allocations
         println!("Memory types: {:?}", memory_types);

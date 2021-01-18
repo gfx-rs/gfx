@@ -60,13 +60,6 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
         todo!()
     }
 
-    unsafe fn allocate<E>(&mut self, _num: usize, _level: Level, _list: &mut E)
-    where
-        E: Extend<CommandBuffer>,
-    {
-        todo!()
-    }
-
     unsafe fn free<I>(&mut self, _buffers: I)
     where
         I: IntoIterator<Item = CommandBuffer>,

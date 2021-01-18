@@ -2967,6 +2967,7 @@ impl d::Device<B> for Device {
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
         I: IntoIterator<Item = pso::Descriptor<'a, B>>,
+        I::IntoIter: ExactSizeIterator,
     {
         let mut descriptor_updater = self.descriptor_updater.lock();
         descriptor_updater.reset();

@@ -786,7 +786,7 @@ impl<B: hal::Backend> Scene<B> {
                             .desc_pools
                             .get_mut(pool)
                             .expect(&format!("Missing descriptor pool: {}", pool))
-                            .allocate_set(set_layout)
+                            .allocate_one(set_layout)
                     }
                     .expect(&format!(
                         "Failed to allocate set with layout: {:?}",

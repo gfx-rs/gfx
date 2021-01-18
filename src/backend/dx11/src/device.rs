@@ -1941,6 +1941,7 @@ impl device::Device<Backend> for Device {
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
         I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
+        I::IntoIter: ExactSizeIterator,
     {
         // Get baseline mapping
         let mut mapping = op

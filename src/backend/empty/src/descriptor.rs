@@ -6,7 +6,7 @@ use log::debug;
 pub struct DescriptorPool;
 
 impl pso::DescriptorPool<crate::Backend> for DescriptorPool {
-    unsafe fn allocate_set(
+    unsafe fn allocate_one(
         &mut self,
         _layout: &DescriptorSetLayout,
     ) -> Result<DescriptorSet, pso::AllocationError> {

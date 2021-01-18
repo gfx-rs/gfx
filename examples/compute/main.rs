@@ -167,7 +167,7 @@ fn main() {
     };
 
     let desc_set = unsafe {
-        let mut desc_set = desc_pool.allocate_set(&set_layout).unwrap();
+        let mut desc_set = desc_pool.allocate_one(&set_layout).unwrap();
         device.write_descriptor_set(pso::DescriptorSetWrite {
             set: &mut desc_set,
             binding: 0,

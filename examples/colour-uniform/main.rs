@@ -927,7 +927,7 @@ impl<B: Backend> DescSetLayout<B> {
         device: Rc<RefCell<DeviceState<B>>>,
     ) -> DescSet<B> {
         let mut desc_set = desc_pool
-            .allocate_set(self.layout.as_ref().unwrap())
+            .allocate_one(self.layout.as_ref().unwrap())
             .unwrap();
         device
             .borrow()

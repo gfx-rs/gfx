@@ -7,7 +7,7 @@ use hal::{
 };
 use parking_lot::Mutex;
 use smallvec::SmallVec;
-use std::{borrow::Borrow, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Debug, Hash)]
 pub struct Semaphore(pub vk::Semaphore);
@@ -114,21 +114,51 @@ pub struct DescriptorPool {
 }
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    unsafe fn allocate<I, E>(
+    unsafe fn allocate_one(
         &mut self,
-        layout_iter: I,
+        layout: &DescriptorSetLayout,
+    ) -> Result<DescriptorSet, pso::AllocationError> {
+        let raw_layouts = [layout.raw];
+        let info = vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(self.raw)
+            .set_layouts(&raw_layouts);
+
+        self.device
+            .raw
+            .allocate_descriptor_sets(&info)
+            //Note: https://github.com/MaikKlein/ash/issues/358
+            .map(|mut sets| DescriptorSet {
+                raw: sets.pop().unwrap(),
+                bindings: Arc::clone(&layout.bindings),
+            })
+            .map_err(|err| match err {
+                vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                    pso::AllocationError::OutOfMemory(OutOfMemory::Host)
+                }
+                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                    pso::AllocationError::OutOfMemory(OutOfMemory::Device)
+                }
+                vk::Result::ERROR_OUT_OF_POOL_MEMORY => pso::AllocationError::OutOfPoolMemory,
+                _ => pso::AllocationError::FragmentedPool,
+            })
+    }
+
+    unsafe fn allocate<'a, I, E>(
+        &mut self,
+        layout_intoiter: I,
         list: &mut E,
     ) -> Result<(), pso::AllocationError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<DescriptorSetLayout>,
+        I: IntoIterator<Item = &'a DescriptorSetLayout>,
+        I::IntoIter: ExactSizeIterator,
         E: Extend<DescriptorSet>,
     {
-        let mut raw_layouts = Vec::new();
-        let mut layout_bindings = Vec::new();
-        for layout in layout_iter {
-            raw_layouts.push(layout.borrow().raw);
-            layout_bindings.push(layout.borrow().bindings.clone());
+        let layouts_iter = layout_intoiter.into_iter();
+        let mut raw_layouts = Vec::with_capacity(layouts_iter.len());
+        let mut layout_bindings = Vec::with_capacity(layouts_iter.len());
+        for layout in layouts_iter {
+            raw_layouts.push(layout.raw);
+            layout_bindings.push(Arc::clone(&layout.bindings));
         }
 
         let info = vk::DescriptorSetAllocateInfo::builder()

@@ -519,7 +519,7 @@ impl DescriptorPool {
 }
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    unsafe fn allocate_set(
+    unsafe fn allocate_one(
         &mut self,
         set_layout: &DescriptorSetLayout,
     ) -> Result<DescriptorSet, pso::AllocationError> {
@@ -529,7 +529,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                 ref inner,
                 ref mut allocators,
             } => {
-                debug!("pool: allocate_set");
+                debug!("pool: allocate_one");
                 let (layouts, total, immutable_samplers) = match *set_layout {
                     DescriptorSetLayout::Emulated {
                         ref layouts,
