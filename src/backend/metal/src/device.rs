@@ -1398,15 +1398,15 @@ impl hal::device::Device<Backend> for Device {
         //drop
     }
 
-    unsafe fn merge_pipeline_caches<I>(
+    unsafe fn merge_pipeline_caches<'a, I>(
         &self,
-        target: &n::PipelineCache,
+        target: &mut n::PipelineCache,
         sources: I,
     ) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<n::PipelineCache>,
+        I: IntoIterator<Item = &'a n::PipelineCache>,
     {
+        //TODO: reduce the locking here
         let mut dst = target.modules.whole_write();
         for source in sources {
             let src = source.borrow().modules.whole_write();

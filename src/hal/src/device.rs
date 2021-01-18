@@ -23,12 +23,7 @@ use crate::{
     Backend, MemoryTypeId,
 };
 
-use std::{
-    any::Any,
-    borrow::{Borrow, BorrowMut},
-    fmt, iter,
-    ops::Range,
-};
+use std::{any::Any, borrow::Borrow, fmt, iter, ops::Range};
 
 /// Error occurred caused device to be lost.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -294,14 +289,13 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<Vec<u8>, OutOfMemory>;
 
     /// Merge a number of source pipeline caches into the target one.
-    unsafe fn merge_pipeline_caches<I>(
+    unsafe fn merge_pipeline_caches<'a, I>(
         &self,
-        target: &B::PipelineCache,
+        target: &mut B::PipelineCache,
         sources: I,
     ) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<B::PipelineCache>,
+        I: IntoIterator<Item = &'a B::PipelineCache>,
         I::IntoIter: ExactSizeIterator;
 
     /// Destroy a pipeline cache object.
@@ -618,22 +612,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     fn create_fence(&self, signaled: bool) -> Result<B::Fence, OutOfMemory>;
 
     /// Resets a given fence to its original, unsignaled state.
-    unsafe fn reset_fence(&self, fence: &mut B::Fence) -> Result<(), OutOfMemory> {
-        self.reset_fences(iter::once(fence))
-    }
-
-    /// Resets multiple fences to their original states.
-    unsafe fn reset_fences<I>(&self, fences: I) -> Result<(), OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: BorrowMut<B::Fence>,
-        I::IntoIter: ExactSizeIterator,
-    {
-        for mut fence in fences {
-            self.reset_fence(fence.borrow_mut())?;
-        }
-        Ok(())
-    }
+    unsafe fn reset_fence(&self, fence: &mut B::Fence) -> Result<(), OutOfMemory>;
 
     /// Blocks until the given fence is signaled.
     /// Returns true if the fence was signaled before the timeout.

@@ -10,15 +10,7 @@ use hal::{
     {buffer, device as d, format, image, pass, pso, query, queue}, {Features, MemoryTypeId},
 };
 
-use std::{
-    borrow::{Borrow, BorrowMut},
-    ffi::CString,
-    mem,
-    ops::Range,
-    pin::Pin,
-    ptr,
-    sync::Arc,
-};
+use std::{borrow::Borrow, ffi::CString, mem, ops::Range, pin::Pin, ptr, sync::Arc};
 
 use crate::{
     command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B, Device,
@@ -720,21 +712,21 @@ impl d::Device<B> for Device {
         self.shared.raw.destroy_pipeline_cache(cache.raw, None);
     }
 
-    unsafe fn merge_pipeline_caches<I>(
+    unsafe fn merge_pipeline_caches<'a, I>(
         &self,
-        target: &n::PipelineCache,
+        target: &mut n::PipelineCache,
         sources: I,
     ) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<n::PipelineCache>,
+        I: IntoIterator<Item = &'a n::PipelineCache>,
         I::IntoIter: ExactSizeIterator,
     {
-        let caches = sources.into_iter().map(|s| s.borrow().raw);
+        let caches = sources.into_iter().map(|s| s.raw);
 
         let result = inplace_it::inplace_or_alloc_array(caches.len(), |uninit_guard| {
             let caches = uninit_guard.init_with_iter(caches);
 
+            //TODO: https://github.com/MaikKlein/ash/issues/357
             self.shared.raw.fp_v1_0().merge_pipeline_caches(
                 self.shared.raw.handle(),
                 target.raw,
@@ -1830,20 +1822,8 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn reset_fences<I>(&self, fences: I) -> Result<(), d::OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: BorrowMut<n::Fence>,
-        I::IntoIter: ExactSizeIterator,
-    {
-        let fences = fences.into_iter().map(|fence| fence.borrow().0);
-
-        let result = inplace_it::inplace_or_alloc_array(fences.len(), |uninit_guard| {
-            let fences = uninit_guard.init_with_iter(fences);
-            self.shared.raw.reset_fences(&fences)
-        });
-
-        match result {
+    unsafe fn reset_fence(&self, fence: &mut n::Fence) -> Result<(), d::OutOfMemory> {
+        match self.shared.raw.reset_fences(&[fence.0]) {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),

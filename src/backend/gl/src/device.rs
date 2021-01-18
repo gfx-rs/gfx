@@ -947,10 +947,9 @@ impl d::Device<B> for Device {
         //empty
     }
 
-    unsafe fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), d::OutOfMemory>
+    unsafe fn merge_pipeline_caches<'a, I>(&self, _: &mut (), _: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<()>,
+        I: IntoIterator<Item = &'a ()>,
     {
         //empty
         Ok(())

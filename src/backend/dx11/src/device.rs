@@ -974,10 +974,13 @@ impl device::Device<Backend> for Device {
         //empty
     }
 
-    unsafe fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), device::OutOfMemory>
+    unsafe fn merge_pipeline_caches<'a, I>(
+        &self,
+        _: &mut (),
+        _: I,
+    ) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<()>,
+        I: IntoIterator<Item = &'a ()>,
     {
         //empty
         Ok(())

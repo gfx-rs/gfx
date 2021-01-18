@@ -256,8 +256,15 @@ impl device::Device<Backend> for Device {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), device::OutOfMemory> {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    unsafe fn merge_pipeline_caches<'a, I>(
+        &self,
+        _: &mut (),
+        _: I,
+    ) -> Result<(), device::OutOfMemory>
+    where
+        I: IntoIterator<Item = &'a ()>,
+    {
+        Ok(())
     }
 
     unsafe fn create_framebuffer<I>(

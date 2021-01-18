@@ -99,14 +99,13 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn merge_pipeline_caches<I>(
+    unsafe fn merge_pipeline_caches<'a, I>(
         &self,
-        _target: &<Backend as hal::Backend>::PipelineCache,
+        _target: &mut <Backend as hal::Backend>::PipelineCache,
         _sources: I,
     ) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<<Backend as hal::Backend>::PipelineCache>,
+        I: IntoIterator<Item = &'a <Backend as hal::Backend>::PipelineCache>,
     {
         todo!()
     }
@@ -177,7 +176,6 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<<Backend as hal::Backend>::Framebuffer, OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<<Backend as hal::Backend>::ImageView>,
     {
         todo!()
     }
@@ -400,14 +398,6 @@ impl hal::device::Device<Backend> for Device {
         &self,
         _fence: &mut <Backend as hal::Backend>::Fence,
     ) -> Result<(), OutOfMemory> {
-        todo!()
-    }
-
-    unsafe fn reset_fences<I>(&self, _fences: I) -> Result<(), OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: BorrowMut<<Backend as hal::Backend>::Fence>,
-    {
         todo!()
     }
 
