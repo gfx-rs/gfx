@@ -19,7 +19,6 @@ pub struct Swapchain {
 #[derive(Debug)]
 pub struct Instance {
     wsi_library: Option<libloading::Library>,
-    x11_display: *mut raw::c_void,
     inner: Mutex<Inner>,
 }
 
@@ -91,6 +90,49 @@ fn test_wayland_display() -> Option<libloading::Library> {
     Some(library)
 }
 
+/// Choose GLES framebuffer configuration.
+fn choose_config(
+    egl: &egl::DynamicInstance<egl::EGL1_4>,
+    display: egl::Display,
+) -> Result<(egl::Config, bool), hal::UnsupportedBackend> {
+    //TODO: EGL_SLOW_CONFIG
+    let tiers = [
+        (
+            "off-screen",
+            &[egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT][..],
+        ),
+        ("presentation", &[egl::SURFACE_TYPE, egl::WINDOW_BIT]),
+        #[cfg(not(target_os = "android"))]
+        ("native-render", &[egl::NATIVE_RENDERABLE, egl::TRUE as _]),
+    ];
+
+    let mut attributes = Vec::with_capacity(7);
+    for tier_max in (0..tiers.len()).rev() {
+        let name = tiers[tier_max].0;
+        log::info!("Trying {}", name);
+
+        attributes.clear();
+        for &(_, tier_attr) in tiers[..=tier_max].iter() {
+            attributes.extend_from_slice(tier_attr);
+        }
+        attributes.push(egl::NONE);
+
+        match egl.choose_first_config(display, &attributes) {
+            Ok(Some(config)) => {
+                return Ok((config, tier_max >= 1));
+            }
+            Ok(None) => {
+                log::warn!("No config found!");
+            }
+            Err(e) => {
+                log::error!("error in choose_first_config: {:?}", e);
+            }
+        }
+    }
+
+    Err(hal::UnsupportedBackend)
+}
+
 impl Inner {
     fn create(
         egl: Starc<egl::DynamicInstance<egl::EGL1_4>>,
@@ -127,44 +169,7 @@ impl Inner {
             }
         }
 
-        //Note: only GLES is supported here.
-        let mut supports_native_window = true;
-        //TODO: EGL_SLOW_CONFIG
-        let mut config_attributes = vec![
-            egl::CONFORMANT,
-            egl::OPENGL_ES2_BIT,
-            egl::RENDERABLE_TYPE,
-            egl::OPENGL_ES2_BIT,
-            egl::SURFACE_TYPE,
-            egl::WINDOW_BIT,
-        ];
-
-        if !cfg!(target_os = "android") {
-            config_attributes.push(egl::NATIVE_RENDERABLE);
-            config_attributes.push(egl::TRUE as _);
-        }
-
-        config_attributes.push(egl::NONE);
-
-        let pre_config = egl.choose_first_config(display, &config_attributes);
-        let config = match pre_config {
-            Ok(Some(config)) => config,
-            Ok(None) => {
-                log::warn!("no compatible EGL config found, trying off-screen");
-                supports_native_window = false;
-                let reduced_config_attributes =
-                    [egl::RENDERABLE_TYPE, egl::OPENGL_ES2_BIT, egl::NONE];
-                match egl.choose_first_config(display, &reduced_config_attributes) {
-                    Ok(Some(config)) => config,
-                    _ => return Err(hal::UnsupportedBackend),
-                }
-            }
-            Err(e) => {
-                log::error!("error in choose_first_config: {:?}", e);
-                return Err(hal::UnsupportedBackend);
-            }
-        };
-
+        let (config, supports_native_window) = choose_config(&egl, display)?;
         egl.bind_api(egl::OPENGL_ES_API).unwrap();
 
         //TODO: make it so `Device` == EGL Context
@@ -238,7 +243,6 @@ impl hal::Instance<crate::Backend> for Instance {
         log::info!("Client extensions: {:?}", client_ext_str);
 
         let mut wsi_library = None;
-        let mut x11_display = ptr::null_mut();
 
         let wayland_library = if client_ext_str.contains(&"EGL_EXT_platform_wayland") {
             test_wayland_display()
@@ -270,7 +274,6 @@ impl hal::Instance<crate::Backend> for Instance {
             log::info!("Using X11 platform");
             let display_attributes = [egl::ATTRIB_NONE];
             wsi_library = Some(library);
-            x11_display = display.as_ptr();
             egl.get_platform_display(EGL_PLATFORM_X11_KHR, display.as_ptr(), &display_attributes)
                 .unwrap()
         } else {
@@ -283,7 +286,6 @@ impl hal::Instance<crate::Backend> for Instance {
         Ok(Instance {
             inner: Mutex::new(inner),
             wsi_library,
-            x11_display,
         })
     }
 
@@ -318,21 +320,19 @@ impl hal::Instance<crate::Backend> for Instance {
         use raw_window_handle::RawWindowHandle as Rwh;
 
         let mut inner = self.inner.lock();
+        #[cfg(not(target_os = "android"))]
+        let (mut temp_xlib_handle, mut temp_xcb_handle);
         let native_window_ptr = match has_handle.raw_window_handle() {
             #[cfg(not(target_os = "android"))]
             Rwh::Xlib(handle) => {
-                if handle.display != self.x11_display {
-                    log::warn!(
-                        "Surface display {:p} doesn't match the instance display {:p}",
-                        handle.display,
-                        self.x11_display
-                    );
-                    return Err(w::InitError::UnsupportedWindowHandle);
-                }
-                handle.window as *mut std::ffi::c_void
+                temp_xlib_handle = handle.window;
+                &mut temp_xlib_handle as *mut _ as *mut std::ffi::c_void
             }
             #[cfg(not(target_os = "android"))]
-            Rwh::Xcb(handle) => handle.window as *mut std::ffi::c_void,
+            Rwh::Xcb(handle) => {
+                temp_xcb_handle = handle.window;
+                &mut temp_xcb_handle as *mut _ as *mut std::ffi::c_void
+            }
             #[cfg(target_os = "android")]
             Rwh::Android(handle) => handle.a_native_window as *mut _ as *mut std::ffi::c_void,
             #[cfg(not(target_os = "android"))]
