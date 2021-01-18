@@ -19,6 +19,7 @@ pub struct Swapchain {
 #[derive(Debug)]
 pub struct Instance {
     wsi_library: Option<libloading::Library>,
+    x11_display: *mut raw::c_void,
     inner: Mutex<Inner>,
 }
 
@@ -237,52 +238,52 @@ impl hal::Instance<crate::Backend> for Instance {
         log::info!("Client extensions: {:?}", client_ext_str);
 
         let mut wsi_library = None;
+        let mut x11_display = ptr::null_mut();
 
-        let wayland_display = if client_ext_str.contains(&"EGL_EXT_platform_wayland") {
+        let wayland_library = if client_ext_str.contains(&"EGL_EXT_platform_wayland") {
             test_wayland_display()
         } else {
             None
         };
 
-        let x11_display = if client_ext_str.contains(&"EGL_EXT_platform_x11") {
+        let x11_display_library = if client_ext_str.contains(&"EGL_EXT_platform_x11") {
             open_x_display()
         } else {
             None
         };
 
-        let display =
-            if let (Some(library), Some(egl)) = (wayland_display, egl.upcast::<egl::EGL1_5>()) {
-                log::info!("Using Wayland platform");
-                let display_attributes = [egl::ATTRIB_NONE];
-                wsi_library = Some(library);
-                egl.get_platform_display(
-                    EGL_PLATFORM_WAYLAND_KHR,
-                    egl::DEFAULT_DISPLAY,
-                    &display_attributes,
-                )
+        let display = if let (Some(library), Some(egl)) =
+            (wayland_library, egl.upcast::<egl::EGL1_5>())
+        {
+            log::info!("Using Wayland platform");
+            let display_attributes = [egl::ATTRIB_NONE];
+            wsi_library = Some(library);
+            egl.get_platform_display(
+                EGL_PLATFORM_WAYLAND_KHR,
+                egl::DEFAULT_DISPLAY,
+                &display_attributes,
+            )
+            .unwrap()
+        } else if let (Some((display, library)), Some(egl)) =
+            (x11_display_library, egl.upcast::<egl::EGL1_5>())
+        {
+            log::info!("Using X11 platform");
+            let display_attributes = [egl::ATTRIB_NONE];
+            wsi_library = Some(library);
+            x11_display = display.as_ptr();
+            egl.get_platform_display(EGL_PLATFORM_X11_KHR, display.as_ptr(), &display_attributes)
                 .unwrap()
-            } else if let (Some((x11_display, library)), Some(egl)) =
-                (x11_display, egl.upcast::<egl::EGL1_5>())
-            {
-                log::info!("Using X11 platform");
-                let display_attributes = [egl::ATTRIB_NONE];
-                wsi_library = Some(library);
-                egl.get_platform_display(
-                    EGL_PLATFORM_X11_KHR,
-                    x11_display.as_ptr(),
-                    &display_attributes,
-                )
-                .unwrap()
-            } else {
-                log::info!("Using default platform");
-                egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
-            };
+        } else {
+            log::info!("Using default platform");
+            egl.get_display(egl::DEFAULT_DISPLAY).unwrap()
+        };
 
         let inner = Inner::create(egl.clone(), display, wsi_library.as_ref())?;
 
         Ok(Instance {
             inner: Mutex::new(inner),
             wsi_library,
+            x11_display,
         })
     }
 
@@ -319,7 +320,17 @@ impl hal::Instance<crate::Backend> for Instance {
         let mut inner = self.inner.lock();
         let native_window_ptr = match has_handle.raw_window_handle() {
             #[cfg(not(target_os = "android"))]
-            Rwh::Xlib(handle) => handle.window as *mut std::ffi::c_void,
+            Rwh::Xlib(handle) => {
+                if handle.display != self.x11_display {
+                    log::warn!(
+                        "Surface display {:p} doesn't match the instance display {:p}",
+                        handle.display,
+                        self.x11_display
+                    );
+                    return Err(w::InitError::UnsupportedWindowHandle);
+                }
+                handle.window as *mut std::ffi::c_void
+            }
             #[cfg(not(target_os = "android"))]
             Rwh::Xcb(handle) => handle.window as *mut std::ffi::c_void,
             #[cfg(target_os = "android")]
