@@ -13,6 +13,7 @@ members = [
     "src/hal",
     "src/warden",
     "examples",
+    "examples/quad_android",
 ]
 
 [patch."https://github.com/gfx-rs/naga"]

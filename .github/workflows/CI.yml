@@ -3,105 +3,37 @@ name: CI
 on:
   push:
     branches-ignore: [staging.tmp]
+    paths:
+    #- 'examples/quad_android/**'
+    #- '!examples/quad_android/**.md'
+    #- 'src/backend/gl/**'
+    #- '!src/backend/gl/**.md'
   pull_request:
     branches-ignore: [staging.tmp]
-
+    paths:
+    #- 'examples/quad_android/**'
+    #- '!examples/quad_android/**.md'
+    #- 'src/backend/gl/**'
+    #- '!src/backend/gl/**.md'
 jobs:
-  ios_build:
-    name: iOS Stable
-    runs-on: macos-10.15
-    env:
-      TARGET: aarch64-apple-ios
-    steps:
-      - uses: actions/checkout@v2
-      - name: Prepare Rust
-        run: rustup target add ${{ env.TARGET }}
-      - run: cargo check --manifest-path src/backend/metal/Cargo.toml --target ${{ env.TARGET }}
-
-  android_build:
-    name: Android Stable
-    runs-on: ubuntu-18.04
-    env:
-      TARGET: aarch64-linux-android
-    steps:
-      - uses: actions/checkout@v2
-      - run: echo "$ANDROID_HOME/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
-      - name: Prepare Rust
-        run: rustup target add ${{ env.TARGET }}
-      - run: cargo check --manifest-path src/backend/vulkan/Cargo.toml --target ${{ env.TARGET }}
-      - run: cargo check --manifest-path src/backend/gl/Cargo.toml --target ${{ env.TARGET }}
-
-  webgl_build:
-    name: Web Assembly
-    runs-on: ubuntu-18.04
-    steps:
-      - uses: actions/checkout@v2
-      - run: rustup target add wasm32-unknown-unknown
-      - run: cargo build --manifest-path examples/Cargo.toml --features gl --target wasm32-unknown-unknown --bin quad
-
-  check-advisories:
-    name: Advisory Check
-    runs-on: ubuntu-18.04
-    steps:
-      - uses: actions/checkout@v2
-      - uses: EmbarkStudios/cargo-deny-action@v1
+  test:
+      runs-on: macos-10.15
+      steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: run tests
+        uses: reactivecircus/android-emulator-runner@v2
         with:
-          command: check advisories
-
-  check-dependencies:
-    name: Dependency Check
-    runs-on: ubuntu-18.04
-    steps:
-      - uses: actions/checkout@v2
-      - uses: EmbarkStudios/cargo-deny-action@v1
+          api-level: 29
+          arch: x86_64
+          # the `googleapis` emulator target considerably slower on CI.
+          target: default
+          profile: Nexus 5X
+          script: sh ./.github/workflows/android_test.sh
+      - uses: actions/upload-artifact@master
+        if: ${{ always() }}
         with:
-          command: check bans licenses sources
-
-  build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        name:
-          [
-            MacOS Stable,
-            MacOS Nightly,
-            Ubuntu Stable,
-            Ubuntu Nightly,
-            Windows Stable,
-            Windows Nightly,
-          ]
-        include:
-          - os: macos-10.15
-            name: MacOS Stable
-            channel: stable
-          - os: macos-10.15
-            name: MacOS Nightly
-            channel: nightly
-          - os: ubuntu-18.04
-            name: Ubuntu Stable
-            channel: stable
-          - os: ubuntu-18.04
-            name: Ubuntu Nightly
-            channel: nightly
-          - os: windows-2019
-            name: Windows Stable
-            channel: stable
-          - os: windows-2019
-            name: Windows Nightly
-            channel: nightly
-    steps:
-      - uses: actions/checkout@v2
-      - if: matrix.channel == 'nightly'
-        name: Install latest nightly
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-      - if: matrix.os == 'windows-2019'
-        name: Install make
-        run: choco install make
-      #- if: matrix.channel == 'stable'
-      #  run: rustup component add clippy
-      - run: make all
+          name: screenshot
+          path: |
+            ~/screenshot.png
+            ~/logcat.log

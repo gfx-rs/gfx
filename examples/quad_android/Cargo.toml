@@ -1,0 +1,37 @@
+[package]
+name = "quad_android"
+version = "0.1.0"
+publish = false
+workspace = "../.."
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = ["gl"]
+gl = ["gfx-backend-gl"]
+
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.9"
+image = "0.23.12"
+log = "0.4"
+hal = { path = "../../src/hal", package = "gfx-hal" }
+auxil = { path = "../../src/auxil/auxil", package = "gfx-auxil" }
+gfx-backend-empty = { path = "../../src/backend/empty" }
+winit = "0.24"
+ndk-glue = "0.2"
+
+[target.'cfg(target_os = "android")'.dependencies.gfx-backend-gl]
+path = "../../src/backend/gl"
+optional = true
+
+[package.metadata.android]
+package_name = "com.rust.game"
+label = "GfxQuad"
+# Vulkan supports on devices running Android API level 24 or higher.
+target_sdk_version = 29
+min_sdk_version = 29
+fullscreen = true
+opengles_version = [3, 0]
+orientation = "sensorLandscape"

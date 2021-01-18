@@ -71,6 +71,7 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
+#[cfg(not(target_os = "android"))]
 fn main() {
     #[cfg(target_arch = "wasm32")]
     console_log::init_with_level(log::Level::Debug).unwrap();
@@ -89,6 +90,10 @@ fn main() {
         "You are running the example with the empty backend, no graphical output is to be expected"
     );
 
+    run();
+}
+
+fn run() {
     let event_loop = winit::event_loop::EventLoop::new();
 
     let wb = winit::window::WindowBuilder::new()

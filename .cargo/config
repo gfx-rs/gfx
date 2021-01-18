@@ -1,0 +1,8 @@
+[target.x86_64-linux-android]
+rustflags = [
+    "-C", "link-arg=-lc++_shared",
+    "-C", "link-arg=-lc++abi",
+    "-C", "link-arg=-lEGL",
+    "-C", "link-arg=-lGLESv3",
+    "-C", "link-arg=-llog",
+]

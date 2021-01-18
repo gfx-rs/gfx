@@ -38,7 +38,7 @@ auxil = { path = "../src/auxil/auxil", version = "0.5", package = "gfx-auxil" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.6" }
 winit = { version = "0.24", features = ["web-sys"] }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(any(target_os = "android", target_arch = "wasm32")))'.dependencies]
 env_logger = "0.8"
 glsl-to-spirv = "0.1.4"
 
@@ -56,7 +56,7 @@ path = "../src/backend/vulkan"
 version = "0.6"
 optional = true
 
-[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos"), not(target_os = "android")))'.dependencies.gfx-backend-gl]
+[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies.gfx-backend-gl]
 path = "../src/backend/gl"
 version = "0.6"
 optional = true
