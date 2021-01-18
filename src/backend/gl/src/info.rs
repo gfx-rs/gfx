@@ -399,7 +399,10 @@ pub(crate) fn query_all(
         limits.max_viewports = get_usize(gl, glow::MAX_VIEWPORTS).unwrap_or(0);
     }
 
-    if info.is_supported(&[Core(4, 3), Ext("GL_ARB_compute_shader")]) {
+    //TODO: technically compute is exposed in Es(3, 1), but GLES requires 3.2
+    // for any storage buffers. We need to investigate if this requirement
+    // can be lowered.
+    if info.is_supported(&[Core(4, 3), Es(3, 2), Ext("GL_ARB_compute_shader")]) {
         for (i, (count, size)) in limits
             .max_compute_work_group_count
             .iter_mut()
