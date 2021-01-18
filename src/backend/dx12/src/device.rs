@@ -3240,11 +3240,9 @@ impl d::Device<B> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a r::Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a r::Memory, memory::Segment)>,
     {
-        for range in ranges {
-            let &(ref memory, ref segment) = range.borrow();
+        for (memory, ref segment) in ranges {
             if let Some(mem) = memory.resource {
                 // map and immediately unmap, hoping that dx12 drivers internally cache
                 // currently mapped buffers.
@@ -3271,11 +3269,9 @@ impl d::Device<B> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a r::Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a r::Memory, memory::Segment)>,
     {
-        for range in ranges {
-            let &(ref memory, ref segment) = range.borrow();
+        for (memory, ref segment) in ranges {
             if let Some(mem) = memory.resource {
                 let start = segment.offset;
                 let end = segment.size.map_or(memory.size, |s| start + s); // TODO: only need to be end of current mapping

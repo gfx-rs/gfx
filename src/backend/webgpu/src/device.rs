@@ -337,16 +337,14 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a <Backend as hal::Backend>::Memory, Segment)>,
+        I: IntoIterator<Item = (&'a <Backend as hal::Backend>::Memory, Segment)>,
     {
         todo!()
     }
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, _ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a <Backend as hal::Backend>::Memory, Segment)>,
+        I: IntoIterator<Item = (&'a <Backend as hal::Backend>::Memory, Segment)>,
     {
         todo!()
     }

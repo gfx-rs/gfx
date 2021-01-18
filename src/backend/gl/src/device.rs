@@ -1347,13 +1347,11 @@ impl d::Device<B> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         let gl = &self.share.context;
 
-        for i in ranges {
-            let (mem, segment) = i.borrow();
+        for (mem, segment) in ranges {
             let (buffer, target) = mem.buffer.expect("cannot flush image memory");
             gl.bind_buffer(target, Some(buffer));
 
@@ -1381,13 +1379,11 @@ impl d::Device<B> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         let gl = &self.share.context;
 
-        for i in ranges {
-            let (mem, segment) = i.borrow();
+        for (mem, segment) in ranges {
             let (buffer, target) = mem.buffer.expect("cannot invalidate image memory");
             gl.bind_buffer(target, Some(buffer));
 

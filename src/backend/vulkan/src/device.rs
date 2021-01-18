@@ -1542,11 +1542,14 @@ impl d::Device<B> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, Segment)>,
+        I::IntoIter: ExactSizeIterator,
     {
-        let ranges = conv::map_memory_ranges(ranges);
-        let result = self.shared.raw.flush_mapped_memory_ranges(&ranges);
+        let vk_ranges = ranges.into_iter().map(conv::map_memory_range);
+        let result = inplace_it::inplace_or_alloc_array(vk_ranges.len(), |uninit_guard| {
+            let range_slice = uninit_guard.init_with_iter(vk_ranges);
+            self.shared.raw.flush_mapped_memory_ranges(&range_slice)
+        });
 
         match result {
             Ok(()) => Ok(()),
@@ -1558,11 +1561,16 @@ impl d::Device<B> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, Segment)>,
+        I::IntoIter: ExactSizeIterator,
     {
-        let ranges = conv::map_memory_ranges(ranges);
-        let result = self.shared.raw.invalidate_mapped_memory_ranges(&ranges);
+        let vk_ranges = ranges.into_iter().map(conv::map_memory_range);
+        let result = inplace_it::inplace_or_alloc_array(vk_ranges.len(), |uninit_guard| {
+            let range_slice = uninit_guard.init_with_iter(vk_ranges);
+            self.shared
+                .raw
+                .invalidate_mapped_memory_ranges(&range_slice)
+        });
 
         match result {
             Ok(()) => Ok(()),

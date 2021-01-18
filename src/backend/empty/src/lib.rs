@@ -455,16 +455,14 @@ impl device::Device<Backend> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a Memory, hal::memory::Segment)>,
+        I: IntoIterator<Item = (&'a Memory, hal::memory::Segment)>,
     {
         Ok(())
     }
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a Memory, hal::memory::Segment)>,
+        I: IntoIterator<Item = (&'a Memory, hal::memory::Segment)>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }

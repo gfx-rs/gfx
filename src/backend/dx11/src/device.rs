@@ -2145,16 +2145,13 @@ impl device::Device<Backend> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a Memory, memory::Segment)>,
     {
         let _scope = debug_scope!(&self.context, "FlushMappedRanges");
 
         // go through every range we wrote to
-        for range in ranges.into_iter() {
-            let &(memory, ref segment) = range.borrow();
+        for (memory, ref segment) in ranges.into_iter() {
             let range = memory.resolve(segment);
-
             let _scope = debug_scope!(&self.context, "Range({:?})", range);
             memory.flush(&self.context, range);
         }
@@ -2167,16 +2164,13 @@ impl device::Device<Backend> for Device {
         ranges: I,
     ) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a Memory, memory::Segment)>,
     {
         let _scope = debug_scope!(&self.context, "InvalidateMappedRanges");
 
         // go through every range we want to read from
-        for range in ranges.into_iter() {
-            let &(memory, ref segment) = range.borrow();
+        for (memory, ref segment) in ranges.into_iter() {
             let range = memory.resolve(segment);
-
             let _scope = debug_scope!(&self.context, "Range({:?})", range);
             memory.invalidate(
                 &self.context,

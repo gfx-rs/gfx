@@ -538,14 +538,14 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Flush mapped memory ranges
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a B::Memory, Segment)>;
+        I: IntoIterator<Item = (&'a B::Memory, Segment)>,
+        I::IntoIter: ExactSizeIterator;
 
     /// Invalidate ranges of non-coherent memory from the host caches
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a B::Memory, Segment)>;
+        I: IntoIterator<Item = (&'a B::Memory, Segment)>,
+        I::IntoIter: ExactSizeIterator;
 
     /// Unmap a memory object once host access to it is no longer needed by the application
     unsafe fn unmap_memory(&self, memory: &mut B::Memory);

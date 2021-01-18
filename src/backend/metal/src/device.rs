@@ -1903,12 +1903,10 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         debug!("flush_mapped_memory_ranges");
-        for item in iter {
-            let (memory, ref segment) = *item.borrow();
+        for (memory, ref segment) in iter {
             let range = memory.resolve(segment);
             debug!("\trange {:?}", range);
 
@@ -1932,8 +1930,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         let mut num_syncs = 0;
         debug!("invalidate_mapped_memory_ranges");
@@ -1945,8 +1942,7 @@ impl hal::device::Device<Backend> for Device {
         autoreleasepool(|| {
             let encoder = cmd_buffer.new_blit_command_encoder();
 
-            for item in iter {
-                let (memory, ref segment) = *item.borrow();
+            for (memory, ref segment) in iter {
                 let range = memory.resolve(segment);
                 debug!("\trange {:?}", range);
 
