@@ -127,12 +127,15 @@ impl Device {
         let mut name_binding_map = FastHashMap::<String, (n::BindingRegister, u8)>::default();
         let mut sampler_map = [None; MAX_TEXTURE_SLOTS];
 
-        let mut is_fragment_stage_exists = false;
+        let mut has_vertex_stage = false;
+        let mut has_fragment_stage = false;
 
         for &(stage, point_maybe) in shaders {
             if let Some(point) = point_maybe {
-                if stage == ShaderStage::Fragment {
-                    is_fragment_stage_exists = true;
+                match stage {
+                    ShaderStage::Vertex => has_vertex_stage = true,
+                    ShaderStage::Fragment => has_fragment_stage = true,
+                    _ => (),
                 }
 
                 let shader = self.compile_shader(
@@ -150,7 +153,7 @@ impl Device {
         }
 
         // Create empty fragment shader if only vertex shader is present
-        if is_fragment_stage_exists == false {
+        if has_vertex_stage && !has_fragment_stage {
             let sl = &self.share.info.shading_language;
             let version = (sl.major * 100 + sl.minor * 10) as u16;
             let shader_type = if sl.is_embedded { "es" } else { "" };
