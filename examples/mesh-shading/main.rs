@@ -246,7 +246,7 @@ where
             unsafe {
                 device.create_descriptor_pool(
                     1, // sets
-                    &[pso::DescriptorRangeDesc {
+                    iter::once(pso::DescriptorRangeDesc {
                         ty: pso::DescriptorType::Buffer {
                             ty: pso::BufferDescriptorType::Storage { read_only: true },
                             format: pso::BufferDescriptorFormat::Structured {
@@ -254,7 +254,7 @@ where
                             },
                         },
                         count: 1,
-                    }],
+                    }),
                     pso::DescriptorPoolCreateFlags::empty(),
                 )
             }
@@ -373,8 +373,14 @@ where
             };
 
             ManuallyDrop::new(
-                unsafe { device.create_render_pass(&[attachment], &[subpass], &[]) }
-                    .expect("Can't create render pass"),
+                unsafe {
+                    device.create_render_pass(
+                        iter::once(attachment),
+                        iter::once(subpass),
+                        iter::empty(),
+                    )
+                }
+                .expect("Can't create render pass"),
             )
         };
 
@@ -437,7 +443,7 @@ where
         }
 
         let pipeline_layout = ManuallyDrop::new(
-            unsafe { device.create_pipeline_layout(iter::once(&*set_layout), &[]) }
+            unsafe { device.create_pipeline_layout(iter::once(&*set_layout), iter::empty()) }
                 .expect("Can't create pipeline layout"),
         );
         let pipeline = {

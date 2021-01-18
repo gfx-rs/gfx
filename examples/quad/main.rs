@@ -272,7 +272,7 @@ where
             unsafe {
                 device.create_descriptor_pool(
                     1, // sets
-                    &[
+                    vec![
                         pso::DescriptorRangeDesc {
                             ty: pso::DescriptorType::Image {
                                 ty: pso::ImageDescriptorType::Sampled {
@@ -572,8 +572,14 @@ where
             };
 
             ManuallyDrop::new(
-                unsafe { device.create_render_pass(&[attachment], &[subpass], &[]) }
-                    .expect("Can't create render pass"),
+                unsafe {
+                    device.create_render_pass(
+                        iter::once(attachment),
+                        iter::once(subpass),
+                        iter::empty(),
+                    )
+                }
+                .expect("Can't create render pass"),
             )
         };
 
@@ -636,7 +642,7 @@ where
         }
 
         let pipeline_layout = ManuallyDrop::new(
-            unsafe { device.create_pipeline_layout(iter::once(&*set_layout), &[]) }
+            unsafe { device.create_pipeline_layout(iter::once(&*set_layout), iter::empty()) }
                 .expect("Can't create pipeline layout"),
         );
         let pipeline = {

@@ -46,19 +46,14 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        _attachments: IA,
-        _subpasses: IS,
-        _dependencies: ID,
+        _attachments: Ia,
+        _subpasses: Is,
+        _dependencies: Id,
     ) -> Result<<Backend as hal::Backend>::RenderPass, OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
     {
         todo!()
     }
@@ -67,16 +62,13 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        _set_layouts: IS,
-        _push_constant: IR,
+        _set_layouts: Is,
+        _push_constant: Ic,
     ) -> Result<<Backend as hal::Backend>::PipelineLayout, OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<<Backend as hal::Backend>::DescriptorSetLayout>,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+        Is: IntoIterator<Item = &'a <Backend as hal::Backend>::DescriptorSetLayout>,
     {
         todo!()
     }
@@ -283,11 +275,7 @@ impl hal::device::Device<Backend> for Device {
         _max_sets: usize,
         _descriptor_ranges: I,
         _flags: hal::pso::DescriptorPoolCreateFlags,
-    ) -> Result<<Backend as hal::Backend>::DescriptorPool, OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>,
-    {
+    ) -> Result<<Backend as hal::Backend>::DescriptorPool, OutOfMemory> {
         todo!()
     }
 

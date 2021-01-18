@@ -1,6 +1,4 @@
-use std::{
-    borrow::Borrow, collections::hash_map::Entry, ffi, iter, mem, ops::Range, ptr, slice, sync::Arc,
-};
+use std::{collections::hash_map::Entry, ffi, iter, mem, ops::Range, ptr, slice, sync::Arc};
 
 use range_alloc::RangeAllocator;
 use smallvec::SmallVec;
@@ -1263,19 +1261,16 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_command_pool(&self, _pool: CommandPool) {}
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        attachments: IA,
-        subpasses: IS,
-        dependencies: ID,
+        attachments: Ia,
+        subpasses: Is,
+        dependencies: Id,
     ) -> Result<r::RenderPass, d::OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
+        Ia: IntoIterator<Item = pass::Attachment>,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
+        Id: IntoIterator<Item = pass::SubpassDependency>,
     {
         #[derive(Copy, Clone, Debug, PartialEq)]
         enum SubState {
@@ -1301,14 +1296,11 @@ impl d::Device<B> for Device {
             barrier_start_index: usize,
         }
 
-        let attachments = attachments
-            .into_iter()
-            .map(|attachment| attachment.borrow().clone())
-            .collect::<SmallVec<[_; 5]>>();
+        let attachments = attachments.into_iter().collect::<SmallVec<[_; 5]>>();
         let mut sub_infos = subpasses
             .into_iter()
             .map(|desc| SubInfo {
-                desc: desc.borrow().clone(),
+                desc: desc.clone(),
                 external_dependencies: image::Access::empty()..image::Access::empty(),
                 unresolved_dependencies: 0,
             })
@@ -1324,7 +1316,6 @@ impl d::Device<B> for Device {
             .collect::<SmallVec<[_; 5]>>();
 
         for dep in &dependencies {
-            let dep = dep.borrow();
             match dep.passes {
                 Range {
                     start: None,
@@ -1413,7 +1404,6 @@ impl d::Device<B> for Device {
             .position(|si| si.unresolved_dependencies == 0)
         {
             for dep in &dependencies {
-                let dep = dep.borrow();
                 if dep.passes.start != dep.passes.end
                     && dep.passes.start == Some(sid as pass::SubpassId)
                 {
@@ -1523,16 +1513,14 @@ impl d::Device<B> for Device {
         Ok(rp)
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        sets: IS,
-        push_constant_ranges: IR,
+        sets: Is,
+        push_constant_ranges: Ic,
     ) -> Result<r::PipelineLayout, d::OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<r::DescriptorSetLayout>,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+        Is: IntoIterator<Item = &'a r::DescriptorSetLayout>,
+        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
     {
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
@@ -1614,7 +1602,7 @@ impl d::Device<B> for Device {
             .iter()
             .map(|desc_set| {
                 let mut sum = 0;
-                for binding in desc_set.borrow().bindings.iter() {
+                for binding in desc_set.bindings.iter() {
                     let content = r::DescriptorContent::from(binding.ty);
                     if !content.is_dynamic() {
                         sum += content.bits().count_ones() as usize;
@@ -1629,7 +1617,6 @@ impl d::Device<B> for Device {
             .iter()
             .enumerate()
             .map(|(i, set)| {
-                let set = set.borrow();
                 let space = (root_space_offset + i) as u32;
                 let mut table_type = r::SetTableTypes::empty();
                 let root_table_offset = root_offset;
@@ -2892,12 +2879,11 @@ impl d::Device<B> for Device {
     unsafe fn create_descriptor_pool<I>(
         &self,
         max_sets: usize,
-        descriptor_pools: I,
+        ranges: I,
         _flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<r::DescriptorPool, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>,
+        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
     {
         // Descriptor pools are implemented as slices of the global descriptor heaps.
         // A descriptor pool will occupy a contiguous space in each heap (CBV/SRV/UAV and Sampler) depending
@@ -2906,13 +2892,10 @@ impl d::Device<B> for Device {
         let mut num_srv_cbv_uav = 0;
         let mut num_samplers = 0;
 
-        let descriptor_pools = descriptor_pools
-            .into_iter()
-            .map(|desc| *desc.borrow())
-            .collect::<Vec<_>>();
+        let ranges = ranges.into_iter().collect::<Vec<_>>();
 
         info!("create_descriptor_pool with {} max sets", max_sets);
-        for desc in &descriptor_pools {
+        for desc in &ranges {
             let content = r::DescriptorContent::from(desc.ty);
             debug!("\tcontent {:?}", content);
             if content.contains(r::DescriptorContent::CBV) {
@@ -2962,7 +2945,7 @@ impl d::Device<B> for Device {
         Ok(r::DescriptorPool {
             heap_srv_cbv_uav,
             heap_raw_sampler: self.samplers.heap.raw,
-            pools: descriptor_pools,
+            pools: ranges,
             max_size: max_sets as _,
         })
     }

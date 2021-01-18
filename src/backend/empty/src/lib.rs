@@ -204,24 +204,26 @@ impl device::Device<Backend> for Device {
         Memory::allocate(memory_type, size)
     }
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        _: IA,
-        _: IS,
-        _: ID,
+        _: Ia,
+        _: Is,
+        _: Id,
     ) -> Result<(), device::OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
     {
         Ok(())
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        _: IS,
-        _: IR,
-    ) -> Result<(), device::OutOfMemory> {
+        _: Is,
+        _: Ic,
+    ) -> Result<(), device::OutOfMemory>
+    where
+        Is: IntoIterator<Item = &'a DescriptorSetLayout>,
+    {
         Ok(())
     }
 

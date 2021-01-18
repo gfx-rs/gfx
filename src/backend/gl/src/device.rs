@@ -19,7 +19,7 @@ use glow::HasContext;
 use parking_lot::Mutex;
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
-use std::{borrow::Borrow, ops::Range, slice, sync::Arc};
+use std::{ops::Range, slice, sync::Arc};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -839,24 +839,19 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        attachments: IA,
-        subpasses: IS,
-        _dependencies: ID,
+        attachments: Ia,
+        subpasses: Is,
+        _dependencies: Id,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
+        Ia: IntoIterator<Item = pass::Attachment>,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
     {
         let subpasses = subpasses
             .into_iter()
             .map(|subpass| {
-                let subpass = subpass.borrow();
                 assert!(
                     subpass.colors.len() <= self.share.limits.max_color_attachments,
                     "Color attachment limit exceeded"
@@ -873,24 +868,18 @@ impl d::Device<B> for Device {
             .collect();
 
         Ok(n::RenderPass {
-            attachments: attachments
-                .into_iter()
-                .map(|attachment| attachment.borrow().clone())
-                .collect::<Vec<_>>(),
+            attachments: attachments.into_iter().collect::<Vec<_>>(),
             subpasses,
         })
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        layouts: IS,
-        _: IR,
+        layouts: Is,
+        _: Ic,
     ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<n::DescriptorSetLayout>,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+        Is: IntoIterator<Item = &'a n::DescriptorSetLayout>,
     {
         use std::convert::TryInto;
         let mut sets = Vec::new();
@@ -899,8 +888,7 @@ impl d::Device<B> for Device {
         let mut num_uniform_buffers = 0usize;
         let mut num_storage_buffers = 0usize;
 
-        for layout in layouts {
-            let layout_bindings = layout.borrow();
+        for layout_bindings in layouts {
             // create a vector with the size enough to hold all the bindings, filled with `!0`
             let mut bindings =
                 vec![!0; layout_bindings.last().map_or(0, |b| b.binding as usize + 1)];
@@ -960,8 +948,6 @@ impl d::Device<B> for Device {
         desc: &pso::GraphicsPipelineDesc<'a, B>,
         _cache: Option<&()>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        let desc = desc.borrow();
-
         let (vertex_buffers, desc_attributes, input_assembler, vs, gs, hs, ds) =
             match desc.primitive_assembler {
                 pso::PrimitiveAssemblerDesc::Vertex {
@@ -1675,8 +1661,7 @@ impl d::Device<B> for Device {
         _: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>,
+        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
     {
         Ok(n::DescriptorPool {})
     }
@@ -1864,12 +1849,12 @@ impl d::Device<B> for Device {
         match wait {
             d::WaitFor::All => {
                 for fence in fences {
-                    if !self.wait_for_fence(fence.borrow(), 0)? {
+                    if !self.wait_for_fence(fence, 0)? {
                         let elapsed_ns = get_elapsed();
                         if elapsed_ns > timeout_ns {
                             return Ok(false);
                         }
-                        if !self.wait_for_fence(fence.borrow(), timeout_ns - elapsed_ns)? {
+                        if !self.wait_for_fence(fence, timeout_ns - elapsed_ns)? {
                             return Ok(false);
                         }
                     }
@@ -1882,7 +1867,7 @@ impl d::Device<B> for Device {
                 let fences: Vec<_> = fences.into_iter().collect();
                 loop {
                     for fence in &fences {
-                        if self.wait_for_fence(fence.borrow(), FENCE_WAIT_NS)? {
+                        if self.wait_for_fence(fence, FENCE_WAIT_NS)? {
                             return Ok(true);
                         }
                     }

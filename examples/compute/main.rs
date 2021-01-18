@@ -97,8 +97,9 @@ fn main() {
         }
         .expect("Can't create descriptor set layout");
 
-        let pipeline_layout = unsafe { device.create_pipeline_layout(Some(&set_layout), &[]) }
-            .expect("Can't create pipeline layout");
+        let pipeline_layout =
+            unsafe { device.create_pipeline_layout(iter::once(&set_layout), iter::empty()) }
+                .expect("Can't create pipeline layout");
         let entry_point = pso::EntryPoint {
             entry: "main",
             module: &shader,
@@ -115,7 +116,7 @@ fn main() {
         let desc_pool = unsafe {
             device.create_descriptor_pool(
                 1,
-                &[pso::DescriptorRangeDesc {
+                iter::once(pso::DescriptorRangeDesc {
                     ty: pso::DescriptorType::Buffer {
                         ty: pso::BufferDescriptorType::Storage { read_only: false },
                         format: pso::BufferDescriptorFormat::Structured {
@@ -123,7 +124,7 @@ fn main() {
                         },
                     },
                     count: 1,
-                }],
+                }),
                 pso::DescriptorPoolCreateFlags::empty(),
             )
         }

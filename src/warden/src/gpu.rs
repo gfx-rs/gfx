@@ -715,7 +715,7 @@ impl<B: hal::Backend> Scene<B> {
                     let pool = unsafe {
                         device.create_descriptor_pool(
                             capacity,
-                            ranges,
+                            ranges.iter().cloned(),
                             pso::DescriptorPoolCreateFlags::empty(),
                         )
                     }
@@ -757,8 +757,13 @@ impl<B: hal::Backend> Scene<B> {
                         let layouts = set_layouts
                             .iter()
                             .map(|sl| &resources.desc_set_layouts[sl].1);
-                        unsafe { device.create_pipeline_layout(layouts, push_constant_ranges) }
-                            .unwrap()
+                        unsafe {
+                            device.create_pipeline_layout(
+                                layouts,
+                                push_constant_ranges.iter().cloned(),
+                            )
+                        }
+                        .unwrap()
                     };
                     resources.pipeline_layouts.insert(name.clone(), layout);
                 }

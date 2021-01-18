@@ -12,7 +12,6 @@ use winapi::{
 use wio::com::ComPtr;
 
 use std::{
-    borrow::Borrow,
     fmt, mem,
     ops::Range,
     ptr,
@@ -857,70 +856,45 @@ impl device::Device<Backend> for Device {
         // automatic
     }
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        attachments: IA,
-        subpasses: IS,
-        _dependencies: ID,
+        attachments: Ia,
+        subpasses: Is,
+        _dependencies: Id,
     ) -> Result<RenderPass, device::OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
+        Ia: IntoIterator<Item = pass::Attachment>,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
     {
         Ok(RenderPass {
-            attachments: attachments
-                .into_iter()
-                .map(|attachment| attachment.borrow().clone())
-                .collect(),
+            attachments: attachments.into_iter().collect(),
             subpasses: subpasses
                 .into_iter()
-                .map(|desc| {
-                    let desc = desc.borrow();
-                    SubpassDesc {
-                        color_attachments: desc
-                            .colors
-                            .iter()
-                            .map(|color| color.borrow().clone())
-                            .collect(),
-                        depth_stencil_attachment: desc.depth_stencil.map(|d| *d),
-                        input_attachments: desc
-                            .inputs
-                            .iter()
-                            .map(|input| input.borrow().clone())
-                            .collect(),
-                        resolve_attachments: desc
-                            .resolves
-                            .iter()
-                            .map(|resolve| resolve.borrow().clone())
-                            .collect(),
-                    }
+                .map(|desc| SubpassDesc {
+                    color_attachments: desc.colors.to_vec(),
+                    depth_stencil_attachment: desc.depth_stencil.cloned(),
+                    input_attachments: desc.inputs.to_vec(),
+                    resolve_attachments: desc.resolves.to_vec(),
                 })
                 .collect(),
         })
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        set_layouts: IS,
-        _push_constant_ranges: IR,
+        set_layouts: Is,
+        _push_constant_ranges: Ic,
     ) -> Result<PipelineLayout, device::OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<DescriptorSetLayout>,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+        Is: IntoIterator<Item = &'a DescriptorSetLayout>,
+        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
     {
         let mut res_offsets = MultiStageData::<RegisterData<RegisterAccumulator>>::default();
         let mut sets = Vec::new();
         for set_layout in set_layouts {
-            let layout = set_layout.borrow();
             sets.push(DescriptorSetInfo {
-                bindings: Arc::clone(&layout.bindings),
-                registers: res_offsets.advance(&layout.pool_mapping),
+                bindings: Arc::clone(&set_layout.bindings),
+                registers: res_offsets.advance(&set_layout.pool_mapping),
             });
         }
 
@@ -1906,14 +1880,12 @@ impl device::Device<Backend> for Device {
         _flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<DescriptorPool, device::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>,
+        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
     {
         let mut total = RegisterData::default();
         for range in ranges {
-            let r = range.borrow();
-            let content = DescriptorContent::from(r.ty);
-            total.add_content_many(content, r.count as DescriptorIndex);
+            let content = DescriptorContent::from(range.ty);
+            total.add_content_many(content, range.count as DescriptorIndex);
         }
 
         let max_stages = 6;

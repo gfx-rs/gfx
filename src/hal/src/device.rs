@@ -23,7 +23,7 @@ use crate::{
     Backend, MemoryTypeId,
 };
 
-use std::{any::Any, borrow::Borrow, fmt, iter, ops::Range};
+use std::{any::Any, fmt, iter, ops::Range};
 
 /// Error occurred caused device to be lost.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -224,22 +224,19 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///   You need to use at least one subpass.
     /// * `dependencies` - [dependencies between subpasses][crate::pass::SubpassDependency].
     ///   Can be empty.
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        attachments: IA,
-        subpasses: IS,
-        dependencies: ID,
+        attachments: Ia,
+        subpasses: Is,
+        dependencies: Id,
     ) -> Result<B::RenderPass, OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IA::IntoIter: ExactSizeIterator,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        IS::IntoIter: ExactSizeIterator,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
-        ID::IntoIter: ExactSizeIterator;
+        Ia: IntoIterator<Item = pass::Attachment>,
+        Ia::IntoIter: ExactSizeIterator,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
+        Is::IntoIter: ExactSizeIterator,
+        Id: IntoIterator<Item = pass::SubpassDependency>,
+        Id::IntoIter: ExactSizeIterator;
 
     /// Destroys a *render pass* created by this device.
     unsafe fn destroy_render_pass(&self, rp: B::RenderPass);
@@ -260,18 +257,16 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// accessed by a pipeline. The pipeline layout represents a sequence of descriptor sets with
     /// each having a specific layout. This sequence of layouts is used to determine the interface
     /// between shader stages and shader resources. Each pipeline is created using a pipeline layout.
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        set_layouts: IS,
-        push_constant: IR,
+        set_layouts: Is,
+        push_constant: Ic,
     ) -> Result<B::PipelineLayout, OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<B::DescriptorSetLayout>,
-        IS::IntoIter: ExactSizeIterator,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
-        IR::IntoIter: ExactSizeIterator;
+        Is: IntoIterator<Item = &'a B::DescriptorSetLayout>,
+        Is::IntoIter: ExactSizeIterator,
+        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
+        Ic::IntoIter: ExactSizeIterator;
 
     /// Destroy a pipeline layout object
     unsafe fn destroy_pipeline_layout(&self, layout: B::PipelineLayout);
@@ -485,8 +480,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         flags: DescriptorPoolCreateFlags,
     ) -> Result<B::DescriptorPool, OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>,
+        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
         I::IntoIter: ExactSizeIterator;
 
     /// Destroy a descriptor pool object

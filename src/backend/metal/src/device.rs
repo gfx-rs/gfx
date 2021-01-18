@@ -33,7 +33,6 @@ use parking_lot::Mutex;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
 use std::{
-    borrow::Borrow,
     cmp,
     collections::hash_map::Entry,
     collections::BTreeMap,
@@ -954,29 +953,21 @@ impl hal::device::Device<Backend> for Device {
         pool.reset(false);
     }
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        attachments: IA,
-        subpasses: IS,
-        _dependencies: ID,
+        attachments: Ia,
+        subpasses: Is,
+        _dependencies: Id,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
+        Ia: IntoIterator<Item = pass::Attachment>,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
     {
-        let attachments: Vec<pass::Attachment> = attachments
-            .into_iter()
-            .map(|at| at.borrow().clone())
-            .collect();
+        let attachments: Vec<pass::Attachment> = attachments.into_iter().collect();
 
         let mut subpasses: Vec<n::Subpass> = subpasses
             .into_iter()
-            .map(|sp| {
-                let sub = sp.borrow();
+            .map(|sub| {
                 let mut colors: ArrayVec<[_; MAX_COLOR_ATTACHMENTS]> = sub
                     .colors
                     .iter()
@@ -1066,16 +1057,14 @@ impl hal::device::Device<Backend> for Device {
         })
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        set_layouts: IS,
-        push_constant_ranges: IR,
+        set_layouts: Is,
+        push_constant_ranges: Ic,
     ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<n::DescriptorSetLayout>,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+        Is: IntoIterator<Item = &'a n::DescriptorSetLayout>,
+        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
     {
         let mut stage_infos = [
             (
@@ -1101,8 +1090,7 @@ impl hal::device::Device<Backend> for Device {
         // First, place the push constants
         let mut pc_buffers = [None; 3];
         let mut pc_limits = [0u32; 3];
-        for pcr in push_constant_ranges {
-            let (flags, range) = pcr.borrow();
+        for (flags, range) in push_constant_ranges {
             for (limit, &(stage_bit, _, _)) in pc_limits.iter_mut().zip(&stage_infos) {
                 if flags.contains(stage_bit) {
                     debug_assert_eq!(range.end % 4, 0);
@@ -1156,7 +1144,7 @@ impl hal::device::Device<Backend> for Device {
                 ps: stage_infos[1].2.clone(),
                 cs: stage_infos[2].2.clone(),
             };
-            match *set_layout.borrow() {
+            match *set_layout {
                 n::DescriptorSetLayout::Emulated {
                     layouts: ref desc_layouts,
                     ref immutable_samplers,
@@ -1409,7 +1397,7 @@ impl hal::device::Device<Backend> for Device {
         //TODO: reduce the locking here
         let mut dst = target.modules.whole_write();
         for source in sources {
-            let src = source.borrow().modules.whole_write();
+            let src = source.modules.whole_write();
             for (key, value) in src.iter() {
                 let storage = dst
                     .entry(key.clone())
@@ -1990,13 +1978,11 @@ impl hal::device::Device<Backend> for Device {
         _flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>,
+        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
     {
         if self.shared.private_caps.argument_buffers {
             let mut arguments = n::ArgumentArray::default();
-            for desc_range in descriptor_ranges {
-                let dr = desc_range.borrow();
+            for dr in descriptor_ranges {
                 let content = n::DescriptorContent::from(dr.ty);
                 let usage = n::ArgumentArray::describe_usage(dr.ty);
                 if content.contains(n::DescriptorContent::BUFFER) {
@@ -2026,8 +2012,7 @@ impl hal::device::Device<Backend> for Device {
             ))
         } else {
             let mut counters = n::ResourceData::<n::PoolResourceIndex>::new();
-            for desc_range in descriptor_ranges {
-                let dr = desc_range.borrow();
+            for dr in descriptor_ranges {
                 counters.add_many(
                     n::DescriptorContent::from(dr.ty),
                     dr.count as pso::DescriptorBinding,

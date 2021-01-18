@@ -10,7 +10,7 @@ use hal::{
     {buffer, device as d, format, image, pass, pso, query, queue}, {Features, MemoryTypeId},
 };
 
-use std::{borrow::Borrow, ffi::CString, mem, ops::Range, pin::Pin, ptr, sync::Arc};
+use std::{ffi::CString, mem, ops::Range, pin::Pin, ptr, sync::Arc};
 
 use crate::{
     command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B, Device,
@@ -494,27 +494,23 @@ impl d::Device<B> for Device {
         self.shared.raw.destroy_command_pool(pool.raw, None);
     }
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        attachments: IA,
-        subpasses: IS,
-        dependencies: ID,
+        attachments: Ia,
+        subpasses: Is,
+        dependencies: Id,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::IntoIter: ExactSizeIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IA::IntoIter: ExactSizeIterator,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        IS::IntoIter: ExactSizeIterator,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
-        ID::IntoIter: ExactSizeIterator,
+        Ia: IntoIterator<Item = pass::Attachment>,
+        Ia::IntoIter: ExactSizeIterator,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
+        Is::IntoIter: ExactSizeIterator,
+        Id: IntoIterator<Item = pass::SubpassDependency>,
+        Id::IntoIter: ExactSizeIterator,
     {
-        let attachments = attachments.into_iter().map(|attachment| {
-            let attachment = attachment.borrow();
-            vk::AttachmentDescription {
+        let attachments = attachments
+            .into_iter()
+            .map(|attachment| vk::AttachmentDescription {
                 flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
                 format: attachment
                     .format
@@ -526,11 +522,9 @@ impl d::Device<B> for Device {
                 stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
                 initial_layout: conv::map_image_layout(attachment.layouts.start),
                 final_layout: conv::map_image_layout(attachment.layouts.end),
-            }
-        });
+            });
 
-        let dependencies = dependencies.into_iter().map(|subpass_dep| {
-            let sdep = subpass_dep.borrow();
+        let dependencies = dependencies.into_iter().map(|sdep|
             // TODO: checks
             vk::SubpassDependency {
                 src_subpass: sdep
@@ -543,8 +537,7 @@ impl d::Device<B> for Device {
                 src_access_mask: conv::map_image_access(sdep.accesses.start),
                 dst_access_mask: conv::map_image_access(sdep.accesses.end),
                 dependency_flags: mem::transmute(sdep.flags),
-            }
-        });
+            });
 
         let attachment_count = attachments.len();
         let result = inplace_it::inplace_or_alloc_array(attachment_count, |uninit_guard| {
@@ -552,7 +545,6 @@ impl d::Device<B> for Device {
             let attachment_refs = subpasses
                 .into_iter()
                 .map(|subpass| {
-                    let subpass = subpass.borrow();
                     fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
                         vk::AttachmentReference {
                             attachment: id as _,
@@ -622,32 +614,30 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        sets: IS,
-        push_constant_ranges: IR,
+        set_layouts_iter: Is,
+        push_constant_ranges: Ic,
     ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<n::DescriptorSetLayout>,
-        IS::IntoIter: ExactSizeIterator,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
-        IR::IntoIter: ExactSizeIterator,
+        Is: IntoIterator<Item = &'a n::DescriptorSetLayout>,
+        Is::IntoIter: ExactSizeIterator,
+        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
+        Ic::IntoIter: ExactSizeIterator,
     {
-        let set_layouts = sets.into_iter().map(|set| set.borrow().raw);
+        let vk_set_layouts = set_layouts_iter.into_iter().map(|set| set.raw);
 
-        let push_constant_ranges = push_constant_ranges.into_iter().map(|range| {
-            let &(s, ref r) = range.borrow();
-            vk::PushConstantRange {
-                stage_flags: conv::map_stage_flags(s),
-                offset: r.start,
-                size: r.end - r.start,
-            }
-        });
+        let push_constant_ranges =
+            push_constant_ranges
+                .into_iter()
+                .map(|(s, ref r)| vk::PushConstantRange {
+                    stage_flags: conv::map_stage_flags(s),
+                    offset: r.start,
+                    size: r.end - r.start,
+                });
 
-        let result = inplace_it::inplace_or_alloc_array(set_layouts.len(), |uninit_guard| {
-            let set_layouts = uninit_guard.init_with_iter(set_layouts);
+        let result = inplace_it::inplace_or_alloc_array(vk_set_layouts.len(), |uninit_guard| {
+            let set_layouts = uninit_guard.init_with_iter(vk_set_layouts);
 
             // TODO: set_layouts doesnt implement fmt::Debug, submit PR?
             // debug!("create_pipeline_layout {:?}", set_layouts);
@@ -1266,21 +1256,19 @@ impl d::Device<B> for Device {
     unsafe fn create_descriptor_pool<T>(
         &self,
         max_sets: usize,
-        descriptor_pools: T,
+        descriptor_ranges: T,
         flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
-        T: IntoIterator,
-        T::Item: Borrow<pso::DescriptorRangeDesc>,
+        T: IntoIterator<Item = pso::DescriptorRangeDesc>,
         T::IntoIter: ExactSizeIterator,
     {
-        let pools = descriptor_pools.into_iter().map(|pool| {
-            let pool = pool.borrow();
-            vk::DescriptorPoolSize {
+        let pools = descriptor_ranges
+            .into_iter()
+            .map(|pool| vk::DescriptorPoolSize {
                 ty: conv::map_descriptor_type(pool.ty),
                 descriptor_count: pool.count as u32,
-            }
-        });
+            });
 
         let result = inplace_it::inplace_or_alloc_array(pools.len(), |uninit_guard| {
             let pools = uninit_guard.init_with_iter(pools);

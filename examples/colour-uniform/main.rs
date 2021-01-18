@@ -179,7 +179,7 @@ impl<B: Backend> RendererState<B> {
             .device
             .create_descriptor_pool(
                 1, // # of sets
-                &[
+                vec![
                     pso::DescriptorRangeDesc {
                         ty: pso::DescriptorType::Image {
                             ty: pso::ImageDescriptorType::Sampled {
@@ -202,7 +202,7 @@ impl<B: Backend> RendererState<B> {
             .device
             .create_descriptor_pool(
                 1, // # of sets
-                &[pso::DescriptorRangeDesc {
+                iter::once(pso::DescriptorRangeDesc {
                     ty: pso::DescriptorType::Buffer {
                         ty: pso::BufferDescriptorType::Uniform,
                         format: pso::BufferDescriptorFormat::Structured {
@@ -210,7 +210,7 @@ impl<B: Backend> RendererState<B> {
                         },
                     },
                     count: 1,
-                }],
+                }),
                 pso::DescriptorPoolCreateFlags::empty(),
             )
             .ok();
@@ -660,7 +660,7 @@ impl<B: Backend> RenderPassState<B> {
             device
                 .borrow()
                 .device
-                .create_render_pass(&[attachment], &[subpass], &[])
+                .create_render_pass(iter::once(attachment), iter::once(subpass), iter::empty())
                 .ok()
         };
         if let Some(ref mut rp) = render_pass {
@@ -1200,19 +1200,21 @@ struct PipelineState<B: Backend> {
 }
 
 impl<B: Backend> PipelineState<B> {
-    unsafe fn new<IS>(
-        desc_layouts: IS,
+    unsafe fn new<'a, Is>(
+        desc_layouts: Is,
         render_pass: &B::RenderPass,
         device_ptr: Rc<RefCell<DeviceState<B>>>,
     ) -> Self
     where
-        IS: IntoIterator,
-        IS::Item: std::borrow::Borrow<B::DescriptorSetLayout>,
-        IS::IntoIter: ExactSizeIterator,
+        Is: IntoIterator<Item = &'a B::DescriptorSetLayout>,
+        Is::IntoIter: ExactSizeIterator,
     {
         let device = &device_ptr.borrow().device;
         let pipeline_layout = device
-            .create_pipeline_layout(desc_layouts, &[(pso::ShaderStageFlags::VERTEX, 0..8)])
+            .create_pipeline_layout(
+                desc_layouts,
+                iter::once((pso::ShaderStageFlags::VERTEX, 0..8)),
+            )
             .expect("Can't create pipeline layout");
 
         let pipeline = {
