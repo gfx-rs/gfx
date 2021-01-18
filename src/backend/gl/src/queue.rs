@@ -988,8 +988,8 @@ impl CommandQueue {
                     );
                 } else {
                     if slot.is_some() {
-                        /// TODO: the generator of these commands should coalesce identical masks to prevent this warning
-                        ///       as much as is possible.
+                        // TODO: the generator of these commands should coalesce identical masks to prevent this warning
+                        //       as much as is possible.
                         warn!("GLES and WebGL do not support per-target color masks. Falling back on global mask.");
                     }
                     self.share.context.color_mask(
