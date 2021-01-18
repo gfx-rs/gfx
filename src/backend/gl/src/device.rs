@@ -1708,8 +1708,7 @@ impl d::Device<B> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::Descriptor<'a, B>>,
+        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
     {
         let mut layout_index = op
             .set
@@ -1720,7 +1719,7 @@ impl d::Device<B> for Device {
 
         for descriptor in op.descriptors {
             let binding_layout = &op.set.layout[layout_index];
-            let binding = match *descriptor.borrow() {
+            let binding = match descriptor {
                 pso::Descriptor::Buffer(buffer, ref sub) => {
                     let (raw_buffer, buffer_range) = buffer.as_bound();
                     let range = crate::resolve_sub_range(sub, buffer_range);

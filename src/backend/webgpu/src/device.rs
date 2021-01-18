@@ -344,8 +344,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, _op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
     {
         todo!()
     }

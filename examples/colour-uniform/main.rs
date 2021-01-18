@@ -966,9 +966,8 @@ impl<B: Backend> DescSet<B> {
         d: DescSetWrite<W>,
         device: &mut B::Device,
     ) where
-        W: IntoIterator,
+        W: IntoIterator<Item = pso::Descriptor<'a, B>>,
         W::IntoIter: ExactSizeIterator,
-        W::Item: std::borrow::Borrow<pso::Descriptor<'a, B>>,
     {
         let set = self.set.as_mut().unwrap();
         device.write_descriptor_set(pso::DescriptorSetWrite {

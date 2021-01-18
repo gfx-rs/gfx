@@ -558,9 +558,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Specifying the parameters of a descriptor set write operation.
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator,
-        I::IntoIter: ExactSizeIterator,
-        I::Item: Borrow<pso::Descriptor<'a, B>>;
+        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
+        I::IntoIter: ExactSizeIterator;
 
     /// Structure specifying a copy descriptor set operation.
     unsafe fn copy_descriptor_set<'a>(&self, op: pso::DescriptorSetCopy<'a, B>);

@@ -1599,9 +1599,8 @@ impl d::Device<B> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator,
+        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
         I::IntoIter: ExactSizeIterator,
-        I::Item: Borrow<pso::Descriptor<'a, B>>,
     {
         let descriptors = op.descriptors.into_iter();
         let mut raw_writes = Vec::<vk::WriteDescriptorSet>::with_capacity(descriptors.len());
@@ -1653,7 +1652,7 @@ impl d::Device<B> for Device {
                 });
             }
 
-            match *descriptor.borrow() {
+            match descriptor {
                 pso::Descriptor::Sampler(sampler) => {
                     image_infos.push(
                         vk::DescriptorImageInfo::builder()

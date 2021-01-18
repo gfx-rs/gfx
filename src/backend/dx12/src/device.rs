@@ -2986,8 +2986,7 @@ impl d::Device<B> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::Descriptor<'a, B>>,
+        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
     {
         let mut descriptor_updater = self.descriptor_updater.lock();
         descriptor_updater.reset();
@@ -3013,7 +3012,7 @@ impl d::Device<B> for Device {
             let mut src_srv = None;
             let mut src_uav = None;
 
-            match *descriptor.borrow() {
+            match descriptor {
                 pso::Descriptor::Buffer(buffer, ref sub) => {
                     let buffer = buffer.expect_bound();
 

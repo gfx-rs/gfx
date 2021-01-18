@@ -1970,8 +1970,7 @@ impl device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
     {
         // Get baseline mapping
         let mut mapping = op
@@ -2014,7 +2013,7 @@ impl device::Device<Backend> for Device {
         for descriptor in op.descriptors {
             let binding: &pso::DescriptorSetLayoutBinding = &op.set.layout.bindings[binding_index];
 
-            let handles = match *descriptor.borrow() {
+            let handles = match descriptor {
                 pso::Descriptor::Buffer(buffer, ref _sub) => RegisterData {
                     c: match buffer.internal.disjoint_cb {
                         Some(dj_buf) => dj_buf as *mut _,

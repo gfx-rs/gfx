@@ -2193,8 +2193,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
     {
         debug!("write_descriptor_set");
         match *op.set {
@@ -2216,7 +2215,7 @@ impl hal::device::Device<Backend> for Device {
 
                 for (layout, descriptor) in layouts[start.unwrap()..].iter().zip(op.descriptors) {
                     trace!("\t{:?}", layout);
-                    match *descriptor.borrow() {
+                    match descriptor {
                         pso::Descriptor::Sampler(sam) => {
                             debug_assert!(!layout
                                 .content
@@ -2294,7 +2293,7 @@ impl hal::device::Device<Backend> for Device {
                     .iter_mut()
                     .zip(op.descriptors)
                 {
-                    match *descriptor.borrow() {
+                    match descriptor {
                         pso::Descriptor::Sampler(sampler) => {
                             debug_assert!(!bindings[&op.binding]
                                 .content
