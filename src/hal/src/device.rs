@@ -316,22 +316,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         cache: Option<&B::PipelineCache>,
     ) -> Result<B::GraphicsPipeline, pso::CreationError>;
 
-    /// Create multiple graphics pipelines.
-    unsafe fn create_graphics_pipelines<'a, I>(
-        &self,
-        descs: I,
-        cache: Option<&B::PipelineCache>,
-    ) -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
-    {
-        descs
-            .into_iter()
-            .map(|desc| self.create_graphics_pipeline(desc.borrow(), cache))
-            .collect()
-    }
-
     /// Destroy a graphics pipeline.
     ///
     /// The graphics pipeline shouldn't be destroyed before any submitted command buffer,
@@ -344,22 +328,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         desc: &pso::ComputePipelineDesc<'a, B>,
         cache: Option<&B::PipelineCache>,
     ) -> Result<B::ComputePipeline, pso::CreationError>;
-
-    /// Create compute pipelines.
-    unsafe fn create_compute_pipelines<'a, I>(
-        &self,
-        descs: I,
-        cache: Option<&B::PipelineCache>,
-    ) -> Vec<Result<B::ComputePipeline, pso::CreationError>>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<pso::ComputePipelineDesc<'a, B>>,
-    {
-        descs
-            .into_iter()
-            .map(|desc| self.create_compute_pipeline(desc.borrow(), cache))
-            .collect()
-    }
 
     /// Destroy a compute pipeline.
     ///

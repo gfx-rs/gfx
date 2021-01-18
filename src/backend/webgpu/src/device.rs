@@ -122,18 +122,6 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn create_graphics_pipelines<'a, I>(
-        &self,
-        _descs: I,
-        _cache: Option<&<Backend as hal::Backend>::PipelineCache>,
-    ) -> Vec<Result<<Backend as hal::Backend>::GraphicsPipeline, hal::pso::CreationError>>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<hal::pso::GraphicsPipelineDesc<'a, Backend>>,
-    {
-        todo!()
-    }
-
     unsafe fn destroy_graphics_pipeline(
         &self,
         _pipeline: <Backend as hal::Backend>::GraphicsPipeline,
@@ -146,18 +134,6 @@ impl hal::device::Device<Backend> for Device {
         _desc: &hal::pso::ComputePipelineDesc<'a, Backend>,
         _cache: Option<&<Backend as hal::Backend>::PipelineCache>,
     ) -> Result<<Backend as hal::Backend>::ComputePipeline, pso::CreationError> {
-        todo!()
-    }
-
-    unsafe fn create_compute_pipelines<'a, I>(
-        &self,
-        _descs: I,
-        _cache: Option<&<Backend as hal::Backend>::PipelineCache>,
-    ) -> Vec<Result<<Backend as hal::Backend>::ComputePipeline, hal::pso::CreationError>>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<hal::pso::ComputePipelineDesc<'a, Backend>>,
-    {
         todo!()
     }
 
