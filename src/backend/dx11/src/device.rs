@@ -1921,22 +1921,17 @@ impl device::Device<Backend> for Device {
         Ok(DescriptorPool::with_capacity(count))
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         layout_bindings: I,
         _immutable_samplers: J,
     ) -> Result<DescriptorSetLayout, device::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<Sampler>,
+        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator<Item = &'a Sampler>,
     {
         let mut total = MultiStageData::<RegisterData<_>>::default();
-        let mut bindings = layout_bindings
-            .into_iter()
-            .map(|b| b.borrow().clone())
-            .collect::<Vec<_>>();
+        let mut bindings = layout_bindings.into_iter().collect::<Vec<_>>();
 
         for binding in bindings.iter() {
             let content = DescriptorContent::from(binding.ty);

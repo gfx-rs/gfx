@@ -2037,23 +2037,20 @@ impl hal::device::Device<Backend> for Device {
         }
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         binding_iter: I,
         immutable_samplers: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<n::Sampler>,
+        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator<Item = &'a n::Sampler>,
     {
         if self.shared.private_caps.argument_buffers {
             let mut stage_flags = pso::ShaderStageFlags::empty();
             let mut arguments = n::ArgumentArray::default();
             let mut bindings = FastHashMap::default();
             for desc in binding_iter {
-                let desc = desc.borrow();
                 //TODO: have the API providing the dimensions and MSAA flag
                 // for textures in an argument buffer
                 match desc.ty {
@@ -2133,8 +2130,7 @@ impl hal::device::Device<Backend> for Device {
             let mut desc_layouts = Vec::new();
             let mut total = n::ResourceData::new();
 
-            for set_layout_binding in binding_iter {
-                let slb = set_layout_binding.borrow();
+            for slb in binding_iter {
                 let mut content = n::DescriptorContent::from(slb.ty);
                 total.add_many(content, slb.count as _);
 
@@ -2145,7 +2141,7 @@ impl hal::device::Device<Backend> for Device {
                             .take(slb.count)
                             .enumerate()
                             .map(|(array_index, sm)| TempSampler {
-                                data: sm.borrow().data.clone(),
+                                data: sm.data.clone(),
                                 binding: slb.binding,
                                 array_index,
                             }),

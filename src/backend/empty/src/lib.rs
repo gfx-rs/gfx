@@ -375,11 +375,14 @@ impl device::Device<Backend> for Device {
         Ok(DescriptorPool)
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         _bindings: I,
         _samplers: J,
-    ) -> Result<DescriptorSetLayout, device::OutOfMemory> {
+    ) -> Result<DescriptorSetLayout, device::OutOfMemory>
+    where
+        J: IntoIterator<Item = &'a ()>,
+    {
         let layout = DescriptorSetLayout {
             name: String::new(),
         };

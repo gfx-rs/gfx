@@ -1305,58 +1305,54 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         binding_iter: I,
         immutable_sampler_iter: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<n::Sampler>,
+        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator<Item = &'a n::Sampler>,
         J::IntoIter: ExactSizeIterator,
     {
-        let immutable_samplers = immutable_sampler_iter.into_iter().map(|is| is.borrow().0);
+        let vk_immutable_samplers = immutable_sampler_iter.into_iter().map(|is| is.0);
         let mut sampler_offset = 0;
 
-        let mut bindings = binding_iter
-            .into_iter()
-            .map(|b| b.borrow().clone())
-            .collect::<Vec<_>>();
+        let mut bindings = binding_iter.into_iter().collect::<Vec<_>>();
         // Sorting will come handy in `write_descriptor_sets`.
         bindings.sort_by_key(|b| b.binding);
 
-        let result = inplace_it::inplace_or_alloc_array(immutable_samplers.len(), |uninit_guard| {
-            let immutable_samplers = uninit_guard.init_with_iter(immutable_samplers);
+        let result =
+            inplace_it::inplace_or_alloc_array(vk_immutable_samplers.len(), |uninit_guard| {
+                let immutable_samplers = uninit_guard.init_with_iter(vk_immutable_samplers);
 
-            let raw_bindings = bindings.iter().map(|b| vk::DescriptorSetLayoutBinding {
-                binding: b.binding,
-                descriptor_type: conv::map_descriptor_type(b.ty),
-                descriptor_count: b.count as _,
-                stage_flags: conv::map_stage_flags(b.stage_flags),
-                p_immutable_samplers: if b.immutable_samplers {
-                    let slice = &immutable_samplers[sampler_offset..];
-                    sampler_offset += b.count;
-                    slice.as_ptr()
-                } else {
-                    ptr::null()
-                },
+                let raw_bindings = bindings.iter().map(|b| vk::DescriptorSetLayoutBinding {
+                    binding: b.binding,
+                    descriptor_type: conv::map_descriptor_type(b.ty),
+                    descriptor_count: b.count as _,
+                    stage_flags: conv::map_stage_flags(b.stage_flags),
+                    p_immutable_samplers: if b.immutable_samplers {
+                        let slice = &immutable_samplers[sampler_offset..];
+                        sampler_offset += b.count;
+                        slice.as_ptr()
+                    } else {
+                        ptr::null()
+                    },
+                });
+
+                inplace_it::inplace_or_alloc_array(raw_bindings.len(), |uninit_guard| {
+                    let raw_bindings = uninit_guard.init_with_iter(raw_bindings);
+
+                    // TODO raw_bindings doesnt implement fmt::Debug
+                    // debug!("create_descriptor_set_layout {:?}", raw_bindings);
+
+                    let info = vk::DescriptorSetLayoutCreateInfo::builder()
+                        .flags(vk::DescriptorSetLayoutCreateFlags::empty())
+                        .bindings(&raw_bindings);
+
+                    self.shared.raw.create_descriptor_set_layout(&info, None)
+                })
             });
-
-            inplace_it::inplace_or_alloc_array(raw_bindings.len(), |uninit_guard| {
-                let raw_bindings = uninit_guard.init_with_iter(raw_bindings);
-
-                // TODO raw_bindings doesnt implement fmt::Debug
-                // debug!("create_descriptor_set_layout {:?}", raw_bindings);
-
-                let info = vk::DescriptorSetLayoutCreateInfo::builder()
-                    .flags(vk::DescriptorSetLayoutCreateFlags::empty())
-                    .bindings(&raw_bindings);
-
-                self.shared.raw.create_descriptor_set_layout(&info, None)
-            })
-        });
 
         match result {
             Ok(layout) => Ok(n::DescriptorSetLayout {
@@ -1619,26 +1615,25 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn wait_for_fences<I>(
+    unsafe fn wait_for_fences<'a, I>(
         &self,
-        fences: I,
+        fences_iter: I,
         wait: d::WaitFor,
         timeout_ns: u64,
     ) -> Result<bool, d::WaitError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<n::Fence>,
+        I: IntoIterator<Item = &'a n::Fence>,
         I::IntoIter: ExactSizeIterator,
     {
-        let fences = fences.into_iter().map(|fence| fence.borrow().0);
+        let vk_fences = fences_iter.into_iter().map(|fence| fence.0);
 
         let all = match wait {
             d::WaitFor::Any => false,
             d::WaitFor::All => true,
         };
 
-        let result = inplace_it::inplace_or_alloc_array(fences.len(), |uninit_guard| {
-            let fences = uninit_guard.init_with_iter(fences);
+        let result = inplace_it::inplace_or_alloc_array(vk_fences.len(), |uninit_guard| {
+            let fences = uninit_guard.init_with_iter(vk_fences);
             self.shared.raw.wait_for_fences(&fences, all, timeout_ns)
         });
 

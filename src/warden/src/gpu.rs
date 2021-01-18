@@ -697,8 +697,10 @@ impl<B: hal::Backend> Scene<B> {
                     assert!(immutable_samplers.is_empty()); //TODO! requires changing the order,
                     assert!(!bindings.is_empty());
                     // since samples are expect to be all read by this point
-                    let layout = unsafe { device.create_descriptor_set_layout(bindings, &[]) }
-                        .expect("Descriptor set layout creation failure!");
+                    let layout = unsafe {
+                        device.create_descriptor_set_layout(bindings.iter().cloned(), &[])
+                    }
+                    .expect("Descriptor set layout creation failure!");
                     let binding_indices = bindings.iter().map(|dsb| dsb.binding).collect();
                     resources
                         .desc_set_layouts

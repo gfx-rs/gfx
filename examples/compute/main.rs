@@ -80,7 +80,7 @@ fn main() {
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
         let set_layout = unsafe {
             device.create_descriptor_set_layout(
-                &[pso::DescriptorSetLayoutBinding {
+                iter::once(pso::DescriptorSetLayoutBinding {
                     binding: 0,
                     ty: pso::DescriptorType::Buffer {
                         ty: pso::BufferDescriptorType::Storage { read_only: false },
@@ -91,7 +91,7 @@ fn main() {
                     count: 1,
                     stage_flags: pso::ShaderStageFlags::COMPUTE,
                     immutable_samplers: false,
-                }],
+                }),
                 &[],
             )
         }

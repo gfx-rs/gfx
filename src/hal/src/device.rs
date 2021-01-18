@@ -502,16 +502,15 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Each individual descriptor binding is specified by a descriptor type, a count (array size)
     /// of the number of descriptors in the binding, a set of shader stages that **can** access the
     /// binding, and (if using immutable samplers) an array of sampler descriptors.
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         bindings: I,
         immutable_samplers: J,
     ) -> Result<B::DescriptorSetLayout, OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<B::Sampler>,
+        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
+        I::IntoIter: ExactSizeIterator,
+        J: IntoIterator<Item = &'a B::Sampler>,
         J::IntoIter: ExactSizeIterator;
 
     /// Destroy a descriptor set layout object
@@ -590,15 +589,14 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Blocks until all or one of the given fences are signaled.
     /// Returns true if fences were signaled before the timeout.
-    unsafe fn wait_for_fences<I>(
+    unsafe fn wait_for_fences<'a, I>(
         &self,
         fences: I,
         wait: WaitFor,
         timeout_ns: u64,
     ) -> Result<bool, WaitError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<B::Fence>,
+        I: IntoIterator<Item = &'a B::Fence>,
         I::IntoIter: ExactSizeIterator,
     {
         use std::{thread, time};
@@ -610,12 +608,12 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         match wait {
             WaitFor::All => {
                 for fence in fences {
-                    if !self.wait_for_fence(fence.borrow(), 0)? {
+                    if !self.wait_for_fence(fence, 0)? {
                         let elapsed_ns = to_ns(start.elapsed());
                         if elapsed_ns > timeout_ns {
                             return Ok(false);
                         }
-                        if !self.wait_for_fence(fence.borrow(), timeout_ns - elapsed_ns)? {
+                        if !self.wait_for_fence(fence, timeout_ns - elapsed_ns)? {
                             return Ok(false);
                         }
                     }
@@ -625,8 +623,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
             WaitFor::Any => {
                 let fences: Vec<_> = fences.into_iter().collect();
                 loop {
-                    for fence in &fences {
-                        if self.wait_for_fence(fence.borrow(), 0)? {
+                    for &fence in &fences {
+                        if self.wait_for_fence(fence, 0)? {
                             return Ok(true);
                         }
                     }

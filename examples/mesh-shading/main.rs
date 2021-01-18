@@ -223,7 +223,7 @@ where
         let set_layout = ManuallyDrop::new(
             unsafe {
                 device.create_descriptor_set_layout(
-                    &[pso::DescriptorSetLayoutBinding {
+                    iter::once(pso::DescriptorSetLayoutBinding {
                         binding: 0,
                         ty: pso::DescriptorType::Buffer {
                             ty: pso::BufferDescriptorType::Storage { read_only: true },
@@ -234,7 +234,7 @@ where
                         count: 1,
                         stage_flags: ShaderStageFlags::MESH,
                         immutable_samplers: false,
-                    }],
+                    }),
                     &[],
                 )
             }

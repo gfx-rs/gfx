@@ -295,16 +295,13 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         _bindings: I,
         _immutable_samplers: J,
     ) -> Result<<Backend as hal::Backend>::DescriptorSetLayout, OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<<Backend as hal::Backend>::Sampler>,
+        J: IntoIterator<Item = &'a <Backend as hal::Backend>::Sampler>,
     {
         todo!()
     }
@@ -383,15 +380,14 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn wait_for_fences<I>(
+    unsafe fn wait_for_fences<'a, I>(
         &self,
         _fences: I,
         _wait: hal::device::WaitFor,
         _timeout_ns: u64,
     ) -> Result<bool, WaitError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<<Backend as hal::Backend>::Fence>,
+        I: IntoIterator<Item = &'a <Backend as hal::Backend>::Fence>,
     {
         todo!()
     }

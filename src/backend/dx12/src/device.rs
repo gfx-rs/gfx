@@ -2967,19 +2967,17 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         bindings: I,
         _immutable_samplers: J,
     ) -> Result<r::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<r::Sampler>,
+        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator<Item = &'a r::Sampler>,
     {
         Ok(r::DescriptorSetLayout {
-            bindings: bindings.into_iter().map(|b| b.borrow().clone()).collect(),
+            bindings: bindings.into_iter().collect(),
         })
     }
 
@@ -3313,28 +3311,26 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn wait_for_fences<I>(
+    unsafe fn wait_for_fences<'a, I>(
         &self,
         fences: I,
         wait: d::WaitFor,
         timeout_ns: u64,
     ) -> Result<bool, d::WaitError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<r::Fence>,
+        I: IntoIterator<Item = &'a r::Fence>,
+        I::IntoIter: ExactSizeIterator,
     {
-        let fences = fences.into_iter().collect::<Vec<_>>();
+        let fences_iter = fences.into_iter();
+        let count = fences_iter.len();
         let mut events = self.events.lock();
-        for _ in events.len()..fences.len() {
+        for _ in events.len()..count {
             events.push(native::Event::create(false, false));
         }
 
-        for (&event, fence) in events.iter().zip(fences.iter()) {
+        for (&event, fence) in events.iter().zip(fences_iter) {
             synchapi::ResetEvent(event.0);
-            assert_eq!(
-                winerror::S_OK,
-                fence.borrow().raw.set_event_on_completion(event, 1)
-            );
+            assert_eq!(winerror::S_OK, fence.raw.set_event_on_completion(event, 1));
         }
 
         let all = match wait {
@@ -3354,7 +3350,7 @@ impl d::Device<B> for Device {
             };
 
             synchapi::WaitForMultipleObjects(
-                fences.len() as u32,
+                count as u32,
                 events.as_ptr() as *const _,
                 all,
                 timeout_ms,

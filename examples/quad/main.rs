@@ -241,7 +241,7 @@ where
         let set_layout = ManuallyDrop::new(
             unsafe {
                 device.create_descriptor_set_layout(
-                    &[
+                    vec![
                         pso::DescriptorSetLayoutBinding {
                             binding: 0,
                             ty: pso::DescriptorType::Image {

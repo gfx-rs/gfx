@@ -1681,21 +1681,16 @@ impl d::Device<B> for Device {
         Ok(n::DescriptorPool {})
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         layout: I,
-        _: J,
+        _immutable_samplers: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<n::FatSampler>,
+        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator<Item = &'a n::FatSampler>,
     {
-        let mut bindings = layout
-            .into_iter()
-            .map(|l| l.borrow().clone())
-            .collect::<Vec<_>>();
+        let mut bindings = layout.into_iter().collect::<Vec<_>>();
         // all operations rely on the ascending bindings order
         bindings.sort_by_key(|b| b.binding);
         Ok(Arc::new(bindings))
@@ -1853,15 +1848,14 @@ impl d::Device<B> for Device {
     }
 
     #[cfg(target_arch = "wasm32")]
-    unsafe fn wait_for_fences<I>(
+    unsafe fn wait_for_fences<'a, I>(
         &self,
         fences: I,
         wait: d::WaitFor,
         timeout_ns: u64,
     ) -> Result<bool, d::WaitError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<n::Fence>,
+        I: IntoIterator<Item = &'a n::Fence>,
     {
         let performance = web_sys::window().unwrap().performance().unwrap();
         let start = performance.now();
