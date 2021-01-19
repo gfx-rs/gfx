@@ -24,7 +24,6 @@ bitflags = "1"
 log = "0.4"
 hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
 auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
-smallvec = "1.0"
 glow = "0.7.1"
 parking_lot = "0.11"
 spirv_cross = { version = "0.22.2", features = ["glsl"]}

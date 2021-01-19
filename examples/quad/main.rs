@@ -36,7 +36,7 @@ use hal::{
     prelude::*,
     pso,
     pso::{PipelineStage, ShaderStageFlags, VertexInputRate},
-    queue::{QueueGroup, Submission},
+    queue::QueueGroup,
     window,
 };
 
@@ -241,7 +241,7 @@ where
         let set_layout = ManuallyDrop::new(
             unsafe {
                 device.create_descriptor_set_layout(
-                    &[
+                    vec![
                         pso::DescriptorSetLayoutBinding {
                             binding: 0,
                             ty: pso::DescriptorType::Image {
@@ -272,7 +272,7 @@ where
             unsafe {
                 device.create_descriptor_pool(
                     1, // sets
-                    &[
+                    vec![
                         pso::DescriptorRangeDesc {
                             ty: pso::DescriptorType::Image {
                                 ty: pso::ImageDescriptorType::Sampled {
@@ -291,7 +291,7 @@ where
             }
             .expect("Can't create descriptor pool"),
         );
-        let mut desc_set = unsafe { desc_pool.allocate_set(&set_layout) }.unwrap();
+        let mut desc_set = unsafe { desc_pool.allocate_one(&set_layout) }.unwrap();
 
         // Buffer allocations
         println!("Memory types: {:?}", memory_types);
@@ -471,14 +471,14 @@ where
             cmd_buffer.pipeline_barrier(
                 PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
-                &[image_barrier],
+                iter::once(image_barrier),
             );
 
             cmd_buffer.copy_buffer_to_image(
                 &image_upload_buffer,
                 &image_logo,
                 i::Layout::TransferDstOptimal,
-                &[command::BufferImageCopy {
+                iter::once(command::BufferImageCopy {
                     buffer_offset: 0,
                     buffer_width: row_pitch / (image_stride as u32),
                     buffer_height: height as u32,
@@ -493,7 +493,7 @@ where
                         height,
                         depth: 1,
                     },
-                }],
+                }),
             );
 
             let image_barrier = m::Barrier::Image {
@@ -509,13 +509,17 @@ where
             cmd_buffer.pipeline_barrier(
                 PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
                 m::Dependencies::empty(),
-                &[image_barrier],
+                iter::once(image_barrier),
             );
 
             cmd_buffer.finish();
 
-            queue_group.queues[0]
-                .submit_without_semaphores(Some(&cmd_buffer), Some(&mut copy_fence));
+            queue_group.queues[0].submit(
+                iter::once(&cmd_buffer),
+                iter::empty(),
+                iter::empty(),
+                Some(&mut copy_fence),
+            );
 
             device
                 .wait_for_fence(&copy_fence, !0)
@@ -568,8 +572,14 @@ where
             };
 
             ManuallyDrop::new(
-                unsafe { device.create_render_pass(&[attachment], &[subpass], &[]) }
-                    .expect("Can't create render pass"),
+                unsafe {
+                    device.create_render_pass(
+                        iter::once(attachment),
+                        iter::once(subpass),
+                        iter::empty(),
+                    )
+                }
+                .expect("Can't create render pass"),
             )
         };
 
@@ -632,7 +642,7 @@ where
         }
 
         let pipeline_layout = ManuallyDrop::new(
-            unsafe { device.create_pipeline_layout(iter::once(&*set_layout), &[]) }
+            unsafe { device.create_pipeline_layout(iter::once(&*set_layout), iter::empty()) }
                 .expect("Can't create pipeline layout"),
         );
         let pipeline = {
@@ -841,8 +851,8 @@ where
         unsafe {
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
-            cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+            cmd_buffer.set_viewports(0, iter::once(self.viewport.clone()));
+            cmd_buffer.set_scissors(0, iter::once(self.viewport.rect));
             cmd_buffer.bind_graphics_pipeline(&self.pipeline);
             cmd_buffer.bind_vertex_buffers(
                 0,
@@ -852,7 +862,7 @@ where
                 &self.pipeline_layout,
                 0,
                 self.desc_set.as_ref(),
-                &[],
+                iter::empty(),
             );
 
             cmd_buffer.begin_render_pass(
@@ -873,13 +883,10 @@ where
             cmd_buffer.end_render_pass();
             cmd_buffer.finish();
 
-            let submission = Submission {
-                command_buffers: iter::once(&*cmd_buffer),
-                wait_semaphores: None,
-                signal_semaphores: iter::once(&self.submission_complete_semaphores[frame_idx]),
-            };
             self.queue_group.queues[0].submit(
-                submission,
+                iter::once(&*cmd_buffer),
+                iter::empty(),
+                iter::once(&self.submission_complete_semaphores[frame_idx]),
                 Some(&mut self.submission_complete_fences[frame_idx]),
             );
 

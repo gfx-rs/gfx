@@ -19,7 +19,7 @@ use glow::HasContext;
 use parking_lot::Mutex;
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
-use std::{borrow::Borrow, ops::Range, slice, sync::Arc};
+use std::{ops::Range, slice, sync::Arc};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -842,24 +842,19 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        attachments: IA,
-        subpasses: IS,
-        _dependencies: ID,
+        attachments: Ia,
+        subpasses: Is,
+        _dependencies: Id,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
+        Ia: IntoIterator<Item = pass::Attachment>,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
     {
         let subpasses = subpasses
             .into_iter()
             .map(|subpass| {
-                let subpass = subpass.borrow();
                 assert!(
                     subpass.colors.len() <= self.share.limits.max_color_attachments,
                     "Color attachment limit exceeded"
@@ -876,24 +871,18 @@ impl d::Device<B> for Device {
             .collect();
 
         Ok(n::RenderPass {
-            attachments: attachments
-                .into_iter()
-                .map(|attachment| attachment.borrow().clone())
-                .collect::<Vec<_>>(),
+            attachments: attachments.into_iter().collect::<Vec<_>>(),
             subpasses,
         })
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        layouts: IS,
-        _: IR,
+        layouts: Is,
+        _: Ic,
     ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<n::DescriptorSetLayout>,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+        Is: IntoIterator<Item = &'a n::DescriptorSetLayout>,
     {
         use std::convert::TryInto;
         let mut sets = Vec::new();
@@ -902,8 +891,7 @@ impl d::Device<B> for Device {
         let mut num_uniform_buffers = 0usize;
         let mut num_storage_buffers = 0usize;
 
-        for layout in layouts {
-            let layout_bindings = layout.borrow();
+        for layout_bindings in layouts {
             // create a vector with the size enough to hold all the bindings, filled with `!0`
             let mut bindings =
                 vec![!0; layout_bindings.last().map_or(0, |b| b.binding as usize + 1)];
@@ -950,10 +938,9 @@ impl d::Device<B> for Device {
         //empty
     }
 
-    unsafe fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), d::OutOfMemory>
+    unsafe fn merge_pipeline_caches<'a, I>(&self, _: &mut (), _: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<()>,
+        I: IntoIterator<Item = &'a ()>,
     {
         //empty
         Ok(())
@@ -964,8 +951,6 @@ impl d::Device<B> for Device {
         desc: &pso::GraphicsPipelineDesc<'a, B>,
         _cache: Option<&()>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        let desc = desc.borrow();
-
         let (vertex_buffers, desc_attributes, input_assembler, vs, gs, hs, ds) =
             match desc.primitive_assembler {
                 pso::PrimitiveAssemblerDesc::Vertex {
@@ -1351,13 +1336,11 @@ impl d::Device<B> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         let gl = &self.share.context;
 
-        for i in ranges {
-            let (mem, segment) = i.borrow();
+        for (mem, segment) in ranges {
             let (buffer, target) = mem.buffer.expect("cannot flush image memory");
             gl.bind_buffer(target, Some(buffer));
 
@@ -1385,13 +1368,11 @@ impl d::Device<B> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         let gl = &self.share.context;
 
-        for i in ranges {
-            let (mem, segment) = i.borrow();
+        for (mem, segment) in ranges {
             let (buffer, target) = mem.buffer.expect("cannot invalidate image memory");
             gl.bind_buffer(target, Some(buffer));
 
@@ -1683,27 +1664,21 @@ impl d::Device<B> for Device {
         _: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>,
+        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
     {
         Ok(n::DescriptorPool {})
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         layout: I,
-        _: J,
+        _immutable_samplers: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<n::FatSampler>,
+        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator<Item = &'a n::FatSampler>,
     {
-        let mut bindings = layout
-            .into_iter()
-            .map(|l| l.borrow().clone())
-            .collect::<Vec<_>>();
+        let mut bindings = layout.into_iter().collect::<Vec<_>>();
         // all operations rely on the ascending bindings order
         bindings.sort_by_key(|b| b.binding);
         Ok(Arc::new(bindings))
@@ -1711,8 +1686,8 @@ impl d::Device<B> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::Descriptor<'a, B>>,
+        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
+        I::IntoIter: ExactSizeIterator,
     {
         let mut layout_index = op
             .set
@@ -1723,7 +1698,7 @@ impl d::Device<B> for Device {
 
         for descriptor in op.descriptors {
             let binding_layout = &op.set.layout[layout_index];
-            let binding = match *descriptor.borrow() {
+            let binding = match descriptor {
                 pso::Descriptor::Buffer(buffer, ref sub) => {
                     let (raw_buffer, buffer_range) = buffer.as_bound();
                     let range = crate::resolve_sub_range(sub, buffer_range);
@@ -1862,15 +1837,14 @@ impl d::Device<B> for Device {
     }
 
     #[cfg(target_arch = "wasm32")]
-    unsafe fn wait_for_fences<I>(
+    unsafe fn wait_for_fences<'a, I>(
         &self,
         fences: I,
         wait: d::WaitFor,
         timeout_ns: u64,
     ) -> Result<bool, d::WaitError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<n::Fence>,
+        I: IntoIterator<Item = &'a n::Fence>,
     {
         let performance = web_sys::window().unwrap().performance().unwrap();
         let start = performance.now();
@@ -1879,12 +1853,12 @@ impl d::Device<B> for Device {
         match wait {
             d::WaitFor::All => {
                 for fence in fences {
-                    if !self.wait_for_fence(fence.borrow(), 0)? {
+                    if !self.wait_for_fence(fence, 0)? {
                         let elapsed_ns = get_elapsed();
                         if elapsed_ns > timeout_ns {
                             return Ok(false);
                         }
-                        if !self.wait_for_fence(fence.borrow(), timeout_ns - elapsed_ns)? {
+                        if !self.wait_for_fence(fence, timeout_ns - elapsed_ns)? {
                             return Ok(false);
                         }
                     }
@@ -1897,7 +1871,7 @@ impl d::Device<B> for Device {
                 let fences: Vec<_> = fences.into_iter().collect();
                 loop {
                     for fence in &fences {
-                        if self.wait_for_fence(fence.borrow(), FENCE_WAIT_NS)? {
+                        if self.wait_for_fence(fence, FENCE_WAIT_NS)? {
                             return Ok(true);
                         }
                     }

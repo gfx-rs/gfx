@@ -24,7 +24,7 @@ use crate::{
     VertexCount, VertexOffset, WorkGroupCount,
 };
 
-use std::{any::Any, borrow::Borrow, fmt, ops::Range};
+use std::{any::Any, fmt, ops::Range};
 
 pub use self::clear::*;
 pub use self::structs::*;
@@ -130,14 +130,16 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     // Should probably be a whole book chapter on synchronization and stuff really.
     /// Inserts a synchronization dependency between pipeline stages
     /// in the command buffer.
+    // Note: the `ExactSizeIterator` here is not used, since the `Barrier`
+    // is an enum, and the backends have to use different-sized arrays for
+    // different kinds of barriers.
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
         stages: Range<pso::PipelineStage>,
         dependencies: Dependencies,
         barriers: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<Barrier<'a, B>>;
+        T: IntoIterator<Item = Barrier<'a, B>>;
 
     /// Fill a buffer with the given `u32` value.
     unsafe fn fill_buffer(&mut self, buffer: &B::Buffer, range: buffer::SubRange, data: u32);
@@ -153,18 +155,16 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         value: ClearValue,
         subresource_ranges: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<SubresourceRange>;
+        T: IntoIterator<Item = SubresourceRange>,
+        T::IntoIter: ExactSizeIterator;
 
     /// Takes an iterator of attachments and an iterator of rect's,
     /// and clears the given rect's for *each* attachment.
     unsafe fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
-        T: IntoIterator,
-        T::Item: Borrow<AttachmentClear>,
+        T: IntoIterator<Item = AttachmentClear>,
         T::IntoIter: ExactSizeIterator,
-        U: IntoIterator,
-        U::Item: Borrow<pso::ClearRect>,
+        U: IntoIterator<Item = pso::ClearRect>,
         U::IntoIter: ExactSizeIterator;
 
     /// "Resolves" a multisampled image, converting it into a non-multisampled
@@ -177,8 +177,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         dst_layout: Layout,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<ImageResolve>,
+        T: IntoIterator<Item = ImageResolve>,
         T::IntoIter: ExactSizeIterator;
 
     /// Copies regions from the source to destination image,
@@ -192,8 +191,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         filter: Filter,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<ImageBlit>,
+        T: IntoIterator<Item = ImageBlit>,
         T::IntoIter: ExactSizeIterator;
 
     /// Bind the index buffer view, making it the "current" one that draw commands
@@ -220,11 +218,10 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///
     /// The `buffers` iterator should yield the `Buffer` to bind, as well as a subrange,
     /// in bytes, into that buffer where the vertex data that should be bound.
-    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
+    unsafe fn bind_vertex_buffers<'a, T>(&mut self, first_binding: pso::BufferIndex, buffers: T)
     where
-        I: IntoIterator<Item = (T, buffer::SubRange)>,
-        T: Borrow<B::Buffer>,
-        I::IntoIter: ExactSizeIterator;
+        T: IntoIterator<Item = (&'a B::Buffer, buffer::SubRange)>,
+        T::IntoIter: ExactSizeIterator;
 
     /// Set the [viewport][crate::pso::Viewport] parameters for the rasterizer.
     ///
@@ -245,8 +242,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///   draw call.
     unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
-        T: IntoIterator,
-        T::Item: Borrow<pso::Viewport>,
+        T: IntoIterator<Item = pso::Viewport>,
         T::IntoIter: ExactSizeIterator;
 
     /// Set the scissor rectangles for the rasterizer.
@@ -268,8 +264,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///   call.
     unsafe fn set_scissors<T>(&mut self, first_scissor: u32, rects: T)
     where
-        T: IntoIterator,
-        T::Item: Borrow<pso::Rect>,
+        T: IntoIterator<Item = pso::Rect>,
         T::IntoIter: ExactSizeIterator;
 
     /// Sets the stencil reference value for comparison operations and store operations.
@@ -341,18 +336,16 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Takes an iterator of graphics `DescriptorSet`'s, and binds them to the command buffer.
     /// `first_set` is the index that the first descriptor is mapped to in the command buffer.
-    unsafe fn bind_graphics_descriptor_sets<I, J>(
+    unsafe fn bind_graphics_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<B::DescriptorSet>,
+        I: IntoIterator<Item = &'a B::DescriptorSet>,
         I::IntoIter: ExactSizeIterator,
-        J: IntoIterator,
-        J::Item: Borrow<DescriptorSetOffset>,
+        J: IntoIterator<Item = DescriptorSetOffset>,
         J::IntoIter: ExactSizeIterator;
 
     /// Bind a compute pipeline.
@@ -368,18 +361,16 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Takes an iterator of compute `DescriptorSet`'s, and binds them to the command buffer,
     /// `first_set` is the index that the first descriptor is mapped to in the command buffer.
-    unsafe fn bind_compute_descriptor_sets<I, J>(
+    unsafe fn bind_compute_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<B::DescriptorSet>,
+        I: IntoIterator<Item = &'a B::DescriptorSet>,
         I::IntoIter: ExactSizeIterator,
-        J: IntoIterator,
-        J::Item: Borrow<DescriptorSetOffset>,
+        J: IntoIterator<Item = DescriptorSetOffset>,
         J::IntoIter: ExactSizeIterator;
 
     /// Execute a workgroup in the compute pipeline. `x`, `y` and `z` are the
@@ -407,8 +398,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Adds a command to copy regions from the source to destination buffer.
     unsafe fn copy_buffer<T>(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: T)
     where
-        T: IntoIterator,
-        T::Item: Borrow<BufferCopy>,
+        T: IntoIterator<Item = BufferCopy>,
         T::IntoIter: ExactSizeIterator;
 
     /// Copies regions from the source to the destination images, which
@@ -423,8 +413,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         dst_layout: Layout,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<ImageCopy>,
+        T: IntoIterator<Item = ImageCopy>,
         T::IntoIter: ExactSizeIterator;
 
     /// Copies regions from the source buffer to the destination image.
@@ -435,8 +424,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         dst_layout: Layout,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<BufferImageCopy>,
+        T: IntoIterator<Item = BufferImageCopy>,
         T::IntoIter: ExactSizeIterator;
 
     /// Copies regions from the source image to the destination buffer.
@@ -447,8 +435,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         dst: &B::Buffer,
         regions: T,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<BufferImageCopy>,
+        T: IntoIterator<Item = BufferImageCopy>,
         T::IntoIter: ExactSizeIterator;
 
     // TODO: This explanation needs improvement.
@@ -583,11 +570,9 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         stages: Range<pso::PipelineStage>,
         barriers: J,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<B::Event>,
+        I: IntoIterator<Item = &'a B::Event>,
         I::IntoIter: ExactSizeIterator,
-        J: IntoIterator,
-        J::Item: Borrow<Barrier<'a, B>>,
+        J: IntoIterator<Item = Barrier<'a, B>>,
         J::IntoIter: ExactSizeIterator;
 
     /// Begins a query operation.  Queries count operations or record timestamps
@@ -641,11 +626,10 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     );
 
     /// Execute the given secondary command buffers.
-    unsafe fn execute_commands<'a, T, I>(&mut self, cmd_buffers: I)
+    unsafe fn execute_commands<'a, T>(&mut self, cmd_buffers: T)
     where
-        T: 'a + Borrow<B::CommandBuffer>,
-        I: IntoIterator<Item = &'a T>,
-        I::IntoIter: ExactSizeIterator;
+        T: IntoIterator<Item = &'a B::CommandBuffer>,
+        T::IntoIter: ExactSizeIterator;
 
     /// Debug mark the current spot in the command buffer.
     unsafe fn insert_debug_marker(&mut self, name: &str, color: u32);

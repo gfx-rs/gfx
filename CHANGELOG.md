@@ -11,6 +11,7 @@
     - memory in `map_memory` and `unmap_memory`
     - queue in `Queue::wait_idle`
     - semaphore in `Queue::present`
+  - Borrowing is removed from the API, and `ExactSizeIterator` bounds are inserted where they were missing
   - `ImageFeature` improvements:
     - new `STORAGE_READ_WRITE` bit, indicating that the storage can be read and written within the same draw/dispatch call
     - new `TRANSFER_SRC` and `TRANSFER_DST` bits, following `VK_KHR_maintenance1`
@@ -20,9 +21,12 @@
   - debug names are supported for all objectr
   - other API changes:
     - `bind_index_buffer` now doesn't need a separate structure
+    - plural versions of `reset_fence` and `create_xx_pipeline` are removed
     - swapchain images can be used for transfer operations
     - separate feature for comparison mutable samplers
     - pipeline descriptor vectors are replaced with slices
+    - features for non-normalized mutable samplers
+    - `Capabilities` structure with supported dynamic state flags
   - OpenGL backend improvements:
     - finally has the API fully matching gfx-hal
     - now only uses OpenGL ES on Linux/Android/Web targets

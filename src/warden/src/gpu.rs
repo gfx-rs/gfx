@@ -323,7 +323,7 @@ impl<B: hal::Backend> Scene<B> {
                                     pso::PipelineStage::TOP_OF_PIPE
                                         ..pso::PipelineStage::BOTTOM_OF_PIPE,
                                     memory::Dependencies::empty(),
-                                    &[buffer_barrier],
+                                    iter::once(buffer_barrier),
                                 );
                             }
                         }
@@ -368,7 +368,7 @@ impl<B: hal::Backend> Scene<B> {
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                                 memory::Dependencies::empty(),
-                                &[pre_barrier],
+                                iter::once(pre_barrier),
                             );
                         }
                         let copy = c::BufferCopy {
@@ -377,7 +377,7 @@ impl<B: hal::Backend> Scene<B> {
                             size: size as _,
                         };
                         unsafe {
-                            init_cmd.copy_buffer(&upload_buffer, &buffer, &[copy]);
+                            init_cmd.copy_buffer(&upload_buffer, &buffer, iter::once(copy));
                         }
                         let post_barrier = memory::Barrier::whole_buffer(
                             &buffer,
@@ -387,7 +387,7 @@ impl<B: hal::Backend> Scene<B> {
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
-                                &[post_barrier],
+                                iter::once(post_barrier),
                             );
                         }
                         // done
@@ -468,7 +468,7 @@ impl<B: hal::Backend> Scene<B> {
                                 pso::PipelineStage::BOTTOM_OF_PIPE
                                     ..pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                                 memory::Dependencies::empty(),
-                                &[image_barrier],
+                                iter::once(image_barrier),
                             );
                         }
                         (access, layout)
@@ -537,7 +537,7 @@ impl<B: hal::Backend> Scene<B> {
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                                 memory::Dependencies::empty(),
-                                &[pre_barrier],
+                                iter::once(pre_barrier),
                             );
                         }
 
@@ -559,7 +559,7 @@ impl<B: hal::Backend> Scene<B> {
                                 &upload_buffer,
                                 &image,
                                 i::Layout::TransferDstOptimal,
-                                &[copy],
+                                iter::once(copy),
                             );
                         }
                         let post_barrier = memory::Barrier::Image {
@@ -576,7 +576,7 @@ impl<B: hal::Backend> Scene<B> {
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
-                                &[post_barrier],
+                                iter::once(post_barrier),
                             );
                         }
                         // done
@@ -697,8 +697,10 @@ impl<B: hal::Backend> Scene<B> {
                     assert!(immutable_samplers.is_empty()); //TODO! requires changing the order,
                     assert!(!bindings.is_empty());
                     // since samples are expect to be all read by this point
-                    let layout = unsafe { device.create_descriptor_set_layout(bindings, &[]) }
-                        .expect("Descriptor set layout creation failure!");
+                    let layout = unsafe {
+                        device.create_descriptor_set_layout(bindings.iter().cloned(), &[])
+                    }
+                    .expect("Descriptor set layout creation failure!");
                     let binding_indices = bindings.iter().map(|dsb| dsb.binding).collect();
                     resources
                         .desc_set_layouts
@@ -713,7 +715,7 @@ impl<B: hal::Backend> Scene<B> {
                     let pool = unsafe {
                         device.create_descriptor_pool(
                             capacity,
-                            ranges,
+                            ranges.iter().cloned(),
                             pso::DescriptorPoolCreateFlags::empty(),
                         )
                     }
@@ -755,8 +757,13 @@ impl<B: hal::Backend> Scene<B> {
                         let layouts = set_layouts
                             .iter()
                             .map(|sl| &resources.desc_set_layouts[sl].1);
-                        unsafe { device.create_pipeline_layout(layouts, push_constant_ranges) }
-                            .unwrap()
+                        unsafe {
+                            device.create_pipeline_layout(
+                                layouts,
+                                push_constant_ranges.iter().cloned(),
+                            )
+                        }
+                        .unwrap()
                     };
                     resources.pipeline_layouts.insert(name.clone(), layout);
                 }
@@ -779,7 +786,7 @@ impl<B: hal::Backend> Scene<B> {
                             .desc_pools
                             .get_mut(pool)
                             .expect(&format!("Missing descriptor pool: {}", pool))
-                            .allocate_set(set_layout)
+                            .allocate_one(set_layout)
                     }
                     .expect(&format!(
                         "Failed to allocate set with layout: {:?}",
@@ -1016,7 +1023,11 @@ impl<B: hal::Backend> Scene<B> {
                                             ),
                                         ),
                                 );
-                                command_buf.copy_buffer(&sb.handle, &db.handle, regions);
+                                command_buf.copy_buffer(
+                                    &sb.handle,
+                                    &db.handle,
+                                    regions.iter().cloned(),
+                                );
                             },
                             Tc::CopyImage {
                                 ref src,
@@ -1051,7 +1062,7 @@ impl<B: hal::Backend> Scene<B> {
                                     i::Layout::TransferSrcOptimal,
                                     &dt.handle,
                                     i::Layout::TransferDstOptimal,
-                                    regions,
+                                    regions.iter().cloned(),
                                 );
                             },
                             Tc::CopyBufferToImage {
@@ -1082,7 +1093,7 @@ impl<B: hal::Backend> Scene<B> {
                                     &sb.handle,
                                     &dt.handle,
                                     i::Layout::TransferDstOptimal,
-                                    regions,
+                                    regions.iter().cloned(),
                                 );
                             },
                             Tc::CopyImageToBuffer {
@@ -1115,7 +1126,7 @@ impl<B: hal::Backend> Scene<B> {
                                     &st.handle,
                                     i::Layout::TransferSrcOptimal,
                                     &db.handle,
-                                    regions,
+                                    regions.iter().cloned(),
                                 );
                             },
                             Tc::ClearImage {
@@ -1140,7 +1151,7 @@ impl<B: hal::Backend> Scene<B> {
                                     &img.handle,
                                     i::Layout::TransferDstOptimal,
                                     value.to_raw(),
-                                    ranges,
+                                    ranges.iter().cloned(),
                                 );
                             },
                             Tc::BlitImage {
@@ -1178,7 +1189,7 @@ impl<B: hal::Backend> Scene<B> {
                                     &dt.handle,
                                     i::Layout::TransferDstOptimal,
                                     filter,
-                                    regions,
+                                    regions.iter().cloned(),
                                 );
                             },
                             Tc::FillBuffer {
@@ -1363,7 +1374,7 @@ impl<B: hal::Backend> Scene<B> {
                                                 ))
                                                 .handle
                                         }),
-                                        &[],
+                                        iter::empty(),
                                     );
                                 }
                                 Dc::Draw {
@@ -1384,10 +1395,10 @@ impl<B: hal::Backend> Scene<B> {
                                     );
                                 }
                                 Dc::SetViewports(ref viewports) => {
-                                    command_buf.set_viewports(0, viewports);
+                                    command_buf.set_viewports(0, viewports.iter().cloned());
                                 }
                                 Dc::SetScissors(ref scissors) => {
-                                    command_buf.set_scissors(0, scissors);
+                                    command_buf.set_scissors(0, scissors.iter().cloned());
                                 }
                             }
                         }
@@ -1434,7 +1445,7 @@ impl<B: hal::Backend> Scene<B> {
                                 .expect(&format!("Missing descriptor set: {}", name))
                                 .handle
                         }),
-                        &[],
+                        iter::empty(),
                     );
                     command_buf.dispatch(dispatch);
                 },
@@ -1489,9 +1500,10 @@ impl<B: hal::Backend> Scene<B> {
 
         let command_buffers = iter::once(&self.init_submit)
             .chain(submits)
-            .chain(iter::once(&self.finish_submit));
+            .chain(iter::once(&self.finish_submit))
+            .collect::<Vec<_>>();
         unsafe {
-            self.queue_group.queues[0].submit_without_semaphores(command_buffers, None);
+            self.queue_group.queues[0].submit(command_buffers, iter::empty(), iter::empty(), None);
         }
     }
 
@@ -1544,7 +1556,7 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
-                &[pre_barrier],
+                iter::once(pre_barrier),
             );
 
             let copy = c::BufferCopy {
@@ -1552,7 +1564,7 @@ impl<B: hal::Backend> Scene<B> {
                 dst: 0,
                 size: buffer.size as _,
             };
-            cmd_buffer.copy_buffer(&buffer.handle, &down_buffer, &[copy]);
+            cmd_buffer.copy_buffer(&buffer.handle, &down_buffer, iter::once(copy));
 
             let post_barrier = memory::Barrier::whole_buffer(
                 &buffer.handle,
@@ -1561,7 +1573,7 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
-                &[post_barrier],
+                iter::once(post_barrier),
             );
             cmd_buffer.end_debug_marker();
             cmd_buffer.finish()
@@ -1572,8 +1584,12 @@ impl<B: hal::Backend> Scene<B> {
             .create_fence(false)
             .expect("Can't create copy-fence");
         unsafe {
-            self.queue_group.queues[0]
-                .submit_without_semaphores(iter::once(&cmd_buffer), Some(&mut copy_fence));
+            self.queue_group.queues[0].submit(
+                iter::once(&cmd_buffer),
+                iter::empty(),
+                iter::empty(),
+                Some(&mut copy_fence),
+            );
             self.device.wait_for_fence(&copy_fence, !0).unwrap();
             self.device.destroy_fence(copy_fence);
             self.device.destroy_command_pool(command_pool);
@@ -1664,7 +1680,7 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
-                &[pre_barrier],
+                iter::once(pre_barrier),
             );
 
             let copy = c::BufferImageCopy {
@@ -1687,7 +1703,7 @@ impl<B: hal::Backend> Scene<B> {
                 &image.handle,
                 i::Layout::TransferSrcOptimal,
                 &down_buffer,
-                &[copy],
+                iter::once(copy),
             );
 
             let post_barrier = memory::Barrier::Image {
@@ -1703,7 +1719,7 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
-                &[post_barrier],
+                iter::once(post_barrier),
             );
             cmd_buffer.end_debug_marker();
             cmd_buffer.finish();
@@ -1714,8 +1730,12 @@ impl<B: hal::Backend> Scene<B> {
             .create_fence(false)
             .expect("Can't create copy-fence");
         unsafe {
-            self.queue_group.queues[0]
-                .submit_without_semaphores(iter::once(&cmd_buffer), Some(&mut copy_fence));
+            self.queue_group.queues[0].submit(
+                iter::once(&cmd_buffer),
+                iter::empty(),
+                iter::empty(),
+                Some(&mut copy_fence),
+            );
             self.device.wait_for_fence(&copy_fence, !0).unwrap();
             self.device.destroy_fence(copy_fence);
             self.device.destroy_command_pool(command_pool);

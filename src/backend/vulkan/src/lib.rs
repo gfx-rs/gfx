@@ -51,7 +51,7 @@ use hal::{
 };
 
 use std::{
-    borrow::{Borrow, Cow},
+    borrow::Cow,
     ffi::{CStr, CString},
     fmt, mem, slice,
     sync::Arc,
@@ -1514,34 +1514,32 @@ impl fmt::Debug for CommandQueue {
 }
 
 impl queue::CommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+    unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
-        submission: queue::Submission<Ic, Iw, Is>,
+        command_buffers: Ic,
+        wait_semaphores: Iw,
+        signal_semaphores: Is,
         fence: Option<&mut native::Fence>,
     ) where
-        T: 'a + Borrow<command::CommandBuffer>,
-        Ic: IntoIterator<Item = &'a T>,
-        S: 'a + Borrow<native::Semaphore>,
-        Iw: IntoIterator<Item = (&'a S, PipelineStage)>,
-        Is: IntoIterator<Item = &'a S>,
+        Ic: IntoIterator<Item = &'a command::CommandBuffer>,
+        Iw: IntoIterator<Item = (&'a native::Semaphore, PipelineStage)>,
+        Is: IntoIterator<Item = &'a native::Semaphore>,
     {
         //TODO: avoid heap allocations
         let mut waits = Vec::new();
         let mut stages = Vec::new();
 
-        let buffers = submission
-            .command_buffers
+        let buffers = command_buffers
             .into_iter()
-            .map(|cmd| cmd.borrow().raw)
+            .map(|cmd| cmd.raw)
             .collect::<Vec<_>>();
-        for (semaphore, stage) in submission.wait_semaphores {
-            waits.push(semaphore.borrow().0);
+        for (semaphore, stage) in wait_semaphores {
+            waits.push(semaphore.0);
             stages.push(conv::map_pipeline_stage(stage));
         }
-        let signals = submission
-            .signal_semaphores
+        let signals = signal_semaphores
             .into_iter()
-            .map(|semaphore| semaphore.borrow().0)
+            .map(|semaphore| semaphore.0)
             .collect::<Vec<_>>();
 
         let mut info = vk::SubmitInfo::builder()

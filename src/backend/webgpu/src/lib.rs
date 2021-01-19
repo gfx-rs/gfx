@@ -226,19 +226,10 @@ use hal::pso::AllocationError;
 pub struct DescriptorPool;
 
 impl hal::pso::DescriptorPool<Backend> for DescriptorPool {
-    unsafe fn allocate_set(
+    unsafe fn allocate_one(
         &mut self,
         _layout: &<Backend as hal::Backend>::DescriptorSetLayout,
     ) -> Result<<Backend as hal::Backend>::DescriptorSet, AllocationError> {
-        todo!()
-    }
-
-    unsafe fn allocate<I, E>(&mut self, _layouts: I, _list: &mut E) -> Result<(), AllocationError>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<<Backend as hal::Backend>::DescriptorSetLayout>,
-        E: Extend<<Backend as hal::Backend>::DescriptorSet>,
-    {
         todo!()
     }
 

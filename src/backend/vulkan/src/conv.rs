@@ -10,9 +10,7 @@ use hal::{
     Features, IndexType,
 };
 
-use smallvec::SmallVec;
-
-use std::{borrow::Borrow, mem};
+use std::mem;
 
 pub fn map_format(format: format::Format) -> vk::Format {
     vk::Format::from_raw(format as i32)
@@ -563,22 +561,12 @@ pub(crate) fn map_device_features(
     }
 }
 
-pub fn map_memory_ranges<'a, I>(ranges: I) -> SmallVec<[vk::MappedMemoryRange; 4]>
-where
-    I: IntoIterator,
-    I::Item: Borrow<(&'a n::Memory, Segment)>,
-{
-    ranges
-        .into_iter()
-        .map(|range| {
-            let &(ref memory, ref segment) = range.borrow();
-            vk::MappedMemoryRange::builder()
-                .memory(memory.raw)
-                .offset(segment.offset)
-                .size(segment.size.unwrap_or(vk::WHOLE_SIZE))
-                .build()
-        })
-        .collect()
+pub fn map_memory_range<'a>((memory, segment): (&'a n::Memory, Segment)) -> vk::MappedMemoryRange {
+    vk::MappedMemoryRange::builder()
+        .memory(memory.raw)
+        .offset(segment.offset)
+        .size(segment.size.unwrap_or(vk::WHOLE_SIZE))
+        .build()
 }
 
 pub fn map_command_buffer_flags(flags: command::CommandBufferFlags) -> vk::CommandBufferUsageFlags {

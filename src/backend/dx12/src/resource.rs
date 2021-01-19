@@ -767,7 +767,7 @@ unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    unsafe fn allocate_set(
+    unsafe fn allocate_one(
         &mut self,
         layout: &DescriptorSetLayout,
     ) -> Result<DescriptorSet, pso::AllocationError> {
@@ -775,7 +775,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         let mut first_gpu_view = None;
         let mut num_samplers = 0;
 
-        info!("allocate_set");
+        info!("allocate_one");
         for binding in &layout.bindings {
             // Add dummy bindings in case of out-of-range or sparse binding layout.
             while binding_infos.len() <= binding.binding as usize {

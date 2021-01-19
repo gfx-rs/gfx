@@ -48,7 +48,7 @@ use hal::{
     image as i, memory as m, pass, pool,
     prelude::*,
     pso,
-    queue::{QueueGroup, Submission},
+    queue::QueueGroup,
     window as w, Backend,
 };
 
@@ -179,7 +179,7 @@ impl<B: Backend> RendererState<B> {
             .device
             .create_descriptor_pool(
                 1, // # of sets
-                &[
+                vec![
                     pso::DescriptorRangeDesc {
                         ty: pso::DescriptorType::Image {
                             ty: pso::ImageDescriptorType::Sampled {
@@ -202,7 +202,7 @@ impl<B: Backend> RendererState<B> {
             .device
             .create_descriptor_pool(
                 1, // # of sets
-                &[pso::DescriptorRangeDesc {
+                iter::once(pso::DescriptorRangeDesc {
                     ty: pso::DescriptorType::Buffer {
                         ty: pso::BufferDescriptorType::Uniform,
                         format: pso::BufferDescriptorFormat::Structured {
@@ -210,7 +210,7 @@ impl<B: Backend> RendererState<B> {
                         },
                     },
                     count: 1,
-                }],
+                }),
                 pso::DescriptorPoolCreateFlags::empty(),
             )
             .ok();
@@ -385,8 +385,8 @@ impl<B: Backend> RendererState<B> {
             };
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
             cmd_buffer.begin_debug_marker("setup", 0);
-            cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+            cmd_buffer.set_viewports(0, iter::once(self.viewport.clone()));
+            cmd_buffer.set_scissors(0, iter::once(self.viewport.rect));
             cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(
                 0,
@@ -399,7 +399,7 @@ impl<B: Backend> RendererState<B> {
                     self.image.desc.set.as_ref().unwrap(),
                     self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap(),
                 ],
-                &[],
+                iter::empty(),
             ); //TODO
             cmd_buffer.end_debug_marker();
 
@@ -422,13 +422,12 @@ impl<B: Backend> RendererState<B> {
             cmd_buffer.insert_debug_marker("done", 0);
             cmd_buffer.finish();
 
-            let submission = Submission {
-                command_buffers: iter::once(&cmd_buffer),
-                wait_semaphores: None,
-                signal_semaphores: iter::once(&*sem_image_present),
-            };
-
-            self.device.borrow_mut().queues.queues[0].submit(submission, None);
+            self.device.borrow_mut().queues.queues[0].submit(
+                iter::once(&cmd_buffer),
+                iter::empty(),
+                iter::once(&*sem_image_present),
+                None,
+            );
             command_buffers.push(cmd_buffer);
 
             // present frame
@@ -661,7 +660,7 @@ impl<B: Backend> RenderPassState<B> {
             device
                 .borrow()
                 .device
-                .create_render_pass(&[attachment], &[subpass], &[])
+                .create_render_pass(iter::once(attachment), iter::once(subpass), iter::empty())
                 .ok()
         };
         if let Some(ref mut rp) = render_pass {
@@ -928,7 +927,7 @@ impl<B: Backend> DescSetLayout<B> {
         device: Rc<RefCell<DeviceState<B>>>,
     ) -> DescSet<B> {
         let mut desc_set = desc_pool
-            .allocate_set(self.layout.as_ref().unwrap())
+            .allocate_one(self.layout.as_ref().unwrap())
             .unwrap();
         device
             .borrow()
@@ -967,9 +966,8 @@ impl<B: Backend> DescSet<B> {
         d: DescSetWrite<W>,
         device: &mut B::Device,
     ) where
-        W: IntoIterator,
+        W: IntoIterator<Item = pso::Descriptor<'a, B>>,
         W::IntoIter: ExactSizeIterator,
-        W::Item: std::borrow::Borrow<pso::Descriptor<'a, B>>,
     {
         let set = self.set.as_mut().unwrap();
         device.write_descriptor_set(pso::DescriptorSetWrite {
@@ -1100,14 +1098,14 @@ impl<B: Backend> ImageState<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
-                &[image_barrier],
+                iter::once(image_barrier),
             );
 
             cmd_buffer.copy_buffer_to_image(
                 buffer.as_ref().unwrap().get_buffer(),
                 &image,
                 i::Layout::TransferDstOptimal,
-                &[command::BufferImageCopy {
+                iter::once(command::BufferImageCopy {
                     buffer_offset: 0,
                     buffer_width: row_pitch / (stride as u32),
                     buffer_height: dims.height as u32,
@@ -1122,7 +1120,7 @@ impl<B: Backend> ImageState<B> {
                         height: dims.height,
                         depth: 1,
                     },
-                }],
+                }),
             );
 
             let image_barrier = m::Barrier::Image {
@@ -1138,13 +1136,15 @@ impl<B: Backend> ImageState<B> {
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER..pso::PipelineStage::FRAGMENT_SHADER,
                 m::Dependencies::empty(),
-                &[image_barrier],
+                iter::once(image_barrier),
             );
 
             cmd_buffer.finish();
 
-            device_state.queues.queues[0].submit_without_semaphores(
+            device_state.queues.queues[0].submit(
                 iter::once(&cmd_buffer),
+                iter::empty(),
+                iter::empty(),
                 Some(&mut transfered_image_fence),
             );
         }
@@ -1200,19 +1200,21 @@ struct PipelineState<B: Backend> {
 }
 
 impl<B: Backend> PipelineState<B> {
-    unsafe fn new<IS>(
-        desc_layouts: IS,
+    unsafe fn new<'a, Is>(
+        desc_layouts: Is,
         render_pass: &B::RenderPass,
         device_ptr: Rc<RefCell<DeviceState<B>>>,
     ) -> Self
     where
-        IS: IntoIterator,
-        IS::Item: std::borrow::Borrow<B::DescriptorSetLayout>,
-        IS::IntoIter: ExactSizeIterator,
+        Is: IntoIterator<Item = &'a B::DescriptorSetLayout>,
+        Is::IntoIter: ExactSizeIterator,
     {
         let device = &device_ptr.borrow().device;
         let pipeline_layout = device
-            .create_pipeline_layout(desc_layouts, &[(pso::ShaderStageFlags::VERTEX, 0..8)])
+            .create_pipeline_layout(
+                desc_layouts,
+                iter::once((pso::ShaderStageFlags::VERTEX, 0..8)),
+            )
             .expect("Can't create pipeline layout");
 
         let pipeline = {

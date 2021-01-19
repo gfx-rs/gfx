@@ -20,7 +20,7 @@ extern crate gfx_backend_metal as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
 
-use std::{fs, ptr, slice, str::FromStr};
+use std::{fs, iter, ptr, slice, str::FromStr};
 
 use hal::{adapter::MemoryType, buffer, command, memory, pool, prelude::*, pso};
 
@@ -80,7 +80,7 @@ fn main() {
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
         let set_layout = unsafe {
             device.create_descriptor_set_layout(
-                &[pso::DescriptorSetLayoutBinding {
+                iter::once(pso::DescriptorSetLayoutBinding {
                     binding: 0,
                     ty: pso::DescriptorType::Buffer {
                         ty: pso::BufferDescriptorType::Storage { read_only: false },
@@ -91,14 +91,15 @@ fn main() {
                     count: 1,
                     stage_flags: pso::ShaderStageFlags::COMPUTE,
                     immutable_samplers: false,
-                }],
+                }),
                 &[],
             )
         }
         .expect("Can't create descriptor set layout");
 
-        let pipeline_layout = unsafe { device.create_pipeline_layout(Some(&set_layout), &[]) }
-            .expect("Can't create pipeline layout");
+        let pipeline_layout =
+            unsafe { device.create_pipeline_layout(iter::once(&set_layout), iter::empty()) }
+                .expect("Can't create pipeline layout");
         let entry_point = pso::EntryPoint {
             entry: "main",
             module: &shader,
@@ -115,7 +116,7 @@ fn main() {
         let desc_pool = unsafe {
             device.create_descriptor_pool(
                 1,
-                &[pso::DescriptorRangeDesc {
+                iter::once(pso::DescriptorRangeDesc {
                     ty: pso::DescriptorType::Buffer {
                         ty: pso::BufferDescriptorType::Storage { read_only: false },
                         format: pso::BufferDescriptorFormat::Structured {
@@ -123,7 +124,7 @@ fn main() {
                         },
                     },
                     count: 1,
-                }],
+                }),
                 pso::DescriptorPoolCreateFlags::empty(),
             )
         }
@@ -166,7 +167,7 @@ fn main() {
     };
 
     let desc_set = unsafe {
-        let mut desc_set = desc_pool.allocate_set(&set_layout).unwrap();
+        let mut desc_set = desc_pool.allocate_one(&set_layout).unwrap();
         device.write_descriptor_set(pso::DescriptorSetWrite {
             set: &mut desc_set,
             binding: 0,
@@ -189,11 +190,11 @@ fn main() {
         command_buffer.copy_buffer(
             &staging_buffer,
             &device_buffer,
-            &[command::BufferCopy {
+            iter::once(command::BufferCopy {
                 src: 0,
                 dst: 0,
                 size: stride as u64 * numbers.len() as u64,
-            }],
+            }),
         );
         command_buffer.pipeline_barrier(
             pso::PipelineStage::TRANSFER..pso::PipelineStage::COMPUTE_SHADER,
@@ -207,7 +208,12 @@ fn main() {
             }),
         );
         command_buffer.bind_compute_pipeline(&pipeline);
-        command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[desc_set], &[]);
+        command_buffer.bind_compute_descriptor_sets(
+            &pipeline_layout,
+            0,
+            iter::once(&desc_set),
+            iter::empty(),
+        );
         command_buffer.dispatch([numbers.len() as u32, 1, 1]);
         command_buffer.pipeline_barrier(
             pso::PipelineStage::COMPUTE_SHADER..pso::PipelineStage::TRANSFER,
@@ -223,15 +229,20 @@ fn main() {
         command_buffer.copy_buffer(
             &device_buffer,
             &staging_buffer,
-            &[command::BufferCopy {
+            iter::once(command::BufferCopy {
                 src: 0,
                 dst: 0,
                 size: stride as u64 * numbers.len() as u64,
-            }],
+            }),
         );
         command_buffer.finish();
 
-        queue_group.queues[0].submit_without_semaphores(Some(&command_buffer), Some(&mut fence));
+        queue_group.queues[0].submit(
+            iter::once(&command_buffer),
+            iter::empty(),
+            iter::empty(),
+            Some(&mut fence),
+        );
 
         device.wait_for_fence(&fence, !0).unwrap();
         command_pool.free(Some(command_buffer));

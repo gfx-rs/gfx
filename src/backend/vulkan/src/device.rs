@@ -10,15 +10,7 @@ use hal::{
     {buffer, device as d, format, image, pass, pso, query, queue}, {Features, MemoryTypeId},
 };
 
-use std::{
-    borrow::{Borrow, BorrowMut},
-    ffi::CString,
-    mem,
-    ops::Range,
-    pin::Pin,
-    ptr,
-    sync::Arc,
-};
+use std::{ffi::CString, mem, ops::Range, pin::Pin, ptr, sync::Arc};
 
 use crate::{
     command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B, Device,
@@ -502,27 +494,23 @@ impl d::Device<B> for Device {
         self.shared.raw.destroy_command_pool(pool.raw, None);
     }
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        attachments: IA,
-        subpasses: IS,
-        dependencies: ID,
+        attachments: Ia,
+        subpasses: Is,
+        dependencies: Id,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::IntoIter: ExactSizeIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IA::IntoIter: ExactSizeIterator,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        IS::IntoIter: ExactSizeIterator,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
-        ID::IntoIter: ExactSizeIterator,
+        Ia: IntoIterator<Item = pass::Attachment>,
+        Ia::IntoIter: ExactSizeIterator,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
+        Is::IntoIter: ExactSizeIterator,
+        Id: IntoIterator<Item = pass::SubpassDependency>,
+        Id::IntoIter: ExactSizeIterator,
     {
-        let attachments = attachments.into_iter().map(|attachment| {
-            let attachment = attachment.borrow();
-            vk::AttachmentDescription {
+        let attachments = attachments
+            .into_iter()
+            .map(|attachment| vk::AttachmentDescription {
                 flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
                 format: attachment
                     .format
@@ -534,11 +522,9 @@ impl d::Device<B> for Device {
                 stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
                 initial_layout: conv::map_image_layout(attachment.layouts.start),
                 final_layout: conv::map_image_layout(attachment.layouts.end),
-            }
-        });
+            });
 
-        let dependencies = dependencies.into_iter().map(|subpass_dep| {
-            let sdep = subpass_dep.borrow();
+        let dependencies = dependencies.into_iter().map(|sdep|
             // TODO: checks
             vk::SubpassDependency {
                 src_subpass: sdep
@@ -551,8 +537,7 @@ impl d::Device<B> for Device {
                 src_access_mask: conv::map_image_access(sdep.accesses.start),
                 dst_access_mask: conv::map_image_access(sdep.accesses.end),
                 dependency_flags: mem::transmute(sdep.flags),
-            }
-        });
+            });
 
         let attachment_count = attachments.len();
         let result = inplace_it::inplace_or_alloc_array(attachment_count, |uninit_guard| {
@@ -560,7 +545,6 @@ impl d::Device<B> for Device {
             let attachment_refs = subpasses
                 .into_iter()
                 .map(|subpass| {
-                    let subpass = subpass.borrow();
                     fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
                         vk::AttachmentReference {
                             attachment: id as _,
@@ -630,32 +614,30 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        sets: IS,
-        push_constant_ranges: IR,
+        set_layouts_iter: Is,
+        push_constant_ranges: Ic,
     ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<n::DescriptorSetLayout>,
-        IS::IntoIter: ExactSizeIterator,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
-        IR::IntoIter: ExactSizeIterator,
+        Is: IntoIterator<Item = &'a n::DescriptorSetLayout>,
+        Is::IntoIter: ExactSizeIterator,
+        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
+        Ic::IntoIter: ExactSizeIterator,
     {
-        let set_layouts = sets.into_iter().map(|set| set.borrow().raw);
+        let vk_set_layouts = set_layouts_iter.into_iter().map(|set| set.raw);
 
-        let push_constant_ranges = push_constant_ranges.into_iter().map(|range| {
-            let &(s, ref r) = range.borrow();
-            vk::PushConstantRange {
-                stage_flags: conv::map_stage_flags(s),
-                offset: r.start,
-                size: r.end - r.start,
-            }
-        });
+        let push_constant_ranges =
+            push_constant_ranges
+                .into_iter()
+                .map(|(s, ref r)| vk::PushConstantRange {
+                    stage_flags: conv::map_stage_flags(s),
+                    offset: r.start,
+                    size: r.end - r.start,
+                });
 
-        let result = inplace_it::inplace_or_alloc_array(set_layouts.len(), |uninit_guard| {
-            let set_layouts = uninit_guard.init_with_iter(set_layouts);
+        let result = inplace_it::inplace_or_alloc_array(vk_set_layouts.len(), |uninit_guard| {
+            let set_layouts = uninit_guard.init_with_iter(vk_set_layouts);
 
             // TODO: set_layouts doesnt implement fmt::Debug, submit PR?
             // debug!("create_pipeline_layout {:?}", set_layouts);
@@ -720,21 +702,21 @@ impl d::Device<B> for Device {
         self.shared.raw.destroy_pipeline_cache(cache.raw, None);
     }
 
-    unsafe fn merge_pipeline_caches<I>(
+    unsafe fn merge_pipeline_caches<'a, I>(
         &self,
-        target: &n::PipelineCache,
+        target: &mut n::PipelineCache,
         sources: I,
     ) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<n::PipelineCache>,
+        I: IntoIterator<Item = &'a n::PipelineCache>,
         I::IntoIter: ExactSizeIterator,
     {
-        let caches = sources.into_iter().map(|s| s.borrow().raw);
+        let caches = sources.into_iter().map(|s| s.raw);
 
         let result = inplace_it::inplace_or_alloc_array(caches.len(), |uninit_guard| {
             let caches = uninit_guard.init_with_iter(caches);
 
+            //TODO: https://github.com/MaikKlein/ash/issues/357
             self.shared.raw.fp_v1_0().merge_pipeline_caches(
                 self.shared.raw.handle(),
                 target.raw,
@@ -829,119 +811,6 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn create_graphics_pipelines<'a, T>(
-        &self,
-        descs: T,
-        cache: Option<&n::PipelineCache>,
-    ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>>
-    where
-        T: IntoIterator,
-        T::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
-    {
-        debug!("create_graphics_pipelines:");
-
-        let mut bufs: Pin<Box<[_]>> = descs
-            .into_iter()
-            .enumerate()
-            .inspect(|(idx, desc)| debug!("# {} {:?}", idx, desc.borrow()))
-            .map(|(_, desc)| (desc, GraphicsPipelineInfoBuf::default()))
-            .collect::<Box<[_]>>()
-            .into();
-
-        for (desc, buf) in bufs.as_mut().get_unchecked_mut() {
-            let desc: &T::Item = desc;
-            GraphicsPipelineInfoBuf::initialize(&mut Pin::new_unchecked(buf), self, desc.borrow());
-        }
-
-        let infos: Vec<_> = bufs
-            .iter()
-            .map(|(desc, buf)| {
-                let desc = desc.borrow();
-
-                let (base_handle, base_index) = match desc.parent {
-                    pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
-                    pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
-                    pso::BasePipeline::None => (vk::Pipeline::null(), -1),
-                };
-
-                let mut flags = vk::PipelineCreateFlags::empty();
-                match desc.parent {
-                    pso::BasePipeline::None => (),
-                    _ => {
-                        flags |= vk::PipelineCreateFlags::DERIVATIVE;
-                    }
-                }
-                if desc
-                    .flags
-                    .contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION)
-                {
-                    flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
-                }
-                if desc
-                    .flags
-                    .contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES)
-                {
-                    flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
-                }
-
-                let builder = vk::GraphicsPipelineCreateInfo::builder()
-                    .flags(flags)
-                    .stages(&buf.stages)
-                    .vertex_input_state(&buf.vertex_input_state)
-                    .input_assembly_state(&buf.input_assembly_state)
-                    .rasterization_state(&buf.rasterization_state);
-                let builder = match buf.tessellation_state.as_ref() {
-                    Some(t) => builder.tessellation_state(t),
-                    None => builder,
-                };
-                builder
-                    .viewport_state(&buf.viewport_state)
-                    .multisample_state(&buf.multisample_state)
-                    .depth_stencil_state(&buf.depth_stencil_state)
-                    .color_blend_state(&buf.color_blend_state)
-                    .dynamic_state(&buf.pipeline_dynamic_state)
-                    .layout(desc.layout.raw)
-                    .render_pass(desc.subpass.main_pass.raw)
-                    .subpass(desc.subpass.index as _)
-                    .base_pipeline_handle(base_handle)
-                    .base_pipeline_index(base_index)
-                    .build()
-            })
-            .collect();
-
-        let (pipelines, error) = if infos.is_empty() {
-            (Vec::new(), None)
-        } else {
-            match self.shared.raw.create_graphics_pipelines(
-                cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
-                &infos,
-                None,
-            ) {
-                Ok(pipelines) => (pipelines, None),
-                Err((pipelines, error)) => (pipelines, Some(error)),
-            }
-        };
-
-        pipelines
-            .into_iter()
-            .map(|pso| {
-                if pso == vk::Pipeline::null() {
-                    match error {
-                        Some(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                            Err(d::OutOfMemory::Host.into())
-                        }
-                        Some(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                            Err(d::OutOfMemory::Device.into())
-                        }
-                        _ => unreachable!(),
-                    }
-                } else {
-                    Ok(n::GraphicsPipeline(pso))
-                }
-            })
-            .collect()
-    }
-
     unsafe fn create_compute_pipeline<'a>(
         &self,
         desc: &pso::ComputePipelineDesc<'a, B>,
@@ -1015,113 +884,6 @@ impl d::Device<B> for Device {
             vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
             _ => Err(pso::CreationError::Other),
         }
-    }
-
-    unsafe fn create_compute_pipelines<'a, T>(
-        &self,
-        descs: T,
-        cache: Option<&n::PipelineCache>,
-    ) -> Vec<Result<n::ComputePipeline, pso::CreationError>>
-    where
-        T: IntoIterator,
-        T::Item: Borrow<pso::ComputePipelineDesc<'a, B>>,
-    {
-        let mut bufs: Pin<Box<[_]>> = descs
-            .into_iter()
-            .map(|desc| (desc, ComputePipelineInfoBuf::default()))
-            .collect::<Box<[_]>>()
-            .into();
-
-        for (desc, buf) in bufs.as_mut().get_unchecked_mut() {
-            let desc: &T::Item = desc;
-            ComputePipelineInfoBuf::initialize(&mut Pin::new_unchecked(buf), desc.borrow());
-        }
-
-        let infos: Vec<_> = bufs
-            .iter()
-            .map(|(desc, buf)| {
-                let desc = desc.borrow();
-
-                let stage = vk::PipelineShaderStageCreateInfo::builder()
-                    .flags(vk::PipelineShaderStageCreateFlags::empty())
-                    .stage(vk::ShaderStageFlags::COMPUTE)
-                    .module(desc.shader.module.raw)
-                    .name(buf.c_string.as_c_str())
-                    .specialization_info(&buf.specialization);
-
-                let (base_handle, base_index) = match desc.parent {
-                    pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
-                    pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
-                    pso::BasePipeline::None => (vk::Pipeline::null(), -1),
-                };
-
-                let mut flags = vk::PipelineCreateFlags::empty();
-                match desc.parent {
-                    pso::BasePipeline::None => (),
-                    _ => {
-                        flags |= vk::PipelineCreateFlags::DERIVATIVE;
-                    }
-                }
-                if desc
-                    .flags
-                    .contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION)
-                {
-                    flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
-                }
-                if desc
-                    .flags
-                    .contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES)
-                {
-                    flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
-                }
-
-                vk::ComputePipelineCreateInfo::builder()
-                    .flags(flags)
-                    .stage(*stage)
-                    .layout(desc.layout.raw)
-                    .base_pipeline_handle(base_handle)
-                    .base_pipeline_index(base_index)
-                    .build()
-            })
-            .collect();
-
-        let (pipelines, error) = if infos.is_empty() {
-            (Vec::new(), None)
-        } else {
-            match self.shared.raw.create_compute_pipelines(
-                cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
-                &infos,
-                None,
-            ) {
-                Ok(pipelines) => (pipelines, None),
-                Err((pipelines, error)) => (pipelines, Some(error)),
-            }
-        };
-
-        pipelines
-            .into_iter()
-            .zip(bufs.iter())
-            .map(|(pso, desc_pair)| {
-                if pso == vk::Pipeline::null() {
-                    match error {
-                        Some(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                            Err(d::OutOfMemory::Host.into())
-                        }
-                        Some(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                            Err(d::OutOfMemory::Device.into())
-                        }
-                        _ => unreachable!(),
-                    }
-                } else {
-                    let desc = desc_pair.0.borrow();
-                    if let Some(name) = desc.label {
-                        self.shared
-                            .set_object_name(vk::ObjectType::PIPELINE, pso, name);
-                    }
-                    Ok(n::ComputePipeline(pso))
-                }
-            })
-            .collect()
     }
 
     unsafe fn create_framebuffer<T>(
@@ -1494,21 +1256,19 @@ impl d::Device<B> for Device {
     unsafe fn create_descriptor_pool<T>(
         &self,
         max_sets: usize,
-        descriptor_pools: T,
+        descriptor_ranges: T,
         flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
-        T: IntoIterator,
-        T::Item: Borrow<pso::DescriptorRangeDesc>,
+        T: IntoIterator<Item = pso::DescriptorRangeDesc>,
         T::IntoIter: ExactSizeIterator,
     {
-        let pools = descriptor_pools.into_iter().map(|pool| {
-            let pool = pool.borrow();
-            vk::DescriptorPoolSize {
+        let pools = descriptor_ranges
+            .into_iter()
+            .map(|pool| vk::DescriptorPoolSize {
                 ty: conv::map_descriptor_type(pool.ty),
                 descriptor_count: pool.count as u32,
-            }
-        });
+            });
 
         let result = inplace_it::inplace_or_alloc_array(pools.len(), |uninit_guard| {
             let pools = uninit_guard.init_with_iter(pools);
@@ -1533,58 +1293,54 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         binding_iter: I,
         immutable_sampler_iter: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<n::Sampler>,
+        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: IntoIterator<Item = &'a n::Sampler>,
         J::IntoIter: ExactSizeIterator,
     {
-        let immutable_samplers = immutable_sampler_iter.into_iter().map(|is| is.borrow().0);
+        let vk_immutable_samplers = immutable_sampler_iter.into_iter().map(|is| is.0);
         let mut sampler_offset = 0;
 
-        let mut bindings = binding_iter
-            .into_iter()
-            .map(|b| b.borrow().clone())
-            .collect::<Vec<_>>();
+        let mut bindings = binding_iter.into_iter().collect::<Vec<_>>();
         // Sorting will come handy in `write_descriptor_sets`.
         bindings.sort_by_key(|b| b.binding);
 
-        let result = inplace_it::inplace_or_alloc_array(immutable_samplers.len(), |uninit_guard| {
-            let immutable_samplers = uninit_guard.init_with_iter(immutable_samplers);
+        let result =
+            inplace_it::inplace_or_alloc_array(vk_immutable_samplers.len(), |uninit_guard| {
+                let immutable_samplers = uninit_guard.init_with_iter(vk_immutable_samplers);
 
-            let raw_bindings = bindings.iter().map(|b| vk::DescriptorSetLayoutBinding {
-                binding: b.binding,
-                descriptor_type: conv::map_descriptor_type(b.ty),
-                descriptor_count: b.count as _,
-                stage_flags: conv::map_stage_flags(b.stage_flags),
-                p_immutable_samplers: if b.immutable_samplers {
-                    let slice = &immutable_samplers[sampler_offset..];
-                    sampler_offset += b.count;
-                    slice.as_ptr()
-                } else {
-                    ptr::null()
-                },
+                let raw_bindings = bindings.iter().map(|b| vk::DescriptorSetLayoutBinding {
+                    binding: b.binding,
+                    descriptor_type: conv::map_descriptor_type(b.ty),
+                    descriptor_count: b.count as _,
+                    stage_flags: conv::map_stage_flags(b.stage_flags),
+                    p_immutable_samplers: if b.immutable_samplers {
+                        let slice = &immutable_samplers[sampler_offset..];
+                        sampler_offset += b.count;
+                        slice.as_ptr()
+                    } else {
+                        ptr::null()
+                    },
+                });
+
+                inplace_it::inplace_or_alloc_array(raw_bindings.len(), |uninit_guard| {
+                    let raw_bindings = uninit_guard.init_with_iter(raw_bindings);
+
+                    // TODO raw_bindings doesnt implement fmt::Debug
+                    // debug!("create_descriptor_set_layout {:?}", raw_bindings);
+
+                    let info = vk::DescriptorSetLayoutCreateInfo::builder()
+                        .flags(vk::DescriptorSetLayoutCreateFlags::empty())
+                        .bindings(&raw_bindings);
+
+                    self.shared.raw.create_descriptor_set_layout(&info, None)
+                })
             });
-
-            inplace_it::inplace_or_alloc_array(raw_bindings.len(), |uninit_guard| {
-                let raw_bindings = uninit_guard.init_with_iter(raw_bindings);
-
-                // TODO raw_bindings doesnt implement fmt::Debug
-                // debug!("create_descriptor_set_layout {:?}", raw_bindings);
-
-                let info = vk::DescriptorSetLayoutCreateInfo::builder()
-                    .flags(vk::DescriptorSetLayoutCreateFlags::empty())
-                    .bindings(&raw_bindings);
-
-                self.shared.raw.create_descriptor_set_layout(&info, None)
-            })
-        });
 
         match result {
             Ok(layout) => Ok(n::DescriptorSetLayout {
@@ -1599,9 +1355,8 @@ impl d::Device<B> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator,
+        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
         I::IntoIter: ExactSizeIterator,
-        I::Item: Borrow<pso::Descriptor<'a, B>>,
     {
         let descriptors = op.descriptors.into_iter();
         let mut raw_writes = Vec::<vk::WriteDescriptorSet>::with_capacity(descriptors.len());
@@ -1653,7 +1408,7 @@ impl d::Device<B> for Device {
                 });
             }
 
-            match *descriptor.borrow() {
+            match descriptor {
                 pso::Descriptor::Sampler(sampler) => {
                     image_infos.push(
                         vk::DescriptorImageInfo::builder()
@@ -1771,11 +1526,14 @@ impl d::Device<B> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, Segment)>,
+        I::IntoIter: ExactSizeIterator,
     {
-        let ranges = conv::map_memory_ranges(ranges);
-        let result = self.shared.raw.flush_mapped_memory_ranges(&ranges);
+        let vk_ranges = ranges.into_iter().map(conv::map_memory_range);
+        let result = inplace_it::inplace_or_alloc_array(vk_ranges.len(), |uninit_guard| {
+            let range_slice = uninit_guard.init_with_iter(vk_ranges);
+            self.shared.raw.flush_mapped_memory_ranges(&range_slice)
+        });
 
         match result {
             Ok(()) => Ok(()),
@@ -1787,11 +1545,16 @@ impl d::Device<B> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, Segment)>,
+        I: IntoIterator<Item = (&'a n::Memory, Segment)>,
+        I::IntoIter: ExactSizeIterator,
     {
-        let ranges = conv::map_memory_ranges(ranges);
-        let result = self.shared.raw.invalidate_mapped_memory_ranges(&ranges);
+        let vk_ranges = ranges.into_iter().map(conv::map_memory_range);
+        let result = inplace_it::inplace_or_alloc_array(vk_ranges.len(), |uninit_guard| {
+            let range_slice = uninit_guard.init_with_iter(vk_ranges);
+            self.shared
+                .raw
+                .invalidate_mapped_memory_ranges(&range_slice)
+        });
 
         match result {
             Ok(()) => Ok(()),
@@ -1831,20 +1594,8 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn reset_fences<I>(&self, fences: I) -> Result<(), d::OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: BorrowMut<n::Fence>,
-        I::IntoIter: ExactSizeIterator,
-    {
-        let fences = fences.into_iter().map(|fence| fence.borrow().0);
-
-        let result = inplace_it::inplace_or_alloc_array(fences.len(), |uninit_guard| {
-            let fences = uninit_guard.init_with_iter(fences);
-            self.shared.raw.reset_fences(&fences)
-        });
-
-        match result {
+    unsafe fn reset_fence(&self, fence: &mut n::Fence) -> Result<(), d::OutOfMemory> {
+        match self.shared.raw.reset_fences(&[fence.0]) {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
@@ -1852,26 +1603,25 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn wait_for_fences<I>(
+    unsafe fn wait_for_fences<'a, I>(
         &self,
-        fences: I,
+        fences_iter: I,
         wait: d::WaitFor,
         timeout_ns: u64,
     ) -> Result<bool, d::WaitError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<n::Fence>,
+        I: IntoIterator<Item = &'a n::Fence>,
         I::IntoIter: ExactSizeIterator,
     {
-        let fences = fences.into_iter().map(|fence| fence.borrow().0);
+        let vk_fences = fences_iter.into_iter().map(|fence| fence.0);
 
         let all = match wait {
             d::WaitFor::Any => false,
             d::WaitFor::All => true,
         };
 
-        let result = inplace_it::inplace_or_alloc_array(fences.len(), |uninit_guard| {
-            let fences = uninit_guard.init_with_iter(fences);
+        let result = inplace_it::inplace_or_alloc_array(vk_fences.len(), |uninit_guard| {
+            let fences = uninit_guard.init_with_iter(vk_fences);
             self.shared.raw.wait_for_fences(&fences, all, timeout_ns)
         });
 

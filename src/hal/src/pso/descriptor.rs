@@ -20,7 +20,7 @@ use crate::{
     buffer::SubRange, device::OutOfMemory, image::Layout, pso::ShaderStageFlags, Backend, PseudoVec,
 };
 
-use std::{borrow::Borrow, fmt, iter};
+use std::{fmt, iter};
 
 ///
 pub type DescriptorSetIndex = u16;
@@ -169,7 +169,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     ///
     /// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
     /// [`DescriptorSetCopy`]: struct.DescriptorSetCopy.html
-    unsafe fn allocate_set(
+    unsafe fn allocate_one(
         &mut self,
         layout: &B::DescriptorSetLayout,
     ) -> Result<B::DescriptorSet, AllocationError> {
@@ -190,14 +190,14 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     ///
     /// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
     /// [`DescriptorSetCopy`]: struct.DescriptorSetCopy.html
-    unsafe fn allocate<I, E>(&mut self, layouts: I, list: &mut E) -> Result<(), AllocationError>
+    unsafe fn allocate<'a, I, E>(&mut self, layouts: I, list: &mut E) -> Result<(), AllocationError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<B::DescriptorSetLayout>,
+        I: IntoIterator<Item = &'a B::DescriptorSetLayout>,
+        I::IntoIter: ExactSizeIterator,
         E: Extend<B::DescriptorSet>,
     {
         for layout in layouts {
-            let set = self.allocate_set(layout.borrow())?;
+            let set = self.allocate_one(layout)?;
             list.extend(iter::once(set));
         }
         Ok(())
@@ -219,10 +219,10 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 ///
 /// Should be provided to the `write_descriptor_sets` method of a `Device`.
 #[derive(Debug)]
-pub struct DescriptorSetWrite<'a, B: Backend, WI>
+pub struct DescriptorSetWrite<'a, B: Backend, I>
 where
-    WI: IntoIterator,
-    WI::Item: Borrow<Descriptor<'a, B>>,
+    I: IntoIterator<Item = Descriptor<'a, B>>,
+    I::IntoIter: ExactSizeIterator,
 {
     /// The descriptor set to modify.
     pub set: &'a mut B::DescriptorSet,
@@ -236,7 +236,7 @@ where
     /// Offset into the array to copy to.
     pub array_offset: DescriptorArrayIndex,
     /// Descriptors to write to the set.
-    pub descriptors: WI,
+    pub descriptors: I,
 }
 
 /// A handle to a specific shader resource that can be bound for use in a `DescriptorSet`.

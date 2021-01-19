@@ -46,19 +46,14 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, Ia, Is, Id>(
         &self,
-        _attachments: IA,
-        _subpasses: IS,
-        _dependencies: ID,
+        _attachments: Ia,
+        _subpasses: Is,
+        _dependencies: Id,
     ) -> Result<<Backend as hal::Backend>::RenderPass, OutOfMemory>
     where
-        IA: IntoIterator,
-        IA::Item: Borrow<pass::Attachment>,
-        IS: IntoIterator,
-        IS::Item: Borrow<pass::SubpassDesc<'a>>,
-        ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>,
+        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
     {
         todo!()
     }
@@ -67,16 +62,13 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        _set_layouts: IS,
-        _push_constant: IR,
+        _set_layouts: Is,
+        _push_constant: Ic,
     ) -> Result<<Backend as hal::Backend>::PipelineLayout, OutOfMemory>
     where
-        IS: IntoIterator,
-        IS::Item: Borrow<<Backend as hal::Backend>::DescriptorSetLayout>,
-        IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+        Is: IntoIterator<Item = &'a <Backend as hal::Backend>::DescriptorSetLayout>,
     {
         todo!()
     }
@@ -99,14 +91,13 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn merge_pipeline_caches<I>(
+    unsafe fn merge_pipeline_caches<'a, I>(
         &self,
-        _target: &<Backend as hal::Backend>::PipelineCache,
+        _target: &mut <Backend as hal::Backend>::PipelineCache,
         _sources: I,
     ) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<<Backend as hal::Backend>::PipelineCache>,
+        I: IntoIterator<Item = &'a <Backend as hal::Backend>::PipelineCache>,
     {
         todo!()
     }
@@ -120,18 +111,6 @@ impl hal::device::Device<Backend> for Device {
         _desc: &pso::GraphicsPipelineDesc<'a, Backend>,
         _cache: Option<&<Backend as hal::Backend>::PipelineCache>,
     ) -> Result<<Backend as hal::Backend>::GraphicsPipeline, pso::CreationError> {
-        todo!()
-    }
-
-    unsafe fn create_graphics_pipelines<'a, I>(
-        &self,
-        _descs: I,
-        _cache: Option<&<Backend as hal::Backend>::PipelineCache>,
-    ) -> Vec<Result<<Backend as hal::Backend>::GraphicsPipeline, hal::pso::CreationError>>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<hal::pso::GraphicsPipelineDesc<'a, Backend>>,
-    {
         todo!()
     }
 
@@ -150,18 +129,6 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn create_compute_pipelines<'a, I>(
-        &self,
-        _descs: I,
-        _cache: Option<&<Backend as hal::Backend>::PipelineCache>,
-    ) -> Vec<Result<<Backend as hal::Backend>::ComputePipeline, hal::pso::CreationError>>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<hal::pso::ComputePipelineDesc<'a, Backend>>,
-    {
-        todo!()
-    }
-
     unsafe fn destroy_compute_pipeline(
         &self,
         _pipeline: <Backend as hal::Backend>::ComputePipeline,
@@ -177,7 +144,6 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<<Backend as hal::Backend>::Framebuffer, OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<<Backend as hal::Backend>::ImageView>,
     {
         todo!()
     }
@@ -309,11 +275,7 @@ impl hal::device::Device<Backend> for Device {
         _max_sets: usize,
         _descriptor_ranges: I,
         _flags: hal::pso::DescriptorPoolCreateFlags,
-    ) -> Result<<Backend as hal::Backend>::DescriptorPool, OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>,
-    {
+    ) -> Result<<Backend as hal::Backend>::DescriptorPool, OutOfMemory> {
         todo!()
     }
 
@@ -321,16 +283,13 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         _bindings: I,
         _immutable_samplers: J,
     ) -> Result<<Backend as hal::Backend>::DescriptorSetLayout, OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator,
-        J::Item: Borrow<<Backend as hal::Backend>::Sampler>,
+        J: IntoIterator<Item = &'a <Backend as hal::Backend>::Sampler>,
     {
         todo!()
     }
@@ -344,8 +303,8 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, _op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator,
-        I::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
+        I::IntoIter: ExactSizeIterator,
     {
         todo!()
     }
@@ -364,16 +323,14 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a <Backend as hal::Backend>::Memory, Segment)>,
+        I: IntoIterator<Item = (&'a <Backend as hal::Backend>::Memory, Segment)>,
     {
         todo!()
     }
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, _ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator,
-        I::Item: Borrow<(&'a <Backend as hal::Backend>::Memory, Segment)>,
+        I: IntoIterator<Item = (&'a <Backend as hal::Backend>::Memory, Segment)>,
     {
         todo!()
     }
@@ -404,14 +361,6 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn reset_fences<I>(&self, _fences: I) -> Result<(), OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: BorrowMut<<Backend as hal::Backend>::Fence>,
-    {
-        todo!()
-    }
-
     unsafe fn wait_for_fence(
         &self,
         _fence: &<Backend as hal::Backend>::Fence,
@@ -420,15 +369,14 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn wait_for_fences<I>(
+    unsafe fn wait_for_fences<'a, I>(
         &self,
         _fences: I,
         _wait: hal::device::WaitFor,
         _timeout_ns: u64,
     ) -> Result<bool, WaitError>
     where
-        I: IntoIterator,
-        I::Item: Borrow<<Backend as hal::Backend>::Fence>,
+        I: IntoIterator<Item = &'a <Backend as hal::Backend>::Fence>,
     {
         todo!()
     }
