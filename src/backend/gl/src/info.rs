@@ -428,7 +428,7 @@ pub(crate) fn query_all(
     ]) {
         features |= Features::SAMPLER_ANISOTROPY;
     }
-    if info.is_supported(&[Core(4, 2)]) {
+    if info.is_supported(&[Core(4, 2), Es(3, 1)]) {
         legacy |= LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER;
     }
     if info.is_supported(&[Core(3, 3), Es(3, 0), Ext("GL_ARB_instanced_arrays")]) {
