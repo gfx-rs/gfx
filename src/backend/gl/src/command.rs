@@ -100,6 +100,7 @@ pub enum Command {
     ClearBufferDepthStencil(Option<pso::DepthValue>, Option<pso::StencilValue>),
     /// Clear the currently bound texture with the given color.
     ClearTexture([f32; 4]),
+    FillBuffer(n::RawBuffer, Range<buffer::Offset>, u32),
 
     BindFramebuffer {
         target: FrameBufferTarget,
@@ -777,8 +778,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         // TODO
     }
 
-    unsafe fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: buffer::SubRange, _data: u32) {
-        unimplemented!()
+    unsafe fn fill_buffer(&mut self, buffer: &n::Buffer, sub: buffer::SubRange, data: u32) {
+        let (raw_buffer, parent_range) = buffer.as_bound();
+        let range = crate::resolve_sub_range(&sub, parent_range);
+        self.data
+            .push_cmd(Command::FillBuffer(raw_buffer, range, data));
     }
 
     unsafe fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: buffer::Offset, _data: &[u8]) {
@@ -990,7 +994,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ImageBlit>,
     {
-        unimplemented!()
+        error!("Blit is not implemented");
     }
 
     unsafe fn bind_index_buffer(

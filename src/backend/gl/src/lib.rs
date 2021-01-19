@@ -543,6 +543,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let gl = &self.0.context;
 
         if cfg!(debug_assertions) && !cfg!(target_arch = "wasm32") && gl.supports_debug() {
+            info!("Debug output is enabled");
             gl.enable(glow::DEBUG_OUTPUT);
             gl.debug_message_callback(debug_message_callback);
         }

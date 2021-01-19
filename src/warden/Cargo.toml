@@ -33,7 +33,7 @@ hal = { path = "../hal", version = "0.6", package = "gfx-hal", features = ["serd
 log = "0.4"
 ron = "0.6"
 serde = { version = "1", features = ["serde_derive"] }
-env_logger = { version = "0.7", optional = true }
+env_logger = { version = "0.8", optional = true }
 glsl-to-spirv = { version = "0.1", optional = true }
 
 [dependencies.gfx-backend-vulkan]

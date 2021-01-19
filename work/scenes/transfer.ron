@@ -223,7 +223,7 @@
 				FillBuffer(
 					buffer: "buffer.fill-8-bytes",
 					offset: 4,
-					size: Some(8),
+					size: Some(4),
 					data: 0xFF,
 				),
 			]
