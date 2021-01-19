@@ -222,22 +222,12 @@ impl CommandQueue {
         unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None) };
         self.state.index_buffer = None;
 
-        // Reset viewports
-        debug_assert_eq!(
-            self.state.num_viewports, 1,
-            "Limits::max_viewports is not respected for viewports"
-        );
+        // Reset viewports && scissors
         unsafe {
             gl.viewport(0, 0, 0, 0);
             gl.depth_range_f32(0.0, 1.0);
+            gl.scissor(0, 0, 0, 0);
         };
-
-        // Reset scissors
-        debug_assert_eq!(
-            self.state.num_scissors, 1,
-            "Limits::max_viewports is not respected for scissors"
-        );
-        unsafe { gl.scissor(0, 0, 0, 0) };
     }
 
     fn process(&mut self, cmd: &com::Command, data_buf: &[u8]) {
