@@ -167,8 +167,8 @@ pub struct PlatformName {
 impl PlatformName {
     fn get(gl: &GlContainer) -> Self {
         PlatformName {
-            vendor: get_string(gl, glow::VENDOR).unwrap(),
-            renderer: get_string(gl, glow::RENDERER).unwrap(),
+            vendor: get_string(gl, glow::VENDOR).unwrap_or_default(),
+            renderer: get_string(gl, glow::RENDERER).unwrap_or_default(),
         }
     }
 }
