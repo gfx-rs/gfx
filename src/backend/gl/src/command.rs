@@ -529,6 +529,8 @@ impl CommandBuffer {
             .collect();
         self.data
             .push_cmd(Command::SetDrawColorBuffers(attachment_indices));
+        self.data
+            .push_cmd(Command::SetColorMask(None, pso::ColorMask::ALL));
 
         for (rat, info) in state
             .render_pass
@@ -552,20 +554,6 @@ impl CommandBuffer {
                     let channel = view_format.base_format().1;
                     let draw_color_index = draw_color_index as u32;
 
-                    // Temporarily reset color mask if it was not ColorMask::ALL
-                    let blend_target = self.cache.blend_targets.get(draw_color_index as usize);
-                    let color_mask = blend_target
-                        .map(Option::as_ref)
-                        .flatten()
-                        .map(|blend_target| blend_target.mask)
-                        .filter(|mask| *mask != pso::ColorMask::ALL);
-                    if color_mask.is_some() || blend_target.is_none() {
-                        self.data.push_cmd(Command::SetColorMask(
-                            Some(draw_color_index),
-                            pso::ColorMask::ALL,
-                        ));
-                    }
-
                     self.data.push_cmd(match channel {
                         ChannelType::Unorm
                         | ChannelType::Snorm
@@ -585,11 +573,6 @@ impl CommandBuffer {
                             info.clear_value.color.sint32
                         }),
                     });
-
-                    if let Some(mask) = color_mask {
-                        self.data
-                            .push_cmd(Command::SetColorMask(Some(draw_color_index), mask));
-                    }
                 }
                 // Clear depth-stencil target
                 None => {
@@ -911,18 +894,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 });
                 self.data
                     .push_cmd(Command::SetDrawColorBuffers(iter::once(0).collect()));
-
-                // Temporarily reset color mask if it was not ColorMask::ALL
-                let blend_target = self.cache.blend_targets.get(0);
-                let color_mask = blend_target
-                    .map(Option::as_ref)
-                    .flatten()
-                    .map(|blend_target| blend_target.mask)
-                    .filter(|mask| *mask != pso::ColorMask::ALL);
-                if color_mask.is_some() || blend_target.is_none() {
-                    self.data
-                        .push_cmd(Command::SetColorMask(Some(0), pso::ColorMask::ALL));
-                }
+                self.data
+                    .push_cmd(Command::SetColorMask(None, pso::ColorMask::ALL));
 
                 self.data.push_cmd(match image.channel {
                     ChannelType::Unorm
@@ -936,9 +909,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     ChannelType::Sint => Command::ClearBufferColorI(0, color.sint32),
                 });
 
-                if let Some(mask) = color_mask {
-                    self.data.push_cmd(Command::SetColorMask(Some(0), mask));
-                }
+                //Note: color mask is not restored: we are outside of a render pass,
+                // and whatever needs to have the mask, including the pass, should set it.
             }
             None => {
                 // 1. glClear
