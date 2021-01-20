@@ -206,6 +206,8 @@ pub struct PrivateCaps {
     pub draw_buffers: bool,
     /// Whether separate color masks per output buffer are supported.
     pub per_slot_color_mask: bool,
+    /// Reading from textures into CPU memory is supported.
+    pub get_tex_image: bool,
 }
 
 /// OpenGL implementation information
@@ -538,6 +540,7 @@ pub(crate) fn query_all(
         depth_range_f64_precision: !info.version.is_embedded, // TODO
         draw_buffers: info.is_supported(&[Core(2, 0), Es(3, 0)]),
         per_slot_color_mask: info.is_supported(&[Core(3, 0)]),
+        get_tex_image: !info.version.is_embedded,
     };
 
     (info, features, legacy, limits, capabilities, private)

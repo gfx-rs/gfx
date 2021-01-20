@@ -688,27 +688,34 @@ impl CommandQueue {
                 pixel_type,
                 dst_buffer,
                 ref data,
-            } => unsafe {
-                // TODO: Fix active texture
-                // TODO: handle partial copies gracefully
-                assert_eq!(data.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
-                assert_eq!(texture_target, glow::TEXTURE_2D);
-                let gl = &self.share.context;
-                gl.active_texture(glow::TEXTURE0);
-                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst_buffer));
-                gl.bind_texture(glow::TEXTURE_2D, Some(src_texture));
-                gl.get_tex_image(
-                    glow::TEXTURE_2D,
-                    data.image_layers.level as _,
-                    //data.image_offset.x,
-                    //data.image_offset.y,
-                    //data.image_extent.width as _,
-                    //data.image_extent.height as _,
-                    texture_format,
-                    pixel_type,
-                    glow::PixelPackData::BufferOffset(data.buffer_offset as u32),
-                );
-                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
+            } => {
+                if self.share.private_caps.get_tex_image {
+                    // TODO: Fix active texture
+                    // TODO: handle partial copies gracefully
+                    assert_eq!(data.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
+                    assert_eq!(texture_target, glow::TEXTURE_2D);
+                    let gl = &self.share.context;
+                    unsafe {
+                        gl.active_texture(glow::TEXTURE0);
+                        gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst_buffer));
+                        gl.bind_texture(glow::TEXTURE_2D, Some(src_texture));
+                        gl.get_tex_image(
+                            glow::TEXTURE_2D,
+                            data.image_layers.level as _,
+                            //data.image_offset.x,
+                            //data.image_offset.y,
+                            //data.image_extent.width as _,
+                            //data.image_extent.height as _,
+                            texture_format,
+                            pixel_type,
+                            glow::PixelPackData::BufferOffset(data.buffer_offset as u32),
+                        );
+                        gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
+                    }
+                } else {
+                    //TODO: use FBO
+                    error!("CopyTextureToBuffer is not implemented on GLES");
+                }
             },
             com::Command::CopyRenderbufferToBuffer(..) => {
                 //TODO: use FBO
