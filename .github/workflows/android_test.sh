@@ -10,7 +10,7 @@ sleep 30s
 
 adb shell /system/bin/screencap -p /sdcard/screenshot.png
 adb pull /sdcard/screenshot.png ~/screenshot.png
-adb logcat *:S RustStdoutStderr:V -d > ~/logcat.log
+adb logcat *:E RustStdoutStderr:V -d > ~/logcat.log
 
 if grep 'RustStdoutStderr' ~/logcat.log;
 then
