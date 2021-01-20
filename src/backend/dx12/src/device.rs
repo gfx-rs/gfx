@@ -3346,6 +3346,7 @@ impl d::Device<B> for Device {
         match hr {
             winbase::WAIT_OBJECT_0..=WAIT_OBJECT_LAST => Ok(true),
             winbase::WAIT_ABANDONED_0..=WAIT_ABANDONED_LAST => Ok(true), //TODO?
+            winbase::WAIT_FAILED => Err(d::WaitError::DeviceLost(d::DeviceLost)),
             winerror::WAIT_TIMEOUT => Ok(false),
             _ => panic!("Unexpected wait status 0x{:X}", hr),
         }
