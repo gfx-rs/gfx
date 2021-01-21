@@ -716,7 +716,7 @@ impl CommandQueue {
                     //TODO: use FBO
                     error!("CopyTextureToBuffer is not implemented on GLES");
                 }
-            },
+            }
             com::Command::CopyRenderbufferToBuffer(..) => {
                 //TODO: use FBO
                 error!("CopyRenderbufferToBuffer is not implemented");

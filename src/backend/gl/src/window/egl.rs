@@ -313,6 +313,7 @@ impl hal::Instance<crate::Backend> for Instance {
         vec![PhysicalDevice::new_adapter(context)]
     }
 
+    #[cfg_attr(target_os = "macos", allow(unused, unreachable_code))]
     unsafe fn create_surface(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,
@@ -320,22 +321,23 @@ impl hal::Instance<crate::Backend> for Instance {
         use raw_window_handle::RawWindowHandle as Rwh;
 
         let mut inner = self.inner.lock();
-        #[cfg(not(target_os = "android"))]
+        let mut wl_window = None;
+        #[cfg(not(any(target_os = "android", target_os = "macos")))]
         let (mut temp_xlib_handle, mut temp_xcb_handle);
         let native_window_ptr = match has_handle.raw_window_handle() {
-            #[cfg(not(target_os = "android"))]
+            #[cfg(not(any(target_os = "android", target_os = "macos")))]
             Rwh::Xlib(handle) => {
                 temp_xlib_handle = handle.window;
                 &mut temp_xlib_handle as *mut _ as *mut std::ffi::c_void
             }
-            #[cfg(not(target_os = "android"))]
+            #[cfg(not(any(target_os = "android", target_os = "macos")))]
             Rwh::Xcb(handle) => {
                 temp_xcb_handle = handle.window;
                 &mut temp_xcb_handle as *mut _ as *mut std::ffi::c_void
             }
             #[cfg(target_os = "android")]
             Rwh::Android(handle) => handle.a_native_window as *mut _ as *mut std::ffi::c_void,
-            #[cfg(not(target_os = "android"))]
+            #[cfg(not(any(target_os = "android", target_os = "macos")))]
             Rwh::Wayland(handle) => {
                 /* Wayland displays are not sharable between surfaces so if the
                  * surface we receive from this handle is from a different
@@ -370,19 +372,21 @@ impl hal::Instance<crate::Backend> for Instance {
                     drop(old_inner);
                 }
 
-                let window = {
-                    let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> = self
-                        .wsi_library
-                        .as_ref()
-                        .expect("unsupported window")
-                        .get(b"wl_egl_window_create")
-                        .unwrap();
-                    let result = wl_egl_window_create(handle.surface, 640, 480);
-                    ptr::NonNull::new(result)
-                };
-                window.expect("unsupported window").as_ptr() as *mut _ as *mut std::ffi::c_void
+                let wl_egl_window_create: libloading::Symbol<WlEglWindowCreateFun> = self
+                    .wsi_library
+                    .as_ref()
+                    .expect("unsupported window")
+                    .get(b"wl_egl_window_create")
+                    .unwrap();
+                let result = wl_egl_window_create(handle.surface, 640, 480) as *mut _
+                    as *mut std::ffi::c_void;
+                wl_window = Some(result);
+                result
             }
-            other => panic!("Unsupported window: {:?}", other),
+            other => {
+                error!("Unsupported window: {:?}", other);
+                return Err(w::InitError::UnsupportedWindowHandle);
+            }
         };
 
         let mut attributes = vec![
@@ -426,12 +430,6 @@ impl hal::Instance<crate::Backend> for Instance {
                     w::InitError::UnsupportedWindowHandle
                 })
         }?;
-
-        let wl_window = match has_handle.raw_window_handle() {
-            #[cfg(not(target_os = "android"))]
-            Rwh::Wayland(_) => Some(native_window_ptr),
-            _ => None,
-        };
 
         Ok(Surface {
             egl: inner.egl.clone(),
