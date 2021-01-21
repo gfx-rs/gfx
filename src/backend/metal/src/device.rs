@@ -1130,6 +1130,7 @@ impl hal::device::Device<Backend> for Device {
                         buffer_id: index as _,
                         texture_id: !0,
                         sampler_id: !0,
+                        count: 0,
                     },
                 );
             }
@@ -1210,6 +1211,7 @@ impl hal::device::Device<Backend> for Device {
                                 } else {
                                     !0
                                 },
+                                count: 0,
                             };
                             counters.add(layout.content);
                             if layout.array_index == 0 {
@@ -1240,6 +1242,7 @@ impl hal::device::Device<Backend> for Device {
                                 buffer_id: if has_stage { counters.buffers } else { !0 },
                                 texture_id: !0,
                                 sampler_id: !0,
+                                count: 0,
                             },
                         );
                         if has_stage {
@@ -1324,7 +1327,7 @@ impl hal::device::Device<Backend> for Device {
             MTLLanguageVersion::V2_0 => msl::Version::V2_0,
             MTLLanguageVersion::V2_1 => msl::Version::V2_1,
             MTLLanguageVersion::V2_2 => msl::Version::V2_2,
-            MTLLanguageVersion::V2_3 => msl::Version::V2_2, //TODO: update this!
+            MTLLanguageVersion::V2_3 => msl::Version::V2_3,
         };
         shader_compiler_options.enable_point_size_builtin = false;
         shader_compiler_options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
@@ -2081,6 +2084,7 @@ impl hal::device::Device<Backend> for Device {
                     } else {
                         !0
                     },
+                    count: 0,
                 };
                 let res_offset = res.buffer_id.min(res.texture_id).min(res.sampler_id);
                 bindings.insert(

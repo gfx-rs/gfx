@@ -26,7 +26,7 @@ hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
 auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
 glow = "0.7.1"
 parking_lot = "0.11"
-spirv_cross = { version = "0.22.2", features = ["glsl"]}
+spirv_cross = { version = "0.23", features = ["glsl"]}
 raw-window-handle = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
