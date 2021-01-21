@@ -1054,59 +1054,14 @@ impl CommandQueue {
                 self.share
                     .context
                     .stencil_mask_separate(glow::BACK, values.back);
-            }, /*
-               com::Command::SetRasterizer(rast) => {
-                   state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
-               },
-               com::Command::SetDepthState(depth) => {
-                   state::bind_depth(&self.share.context, &depth);
-               },
-               com::Command::SetStencilState(stencil, refs, cull) => {
-                   state::bind_stencil(&self.share.context, &stencil, refs, cull);
-               },
-               com::Command::SetBlendState(slot, color) => {
-                   if self.share.capabilities.separate_blending_slots {
-                       state::bind_blend_slot(&self.share.context, slot, color);
-                   }else if slot == 0 {
-                       //self.temp.color = color; //TODO
-                       state::bind_blend(&self.share.context, color);
-                   }else if false {
-                       error!("Separate blending slots are not supported");
-                   }
-               },
-               com::Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
-                   let gl = &self.share.context;
-
-                   if self.share.capabilities.copy_buffer {
-                       unsafe {
-                           gl.BindBuffer(gl::COPY_READ_BUFFER, src);
-                           gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
-                           gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
-                                               gl::COPY_WRITE_BUFFER,
-                                               src_offset,
-                                               dst_offset,
-                                               size);
-                       }
-                   } else {
-                       debug_assert!(self.share.private_caps.buffer_storage == false);
-
-                       unsafe {
-                           let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
-                           device::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
-                           src_ptr.offset(src_offset);
-
-                           let mut dst_ptr = 0 as *mut ::std::os::raw::c_void;
-                           device::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
-                           dst_ptr.offset(dst_offset);
-
-                           ::std::ptr::copy(src_ptr, dst_ptr, size as usize);
-
-                           device::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
-                           device::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
-                       }
-                   }
-               },
-               */
+            },
+            com::Command::MemoryBarrier(mask) => {
+                if self.share.private_caps.memory_barrier {
+                    unsafe {
+                        self.share.context.memory_barrier(mask);
+                    }
+                }
+            }
         }
         if let Err(err) = self.share.check() {
             panic!("Error {:?} executing command: {:?}", err, cmd)

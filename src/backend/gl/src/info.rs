@@ -208,6 +208,8 @@ pub struct PrivateCaps {
     pub per_slot_color_mask: bool,
     /// Reading from textures into CPU memory is supported.
     pub get_tex_image: bool,
+    /// Inserting memory barriers.
+    pub memory_barrier: bool,
 }
 
 /// OpenGL implementation information
@@ -541,6 +543,7 @@ pub(crate) fn query_all(
         draw_buffers: info.is_supported(&[Core(2, 0), Es(3, 0)]),
         per_slot_color_mask: info.is_supported(&[Core(3, 0)]),
         get_tex_image: !info.version.is_embedded,
+        memory_barrier: info.is_supported(&[Core(4, 2), Es(3, 1)]),
     };
 
     (info, features, legacy, limits, capabilities, private)
