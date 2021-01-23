@@ -156,6 +156,8 @@ pub enum Command {
     SetDepthMask(bool),
     SetStencilMask(pso::StencilValue),
     SetStencilMaskSeparate(pso::Sided<pso::StencilValue>),
+
+    MemoryBarrier(u32),
 }
 
 pub type FrameBufferTarget = u32;
@@ -750,11 +752,44 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         &mut self,
         _stages: Range<pso::PipelineStage>,
         _dependencies: memory::Dependencies,
-        _barriers: T,
+        barriers: T,
     ) where
         T: IntoIterator<Item = memory::Barrier<'a, Backend>>,
     {
-        // TODO
+        //TODO: this needs to be much more detailed. Problem is that the affected
+        // resources by a barrier have to be bound to specific slots, so, for example,
+        // doing a `set_graphics_pipeline` followed by `pipeline_barrier` may need
+        // the vertex bindings to be reinstated.
+        let mut mask = 0;
+
+        for barrier in barriers {
+            match barrier {
+                memory::Barrier::AllBuffers(access) => {
+                    if access.start.contains(buffer::Access::SHADER_WRITE) {
+                        mask |= glow::SHADER_STORAGE_BARRIER_BIT;
+                    }
+                }
+                memory::Barrier::Buffer { states, .. } => {
+                    if states.start.contains(buffer::Access::SHADER_WRITE) {
+                        mask |= glow::SHADER_STORAGE_BARRIER_BIT;
+                    }
+                }
+                memory::Barrier::AllImages(access) => {
+                    if access.start.contains(image::Access::SHADER_WRITE) {
+                        mask |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
+                    }
+                }
+                memory::Barrier::Image { states, .. } => {
+                    if states.start.0.contains(image::Access::SHADER_WRITE) {
+                        mask |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
+                    }
+                }
+            }
+        }
+
+        if mask != 0 {
+            self.data.push_cmd(Command::MemoryBarrier(mask));
+        }
     }
 
     unsafe fn fill_buffer(&mut self, buffer: &n::Buffer, sub: buffer::SubRange, data: u32) {

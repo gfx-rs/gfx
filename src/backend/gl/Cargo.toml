@@ -24,7 +24,7 @@ bitflags = "1"
 log = "0.4"
 hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
 auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
-glow = "0.7.1"
+glow = "0.7.2"
 parking_lot = "0.11"
 spirv_cross = { version = "0.23", features = ["glsl"]}
 raw-window-handle = "0.3"
