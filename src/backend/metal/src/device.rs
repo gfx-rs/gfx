@@ -103,7 +103,7 @@ fn get_final_function(
             Some(c) => unsafe {
                 let ptr = &specialization.data[c.range.start as usize] as *const u8 as *const _;
                 let ty: metal::MTLDataType = msg_send![object, type];
-                constants.set_constant_value_at_index(c.id as NSUInteger, ty, ptr);
+                constants.set_constant_value_at_index(ptr, ty, c.id as NSUInteger);
             },
             None if required != NO => {
                 //TODO: get name
@@ -2577,7 +2577,7 @@ impl hal::device::Device<Backend> for Device {
         let stride = (col_count * (format_desc.bits as u64 / 8) + align_mask) & !align_mask;
 
         Ok(n::BufferView {
-            raw: raw.new_texture_from_contents(&descriptor, start, stride),
+            raw: raw.new_texture_with_descriptor(&descriptor, start, stride),
         })
     }
 

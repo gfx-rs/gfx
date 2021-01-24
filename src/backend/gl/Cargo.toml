@@ -30,12 +30,12 @@ spirv_cross = { version = "0.23", features = ["glsl"]}
 raw-window-handle = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-egl = { package = "khronos-egl", git = "https://github.com/timothee-haudebourg/khronos-egl", rev = "4b769b8f2d068fa78db9285a8557cd11365fa314", features = ["dynamic"] }
+egl = { package = "khronos-egl", version = "3", features = ["dynamic"] }
 libloading = "0.6"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-6"
+tag = "gfx-7"
 #TODO: remove `spv-out` once spirv-cross is deprecated
 features = ["spv-out", "glsl-out"]
 optional = true
