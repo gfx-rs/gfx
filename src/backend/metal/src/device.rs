@@ -2175,7 +2175,6 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
         I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
-        I::IntoIter: ExactSizeIterator,
     {
         debug!("write_descriptor_set");
         match *op.set {

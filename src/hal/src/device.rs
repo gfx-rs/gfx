@@ -232,11 +232,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<B::RenderPass, OutOfMemory>
     where
         Ia: IntoIterator<Item = pass::Attachment>,
-        Ia::IntoIter: ExactSizeIterator,
         Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
-        Is::IntoIter: ExactSizeIterator,
-        Id: IntoIterator<Item = pass::SubpassDependency>,
-        Id::IntoIter: ExactSizeIterator;
+        Id: IntoIterator<Item = pass::SubpassDependency>;
 
     /// Destroys a *render pass* created by this device.
     unsafe fn destroy_render_pass(&self, rp: B::RenderPass);
@@ -264,9 +261,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<B::PipelineLayout, OutOfMemory>
     where
         Is: IntoIterator<Item = &'a B::DescriptorSetLayout>,
-        Is::IntoIter: ExactSizeIterator,
-        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
-        Ic::IntoIter: ExactSizeIterator;
+        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>;
 
     /// Destroy a pipeline layout object
     unsafe fn destroy_pipeline_layout(&self, layout: B::PipelineLayout);
@@ -290,8 +285,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         sources: I,
     ) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator<Item = &'a B::PipelineCache>,
-        I::IntoIter: ExactSizeIterator;
+        I: IntoIterator<Item = &'a B::PipelineCache>;
 
     /// Destroy a pipeline cache object.
     unsafe fn destroy_pipeline_cache(&self, cache: B::PipelineCache);
@@ -480,8 +474,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         flags: DescriptorPoolCreateFlags,
     ) -> Result<B::DescriptorPool, OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
-        I::IntoIter: ExactSizeIterator;
+        I: IntoIterator<Item = pso::DescriptorRangeDesc>;
 
     /// Destroy a descriptor pool object
     ///
@@ -503,9 +496,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<B::DescriptorSetLayout, OutOfMemory>
     where
         I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
-        I::IntoIter: ExactSizeIterator,
-        J: IntoIterator<Item = &'a B::Sampler>,
-        J::IntoIter: ExactSizeIterator;
+        J: IntoIterator<Item = &'a B::Sampler>;
 
     /// Destroy a descriptor set layout object
     unsafe fn destroy_descriptor_set_layout(&self, layout: B::DescriptorSetLayout);
@@ -513,8 +504,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Specifying the parameters of a descriptor set write operation.
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
-        I::IntoIter: ExactSizeIterator;
+        I: IntoIterator<Item = pso::Descriptor<'a, B>>;
 
     /// Structure specifying a copy descriptor set operation.
     unsafe fn copy_descriptor_set<'a>(&self, op: pso::DescriptorSetCopy<'a, B>);
@@ -531,14 +521,12 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Flush mapped memory ranges
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a B::Memory, Segment)>,
-        I::IntoIter: ExactSizeIterator;
+        I: IntoIterator<Item = (&'a B::Memory, Segment)>;
 
     /// Invalidate ranges of non-coherent memory from the host caches
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a B::Memory, Segment)>,
-        I::IntoIter: ExactSizeIterator;
+        I: IntoIterator<Item = (&'a B::Memory, Segment)>;
 
     /// Unmap a memory object once host access to it is no longer needed by the application
     unsafe fn unmap_memory(&self, memory: &mut B::Memory);
@@ -591,7 +579,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<bool, WaitError>
     where
         I: IntoIterator<Item = &'a B::Fence>,
-        I::IntoIter: ExactSizeIterator,
     {
         use std::{thread, time};
         fn to_ns(duration: time::Duration) -> u64 {

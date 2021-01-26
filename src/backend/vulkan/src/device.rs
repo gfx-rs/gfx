@@ -1,5 +1,6 @@
 use arrayvec::ArrayVec;
 use ash::{extensions::khr, version::DeviceV1_0, vk};
+use inplace_it::inplace_or_alloc_from_iter;
 use smallvec::SmallVec;
 
 use hal::{
@@ -502,29 +503,27 @@ impl d::Device<B> for Device {
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
         Ia: IntoIterator<Item = pass::Attachment>,
-        Ia::IntoIter: ExactSizeIterator,
         Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
-        Is::IntoIter: ExactSizeIterator,
         Id: IntoIterator<Item = pass::SubpassDependency>,
-        Id::IntoIter: ExactSizeIterator,
     {
-        let attachments = attachments
-            .into_iter()
-            .map(|attachment| vk::AttachmentDescription {
-                flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
-                format: attachment
-                    .format
-                    .map_or(vk::Format::UNDEFINED, conv::map_format),
-                samples: conv::map_sample_count_flags(attachment.samples),
-                load_op: conv::map_attachment_load_op(attachment.ops.load),
-                store_op: conv::map_attachment_store_op(attachment.ops.store),
-                stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
-                stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
-                initial_layout: conv::map_image_layout(attachment.layouts.start),
-                final_layout: conv::map_image_layout(attachment.layouts.end),
-            });
+        let attachments_iter =
+            attachments
+                .into_iter()
+                .map(|attachment| vk::AttachmentDescription {
+                    flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
+                    format: attachment
+                        .format
+                        .map_or(vk::Format::UNDEFINED, conv::map_format),
+                    samples: conv::map_sample_count_flags(attachment.samples),
+                    load_op: conv::map_attachment_load_op(attachment.ops.load),
+                    store_op: conv::map_attachment_store_op(attachment.ops.store),
+                    stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
+                    stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
+                    initial_layout: conv::map_image_layout(attachment.layouts.start),
+                    final_layout: conv::map_image_layout(attachment.layouts.end),
+                });
 
-        let dependencies = dependencies.into_iter().map(|sdep|
+        let dependencies_iter = dependencies.into_iter().map(|sdep|
             // TODO: checks
             vk::SubpassDependency {
                 src_subpass: sdep
@@ -539,9 +538,7 @@ impl d::Device<B> for Device {
                 dependency_flags: mem::transmute(sdep.flags),
             });
 
-        let attachment_count = attachments.len();
-        let result = inplace_it::inplace_or_alloc_array(attachment_count, |uninit_guard| {
-            let attachments = uninit_guard.init_with_iter(attachments);
+        let result = inplace_or_alloc_from_iter(attachments_iter, |attachments| {
             let attachment_refs = subpasses
                 .into_iter()
                 .map(|subpass| {
@@ -590,24 +587,25 @@ impl d::Device<B> for Device {
                 })
                 .collect::<Box<[_]>>();
 
-            inplace_it::inplace_or_alloc_array(dependencies.len(), |uninit_guard| {
-                let dependencies = uninit_guard.init_with_iter(dependencies);
-
+            inplace_or_alloc_from_iter(dependencies_iter, |dependencies| {
                 let info = vk::RenderPassCreateInfo::builder()
                     .flags(vk::RenderPassCreateFlags::empty())
                     .attachments(&attachments)
                     .subpasses(&subpasses)
                     .dependencies(&dependencies);
 
-                self.shared.raw.create_render_pass(&info, None)
+                self.shared
+                    .raw
+                    .create_render_pass(&info, None)
+                    .map(|raw| n::RenderPass {
+                        raw,
+                        attachment_count: attachments.len(),
+                    })
             })
         });
 
         match result {
-            Ok(renderpass) => Ok(n::RenderPass {
-                raw: renderpass,
-                attachment_count,
-            }),
+            Ok(renderpass) => Ok(renderpass),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device),
             _ => unreachable!(),
@@ -616,18 +614,16 @@ impl d::Device<B> for Device {
 
     unsafe fn create_pipeline_layout<'a, Is, Ic>(
         &self,
-        set_layouts_iter: Is,
+        set_layouts: Is,
         push_constant_ranges: Ic,
     ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
         Is: IntoIterator<Item = &'a n::DescriptorSetLayout>,
-        Is::IntoIter: ExactSizeIterator,
         Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
-        Ic::IntoIter: ExactSizeIterator,
     {
-        let vk_set_layouts = set_layouts_iter.into_iter().map(|set| set.raw);
+        let vk_set_layouts_iter = set_layouts.into_iter().map(|set| set.raw);
 
-        let push_constant_ranges =
+        let push_constant_ranges_iter =
             push_constant_ranges
                 .into_iter()
                 .map(|(s, ref r)| vk::PushConstantRange {
@@ -636,15 +632,11 @@ impl d::Device<B> for Device {
                     size: r.end - r.start,
                 });
 
-        let result = inplace_it::inplace_or_alloc_array(vk_set_layouts.len(), |uninit_guard| {
-            let set_layouts = uninit_guard.init_with_iter(vk_set_layouts);
-
+        let result = inplace_or_alloc_from_iter(vk_set_layouts_iter, |set_layouts| {
             // TODO: set_layouts doesnt implement fmt::Debug, submit PR?
             // debug!("create_pipeline_layout {:?}", set_layouts);
 
-            inplace_it::inplace_or_alloc_array(push_constant_ranges.len(), |uninit_guard| {
-                let push_constant_ranges = uninit_guard.init_with_iter(push_constant_ranges);
-
+            inplace_or_alloc_from_iter(push_constant_ranges_iter, |push_constant_ranges| {
                 let info = vk::PipelineLayoutCreateInfo::builder()
                     .flags(vk::PipelineLayoutCreateFlags::empty())
                     .set_layouts(&set_layouts)
@@ -709,13 +701,10 @@ impl d::Device<B> for Device {
     ) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator<Item = &'a n::PipelineCache>,
-        I::IntoIter: ExactSizeIterator,
     {
-        let caches = sources.into_iter().map(|s| s.raw);
+        let caches_iter = sources.into_iter().map(|s| s.raw);
 
-        let result = inplace_it::inplace_or_alloc_array(caches.len(), |uninit_guard| {
-            let caches = uninit_guard.init_with_iter(caches);
-
+        let result = inplace_or_alloc_from_iter(caches_iter, |caches| {
             //TODO: https://github.com/MaikKlein/ash/issues/357
             self.shared.raw.fp_v1_0().merge_pipeline_caches(
                 self.shared.raw.handle(),
@@ -1261,18 +1250,15 @@ impl d::Device<B> for Device {
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
         T: IntoIterator<Item = pso::DescriptorRangeDesc>,
-        T::IntoIter: ExactSizeIterator,
     {
-        let pools = descriptor_ranges
+        let pools_iter = descriptor_ranges
             .into_iter()
             .map(|pool| vk::DescriptorPoolSize {
                 ty: conv::map_descriptor_type(pool.ty),
                 descriptor_count: pool.count as u32,
             });
 
-        let result = inplace_it::inplace_or_alloc_array(pools.len(), |uninit_guard| {
-            let pools = uninit_guard.init_with_iter(pools);
-
+        let result = inplace_or_alloc_from_iter(pools_iter, |pools| {
             let info = vk::DescriptorPoolCreateInfo::builder()
                 .flags(conv::map_descriptor_pool_create_flags(flags))
                 .max_sets(max_sets as u32)
@@ -1282,11 +1268,7 @@ impl d::Device<B> for Device {
         });
 
         match result {
-            Ok(pool) => Ok(n::DescriptorPool {
-                raw: pool,
-                device: self.shared.clone(),
-                set_free_vec: Vec::new(),
-            }),
+            Ok(pool) => Ok(n::DescriptorPool::new(pool, &self.shared)),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
@@ -1296,51 +1278,45 @@ impl d::Device<B> for Device {
     unsafe fn create_descriptor_set_layout<'a, I, J>(
         &self,
         binding_iter: I,
-        immutable_sampler_iter: J,
+        immutable_samplers: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
         I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
         J: IntoIterator<Item = &'a n::Sampler>,
-        J::IntoIter: ExactSizeIterator,
     {
-        let vk_immutable_samplers = immutable_sampler_iter.into_iter().map(|is| is.0);
+        let vk_immutable_samplers_iter = immutable_samplers.into_iter().map(|is| is.0);
         let mut sampler_offset = 0;
 
         let mut bindings = binding_iter.into_iter().collect::<Vec<_>>();
         // Sorting will come handy in `write_descriptor_sets`.
         bindings.sort_by_key(|b| b.binding);
 
-        let result =
-            inplace_it::inplace_or_alloc_array(vk_immutable_samplers.len(), |uninit_guard| {
-                let immutable_samplers = uninit_guard.init_with_iter(vk_immutable_samplers);
-
-                let raw_bindings = bindings.iter().map(|b| vk::DescriptorSetLayoutBinding {
-                    binding: b.binding,
-                    descriptor_type: conv::map_descriptor_type(b.ty),
-                    descriptor_count: b.count as _,
-                    stage_flags: conv::map_stage_flags(b.stage_flags),
-                    p_immutable_samplers: if b.immutable_samplers {
-                        let slice = &immutable_samplers[sampler_offset..];
-                        sampler_offset += b.count;
-                        slice.as_ptr()
-                    } else {
-                        ptr::null()
-                    },
-                });
-
-                inplace_it::inplace_or_alloc_array(raw_bindings.len(), |uninit_guard| {
-                    let raw_bindings = uninit_guard.init_with_iter(raw_bindings);
-
-                    // TODO raw_bindings doesnt implement fmt::Debug
-                    // debug!("create_descriptor_set_layout {:?}", raw_bindings);
-
-                    let info = vk::DescriptorSetLayoutCreateInfo::builder()
-                        .flags(vk::DescriptorSetLayoutCreateFlags::empty())
-                        .bindings(&raw_bindings);
-
-                    self.shared.raw.create_descriptor_set_layout(&info, None)
-                })
+        let result = inplace_or_alloc_from_iter(vk_immutable_samplers_iter, |immutable_samplers| {
+            let raw_bindings_iter = bindings.iter().map(|b| vk::DescriptorSetLayoutBinding {
+                binding: b.binding,
+                descriptor_type: conv::map_descriptor_type(b.ty),
+                descriptor_count: b.count as _,
+                stage_flags: conv::map_stage_flags(b.stage_flags),
+                p_immutable_samplers: if b.immutable_samplers {
+                    let slice = &immutable_samplers[sampler_offset..];
+                    sampler_offset += b.count;
+                    slice.as_ptr()
+                } else {
+                    ptr::null()
+                },
             });
+
+            inplace_or_alloc_from_iter(raw_bindings_iter, |raw_bindings| {
+                // TODO raw_bindings doesnt implement fmt::Debug
+                // debug!("create_descriptor_set_layout {:?}", raw_bindings);
+
+                let info = vk::DescriptorSetLayoutCreateInfo::builder()
+                    .flags(vk::DescriptorSetLayoutCreateFlags::empty())
+                    .bindings(&raw_bindings);
+
+                self.shared.raw.create_descriptor_set_layout(&info, None)
+            })
+        });
 
         match result {
             Ok(layout) => Ok(n::DescriptorSetLayout {
@@ -1356,10 +1332,10 @@ impl d::Device<B> for Device {
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
         I: IntoIterator<Item = pso::Descriptor<'a, B>>,
-        I::IntoIter: ExactSizeIterator,
     {
         let descriptors = op.descriptors.into_iter();
-        let mut raw_writes = Vec::<vk::WriteDescriptorSet>::with_capacity(descriptors.len());
+        let mut raw_writes =
+            Vec::<vk::WriteDescriptorSet>::with_capacity(descriptors.size_hint().0);
         let mut image_infos = Vec::new();
         let mut buffer_infos = Vec::new();
         let mut texel_buffer_views = Vec::new();
@@ -1452,7 +1428,7 @@ impl d::Device<B> for Device {
         }
 
         // Patch the pointers now that we have all the storage allocated.
-        for raw in &mut raw_writes {
+        for raw in raw_writes.iter_mut() {
             use crate::vk::DescriptorType as Dt;
             match raw.descriptor_type {
                 Dt::SAMPLER
@@ -1527,12 +1503,10 @@ impl d::Device<B> for Device {
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator<Item = (&'a n::Memory, Segment)>,
-        I::IntoIter: ExactSizeIterator,
     {
-        let vk_ranges = ranges.into_iter().map(conv::map_memory_range);
-        let result = inplace_it::inplace_or_alloc_array(vk_ranges.len(), |uninit_guard| {
-            let range_slice = uninit_guard.init_with_iter(vk_ranges);
-            self.shared.raw.flush_mapped_memory_ranges(&range_slice)
+        let vk_ranges_iter = ranges.into_iter().map(conv::map_memory_range);
+        let result = inplace_or_alloc_from_iter(vk_ranges_iter, |ranges| {
+            self.shared.raw.flush_mapped_memory_ranges(&ranges)
         });
 
         match result {
@@ -1546,14 +1520,10 @@ impl d::Device<B> for Device {
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator<Item = (&'a n::Memory, Segment)>,
-        I::IntoIter: ExactSizeIterator,
     {
-        let vk_ranges = ranges.into_iter().map(conv::map_memory_range);
-        let result = inplace_it::inplace_or_alloc_array(vk_ranges.len(), |uninit_guard| {
-            let range_slice = uninit_guard.init_with_iter(vk_ranges);
-            self.shared
-                .raw
-                .invalidate_mapped_memory_ranges(&range_slice)
+        let vk_ranges_iter = ranges.into_iter().map(conv::map_memory_range);
+        let result = inplace_or_alloc_from_iter(vk_ranges_iter, |ranges| {
+            self.shared.raw.invalidate_mapped_memory_ranges(&ranges)
         });
 
         match result {
@@ -1611,18 +1581,16 @@ impl d::Device<B> for Device {
     ) -> Result<bool, d::WaitError>
     where
         I: IntoIterator<Item = &'a n::Fence>,
-        I::IntoIter: ExactSizeIterator,
     {
-        let vk_fences = fences_iter.into_iter().map(|fence| fence.0);
+        let vk_fences_iter = fences_iter.into_iter().map(|fence| fence.0);
 
         let all = match wait {
             d::WaitFor::Any => false,
             d::WaitFor::All => true,
         };
 
-        let result = inplace_it::inplace_or_alloc_array(vk_fences.len(), |uninit_guard| {
-            let fences = uninit_guard.init_with_iter(vk_fences);
-            self.shared.raw.wait_for_fences(&fences, all, timeout_ns)
+        let result = inplace_or_alloc_from_iter(vk_fences_iter, |fences| {
+            self.shared.raw.wait_for_fences(fences, all, timeout_ns)
         });
 
         match result {
@@ -1815,7 +1783,7 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_descriptor_pool(&self, pool: n::DescriptorPool) {
-        self.shared.raw.destroy_descriptor_pool(pool.raw, None);
+        self.shared.raw.destroy_descriptor_pool(pool.finish(), None);
     }
 
     unsafe fn destroy_descriptor_set_layout(&self, layout: n::DescriptorSetLayout) {

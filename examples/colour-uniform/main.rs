@@ -967,7 +967,6 @@ impl<B: Backend> DescSet<B> {
         device: &mut B::Device,
     ) where
         W: IntoIterator<Item = pso::Descriptor<'a, B>>,
-        W::IntoIter: ExactSizeIterator,
     {
         let set = self.set.as_mut().unwrap();
         device.write_descriptor_set(pso::DescriptorSetWrite {
@@ -1207,7 +1206,6 @@ impl<B: Backend> PipelineState<B> {
     ) -> Self
     where
         Is: IntoIterator<Item = &'a B::DescriptorSetLayout>,
-        Is::IntoIter: ExactSizeIterator,
     {
         let device = &device_ptr.borrow().device;
         let pipeline_layout = device

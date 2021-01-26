@@ -193,7 +193,6 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     unsafe fn allocate<'a, I, E>(&mut self, layouts: I, list: &mut E) -> Result<(), AllocationError>
     where
         I: IntoIterator<Item = &'a B::DescriptorSetLayout>,
-        I::IntoIter: ExactSizeIterator,
         E: Extend<B::DescriptorSet>,
     {
         for layout in layouts {
@@ -222,7 +221,6 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 pub struct DescriptorSetWrite<'a, B: Backend, I>
 where
     I: IntoIterator<Item = Descriptor<'a, B>>,
-    I::IntoIter: ExactSizeIterator,
 {
     /// The descriptor set to modify.
     pub set: &'a mut B::DescriptorSet,

@@ -90,11 +90,8 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
         fence: Option<&mut B::Fence>,
     ) where
         Ic: IntoIterator<Item = &'a B::CommandBuffer>,
-        Ic::IntoIter: ExactSizeIterator,
         Iw: IntoIterator<Item = (&'a B::Semaphore, pso::PipelineStage)>,
-        Iw::IntoIter: ExactSizeIterator,
-        Is: IntoIterator<Item = &'a B::Semaphore>,
-        Is::IntoIter: ExactSizeIterator;
+        Is: IntoIterator<Item = &'a B::Semaphore>;
 
     /// Present a swapchain image directly to a surface, after waiting on `wait_semaphore`.
     ///
