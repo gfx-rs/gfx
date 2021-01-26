@@ -109,13 +109,11 @@ impl Instance {
         // we can return them and let the application choose.
         if high_performance_adapter != low_power_adapter {
             high_performance_adapter
-                .into_iter()
                 .chain(low_power_adapter)
                 .map(map_wgpu_adapter_to_hal_adapter)
                 .collect()
         } else {
             high_performance_adapter
-                .into_iter()
                 .map(map_wgpu_adapter_to_hal_adapter)
                 .collect()
         }
@@ -235,7 +233,7 @@ impl hal::pso::DescriptorPool<Backend> for DescriptorPool {
 
     unsafe fn free<I>(&mut self, _descriptor_sets: I)
     where
-        I: IntoIterator<Item = <Backend as hal::Backend>::DescriptorSet>,
+        I: Iterator<Item = <Backend as hal::Backend>::DescriptorSet>,
     {
         todo!()
     }

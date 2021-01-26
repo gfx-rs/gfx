@@ -274,7 +274,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         device.features = requested_features;
 
         let queue_groups = families
-            .into_iter()
+            .iter()
             .map(|&(&family, priorities)| {
                 use hal::queue::QueueFamily as _;
                 let mut group = q::QueueGroup::new(family.id());
@@ -503,9 +503,9 @@ impl q::CommandQueue<Backend> for CommandQueue {
         _signal_semaphores: Is,
         fence: Option<&mut resource::Fence>,
     ) where
-        Ic: IntoIterator<Item = &'a command::CommandBuffer>,
-        Iw: IntoIterator<Item = (&'a resource::Semaphore, PipelineStage)>,
-        Is: IntoIterator<Item = &'a resource::Semaphore>,
+        Ic: Iterator<Item = &'a command::CommandBuffer>,
+        Iw: Iterator<Item = (&'a resource::Semaphore, PipelineStage)>,
+        Is: Iterator<Item = &'a resource::Semaphore>,
     {
         // Reset idle fence and event
         // That's safe here due to exclusive access to the queue
@@ -514,7 +514,6 @@ impl q::CommandQueue<Backend> for CommandQueue {
 
         // TODO: semaphores
         let lists = command_buffers
-            .into_iter()
             .map(|cmd_buf| cmd_buf.as_raw_list())
             .collect::<SmallVec<[_; 4]>>();
         self.raw

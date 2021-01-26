@@ -48,10 +48,9 @@ impl pool::CommandPool<Backend> for RawCommandPool {
 
     unsafe fn free<I>(&mut self, cbufs: I)
     where
-        I: IntoIterator<Item = CommandBuffer>,
+        I: Iterator<Item = CommandBuffer>,
     {
-        let buffers: SmallVec<[vk::CommandBuffer; 16]> =
-            cbufs.into_iter().map(|buffer| buffer.raw).collect();
+        let buffers: SmallVec<[vk::CommandBuffer; 16]> = cbufs.map(|buffer| buffer.raw).collect();
         self.device.raw.free_command_buffers(self.raw, &buffers);
     }
 }

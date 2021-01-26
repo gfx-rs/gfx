@@ -30,7 +30,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         _: Is,
         _fence: Option<&mut <Backend as hal::Backend>::Fence>,
     ) where
-        Ic: IntoIterator<Item = &'a <Backend as hal::Backend>::CommandBuffer>,
+        Ic: Iterator<Item = &'a <Backend as hal::Backend>::CommandBuffer>,
     {
         todo!()
     }
@@ -62,7 +62,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
 
     unsafe fn free<I>(&mut self, _buffers: I)
     where
-        I: IntoIterator<Item = CommandBuffer>,
+        I: Iterator<Item = CommandBuffer>,
     {
         todo!()
     }
@@ -97,7 +97,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _dependencies: Dependencies,
         _barriers: T,
     ) where
-        T: IntoIterator<Item = Barrier<'a, Backend>>,
+        T: Iterator<Item = Barrier<'a, Backend>>,
     {
         todo!()
     }
@@ -127,7 +127,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _value: ClearValue,
         _subresource_ranges: T,
     ) where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<SubresourceRange>,
     {
         todo!()
@@ -135,9 +135,9 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn clear_attachments<T, U>(&mut self, _clears: T, _rects: U)
     where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<AttachmentClear>,
-        U: IntoIterator,
+        U: Iterator,
         U::Item: Borrow<pso::ClearRect>,
     {
         todo!()
@@ -151,7 +151,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _dst_layout: Layout,
         _regions: T,
     ) where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<ImageResolve>,
     {
         todo!()
@@ -166,7 +166,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _filter: Filter,
         _regions: T,
     ) where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<ImageBlit>,
     {
         todo!()
@@ -183,7 +183,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, _first_binding: pso::BufferIndex, _buffers: I)
     where
-        I: IntoIterator<Item = (T, buffer::SubRange)>,
+        I: Iterator<Item = (T, buffer::SubRange)>,
         T: Borrow<<Backend as hal::Backend>::Buffer>,
     {
         todo!()
@@ -191,7 +191,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_viewports<T>(&mut self, _first_viewport: u32, _viewports: T)
     where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<pso::Viewport>,
     {
         todo!()
@@ -199,7 +199,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_scissors<T>(&mut self, _first_scissor: u32, _rects: T)
     where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<pso::Rect>,
     {
         todo!()
@@ -241,7 +241,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _clear_values: T,
         _first_subpass: SubpassContents,
     ) where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<ClearValue>,
     {
         todo!()
@@ -269,9 +269,9 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _sets: I,
         _offsets: J,
     ) where
-        I: IntoIterator,
+        I: Iterator,
         I::Item: Borrow<<Backend as hal::Backend>::DescriptorSet>,
-        J: IntoIterator,
+        J: Iterator,
         J::Item: Borrow<DescriptorSetOffset>,
     {
         todo!()
@@ -291,9 +291,9 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _sets: I,
         _offsets: J,
     ) where
-        I: IntoIterator,
+        I: Iterator,
         I::Item: Borrow<<Backend as hal::Backend>::DescriptorSet>,
-        J: IntoIterator,
+        J: Iterator,
         J::Item: Borrow<DescriptorSetOffset>,
     {
         todo!()
@@ -317,7 +317,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _dst: &<Backend as hal::Backend>::Buffer,
         _regions: T,
     ) where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<BufferCopy>,
     {
         todo!()
@@ -331,7 +331,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _dst_layout: Layout,
         _regions: T,
     ) where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<ImageCopy>,
     {
         todo!()
@@ -344,7 +344,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _dst_layout: Layout,
         _regions: T,
     ) where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<BufferImageCopy>,
     {
         todo!()
@@ -357,7 +357,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _dst: &<Backend as hal::Backend>::Buffer,
         _regions: T,
     ) where
-        T: IntoIterator,
+        T: Iterator,
         T::Item: Borrow<BufferImageCopy>,
     {
         todo!()
@@ -468,9 +468,9 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _stages: Range<pso::PipelineStage>,
         _barriers: J,
     ) where
-        I: IntoIterator,
+        I: Iterator,
         I::Item: Borrow<<Backend as hal::Backend>::Event>,
-        J: IntoIterator<Item = Barrier<'a, Backend>>,
+        J: Iterator<Item = Barrier<'a, Backend>>,
     {
         todo!()
     }
@@ -533,7 +533,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn execute_commands<'a, T, I>(&mut self, _cmd_buffers: I)
     where
         T: 'a + Borrow<<Backend as hal::Backend>::CommandBuffer>,
-        I: IntoIterator<Item = &'a T>,
+        I: Iterator<Item = &'a T>,
     {
         todo!()
     }

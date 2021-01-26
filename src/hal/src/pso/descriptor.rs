@@ -192,7 +192,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// [`DescriptorSetCopy`]: struct.DescriptorSetCopy.html
     unsafe fn allocate<'a, I, E>(&mut self, layouts: I, list: &mut E) -> Result<(), AllocationError>
     where
-        I: IntoIterator<Item = &'a B::DescriptorSetLayout>,
+        I: Iterator<Item = &'a B::DescriptorSetLayout>,
         E: Extend<B::DescriptorSet>,
     {
         for layout in layouts {
@@ -205,7 +205,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// Free the given descriptor sets provided as an iterator.
     unsafe fn free<I>(&mut self, descriptor_sets: I)
     where
-        I: IntoIterator<Item = B::DescriptorSet>;
+        I: Iterator<Item = B::DescriptorSet>;
 
     /// Resets a descriptor pool, releasing all resources from all the descriptor sets
     /// allocated from it and freeing the descriptor sets. Invalidates all descriptor
@@ -220,7 +220,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 #[derive(Debug)]
 pub struct DescriptorSetWrite<'a, B: Backend, I>
 where
-    I: IntoIterator<Item = Descriptor<'a, B>>,
+    I: Iterator<Item = Descriptor<'a, B>>,
 {
     /// The descriptor set to modify.
     pub set: &'a mut B::DescriptorSet,

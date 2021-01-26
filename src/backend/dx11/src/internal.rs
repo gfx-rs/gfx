@@ -654,7 +654,7 @@ impl Internal {
         dst: &Image,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::ImageCopy>,
+        T: Iterator<Item = command::ImageCopy>,
     {
         let key = (
             src.decomposed_format.copy_srv.unwrap(),
@@ -674,7 +674,7 @@ impl Internal {
                 context.CSSetConstantBuffers(0, 1, &const_buf.buffer.as_raw());
                 context.CSSetShaderResources(0, 1, [srv].as_ptr());
 
-                for info in regions.into_iter() {
+                for info in regions {
                     let image = ImageCopy {
                         src: [
                             info.src_offset.x as _,
@@ -775,7 +775,7 @@ impl Internal {
         dst: &Buffer,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::BufferImageCopy>,
+        T: Iterator<Item = command::BufferImageCopy>,
     {
         let _scope = debug_scope!(
             context,
@@ -883,7 +883,7 @@ impl Internal {
         dst: &Image,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::BufferImageCopy>,
+        T: Iterator<Item = command::BufferImageCopy>,
     {
         let _scope = debug_scope!(
             context,
@@ -1047,7 +1047,7 @@ impl Internal {
         filter: image::Filter,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::ImageBlit>,
+        T: Iterator<Item = command::ImageBlit>,
     {
         use std::cmp;
 
@@ -1154,13 +1154,13 @@ impl Internal {
         rects: U,
         cache: &RenderPassCache,
     ) where
-        T: IntoIterator<Item = command::AttachmentClear>,
-        U: IntoIterator<Item = pso::ClearRect>,
+        T: Iterator<Item = command::AttachmentClear>,
+        U: Iterator<Item = pso::ClearRect>,
     {
         use hal::format::ChannelType as Ct;
         let _scope = debug_scope!(context, "ClearAttachments");
 
-        let clear_rects: SmallVec<[pso::ClearRect; 8]> = rects.into_iter().collect();
+        let clear_rects: SmallVec<[pso::ClearRect; 8]> = rects.collect();
         let mut const_buf = self.internal_buffer.lock();
 
         unsafe {

@@ -204,9 +204,9 @@ impl PipelineCache {
         offsets: J,
     ) -> [native::DescriptorHeap; 2]
     where
-        J: IntoIterator<Item = com::DescriptorSetOffset>,
+        J: Iterator<Item = com::DescriptorSetOffset>,
     {
-        let mut offsets = offsets.into_iter().map(|offset| offset as u64);
+        let mut offsets = offsets.map(|offset| offset as u64);
 
         // 'Global' GPU descriptor heaps.
         // All descriptors live in the same heaps.
@@ -1263,7 +1263,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         attachment_infos: T,
         _first_subpass: com::SubpassContents,
     ) where
-        T: IntoIterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
+        T: Iterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
     {
         // Make sure that no subpass works with Present as intermediate layout.
         // This wouldn't make much sense, and proceeding with this constraint
@@ -1285,7 +1285,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         self.barriers.clear();
         let mut attachments = Vec::new();
         for (i, (info, attachment)) in attachment_infos
-            .into_iter()
             .zip(render_pass.attachments.iter())
             .enumerate()
         {
@@ -1381,7 +1380,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _dependencies: memory::Dependencies,
         barriers: T,
     ) where
-        T: IntoIterator<Item = memory::Barrier<'a, Backend>>,
+        T: Iterator<Item = memory::Barrier<'a, Backend>>,
     {
         self.barriers.clear();
 
@@ -1510,7 +1509,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         value: com::ClearValue,
         subresource_ranges: T,
     ) where
-        T: IntoIterator<Item = image::SubresourceRange>,
+        T: Iterator<Item = image::SubresourceRange>,
     {
         let image = image.expect_bound();
         let base_state = conv::map_image_resource_state(image::Access::TRANSFER_WRITE, layout);
@@ -1557,8 +1556,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
-        T: IntoIterator<Item = com::AttachmentClear>,
-        U: IntoIterator<Item = pso::ClearRect>,
+        T: Iterator<Item = com::AttachmentClear>,
+        U: Iterator<Item = pso::ClearRect>,
     {
         let pass_cache = match self.pass_cache {
             Some(ref cache) => cache,
@@ -1566,7 +1565,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         };
         let sub_pass = &pass_cache.render_pass.subpasses[self.cur_subpass as usize];
 
-        let clear_rects: SmallVec<[pso::ClearRect; 4]> = rects.into_iter().collect();
+        let clear_rects: SmallVec<[pso::ClearRect; 4]> = rects.collect();
 
         let device = self.shared.service_pipes.device;
 
@@ -1652,7 +1651,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _dst_layout: image::Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::ImageResolve>,
+        T: Iterator<Item = com::ImageResolve>,
     {
         let src = src.expect_bound();
         let dst = dst.expect_bound();
@@ -1713,7 +1712,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         filter: image::Filter,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::ImageBlit>,
+        T: Iterator<Item = com::ImageBlit>,
     {
         let device = self.shared.service_pipes.device.clone();
         let src = src.expect_bound();
@@ -1951,7 +1950,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_vertex_buffers<'a, T>(&mut self, first_binding: pso::BufferIndex, buffers: T)
     where
-        T: IntoIterator<Item = (&'a r::Buffer, buffer::SubRange)>,
+        T: Iterator<Item = (&'a r::Buffer, buffer::SubRange)>,
     {
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
 
@@ -1969,9 +1968,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
-        T: IntoIterator<Item = pso::Viewport>,
+        T: Iterator<Item = pso::Viewport>,
     {
-        for (i, vp) in viewports.into_iter().enumerate() {
+        for (i, vp) in viewports.enumerate() {
             let viewport = d3d12::D3D12_VIEWPORT {
                 TopLeftX: vp.rect.x as _,
                 TopLeftY: vp.rect.y as _,
@@ -1993,9 +1992,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
-        T: IntoIterator<Item = pso::Rect>,
+        T: Iterator<Item = pso::Rect>,
     {
-        for (i, r) in scissors.into_iter().enumerate() {
+        for (i, r) in scissors.enumerate() {
             let rect = get_rect(&r);
             if i + first_scissor as usize >= self.scissor_cache.len() {
                 self.scissor_cache.push(rect);
@@ -2097,12 +2096,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator<Item = &'a r::DescriptorSet>,
-        J: IntoIterator<Item = com::DescriptorSetOffset>,
+        I: Iterator<Item = &'a r::DescriptorSet>,
+        J: Iterator<Item = com::DescriptorSetOffset>,
     {
-        let set_array = sets
-            .into_iter()
-            .collect::<ArrayVec<[_; MAX_DESCRIPTOR_SETS]>>();
+        let set_array = sets.collect::<ArrayVec<[_; MAX_DESCRIPTOR_SETS]>>();
         self.active_descriptor_heaps = self
             .gr_pipeline
             .bind_descriptor_sets(layout, first_set, &set_array, offsets);
@@ -2138,12 +2135,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator<Item = &'a r::DescriptorSet>,
-        J: IntoIterator<Item = com::DescriptorSetOffset>,
+        I: Iterator<Item = &'a r::DescriptorSet>,
+        J: Iterator<Item = com::DescriptorSetOffset>,
     {
-        let set_array = sets
-            .into_iter()
-            .collect::<ArrayVec<[_; MAX_DESCRIPTOR_SETS]>>();
+        let set_array = sets.collect::<ArrayVec<[_; MAX_DESCRIPTOR_SETS]>>();
         self.active_descriptor_heaps = self
             .comp_pipeline
             .bind_descriptor_sets(layout, first_set, &set_array, offsets);
@@ -2247,7 +2242,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn copy_buffer<T>(&mut self, src: &r::Buffer, dst: &r::Buffer, regions: T)
     where
-        T: IntoIterator<Item = com::BufferCopy>,
+        T: Iterator<Item = com::BufferCopy>,
     {
         let src = src.expect_bound();
         let dst = dst.expect_bound();
@@ -2284,7 +2279,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _: image::Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::ImageCopy>,
+        T: Iterator<Item = com::ImageCopy>,
     {
         let src = src.expect_bound();
         let dst = dst.expect_bound();
@@ -2412,7 +2407,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _: image::Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::BufferImageCopy>,
+        T: Iterator<Item = com::BufferImageCopy>,
     {
         let buffer = buffer.expect_bound();
         let image = image.expect_bound();
@@ -2476,7 +2471,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         buffer: &r::Buffer,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::BufferImageCopy>,
+        T: Iterator<Item = com::BufferImageCopy>,
     {
         let image = image.expect_bound();
         let buffer = buffer.expect_bound();
@@ -2681,8 +2676,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
     where
-        I: IntoIterator<Item = &'a ()>,
-        J: IntoIterator<Item = memory::Barrier<'a, Backend>>,
+        I: Iterator<Item = &'a ()>,
+        J: Iterator<Item = memory::Barrier<'a, Backend>>,
     {
         unimplemented!()
     }
@@ -2793,7 +2788,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn execute_commands<'a, T>(&mut self, cmd_buffers: T)
     where
-        T: IntoIterator<Item = &'a CommandBuffer>,
+        T: Iterator<Item = &'a CommandBuffer>,
     {
         for _cmd_buf in cmd_buffers {
             error!("TODO: execute_commands");

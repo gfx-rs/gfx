@@ -264,13 +264,9 @@ unsafe extern "system" fn debug_utils_messenger_callback(
             message
         );
 
-        #[allow(array_into_iter)]
-        for (info_label, info) in additional_info.into_iter() {
-            match info {
-                Some(data) => {
-                    msg = format!("{}\n{}: {}", msg, info_label, data);
-                }
-                None => {}
+        for &(info_label, ref info) in additional_info.iter() {
+            if let Some(ref data) = *info {
+                msg = format!("{}\n{}: {}", msg, info_label, data);
             }
         }
 
@@ -860,7 +856,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         let device_arc = Arc::clone(&device.shared);
         let queue_groups = families
-            .into_iter()
+            .iter()
             .map(|&(family, ref priorities)| {
                 let mut family_raw =
                     queue::QueueGroup::new(queue::QueueFamilyId(family.index as usize));
@@ -1521,24 +1517,20 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         signal_semaphores: Is,
         fence: Option<&mut native::Fence>,
     ) where
-        Ic: IntoIterator<Item = &'a command::CommandBuffer>,
-        Iw: IntoIterator<Item = (&'a native::Semaphore, PipelineStage)>,
-        Is: IntoIterator<Item = &'a native::Semaphore>,
+        Ic: Iterator<Item = &'a command::CommandBuffer>,
+        Iw: Iterator<Item = (&'a native::Semaphore, PipelineStage)>,
+        Is: Iterator<Item = &'a native::Semaphore>,
     {
         //TODO: avoid heap allocations
         let mut waits = Vec::new();
         let mut stages = Vec::new();
 
-        let buffers = command_buffers
-            .into_iter()
-            .map(|cmd| cmd.raw)
-            .collect::<Vec<_>>();
+        let buffers = command_buffers.map(|cmd| cmd.raw).collect::<Vec<_>>();
         for (semaphore, stage) in wait_semaphores {
             waits.push(semaphore.0);
             stages.push(conv::map_pipeline_stage(stage));
         }
         let signals = signal_semaphores
-            .into_iter()
             .map(|semaphore| semaphore.0)
             .collect::<Vec<_>>();
 

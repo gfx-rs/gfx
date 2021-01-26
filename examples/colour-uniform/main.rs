@@ -192,7 +192,8 @@ impl<B: Backend> RendererState<B> {
                         ty: pso::DescriptorType::Sampler,
                         count: 1,
                     },
-                ],
+                ]
+                .into_iter(),
                 pso::DescriptorPoolCreateFlags::empty(),
             )
             .ok();
@@ -285,7 +286,7 @@ impl<B: Backend> RendererState<B> {
             FramebufferState::new(Rc::clone(&device), swapchain.frame_queue_size, framebuffer);
 
         let pipeline = PipelineState::new(
-            vec![image.get_layout(), uniform.get_layout()],
+            vec![image.get_layout(), uniform.get_layout()].into_iter(),
             render_pass.render_pass.as_ref().unwrap(),
             Rc::clone(&device),
         );
@@ -344,7 +345,7 @@ impl<B: Backend> RendererState<B> {
 
         self.pipeline = unsafe {
             PipelineState::new(
-                vec![self.image.get_layout(), self.uniform.get_layout()],
+                vec![self.image.get_layout(), self.uniform.get_layout()].into_iter(),
                 self.render_pass.render_pass.as_ref().unwrap(),
                 Rc::clone(&self.device),
             )
@@ -390,7 +391,7 @@ impl<B: Backend> RendererState<B> {
             cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
             cmd_buffer.bind_vertex_buffers(
                 0,
-                Some((self.vertex_buffer.get_buffer(), buffer::SubRange::WHOLE)),
+                iter::once((self.vertex_buffer.get_buffer(), buffer::SubRange::WHOLE)),
             );
             cmd_buffer.bind_graphics_descriptor_sets(
                 self.pipeline.pipeline_layout.as_ref().unwrap(),
@@ -398,7 +399,8 @@ impl<B: Backend> RendererState<B> {
                 vec![
                     self.image.desc.set.as_ref().unwrap(),
                     self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap(),
-                ],
+                ]
+                .into_iter(),
                 iter::empty(),
             ); //TODO
             cmd_buffer.end_debug_marker();
@@ -879,7 +881,7 @@ impl<B: Backend> Uniform<B> {
             DescSetWrite {
                 binding,
                 array_offset: 0,
-                descriptors: Some(pso::Descriptor::Buffer(
+                descriptors: iter::once(pso::Descriptor::Buffer(
                     buffer.as_ref().unwrap().get_buffer(),
                     buffer::SubRange::WHOLE,
                 )),
@@ -911,7 +913,7 @@ impl<B: Backend> DescSetLayout<B> {
         let desc_set_layout = device
             .borrow()
             .device
-            .create_descriptor_set_layout(bindings, &[])
+            .create_descriptor_set_layout(bindings.into_iter(), iter::empty())
             .ok();
 
         DescSetLayout {
@@ -966,7 +968,7 @@ impl<B: Backend> DescSet<B> {
         d: DescSetWrite<W>,
         device: &mut B::Device,
     ) where
-        W: IntoIterator<Item = pso::Descriptor<'a, B>>,
+        W: Iterator<Item = pso::Descriptor<'a, B>>,
     {
         let set = self.set.as_mut().unwrap();
         device.write_descriptor_set(pso::DescriptorSetWrite {
@@ -1060,7 +1062,7 @@ impl<B: Backend> ImageState<B> {
             DescSetWrite {
                 binding: 0,
                 array_offset: 0,
-                descriptors: Some(pso::Descriptor::Image(
+                descriptors: iter::once(pso::Descriptor::Image(
                     &image_view,
                     i::Layout::ShaderReadOnlyOptimal,
                 )),
@@ -1071,7 +1073,7 @@ impl<B: Backend> ImageState<B> {
             DescSetWrite {
                 binding: 1,
                 array_offset: 0,
-                descriptors: Some(pso::Descriptor::Sampler(&sampler)),
+                descriptors: iter::once(pso::Descriptor::Sampler(&sampler)),
             },
             device,
         );
@@ -1205,7 +1207,7 @@ impl<B: Backend> PipelineState<B> {
         device_ptr: Rc<RefCell<DeviceState<B>>>,
     ) -> Self
     where
-        Is: IntoIterator<Item = &'a B::DescriptorSetLayout>,
+        Is: Iterator<Item = &'a B::DescriptorSetLayout>,
     {
         let device = &device_ptr.borrow().device;
         let pipeline_layout = device
@@ -1452,7 +1454,7 @@ impl<B: Backend> Drop for FramebufferState<B> {
                 .into_iter()
                 .zip(self.command_buffer_lists.drain(..))
             {
-                command_pool.free(comamnd_buffer_list);
+                command_pool.free(comamnd_buffer_list.into_iter());
                 device.destroy_command_pool(command_pool);
             }
 

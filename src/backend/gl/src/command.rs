@@ -656,12 +656,12 @@ impl CommandBuffer {
         layout: &n::PipelineLayout,
         first_set: usize,
         sets: I,
-        offsets: J,
+        mut offsets: J,
     ) where
-        I: IntoIterator<Item = &'a n::DescriptorSet>,
-        J: IntoIterator<Item = command::DescriptorSetOffset>,
+        I: Iterator<Item = &'a n::DescriptorSet>,
+        J: Iterator<Item = command::DescriptorSetOffset>,
     {
-        if let Some(_) = offsets.into_iter().next() {
+        if let Some(_) = offsets.next() {
             warn!("Dynamic offsets are not supported yet");
         }
 
@@ -754,7 +754,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _dependencies: memory::Dependencies,
         barriers: T,
     ) where
-        T: IntoIterator<Item = memory::Barrier<'a, Backend>>,
+        T: Iterator<Item = memory::Barrier<'a, Backend>>,
     {
         //TODO: this needs to be much more detailed. Problem is that the affected
         // resources by a barrier have to be bound to specific slots, so, for example,
@@ -811,7 +811,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         attachment_infos: T,
         _first_subpass: command::SubpassContents,
     ) where
-        T: IntoIterator<Item = command::RenderAttachmentInfo<'a, Backend>>,
+        T: Iterator<Item = command::RenderAttachmentInfo<'a, Backend>>,
     {
         // TODO: load ops: clearing strategy
         //  1.  < GL 3.0 / GL ES 2.0: glClear, only single color attachment?
@@ -882,7 +882,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         value: command::ClearValue,
         _subresource_ranges: T,
     ) where
-        T: IntoIterator<Item = image::SubresourceRange>,
+        T: Iterator<Item = image::SubresourceRange>,
     {
         // TODO: clearing strategies
         //  1.  < GL 3.0 / GL ES 3.0: glClear
@@ -962,8 +962,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn clear_attachments<T, U>(&mut self, _: T, _: U)
     where
-        T: IntoIterator<Item = command::AttachmentClear>,
-        U: IntoIterator<Item = pso::ClearRect>,
+        T: Iterator<Item = command::AttachmentClear>,
+        U: Iterator<Item = pso::ClearRect>,
     {
         unimplemented!()
     }
@@ -976,7 +976,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _dst_layout: image::Layout,
         _regions: T,
     ) where
-        T: IntoIterator<Item = command::ImageResolve>,
+        T: Iterator<Item = command::ImageResolve>,
     {
         unimplemented!()
     }
@@ -990,7 +990,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _filter: image::Filter,
         _regions: T,
     ) where
-        T: IntoIterator<Item = command::ImageBlit>,
+        T: Iterator<Item = command::ImageBlit>,
     {
         error!("Blit is not implemented");
     }
@@ -1009,9 +1009,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_vertex_buffers<'a, T>(&mut self, first_binding: pso::BufferIndex, buffers: T)
     where
-        T: IntoIterator<Item = (&'a n::Buffer, buffer::SubRange)>,
+        T: Iterator<Item = (&'a n::Buffer, buffer::SubRange)>,
     {
-        for (i, (buffer, sub)) in buffers.into_iter().enumerate() {
+        for (i, (buffer, sub)) in buffers.enumerate() {
             let index = first_binding as usize + i;
             if self.cache.vertex_buffers.len() <= index {
                 self.cache.vertex_buffers.resize(index + 1, None);
@@ -1025,7 +1025,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
-        T: IntoIterator<Item = pso::Viewport>,
+        T: Iterator<Item = pso::Viewport>,
     {
         // OpenGL has two functions for setting the viewports.
         // Configuring the rectangle area and setting the depth bounds are separated.
@@ -1070,7 +1070,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
-        T: IntoIterator<Item = pso::Rect>,
+        T: Iterator<Item = pso::Rect>,
     {
         let mut scissors_ptr = BufferSlice { offset: 0, size: 0 };
         let mut len = 0;
@@ -1226,8 +1226,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator<Item = &'a n::DescriptorSet>,
-        J: IntoIterator<Item = command::DescriptorSetOffset>,
+        I: Iterator<Item = &'a n::DescriptorSet>,
+        J: Iterator<Item = command::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(layout, first_set, sets, offsets)
     }
@@ -1246,8 +1246,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator<Item = &'a n::DescriptorSet>,
-        J: IntoIterator<Item = command::DescriptorSetOffset>,
+        I: Iterator<Item = &'a n::DescriptorSet>,
+        J: Iterator<Item = command::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(layout, first_set, sets, offsets)
     }
@@ -1264,7 +1264,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
     where
-        T: IntoIterator<Item = command::BufferCopy>,
+        T: Iterator<Item = command::BufferCopy>,
     {
         let old_size = self.data.buf.size;
 
@@ -1290,7 +1290,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _dst_layout: image::Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::ImageCopy>,
+        T: Iterator<Item = command::ImageCopy>,
     {
         let old_size = self.data.buf.size;
 
@@ -1321,7 +1321,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: image::Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::BufferImageCopy>,
+        T: Iterator<Item = command::BufferImageCopy>,
     {
         let old_size = self.data.buf.size;
 
@@ -1362,7 +1362,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         dst: &n::Buffer,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::BufferImageCopy>,
+        T: Iterator<Item = command::BufferImageCopy>,
     {
         let old_size = self.data.buf.size;
         let (dst_raw, dst_range) = dst.as_bound();
@@ -1561,8 +1561,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
     where
-        I: IntoIterator<Item = &'a ()>,
-        J: IntoIterator<Item = memory::Barrier<'a, Backend>>,
+        I: Iterator<Item = &'a ()>,
+        J: Iterator<Item = memory::Barrier<'a, Backend>>,
     {
         unimplemented!()
     }
@@ -1635,7 +1635,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn execute_commands<'a, T>(&mut self, _buffers: T)
     where
-        T: IntoIterator<Item = &'a CommandBuffer>,
+        T: Iterator<Item = &'a CommandBuffer>,
     {
         unimplemented!()
     }

@@ -603,8 +603,8 @@ impl From<usize> for MemoryTypeId {
 struct PseudoVec<T>(Option<T>);
 
 impl<T> Extend<T> for PseudoVec<T> {
-    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
-        let mut iter = iter.into_iter();
+    fn extend<I: IntoIterator<Item = T>>(&mut self, into_iter: I) {
+        let mut iter = into_iter.into_iter();
         self.0 = iter.next();
         assert!(iter.next().is_none());
     }

@@ -1268,9 +1268,9 @@ impl d::Device<B> for Device {
         dependencies: Id,
     ) -> Result<r::RenderPass, d::OutOfMemory>
     where
-        Ia: IntoIterator<Item = pass::Attachment>,
-        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
-        Id: IntoIterator<Item = pass::SubpassDependency>,
+        Ia: Iterator<Item = pass::Attachment>,
+        Is: Iterator<Item = pass::SubpassDesc<'a>>,
+        Id: Iterator<Item = pass::SubpassDependency>,
     {
         #[derive(Copy, Clone, Debug, PartialEq)]
         enum SubState {
@@ -1296,16 +1296,15 @@ impl d::Device<B> for Device {
             barrier_start_index: usize,
         }
 
-        let attachments = attachments.into_iter().collect::<SmallVec<[_; 5]>>();
+        let attachments = attachments.collect::<SmallVec<[_; 5]>>();
         let mut sub_infos = subpasses
-            .into_iter()
             .map(|desc| SubInfo {
                 desc: desc.clone(),
                 external_dependencies: image::Access::empty()..image::Access::empty(),
                 unresolved_dependencies: 0,
             })
             .collect::<SmallVec<[_; 1]>>();
-        let dependencies = dependencies.into_iter().collect::<SmallVec<[_; 2]>>();
+        let dependencies = dependencies.collect::<SmallVec<[_; 2]>>();
 
         let mut att_infos = (0..attachments.len())
             .map(|_| AttachmentInfo {
@@ -1519,8 +1518,8 @@ impl d::Device<B> for Device {
         push_constant_ranges: Ic,
     ) -> Result<r::PipelineLayout, d::OutOfMemory>
     where
-        Is: IntoIterator<Item = &'a r::DescriptorSetLayout>,
-        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
+        Is: Iterator<Item = &'a r::DescriptorSetLayout>,
+        Ic: Iterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
     {
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
@@ -1546,7 +1545,7 @@ impl d::Device<B> for Device {
         // Root Descriptors 1
         //     ...
 
-        let sets = sets.into_iter().collect::<Vec<_>>();
+        let sets = sets.collect::<Vec<_>>();
 
         let mut root_offset = 0u32;
         let root_constants = root_constants::split(push_constant_ranges)
@@ -1788,7 +1787,7 @@ impl d::Device<B> for Device {
 
     unsafe fn merge_pipeline_caches<'a, I>(&self, _: &mut (), _: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = &'a ()>,
+        I: Iterator<Item = &'a ()>,
     {
         //empty
         Ok(())
@@ -2883,7 +2882,7 @@ impl d::Device<B> for Device {
         _flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<r::DescriptorPool, d::OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
+        I: Iterator<Item = pso::DescriptorRangeDesc>,
     {
         // Descriptor pools are implemented as slices of the global descriptor heaps.
         // A descriptor pool will occupy a contiguous space in each heap (CBV/SRV/UAV and Sampler) depending
@@ -2892,7 +2891,7 @@ impl d::Device<B> for Device {
         let mut num_srv_cbv_uav = 0;
         let mut num_samplers = 0;
 
-        let ranges = ranges.into_iter().collect::<Vec<_>>();
+        let ranges = ranges.collect::<Vec<_>>();
 
         info!("create_descriptor_pool with {} max sets", max_sets);
         for desc in &ranges {
@@ -2956,17 +2955,17 @@ impl d::Device<B> for Device {
         _immutable_samplers: J,
     ) -> Result<r::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator<Item = &'a r::Sampler>,
+        I: Iterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: Iterator<Item = &'a r::Sampler>,
     {
         Ok(r::DescriptorSetLayout {
-            bindings: bindings.into_iter().collect(),
+            bindings: bindings.collect(),
         })
     }
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
+        I: Iterator<Item = pso::Descriptor<'a, B>>,
     {
         let mut descriptor_updater = self.descriptor_updater.lock();
         descriptor_updater.reset();
@@ -3221,7 +3220,7 @@ impl d::Device<B> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a r::Memory, memory::Segment)>,
+        I: Iterator<Item = (&'a r::Memory, memory::Segment)>,
     {
         for (memory, ref segment) in ranges {
             if let Some(mem) = memory.resource {
@@ -3250,7 +3249,7 @@ impl d::Device<B> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a r::Memory, memory::Segment)>,
+        I: Iterator<Item = (&'a r::Memory, memory::Segment)>,
     {
         for (memory, ref segment) in ranges {
             if let Some(mem) = memory.resource {
@@ -3301,7 +3300,7 @@ impl d::Device<B> for Device {
         timeout_ns: u64,
     ) -> Result<bool, d::WaitError>
     where
-        I: IntoIterator<Item = &'a r::Fence>,
+        I: Iterator<Item = &'a r::Fence>,
     {
         let mut count = 0;
         let mut events = self.events.lock();

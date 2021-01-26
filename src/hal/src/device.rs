@@ -231,9 +231,9 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         dependencies: Id,
     ) -> Result<B::RenderPass, OutOfMemory>
     where
-        Ia: IntoIterator<Item = pass::Attachment>,
-        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
-        Id: IntoIterator<Item = pass::SubpassDependency>;
+        Ia: Iterator<Item = pass::Attachment>,
+        Is: Iterator<Item = pass::SubpassDesc<'a>>,
+        Id: Iterator<Item = pass::SubpassDependency>;
 
     /// Destroys a *render pass* created by this device.
     unsafe fn destroy_render_pass(&self, rp: B::RenderPass);
@@ -260,8 +260,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         push_constant: Ic,
     ) -> Result<B::PipelineLayout, OutOfMemory>
     where
-        Is: IntoIterator<Item = &'a B::DescriptorSetLayout>,
-        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>;
+        Is: Iterator<Item = &'a B::DescriptorSetLayout>,
+        Ic: Iterator<Item = (pso::ShaderStageFlags, Range<u32>)>;
 
     /// Destroy a pipeline layout object
     unsafe fn destroy_pipeline_layout(&self, layout: B::PipelineLayout);
@@ -285,7 +285,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         sources: I,
     ) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator<Item = &'a B::PipelineCache>;
+        I: Iterator<Item = &'a B::PipelineCache>;
 
     /// Destroy a pipeline cache object.
     unsafe fn destroy_pipeline_cache(&self, cache: B::PipelineCache);
@@ -335,7 +335,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         extent: image::Extent,
     ) -> Result<B::Framebuffer, OutOfMemory>
     where
-        I: IntoIterator<Item = image::FramebufferAttachment>;
+        I: Iterator<Item = image::FramebufferAttachment>;
 
     /// Destroy a framebuffer.
     ///
@@ -474,7 +474,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         flags: DescriptorPoolCreateFlags,
     ) -> Result<B::DescriptorPool, OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorRangeDesc>;
+        I: Iterator<Item = pso::DescriptorRangeDesc>;
 
     /// Destroy a descriptor pool object
     ///
@@ -495,8 +495,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         immutable_samplers: J,
     ) -> Result<B::DescriptorSetLayout, OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator<Item = &'a B::Sampler>;
+        I: Iterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: Iterator<Item = &'a B::Sampler>;
 
     /// Destroy a descriptor set layout object
     unsafe fn destroy_descriptor_set_layout(&self, layout: B::DescriptorSetLayout);
@@ -504,7 +504,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Specifying the parameters of a descriptor set write operation.
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::Descriptor<'a, B>>;
+        I: Iterator<Item = pso::Descriptor<'a, B>>;
 
     /// Structure specifying a copy descriptor set operation.
     unsafe fn copy_descriptor_set<'a>(&self, op: pso::DescriptorSetCopy<'a, B>);
@@ -521,12 +521,12 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Flush mapped memory ranges
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a B::Memory, Segment)>;
+        I: Iterator<Item = (&'a B::Memory, Segment)>;
 
     /// Invalidate ranges of non-coherent memory from the host caches
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a B::Memory, Segment)>;
+        I: Iterator<Item = (&'a B::Memory, Segment)>;
 
     /// Unmap a memory object once host access to it is no longer needed by the application
     unsafe fn unmap_memory(&self, memory: &mut B::Memory);
@@ -578,7 +578,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         timeout_ns: u64,
     ) -> Result<bool, WaitError>
     where
-        I: IntoIterator<Item = &'a B::Fence>,
+        I: Iterator<Item = &'a B::Fence>,
     {
         use std::{thread, time};
         fn to_ns(duration: time::Duration) -> u64 {
@@ -602,7 +602,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
                 Ok(true)
             }
             WaitFor::Any => {
-                let fences: Vec<_> = fences.into_iter().collect();
+                let fences: Vec<_> = fences.collect();
                 loop {
                     for &fence in &fences {
                         if self.wait_for_fence(fence, 0)? {

@@ -39,9 +39,9 @@ fn map_buffer_image_regions<T>(
     regions: T,
 ) -> impl Iterator<Item = vk::BufferImageCopy>
 where
-    T: IntoIterator<Item = com::BufferImageCopy>,
+    T: Iterator<Item = com::BufferImageCopy>,
 {
-    regions.into_iter().map(|r| {
+    regions.map(|r| {
         let image_subresource = conv::map_subresource_layers(&r.image_layers);
         vk::BufferImageCopy {
             buffer_offset: r.buffer_offset,
@@ -62,7 +62,7 @@ struct BarrierSet {
 
 fn destructure_barriers<'a, T>(barriers: T) -> BarrierSet
 where
-    T: IntoIterator<Item = memory::Barrier<'a, Backend>>,
+    T: Iterator<Item = memory::Barrier<'a, Backend>>,
 {
     let mut global: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
     let mut buffer: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
@@ -151,13 +151,13 @@ impl CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator<Item = &'a n::DescriptorSet>,
-        J: IntoIterator<Item = com::DescriptorSetOffset>,
+        I: Iterator<Item = &'a n::DescriptorSet>,
+        J: Iterator<Item = com::DescriptorSetOffset>,
     {
-        let sets_iter = sets.into_iter().map(|set| set.raw);
+        let sets_iter = sets.map(|set| set.raw);
 
         inplace_or_alloc_from_iter(sets_iter, |sets| {
-            inplace_or_alloc_from_iter(offsets.into_iter(), |dynamic_offsets| unsafe {
+            inplace_or_alloc_from_iter(offsets, |dynamic_offsets| unsafe {
                 self.device.raw.cmd_bind_descriptor_sets(
                     self.raw,
                     bind_point,
@@ -231,7 +231,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         attachments: T,
         first_subpass: com::SubpassContents,
     ) where
-        T: IntoIterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
+        T: Iterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
     {
         let mut raw_clear_values = SmallVec::<[vk::ClearValue; ROUGH_MAX_ATTACHMENT_COUNT]>::new();
         let mut raw_image_views = n::FramebufferKey::new();
@@ -306,7 +306,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dependencies: memory::Dependencies,
         barriers: T,
     ) where
-        T: IntoIterator<Item = memory::Barrier<'a, Backend>>,
+        T: Iterator<Item = memory::Barrier<'a, Backend>>,
     {
         let BarrierSet {
             global,
@@ -348,7 +348,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         value: com::ClearValue,
         subresource_ranges: T,
     ) where
-        T: IntoIterator<Item = SubresourceRange>,
+        T: Iterator<Item = SubresourceRange>,
     {
         let mut color_ranges = Vec::new();
         let mut ds_ranges = Vec::new();
@@ -399,10 +399,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
-        T: IntoIterator<Item = com::AttachmentClear>,
-        U: IntoIterator<Item = pso::ClearRect>,
+        T: Iterator<Item = com::AttachmentClear>,
+        U: Iterator<Item = pso::ClearRect>,
     {
-        let clears_iter = clears.into_iter().map(|clear| match clear {
+        let clears_iter = clears.map(|clear| match clear {
             com::AttachmentClear::Color { index, value } => vk::ClearAttachment {
                 aspect_mask: vk::ImageAspectFlags::COLOR,
                 color_attachment: index as _,
@@ -430,7 +430,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             },
         });
 
-        let rects_iter = rects.into_iter().map(|rect| conv::map_clear_rect(&rect));
+        let rects_iter = rects.map(|rect| conv::map_clear_rect(&rect));
 
         inplace_or_alloc_from_iter(clears_iter, |clears| {
             inplace_or_alloc_from_iter(rects_iter, |rects| {
@@ -449,9 +449,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dst_layout: Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::ImageResolve>,
+        T: Iterator<Item = com::ImageResolve>,
     {
-        let regions_iter = regions.into_iter().map(|r| vk::ImageResolve {
+        let regions_iter = regions.map(|r| vk::ImageResolve {
             src_subresource: conv::map_subresource_layers(&r.src_subresource),
             src_offset: conv::map_offset(r.src_offset),
             dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
@@ -480,9 +480,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         filter: Filter,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::ImageBlit>,
+        T: Iterator<Item = com::ImageBlit>,
     {
-        let regions_iter = regions.into_iter().map(|r| vk::ImageBlit {
+        let regions_iter = regions.map(|r| vk::ImageBlit {
             src_subresource: conv::map_subresource_layers(&r.src_subresource),
             src_offsets: [
                 conv::map_offset(r.src_bounds.start),
@@ -524,11 +524,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_vertex_buffers<'a, T>(&mut self, first_binding: pso::BufferIndex, buffers: T)
     where
-        T: IntoIterator<Item = (&'a n::Buffer, buffer::SubRange)>,
+        T: Iterator<Item = (&'a n::Buffer, buffer::SubRange)>,
     {
         let (buffers, offsets): (SmallVec<[vk::Buffer; 16]>, SmallVec<[vk::DeviceSize; 16]>) =
             buffers
-                .into_iter()
                 .map(|(buffer, sub)| (buffer.raw, sub.offset))
                 .unzip();
 
@@ -539,11 +538,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
-        T: IntoIterator<Item = pso::Viewport>,
+        T: Iterator<Item = pso::Viewport>,
     {
-        let viewports_iter = viewports
-            .into_iter()
-            .map(|ref viewport| self.device.map_viewport(viewport));
+        let viewports_iter = viewports.map(|ref viewport| self.device.map_viewport(viewport));
 
         inplace_or_alloc_from_iter(viewports_iter, |viewports| {
             self.device
@@ -554,11 +551,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
-        T: IntoIterator<Item = pso::Rect>,
+        T: Iterator<Item = pso::Rect>,
     {
-        let scissors_iter = scissors
-            .into_iter()
-            .map(|ref scissor| conv::map_rect(scissor));
+        let scissors_iter = scissors.map(|ref scissor| conv::map_rect(scissor));
 
         inplace_or_alloc_from_iter(scissors_iter, |scissors| {
             self.device
@@ -624,8 +619,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator<Item = &'a n::DescriptorSet>,
-        J: IntoIterator<Item = com::DescriptorSetOffset>,
+        I: Iterator<Item = &'a n::DescriptorSet>,
+        J: Iterator<Item = com::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(
             vk::PipelineBindPoint::GRAPHICS,
@@ -649,8 +644,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator<Item = &'a n::DescriptorSet>,
-        J: IntoIterator<Item = com::DescriptorSetOffset>,
+        I: Iterator<Item = &'a n::DescriptorSet>,
+        J: Iterator<Item = com::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(
             vk::PipelineBindPoint::COMPUTE,
@@ -675,9 +670,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
     where
-        T: IntoIterator<Item = com::BufferCopy>,
+        T: Iterator<Item = com::BufferCopy>,
     {
-        let regions_iter = regions.into_iter().map(|r| vk::BufferCopy {
+        let regions_iter = regions.map(|r| vk::BufferCopy {
             src_offset: r.src,
             dst_offset: r.dst,
             size: r.size,
@@ -698,9 +693,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dst_layout: Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::ImageCopy>,
+        T: Iterator<Item = com::ImageCopy>,
     {
-        let regions_iter = regions.into_iter().map(|r| vk::ImageCopy {
+        let regions_iter = regions.map(|r| vk::ImageCopy {
             src_subresource: conv::map_subresource_layers(&r.src_subresource),
             src_offset: conv::map_offset(r.src_offset),
             dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
@@ -727,7 +722,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dst_layout: Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::BufferImageCopy>,
+        T: Iterator<Item = com::BufferImageCopy>,
     {
         let regions_iter = map_buffer_image_regions(dst, regions);
 
@@ -749,7 +744,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         dst: &n::Buffer,
         regions: T,
     ) where
-        T: IntoIterator<Item = com::BufferImageCopy>,
+        T: Iterator<Item = com::BufferImageCopy>,
     {
         let regions_iter = map_buffer_image_regions(src, regions);
 
@@ -937,10 +932,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         stages: Range<pso::PipelineStage>,
         barriers: J,
     ) where
-        I: IntoIterator<Item = &'a n::Event>,
-        J: IntoIterator<Item = memory::Barrier<'a, Backend>>,
+        I: Iterator<Item = &'a n::Event>,
+        J: Iterator<Item = memory::Barrier<'a, Backend>>,
     {
-        let events_iter = events.into_iter().map(|e| e.0);
+        let events_iter = events.map(|e| e.0);
 
         let BarrierSet {
             global,
@@ -1049,9 +1044,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn execute_commands<'a, T>(&mut self, buffers: T)
     where
-        T: IntoIterator<Item = &'a CommandBuffer>,
+        T: Iterator<Item = &'a CommandBuffer>,
     {
-        let command_buffers_iter = buffers.into_iter().map(|b| b.raw);
+        let command_buffers_iter = buffers.map(|b| b.raw);
 
         inplace_or_alloc_from_iter(command_buffers_iter, |command_buffers| {
             self.device

@@ -235,7 +235,7 @@ where
                         stage_flags: ShaderStageFlags::MESH,
                         immutable_samplers: false,
                     }),
-                    &[],
+                    iter::empty(),
                 )
             }
             .expect("Can't create descriptor set layout"),
@@ -324,7 +324,7 @@ where
                 set: &mut desc_set,
                 binding: 0,
                 array_offset: 0,
-                descriptors: Some(pso::Descriptor::Buffer(
+                descriptors: iter::once(pso::Descriptor::Buffer(
                     &*positions_buffer,
                     buffer::SubRange::WHOLE,
                 )),

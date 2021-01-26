@@ -573,7 +573,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         Ok(adapter::Gpu {
             device: Device::new(self.0.clone(), requested_features),
             queue_groups: families
-                .into_iter()
+                .iter()
                 .map(|&(_family, priorities)| {
                     assert_eq!(priorities.len(), 1);
                     let mut family = q::QueueGroup::new(q::QueueFamilyId(0));

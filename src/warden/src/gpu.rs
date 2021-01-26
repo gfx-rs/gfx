@@ -639,16 +639,13 @@ impl<B: hal::Backend> Scene<B> {
                             (colors, ds, inputs, preserves, resolves)
                         })
                         .collect::<Vec<_>>();
-                    let raw_subs = temp
-                        .iter()
-                        .map(|t| hal::pass::SubpassDesc {
-                            colors: &t.0,
-                            depth_stencil: t.1.as_ref(),
-                            inputs: &t.2,
-                            preserves: &t.3,
-                            resolves: &t.4,
-                        })
-                        .collect::<Vec<_>>();
+                    let raw_subs = temp.iter().map(|t| hal::pass::SubpassDesc {
+                        colors: &t.0,
+                        depth_stencil: t.1.as_ref(),
+                        inputs: &t.2,
+                        preserves: &t.3,
+                        resolves: &t.4,
+                    });
                     let raw_deps = dependencies.iter().map(|dep| hal::pass::SubpassDependency {
                         passes: subpass_ref(&dep.passes.start)..subpass_ref(&dep.passes.end),
                         stages: dep.stages.clone(),
@@ -698,7 +695,7 @@ impl<B: hal::Backend> Scene<B> {
                     assert!(!bindings.is_empty());
                     // since samples are expect to be all read by this point
                     let layout = unsafe {
-                        device.create_descriptor_set_layout(bindings.iter().cloned(), &[])
+                        device.create_descriptor_set_layout(bindings.iter().cloned(), iter::empty())
                     }
                     .expect("Descriptor set layout creation failure!");
                     let binding_indices = bindings.iter().map(|dsb| dsb.binding).collect();
@@ -836,7 +833,8 @@ impl<B: hal::Backend> Scene<B> {
                                         hal::pso::Descriptor::Sampler(sampler)
                                     })
                                     .collect::<Vec<_>>(),
-                            },
+                            }
+                            .into_iter(),
                         };
                         unsafe {
                             device.write_descriptor_set(write);
@@ -862,8 +860,7 @@ impl<B: hal::Backend> Scene<B> {
                     let infos = rp
                         .attachments
                         .iter()
-                        .map(|&(ref name, _)| attachments[name].clone())
-                        .collect::<Vec<_>>();
+                        .map(|&(ref name, _)| attachments[name].clone());
                     let framebuffer =
                         unsafe { device.create_framebuffer(&rp.handle, infos, extent) }.unwrap();
                     resources.framebuffers.insert(
@@ -1145,7 +1142,8 @@ impl<B: hal::Backend> Scene<B> {
                                         images.entry(image),
                                         i::Access::TRANSFER_WRITE,
                                         i::Layout::TransferDstOptimal,
-                                    ),
+                                    )
+                                    .into_iter(),
                                 );
                                 command_buf.clear_image(
                                     &img.handle,
@@ -1205,7 +1203,8 @@ impl<B: hal::Backend> Scene<B> {
                                 command_buf.pipeline_barrier(
                                     src_stage..pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
-                                    buf.barrier(buffers.entry(buffer), b::State::TRANSFER_WRITE),
+                                    buf.barrier(buffers.entry(buffer), b::State::TRANSFER_WRITE)
+                                        .into_iter(),
                                 );
                                 command_buf.fill_buffer(
                                     &buf.handle,
@@ -1303,10 +1302,10 @@ impl<B: hal::Backend> Scene<B> {
                         }),
                         c::SubpassContents::Inline,
                     );
-                    command_buf.set_scissors(0, Some(rect));
+                    command_buf.set_scissors(0, iter::once(rect));
                     command_buf.set_viewports(
                         0,
-                        Some(pso::Viewport {
+                        iter::once(pso::Viewport {
                             rect,
                             depth: 0.0..1.0,
                         }),
@@ -1500,8 +1499,7 @@ impl<B: hal::Backend> Scene<B> {
 
         let command_buffers = iter::once(&self.init_submit)
             .chain(submits)
-            .chain(iter::once(&self.finish_submit))
-            .collect::<Vec<_>>();
+            .chain(iter::once(&self.finish_submit));
         unsafe {
             self.queue_group.queues[0].submit(command_buffers, iter::empty(), iter::empty(), None);
         }

@@ -849,11 +849,10 @@ impl d::Device<B> for Device {
         _dependencies: Id,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
-        Ia: IntoIterator<Item = pass::Attachment>,
-        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
+        Ia: Iterator<Item = pass::Attachment>,
+        Is: Iterator<Item = pass::SubpassDesc<'a>>,
     {
         let subpasses = subpasses
-            .into_iter()
             .map(|subpass| {
                 assert!(
                     subpass.colors.len() <= self.share.limits.max_color_attachments,
@@ -871,7 +870,7 @@ impl d::Device<B> for Device {
             .collect();
 
         Ok(n::RenderPass {
-            attachments: attachments.into_iter().collect::<Vec<_>>(),
+            attachments: attachments.collect::<Vec<_>>(),
             subpasses,
         })
     }
@@ -882,7 +881,7 @@ impl d::Device<B> for Device {
         _: Ic,
     ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
-        Is: IntoIterator<Item = &'a n::DescriptorSetLayout>,
+        Is: Iterator<Item = &'a n::DescriptorSetLayout>,
     {
         use std::convert::TryInto;
         let mut sets = Vec::new();
@@ -940,7 +939,7 @@ impl d::Device<B> for Device {
 
     unsafe fn merge_pipeline_caches<'a, I>(&self, _: &mut (), _: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = &'a ()>,
+        I: Iterator<Item = &'a ()>,
     {
         //empty
         Ok(())
@@ -1085,7 +1084,7 @@ impl d::Device<B> for Device {
 
         /*
         let attachments: Vec<_> = attachments
-            .into_iter()
+
             .map(|at| at.borrow().clone())
             .collect();
         debug!("create_framebuffer {:?}", attachments);
@@ -1336,7 +1335,7 @@ impl d::Device<B> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
+        I: Iterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         let gl = &self.share.context;
 
@@ -1368,7 +1367,7 @@ impl d::Device<B> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
+        I: Iterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         let gl = &self.share.context;
 
@@ -1664,7 +1663,7 @@ impl d::Device<B> for Device {
         _: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
+        I: Iterator<Item = pso::DescriptorRangeDesc>,
     {
         Ok(n::DescriptorPool {})
     }
@@ -1675,10 +1674,10 @@ impl d::Device<B> for Device {
         _immutable_samplers: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator<Item = &'a n::FatSampler>,
+        I: Iterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: Iterator<Item = &'a n::FatSampler>,
     {
-        let mut bindings = layout.into_iter().collect::<Vec<_>>();
+        let mut bindings = layout.collect::<Vec<_>>();
         // all operations rely on the ascending bindings order
         bindings.sort_by_key(|b| b.binding);
         Ok(Arc::new(bindings))
@@ -1686,7 +1685,7 @@ impl d::Device<B> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
+        I: Iterator<Item = pso::Descriptor<'a, B>>,
     {
         let mut layout_index = op
             .set
@@ -1843,7 +1842,7 @@ impl d::Device<B> for Device {
         timeout_ns: u64,
     ) -> Result<bool, d::WaitError>
     where
-        I: IntoIterator<Item = &'a n::Fence>,
+        I: Iterator<Item = &'a n::Fence>,
     {
         let performance = web_sys::window().unwrap().performance().unwrap();
         let start = performance.now();
@@ -1867,7 +1866,7 @@ impl d::Device<B> for Device {
             d::WaitFor::Any => {
                 const FENCE_WAIT_NS: u64 = 100_000;
 
-                let fences: Vec<_> = fences.into_iter().collect();
+                let fences: Vec<_> = fences.collect();
                 loop {
                     for fence in &fences {
                         if self.wait_for_fence(fence, FENCE_WAIT_NS)? {

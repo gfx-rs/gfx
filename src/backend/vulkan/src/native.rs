@@ -172,7 +172,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         list: &mut E,
     ) -> Result<(), pso::AllocationError>
     where
-        I: IntoIterator<Item = &'a DescriptorSetLayout>,
+        I: Iterator<Item = &'a DescriptorSetLayout>,
         E: Extend<DescriptorSet>,
     {
         self.temp_raw_layouts.clear();
@@ -210,9 +210,9 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 
     unsafe fn free<I>(&mut self, descriptor_sets: I)
     where
-        I: IntoIterator<Item = DescriptorSet>,
+        I: Iterator<Item = DescriptorSet>,
     {
-        let sets_iter = descriptor_sets.into_iter().map(|d| d.raw);
+        let sets_iter = descriptor_sets.map(|d| d.raw);
         inplace_or_alloc_from_iter(sets_iter, |sets| {
             self.device.raw.free_descriptor_sets(self.raw, sets);
         })
