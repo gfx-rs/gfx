@@ -394,7 +394,6 @@ impl device::Device<Backend> for Device {
     unsafe fn write_descriptor_set<'a, I>(&self, _: pso::DescriptorSetWrite<'a, Backend, I>)
     where
         I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
-        I::IntoIter: ExactSizeIterator,
     {
     }
 

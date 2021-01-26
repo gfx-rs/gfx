@@ -5,7 +5,7 @@
 
 Most of the code just passes the data through. The only problem
 that affects all the pieces is related to memory allocation:
-Vulkan expects slices, but the API gives us `ExactSizeIterator`.
+Vulkan expects slices, but the API gives us `Iterator`.
 So we end up using a lot of `inplace_it` to get things collected on stack.
 
 ## Framebuffers

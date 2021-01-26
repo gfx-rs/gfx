@@ -2967,7 +2967,6 @@ impl d::Device<B> for Device {
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
         I: IntoIterator<Item = pso::Descriptor<'a, B>>,
-        I::IntoIter: ExactSizeIterator,
     {
         let mut descriptor_updater = self.descriptor_updater.lock();
         descriptor_updater.reset();
@@ -3303,18 +3302,18 @@ impl d::Device<B> for Device {
     ) -> Result<bool, d::WaitError>
     where
         I: IntoIterator<Item = &'a r::Fence>,
-        I::IntoIter: ExactSizeIterator,
     {
-        let fences_iter = fences.into_iter();
-        let count = fences_iter.len();
+        let mut count = 0;
         let mut events = self.events.lock();
-        for _ in events.len()..count {
-            events.push(native::Event::create(false, false));
-        }
 
-        for (&event, fence) in events.iter().zip(fences_iter) {
+        for fence in fences {
+            if count == events.len() {
+                events.push(native::Event::create(false, false));
+            }
+            let event = events[count];
             synchapi::ResetEvent(event.0);
             assert_eq!(winerror::S_OK, fence.raw.set_event_on_completion(event, 1));
+            count += 1;
         }
 
         let all = match wait {

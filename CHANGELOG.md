@@ -1,6 +1,7 @@
 # Change Log
 
 ### hal-unreleased
+  - `Borrow` and `ExactSizeIterator` bounds are removed from the iterators
   - error improvements:
     - use `thiserror` for errors
     - variants and a few names are refactored
@@ -11,7 +12,6 @@
     - memory in `map_memory` and `unmap_memory`
     - queue in `Queue::wait_idle`
     - semaphore in `Queue::present`
-  - Borrowing is removed from the API, and `ExactSizeIterator` bounds are inserted where they were missing
   - `ImageFeature` improvements:
     - new `STORAGE_READ_WRITE` bit, indicating that the storage can be read and written within the same draw/dispatch call
     - new `TRANSFER_SRC` and `TRANSFER_DST` bits, following `VK_KHR_maintenance1`
