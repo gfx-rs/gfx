@@ -1,7 +1,7 @@
 use ash::{
     extensions::{
         khr::AccelerationStructure, khr::DeferredHostOperations, khr::DrawIndirectCount,
-        khr::Swapchain, nv::MeshShader,
+        khr::RayTracingPipeline, khr::Swapchain, nv::MeshShader,
     },
     version::{DeviceV1_0, InstanceV1_0},
     vk,
@@ -34,6 +34,7 @@ pub struct PhysicalDeviceFeatures {
     buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>,
     acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>,
     ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
+    ray_tracing_pipeline: Option<vk::PhysicalDeviceRayTracingPipelineFeaturesKHR>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -67,6 +68,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.ray_query {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.ray_tracing_pipeline {
             info = info.push_next(feature);
         }
 
@@ -279,6 +283,18 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDeviceRayQueryFeaturesKHR::builder()
                         .ray_query(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            ray_tracing_pipeline: if enabled_extensions.contains(&RayTracingPipeline::name()) {
+                Some(
+                    vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
+                        .ray_tracing_pipeline(true)
+                        .ray_tracing_pipeline_trace_rays_indirect(
+                            features.contains(Features::TRACE_RAYS_INDIRECT),
+                        )
                         .build(),
                 )
             } else {
@@ -557,6 +573,15 @@ impl PhysicalDeviceFeatures {
             }
         }
 
+        if let Some(ray_tracing_pipeline) = self.ray_tracing_pipeline {
+            if ray_tracing_pipeline.ray_tracing_pipeline == vk::TRUE {
+                bits |= Features::RAY_TRACING_PIPELINE;
+            }
+            if ray_tracing_pipeline.ray_tracing_pipeline_trace_rays_indirect == vk::TRUE {
+                bits |= Features::TRACE_RAYS_INDIRECT;
+            }
+        }
+
         if let Some(buffer_device_address) = self.buffer_device_address {
             // TODO there's not hal feature for this
         }
@@ -670,6 +695,19 @@ impl PhysicalDeviceInfo {
             }
         }
 
+        if requested_features.intersects(
+            Features::RAY_TRACING_PIPELINE
+                | Features::TRACE_RAYS_INDIRECT
+                | Features::RAY_TRAVERSAL_PRIMITIVE_CULLING,
+        ) {
+            requested_extensions.push(RayTracingPipeline::name());
+
+            if self.api_version() < Version::V1_2 {
+                requested_extensions.push(vk::KhrSpirv14Fn::name());
+                requested_extensions.push(vk::KhrShaderFloatControlsFn::name());
+            }
+        }
+
         requested_extensions
     }
 
@@ -751,6 +789,14 @@ impl PhysicalDeviceInfo {
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
+            if device_properties.supports_extension(RayTracingPipeline::name()) {
+                features.ray_tracing_pipeline =
+                    Some(vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder().build());
+
+                let mut_ref = features.ray_tracing_pipeline.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
             unsafe {
                 get_device_properties
                     .get_physical_device_features2_khr(device, &mut features2 as *mut _);
@@ -769,11 +815,17 @@ impl PhysicalDeviceInfo {
             }
         }
 
+        // Null out all of the `pNext` fields in `features` to prevent any accidental unsafe derefs later on.
+        // We need to do this because `features` has internal pointers to itself, but we're moving it out of this function.
         unsafe {
             null_p_next(&mut features.vulkan_1_2);
             null_p_next(&mut features.descriptor_indexing);
             null_p_next(&mut features.mesh_shader);
             null_p_next(&mut features.imageless_framebuffer);
+            null_p_next(&mut features.buffer_device_address);
+            null_p_next(&mut features.acceleration_structure);
+            null_p_next(&mut features.ray_query);
+            null_p_next(&mut features.ray_tracing_pipeline);
         }
 
         (device_properties, features)
@@ -1027,6 +1079,15 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 None
             };
 
+        let ray_tracing_pipeline_fn = if enabled_extensions.contains(&RayTracingPipeline::name()) {
+            Some(ExtensionFn::Extension(RayTracingPipeline::new(
+                &self.instance.inner,
+                &device_raw,
+            )))
+        } else {
+            None
+        };
+
         #[cfg(feature = "naga")]
         let naga_options = {
             use naga::back::spv;
@@ -1065,6 +1126,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     draw_indirect_count: indirect_count_fn,
                     buffer_device_address: buffer_device_address_fn,
                     acceleration_structure: acceleration_structure_fn,
+                    ray_tracing_pipeline: ray_tracing_pipeline_fn,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
                     || self
@@ -1344,6 +1406,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let mut sampler_reduction_capabilities = hal::SamplerReductionProperties::default();
         let mut acceleration_structure_capabilities =
             hal::AccelerationStructureProperties::default();
+        let mut ray_tracing_pipeline_capabilities = hal::RayTracingPipelineProperties::default();
 
         if let Some(get_physical_device_properties) =
             self.instance.get_physical_device_properties.as_ref()
@@ -1355,6 +1418,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 vk::PhysicalDeviceSamplerFilterMinmaxProperties::builder();
             let mut acceleration_structure_properties =
                 vk::PhysicalDeviceAccelerationStructurePropertiesKHR::builder();
+            let mut ray_tracing_pipeline_properties =
+                vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::builder();
 
             unsafe {
                 get_physical_device_properties.get_physical_device_properties2_khr(
@@ -1364,6 +1429,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         .push_next(&mut mesh_shader_properties)
                         .push_next(&mut sampler_reduction_properties)
                         .push_next(&mut acceleration_structure_properties)
+                        .push_next(&mut ray_tracing_pipeline_properties)
                         .build() as *mut _,
                 );
             }
@@ -1438,6 +1504,20 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     acceleration_structure_properties
                         .min_acceleration_structure_scratch_offset_alignment,
             };
+
+            ray_tracing_pipeline_capabilities = hal::RayTracingPipelineProperties {
+                shader_group_handle_size: ray_tracing_pipeline_properties.shader_group_handle_size,
+                max_ray_recursion_depth: ray_tracing_pipeline_properties.max_ray_recursion_depth,
+                max_shader_group_stride: ray_tracing_pipeline_properties.max_shader_group_stride,
+                shader_group_base_alignment: ray_tracing_pipeline_properties
+                    .shader_group_base_alignment,
+                max_ray_dispatch_invocation_count: ray_tracing_pipeline_properties
+                    .max_ray_dispatch_invocation_count,
+                shader_group_handle_alignment: ray_tracing_pipeline_properties
+                    .shader_group_handle_alignment,
+                max_ray_hit_attribute_size: ray_tracing_pipeline_properties
+                    .max_ray_hit_attribute_size,
+            };
         }
 
         PhysicalDeviceProperties {
@@ -1446,6 +1526,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             mesh_shader: mesh_shader_capabilities,
             sampler_reduction: sampler_reduction_capabilities,
             acceleration_structure: acceleration_structure_capabilities,
+            ray_tracing_pipeline: ray_tracing_pipeline_capabilities,
             performance_caveats: Default::default(),
             dynamic_pipeline_states: DynamicStates::all(),
             downlevel: DownlevelProperties::all_enabled(),

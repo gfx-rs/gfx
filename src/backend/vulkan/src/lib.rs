@@ -679,6 +679,7 @@ struct DeviceExtensionFunctions {
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
     buffer_device_address: Option<ExtensionFn<vk::KhrBufferDeviceAddressFn>>,
     acceleration_structure: Option<ExtensionFn<khr::AccelerationStructure>>,
+    ray_tracing_pipeline: Option<ExtensionFn<khr::RayTracingPipeline>>,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.

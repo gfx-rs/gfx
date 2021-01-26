@@ -366,10 +366,8 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         _sets: I,
         _offsets: J,
     ) where
-        I: IntoIterator<Item = &'a B::DescriptorSet>,
-        I::IntoIter: ExactSizeIterator,
-        J: IntoIterator<Item = DescriptorSetOffset>,
-        J::IntoIter: ExactSizeIterator,
+        I: Iterator<Item = &'a B::DescriptorSet>,
+        J: Iterator<Item = DescriptorSetOffset>,
     {
         unimplemented!();
     }

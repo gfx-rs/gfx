@@ -303,6 +303,12 @@ bitflags! {
 
         /// Support ray query functionality in shaders.
         const RAY_QUERY = 0x0000_0020 << 96;
+        /// Supports ray tracing pipelines.
+        const RAY_TRACING_PIPELINE = 0x0000_0040 << 96;
+        /// Supports the indirect trace rays call.
+        const TRACE_RAYS_INDIRECT = 0x0000_0080 << 96;
+        /// TODO docs
+        const RAY_TRAVERSAL_PRIMITIVE_CULLING = 0x0000_0100 << 96;
     }
 }
 
@@ -362,8 +368,10 @@ pub struct PhysicalDeviceProperties {
     pub sampler_reduction: SamplerReductionProperties,
     /// Downlevel properties.
     pub downlevel: DownlevelProperties,
-    /// Acceleration Structure properties,
+    /// Acceleration Structure properties.
     pub acceleration_structure: AccelerationStructureProperties,
+    /// Ray Tracing Pipeline properties.
+    pub ray_tracing_pipeline: RayTracingPipelineProperties,
     /// Performance caveats.
     pub performance_caveats: PerformanceCaveats,
     /// Dynamic pipeline states.
@@ -609,6 +617,32 @@ pub struct AccelerationStructureProperties {
     pub max_descriptor_set_acceleration_structures: u32,
     /// The minimum alignment in bytes for scratch data passed in to an acceleration structure build command.
     pub min_acceleration_structure_scratch_offset_alignment: u32,
+}
+
+/// Resource limits related to the Ray Tracing Pipeline.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct RayTracingPipelineProperties {
+    // TODO since we don't use `vk::DescriptorSetLayoutCreateFlags`, I'm leaving this out
+    // pub max_per_stage_descriptor_update_after_bind_acceleration_structures: u32,
+    // pub max_descriptor_set_update_after_bind_acceleration_structures: u32,
+    /// TODO docs
+    pub shader_group_handle_size: u32,
+    /// TODO docs
+    pub max_ray_recursion_depth: u32,
+    /// TODO docs
+    pub max_shader_group_stride: u32,
+    /// TODO docs
+    pub shader_group_base_alignment: u32,
+    // TODO(capture-replay)
+    // /// TODO docs
+    // pub shader_group_handle_capture_replay_size: u32,
+    /// TODO docs
+    pub max_ray_dispatch_invocation_count: u32,
+    /// TODO docs
+    pub shader_group_handle_alignment: u32,
+    /// TODO docs
+    pub max_ray_hit_attribute_size: u32,
 }
 
 /// Resource limits related to the reduction samplers.

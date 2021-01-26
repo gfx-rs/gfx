@@ -661,23 +661,31 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn bind_ray_tracing_pipeline(&mut self, _pipeline: &n::RayTracingPipeline) {
-        unimplemented!();
+    unsafe fn bind_ray_tracing_pipeline(&mut self, pipeline: &n::RayTracingPipeline) {
+        self.device.raw.cmd_bind_pipeline(
+            self.raw,
+            vk::PipelineBindPoint::RAY_TRACING_KHR,
+            pipeline.0,
+        )
     }
 
     unsafe fn bind_ray_tracing_descriptor_sets<'a, I, J>(
         &mut self,
-        _layout: &n::PipelineLayout,
-        _first_set: usize,
-        _sets: I,
-        _offsets: J,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: I,
+        offsets: J,
     ) where
-        I: IntoIterator<Item = &'a n::DescriptorSet>,
-        I::IntoIter: ExactSizeIterator,
-        J: IntoIterator<Item = com::DescriptorSetOffset>,
-        J::IntoIter: ExactSizeIterator,
+        I: Iterator<Item = &'a n::DescriptorSet>,
+        J: Iterator<Item = com::DescriptorSetOffset>,
     {
-        unimplemented!();
+        self.bind_descriptor_sets(
+            vk::PipelineBindPoint::RAY_TRACING_KHR,
+            layout,
+            first_set,
+            sets,
+            offsets,
+        );
     }
 
     unsafe fn dispatch(&mut self, count: WorkGroupCount) {
@@ -1215,32 +1223,75 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             );
     }
 
-    unsafe fn set_ray_tracing_pipeline_stack_size(&self, _pipeline_stack_size: u32) {
-        unimplemented!()
+    unsafe fn set_ray_tracing_pipeline_stack_size(&self, pipeline_stack_size: u32) {
+        self.device
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call set_ray_tracing_pipeline_stack_size")
+            .cmd_set_ray_tracing_pipeline_stack_size(self.raw, pipeline_stack_size);
     }
 
     unsafe fn trace_rays(
         &self,
-        _raygen_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
-        _miss_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
-        _hit_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
-        _callable_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
-        _count: WorkGroupCount,
+        raygen_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        miss_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        hit_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        callable_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        count: WorkGroupCount,
     ) {
-        unimplemented!()
+        self.device
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call trace_rays")
+            .cmd_trace_rays(
+                self.raw,
+                &conv::map_shader_binding_table(&self.device, raygen_shader_binding_table),
+                &conv::map_shader_binding_table(&self.device, miss_shader_binding_table),
+                &conv::map_shader_binding_table(&self.device, hit_shader_binding_table),
+                &conv::map_shader_binding_table(&self.device, callable_shader_binding_table),
+                count[0],
+                count[1],
+                count[2],
+            );
     }
 
     /// `buffer` points to a `WorkGroupCount`.
     unsafe fn trace_rays_indirect<'a>(
         &self,
-        _raygen_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
-        _miss_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
-        _hit_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
-        _callable_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
-        _buffer: &'a n::Buffer,
-        _offset: buffer::Offset,
+        raygen_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        miss_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        hit_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        callable_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        buffer: &'a n::Buffer,
+        offset: buffer::Offset,
     ) {
-        unimplemented!()
+        self.device
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call trace_rays_indirect")
+            .cmd_trace_rays_indirect(
+                self.raw,
+                &[conv::map_shader_binding_table(
+                    &self.device,
+                    raygen_shader_binding_table,
+                )],
+                &[conv::map_shader_binding_table(
+                    &self.device,
+                    miss_shader_binding_table,
+                )],
+                &[conv::map_shader_binding_table(
+                    &self.device,
+                    hit_shader_binding_table,
+                )],
+                &[conv::map_shader_binding_table(
+                    &self.device,
+                    callable_shader_binding_table,
+                )],
+                self.device.get_buffer_device_address(buffer, offset),
+            );
     }
 
     unsafe fn push_compute_constants(

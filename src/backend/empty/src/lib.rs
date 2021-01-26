@@ -50,6 +50,7 @@ impl hal::Backend for Backend {
 
     type ComputePipeline = ();
     type GraphicsPipeline = ();
+    type RayTracingPipeline = ();
     type PipelineCache = ();
     type PipelineLayout = ();
     type DescriptorSetLayout = DescriptorSetLayout;

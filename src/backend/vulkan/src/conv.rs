@@ -9,6 +9,7 @@ use hal::{
     window::{CompositeAlphaMode, PresentMode},
     IndexType,
 };
+use pso::{BasePipeline, ShaderBindingTable, ShaderStageFlags};
 
 use std::mem;
 
@@ -803,4 +804,148 @@ pub unsafe fn map_geometry_info(
             device_address: device.get_buffer_device_address(desc.scratch, desc.scratch_offset),
         })
         .build()
+}
+
+pub fn map_group_shader(group_shader: pso::GroupShader) -> vk::ShaderGroupShaderKHR {
+    match group_shader {
+        pso::GroupShader::General => vk::ShaderGroupShaderKHR::GENERAL,
+        pso::GroupShader::ClosestHit => vk::ShaderGroupShaderKHR::CLOSEST_HIT,
+        pso::GroupShader::AnyHit => vk::ShaderGroupShaderKHR::ANY_HIT,
+        pso::GroupShader::Intersection => vk::ShaderGroupShaderKHR::INTERSECTION,
+    }
+}
+
+// TODO reuse for other pipelines?
+pub fn map_pipeline_create_flags<'a, P: 'a>(
+    pipeline_create_flags: pso::PipelineCreationFlags,
+    parent: &BasePipeline<'a, P>,
+) -> vk::PipelineCreateFlags {
+    let mut flags = vk::PipelineCreateFlags::empty();
+    match parent {
+        pso::BasePipeline::None => (),
+        _ => {
+            flags |= vk::PipelineCreateFlags::DERIVATIVE;
+        }
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
+        flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
+        flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
+    }
+    if pipeline_create_flags
+        .contains(pso::PipelineCreationFlags::RAY_TRACING_NO_NULL_ANY_HIT_SHADERS)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_NO_NULL_ANY_HIT_SHADERS_KHR;
+    }
+    if pipeline_create_flags
+        .contains(pso::PipelineCreationFlags::RAY_TRACING_NO_NULL_CLOSEST_HIT_SHADERS)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_NO_NULL_CLOSEST_HIT_SHADERS_KHR;
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::RAY_TRACING_NO_NULL_MISS_SHADERS)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_NO_NULL_MISS_SHADERS_KHR;
+    }
+    if pipeline_create_flags
+        .contains(pso::PipelineCreationFlags::RAY_TRACING_NO_NULL_INTERSECTION_SHADERS)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_NO_NULL_INTERSECTION_SHADERS_KHR;
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::RAY_TRACING_SKIP_TRIANGLES) {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_SKIP_TRIANGLES_KHR;
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::RAY_TRACING_SKIP_AABBS) {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_SKIP_AABBS_KHR;
+    }
+    if pipeline_create_flags
+        .contains(pso::PipelineCreationFlags::RAY_TRACING_SHADER_GROUP_HANDLE_CAPTURE_REPLAY)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_SHADER_GROUP_HANDLE_CAPTURE_REPLAY_KHR;
+    }
+    flags
+}
+
+pub fn map_shader_stage(stage: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
+    let mut flags = vk::ShaderStageFlags::empty();
+    if stage.contains(pso::ShaderStageFlags::VERTEX) {
+        flags |= vk::ShaderStageFlags::VERTEX;
+    }
+    if stage.contains(pso::ShaderStageFlags::HULL) {
+        flags |= vk::ShaderStageFlags::TESSELLATION_CONTROL;
+    }
+    if stage.contains(pso::ShaderStageFlags::DOMAIN) {
+        flags |= vk::ShaderStageFlags::TESSELLATION_EVALUATION;
+    }
+    if stage.contains(pso::ShaderStageFlags::GEOMETRY) {
+        flags |= vk::ShaderStageFlags::GEOMETRY;
+    }
+    if stage.contains(pso::ShaderStageFlags::FRAGMENT) {
+        flags |= vk::ShaderStageFlags::FRAGMENT;
+    }
+    if stage.contains(pso::ShaderStageFlags::COMPUTE) {
+        flags |= vk::ShaderStageFlags::COMPUTE;
+    }
+    if stage.contains(pso::ShaderStageFlags::TASK) {
+        flags |= vk::ShaderStageFlags::TASK_NV;
+    }
+    if stage.contains(pso::ShaderStageFlags::MESH) {
+        flags |= vk::ShaderStageFlags::MESH_NV;
+    }
+    if stage.contains(pso::ShaderStageFlags::RAYGEN) {
+        flags |= vk::ShaderStageFlags::RAYGEN_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::ANY_HIT) {
+        flags |= vk::ShaderStageFlags::ANY_HIT_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::CLOSEST_HIT) {
+        flags |= vk::ShaderStageFlags::CLOSEST_HIT_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::MISS) {
+        flags |= vk::ShaderStageFlags::MISS_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::INTERSECTION) {
+        flags |= vk::ShaderStageFlags::INTERSECTION_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::CALLABLE) {
+        flags |= vk::ShaderStageFlags::CALLABLE_KHR;
+    }
+    flags
+}
+
+pub fn map_group_type(group_type: pso::GroupType) -> vk::RayTracingShaderGroupTypeKHR {
+    match group_type {
+        pso::GroupType::General => vk::RayTracingShaderGroupTypeKHR::GENERAL,
+        pso::GroupType::TrianglesHitGroup => vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP,
+        pso::GroupType::ProceduralHitGroup => {
+            vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP
+        }
+    }
+}
+
+pub fn map_shader_group_desc(
+    desc: &pso::ShaderGroupDesc,
+) -> vk::RayTracingShaderGroupCreateInfoKHR {
+    vk::RayTracingShaderGroupCreateInfoKHR::builder()
+        .ty(map_group_type(desc.ty))
+        .general_shader(desc.general_shader)
+        .closest_hit_shader(desc.closest_hit_shader)
+        .any_hit_shader(desc.any_hit_shader)
+        .intersection_shader(desc.intersection_shader)
+        .build()
+}
+
+pub unsafe fn map_shader_binding_table(
+    device: &crate::RawDevice,
+    table: Option<pso::ShaderBindingTable<crate::Backend>>,
+) -> vk::StridedDeviceAddressRegionKHR {
+    if let Some(table) = table {
+        vk::StridedDeviceAddressRegionKHR::builder()
+            .device_address(device.get_buffer_device_address(table.buffer, table.offset))
+            .stride(table.stride as u64)
+            .size(table.size)
+            .build()
+    } else {
+        vk::StridedDeviceAddressRegionKHR::default()
+    }
 }
