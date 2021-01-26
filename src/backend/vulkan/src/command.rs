@@ -661,6 +661,25 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
+    unsafe fn bind_ray_tracing_pipeline(&mut self, _pipeline: &n::RayTracingPipeline) {
+        unimplemented!();
+    }
+
+    unsafe fn bind_ray_tracing_descriptor_sets<'a, I, J>(
+        &mut self,
+        _layout: &n::PipelineLayout,
+        _first_set: usize,
+        _sets: I,
+        _offsets: J,
+    ) where
+        I: IntoIterator<Item = &'a n::DescriptorSet>,
+        I::IntoIter: ExactSizeIterator,
+        J: IntoIterator<Item = com::DescriptorSetOffset>,
+        J::IntoIter: ExactSizeIterator,
+    {
+        unimplemented!();
+    }
+
     unsafe fn dispatch(&mut self, count: WorkGroupCount) {
         self.device
             .raw
@@ -1194,6 +1213,34 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 pool.0,
                 first_query,
             );
+    }
+
+    unsafe fn set_ray_tracing_pipeline_stack_size(&self, _pipeline_stack_size: u32) {
+        unimplemented!()
+    }
+
+    unsafe fn trace_rays(
+        &self,
+        _raygen_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        _miss_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        _hit_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        _callable_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        _count: WorkGroupCount,
+    ) {
+        unimplemented!()
+    }
+
+    /// `buffer` points to a `WorkGroupCount`.
+    unsafe fn trace_rays_indirect<'a>(
+        &self,
+        _raygen_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        _miss_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        _hit_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        _callable_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        _buffer: &'a n::Buffer,
+        _offset: buffer::Offset,
+    ) {
+        unimplemented!()
     }
 
     unsafe fn push_compute_constants(

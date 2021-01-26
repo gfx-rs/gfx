@@ -340,6 +340,8 @@ bitflags! {
         const STENCIL_WRITE_MASK = 0x0200;
         /// Supports `StencilTest::reference_values == State::Dynamic(_)`
         const STENCIL_REFERENCE = 0x0400;
+        /// TODO docs
+        const RAY_TRACING_PIPELINE_STACK_SIZE = 1000347000;
     }
 }
 
@@ -817,6 +819,8 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type ComputePipeline: fmt::Debug + Any + Send + Sync;
     /// The corresponding graphics pipeline type for this backend.
     type GraphicsPipeline: fmt::Debug + Any + Send + Sync;
+    /// The corresponding ray tracing pipeline type for this backend.
+    type RayTracingPipeline: fmt::Debug + Any + Send + Sync;
     /// The corresponding pipeline cache type for this backend.
     type PipelineCache: fmt::Debug + Any + Send + Sync;
     /// The corresponding pipeline layout type for this backend.

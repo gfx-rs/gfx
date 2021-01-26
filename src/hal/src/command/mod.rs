@@ -353,6 +353,27 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         I: Iterator<Item = &'a B::DescriptorSet>,
         J: Iterator<Item = DescriptorSetOffset>;
 
+    /// TODO docs
+    unsafe fn bind_ray_tracing_pipeline(&mut self, _pipeline: &B::RayTracingPipeline) {
+        unimplemented!();
+    }
+
+    /// TODO docs
+    unsafe fn bind_ray_tracing_descriptor_sets<'a, I, J>(
+        &mut self,
+        _layout: &B::PipelineLayout,
+        _first_set: usize,
+        _sets: I,
+        _offsets: J,
+    ) where
+        I: IntoIterator<Item = &'a B::DescriptorSet>,
+        I::IntoIter: ExactSizeIterator,
+        J: IntoIterator<Item = DescriptorSetOffset>,
+        J::IntoIter: ExactSizeIterator,
+    {
+        unimplemented!();
+    }
+
     /// Execute a workgroup in the compute pipeline. `x`, `y` and `z` are the
     /// number of local workgroups to dispatch along each "axis"; a total of `x`*`y`*`z`
     /// local workgroups will be created.
@@ -636,6 +657,37 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         _query_type: query::Type,
         _pool: &B::QueryPool,
         _first_query: u32,
+    ) {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    unsafe fn set_ray_tracing_pipeline_stack_size(&self, _pipeline_stack_size: u32) {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    unsafe fn trace_rays(
+        &self,
+        _raygen_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _miss_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _hit_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _callable_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _count: WorkGroupCount,
+    ) {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    /// `buffer` points to a `WorkGroupCount`.
+    unsafe fn trace_rays_indirect<'a>(
+        &self,
+        _raygen_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _miss_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _hit_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _callable_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _buffer: &'a B::Buffer,
+        _offset: buffer::Offset,
     ) {
         unimplemented!()
     }

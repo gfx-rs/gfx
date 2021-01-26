@@ -23,7 +23,7 @@ use crate::{
     Backend, MemoryTypeId,
 };
 
-use std::{any::Any, fmt, iter, ops::Range};
+use std::{any::Any, fmt, iter, ops::Range, unimplemented};
 
 /// Error occurred caused device to be lost.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -328,6 +328,22 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// The compute pipeline shouldn't be destroyed before any submitted command buffer,
     /// which references the compute pipeline, has finished execution.
     unsafe fn destroy_compute_pipeline(&self, pipeline: B::ComputePipeline);
+
+    /// TODO docs
+    // TODO(capture-replay) can return VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS
+    // TODO(host-operations) deferredOperation
+    unsafe fn create_ray_tracing_pipeline<'a>(
+        &self,
+        _desc: &pso::RayTracingPipelineDesc<'a, B>,
+        _cache: Option<&B::PipelineCache>,
+    ) -> Result<B::RayTracingPipeline, pso::CreationError> {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: B::RayTracingPipeline) {
+        unimplemented!()
+    }
 
     /// Create a new framebuffer object.
     ///
@@ -712,6 +728,40 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         _version_header: &[u8; 32],
     ) -> acceleration_structure::Compatibility {
+        unimplemented!()
+    }
+
+    // // TODO(capture-replay)
+    // // TODO return a buffer of size shaderGroupHandleCaptureReplaySize * groupCount
+    // unsafe fn get_ray_tracing_capture_replay_shader_group_handles<'a>(
+    //     &self,
+    //     _pipeline: &'a B::RayTracingPipeline,
+    //     _first_group: u32,
+    //     _group_count: u32,
+    //     _data: &mut [u8]
+    // ) -> Result<(), OutOfMemory> {
+    //     unimplemented!()
+    // }
+
+    /// TODO docs
+    // `data` must be at least `shaderGroupHandleCaptureReplaySize * groupCount`
+    unsafe fn get_ray_tracing_shader_group_handles<'a>(
+        &self,
+        _pipeline: &'a B::RayTracingPipeline,
+        _first_group: u32,
+        _group_count: u32,
+        _data: &mut [u8],
+    ) -> Result<(), OutOfMemory> {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    unsafe fn get_ray_tracing_shader_group_stack_size<'a>(
+        &self,
+        _pipeline: &'a B::RayTracingPipeline,
+        _group: u32,
+        _group_shader: pso::GroupShader,
+    ) -> u64 {
         unimplemented!()
     }
 

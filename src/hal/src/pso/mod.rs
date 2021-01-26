@@ -9,10 +9,12 @@ mod descriptor;
 mod graphics;
 mod input_assembler;
 mod output_merger;
+mod ray_tracing;
 mod specialization;
 
 pub use self::{
-    compute::*, descriptor::*, graphics::*, input_assembler::*, output_merger::*, specialization::*,
+    compute::*, descriptor::*, graphics::*, input_assembler::*, output_merger::*, ray_tracing::*,
+    specialization::*,
 };
 
 /// Error types happening upon PSO creation on the device side.
@@ -83,6 +85,8 @@ bitflags!(
         const HOST = 0x4000;
         /// Acceleration structure building stage.
         const ACCELERATION_STRUCTURE_BUILD = 0x02000000;
+        /// Ray tracing shader execution.
+        const RAY_TRACING_SHADER = 0x00200000;
         /// Task shader stage.
         const TASK_SHADER = 0x80000;
         /// Mesh shader stage.
@@ -95,6 +99,8 @@ bitflags!(
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(Default)]
     pub struct ShaderStageFlags: u32 {
+        // NOTE: these values follow [VkShaderStageFlagBits](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkShaderStageFlagBits.html).
+
         /// Vertex shader stage.
         const VERTEX   = 0x1;
         /// Hull (tessellation) shader stage.
@@ -114,6 +120,18 @@ bitflags!(
         /// All graphics pipeline shader stages.
         const GRAPHICS = Self::VERTEX.bits | Self::HULL.bits |
             Self::DOMAIN.bits | Self::GEOMETRY.bits | Self::FRAGMENT.bits;
+        /// Ray geneneration shader stage.
+        const RAYGEN       = 0x100;
+        /// Any-hit shader stage.
+        const ANY_HIT      = 0x200;
+        /// Closest-hit shader stage.
+        const CLOSEST_HIT  = 0x400;
+        /// Miss shader stage.
+        const MISS         = 0x800;
+        /// Intersection shader stage.
+        const INTERSECTION = 0x1000;
+        /// Callable shader stage.
+        const CALLABLE     = 0x2000;
         /// All shader stages (matches Vulkan).
         const ALL      = 0x7FFFFFFF;
     }
@@ -163,6 +181,21 @@ bitflags!(
         ///
         /// Must be set when pipelines set the pipeline as base.
         const ALLOW_DERIVATIVES = 0x2;
+
+        /// TODO docs
+        const RAY_TRACING_NO_NULL_ANY_HIT_SHADERS = 0x4000;
+        /// TODO docs
+        const RAY_TRACING_NO_NULL_CLOSEST_HIT_SHADERS = 0x8000;
+        /// TODO docs
+        const RAY_TRACING_NO_NULL_MISS_SHADERS = 0x10000;
+        /// TODO docs
+        const RAY_TRACING_NO_NULL_INTERSECTION_SHADERS = 0x20000;
+        /// TODO docs
+        const RAY_TRACING_SKIP_TRIANGLES = 0x1000;
+        /// TODO docs
+        const RAY_TRACING_SKIP_AABBS = 0x2000;
+        /// TODO docs
+        const RAY_TRACING_SHADER_GROUP_HANDLE_CAPTURE_REPLAY = 0x80000;
     }
 );
 
