@@ -95,7 +95,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
 
     unsafe fn free<I>(&mut self, buffers: I)
     where
-        I: IntoIterator<Item = CommandBuffer>,
+        I: Iterator<Item = CommandBuffer>,
     {
         let mut memory = self
             .memory

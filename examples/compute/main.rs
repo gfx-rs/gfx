@@ -92,7 +92,7 @@ fn main() {
                     stage_flags: pso::ShaderStageFlags::COMPUTE,
                     immutable_samplers: false,
                 }),
-                &[],
+                iter::empty(),
             )
         }
         .expect("Can't create descriptor set layout");
@@ -172,7 +172,7 @@ fn main() {
             set: &mut desc_set,
             binding: 0,
             array_offset: 0,
-            descriptors: Some(pso::Descriptor::Buffer(
+            descriptors: iter::once(pso::Descriptor::Buffer(
                 &device_buffer,
                 buffer::SubRange::WHOLE,
             )),
@@ -199,7 +199,7 @@ fn main() {
         command_buffer.pipeline_barrier(
             pso::PipelineStage::TRANSFER..pso::PipelineStage::COMPUTE_SHADER,
             memory::Dependencies::empty(),
-            Some(memory::Barrier::Buffer {
+            iter::once(memory::Barrier::Buffer {
                 states: buffer::Access::TRANSFER_WRITE
                     ..buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
                 families: None,
@@ -218,7 +218,7 @@ fn main() {
         command_buffer.pipeline_barrier(
             pso::PipelineStage::COMPUTE_SHADER..pso::PipelineStage::TRANSFER,
             memory::Dependencies::empty(),
-            Some(memory::Barrier::Buffer {
+            iter::once(memory::Barrier::Buffer {
                 states: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE
                     ..buffer::Access::TRANSFER_READ,
                 families: None,
@@ -245,7 +245,7 @@ fn main() {
         );
 
         device.wait_for_fence(&fence, !0).unwrap();
-        command_pool.free(Some(command_buffer));
+        command_pool.free(iter::once(command_buffer));
     }
 
     unsafe {

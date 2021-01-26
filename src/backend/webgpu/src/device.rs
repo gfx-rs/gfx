@@ -53,7 +53,7 @@ impl hal::device::Device<Backend> for Device {
         _dependencies: Id,
     ) -> Result<<Backend as hal::Backend>::RenderPass, OutOfMemory>
     where
-        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
+        Is: Iterator<Item = pass::SubpassDesc<'a>>,
     {
         todo!()
     }
@@ -68,7 +68,7 @@ impl hal::device::Device<Backend> for Device {
         _push_constant: Ic,
     ) -> Result<<Backend as hal::Backend>::PipelineLayout, OutOfMemory>
     where
-        Is: IntoIterator<Item = &'a <Backend as hal::Backend>::DescriptorSetLayout>,
+        Is: Iterator<Item = &'a <Backend as hal::Backend>::DescriptorSetLayout>,
     {
         todo!()
     }
@@ -97,7 +97,7 @@ impl hal::device::Device<Backend> for Device {
         _sources: I,
     ) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator<Item = &'a <Backend as hal::Backend>::PipelineCache>,
+        I: Iterator<Item = &'a <Backend as hal::Backend>::PipelineCache>,
     {
         todo!()
     }
@@ -143,7 +143,7 @@ impl hal::device::Device<Backend> for Device {
         _extent: hal::image::Extent,
     ) -> Result<<Backend as hal::Backend>::Framebuffer, OutOfMemory>
     where
-        I: IntoIterator,
+        I: Iterator,
     {
         todo!()
     }
@@ -289,7 +289,7 @@ impl hal::device::Device<Backend> for Device {
         _immutable_samplers: J,
     ) -> Result<<Backend as hal::Backend>::DescriptorSetLayout, OutOfMemory>
     where
-        J: IntoIterator<Item = &'a <Backend as hal::Backend>::Sampler>,
+        J: Iterator<Item = &'a <Backend as hal::Backend>::Sampler>,
     {
         todo!()
     }
@@ -303,7 +303,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, _op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
+        I: Iterator<Item = pso::Descriptor<'a, Backend>>,
     {
         todo!()
     }
@@ -322,14 +322,14 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a <Backend as hal::Backend>::Memory, Segment)>,
+        I: Iterator<Item = (&'a <Backend as hal::Backend>::Memory, Segment)>,
     {
         todo!()
     }
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, _ranges: I) -> Result<(), OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a <Backend as hal::Backend>::Memory, Segment)>,
+        I: Iterator<Item = (&'a <Backend as hal::Backend>::Memory, Segment)>,
     {
         todo!()
     }
@@ -375,7 +375,7 @@ impl hal::device::Device<Backend> for Device {
         _timeout_ns: u64,
     ) -> Result<bool, WaitError>
     where
-        I: IntoIterator<Item = &'a <Backend as hal::Backend>::Fence>,
+        I: Iterator<Item = &'a <Backend as hal::Backend>::Fence>,
     {
         todo!()
     }

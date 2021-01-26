@@ -502,28 +502,25 @@ impl d::Device<B> for Device {
         dependencies: Id,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
-        Ia: IntoIterator<Item = pass::Attachment>,
-        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
-        Id: IntoIterator<Item = pass::SubpassDependency>,
+        Ia: Iterator<Item = pass::Attachment>,
+        Is: Iterator<Item = pass::SubpassDesc<'a>>,
+        Id: Iterator<Item = pass::SubpassDependency>,
     {
-        let attachments_iter =
-            attachments
-                .into_iter()
-                .map(|attachment| vk::AttachmentDescription {
-                    flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
-                    format: attachment
-                        .format
-                        .map_or(vk::Format::UNDEFINED, conv::map_format),
-                    samples: conv::map_sample_count_flags(attachment.samples),
-                    load_op: conv::map_attachment_load_op(attachment.ops.load),
-                    store_op: conv::map_attachment_store_op(attachment.ops.store),
-                    stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
-                    stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
-                    initial_layout: conv::map_image_layout(attachment.layouts.start),
-                    final_layout: conv::map_image_layout(attachment.layouts.end),
-                });
+        let attachments_iter = attachments.map(|attachment| vk::AttachmentDescription {
+            flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
+            format: attachment
+                .format
+                .map_or(vk::Format::UNDEFINED, conv::map_format),
+            samples: conv::map_sample_count_flags(attachment.samples),
+            load_op: conv::map_attachment_load_op(attachment.ops.load),
+            store_op: conv::map_attachment_store_op(attachment.ops.store),
+            stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
+            stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
+            initial_layout: conv::map_image_layout(attachment.layouts.start),
+            final_layout: conv::map_image_layout(attachment.layouts.end),
+        });
 
-        let dependencies_iter = dependencies.into_iter().map(|sdep|
+        let dependencies_iter = dependencies.map(|sdep|
             // TODO: checks
             vk::SubpassDependency {
                 src_subpass: sdep
@@ -540,7 +537,6 @@ impl d::Device<B> for Device {
 
         let result = inplace_or_alloc_from_iter(attachments_iter, |attachments| {
             let attachment_refs = subpasses
-                .into_iter()
                 .map(|subpass| {
                     fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
                         vk::AttachmentReference {
@@ -618,19 +614,17 @@ impl d::Device<B> for Device {
         push_constant_ranges: Ic,
     ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
-        Is: IntoIterator<Item = &'a n::DescriptorSetLayout>,
-        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
+        Is: Iterator<Item = &'a n::DescriptorSetLayout>,
+        Ic: Iterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
     {
-        let vk_set_layouts_iter = set_layouts.into_iter().map(|set| set.raw);
+        let vk_set_layouts_iter = set_layouts.map(|set| set.raw);
 
         let push_constant_ranges_iter =
-            push_constant_ranges
-                .into_iter()
-                .map(|(s, ref r)| vk::PushConstantRange {
-                    stage_flags: conv::map_stage_flags(s),
-                    offset: r.start,
-                    size: r.end - r.start,
-                });
+            push_constant_ranges.map(|(s, ref r)| vk::PushConstantRange {
+                stage_flags: conv::map_stage_flags(s),
+                offset: r.start,
+                size: r.end - r.start,
+            });
 
         let result = inplace_or_alloc_from_iter(vk_set_layouts_iter, |set_layouts| {
             // TODO: set_layouts doesnt implement fmt::Debug, submit PR?
@@ -700,9 +694,9 @@ impl d::Device<B> for Device {
         sources: I,
     ) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = &'a n::PipelineCache>,
+        I: Iterator<Item = &'a n::PipelineCache>,
     {
-        let caches_iter = sources.into_iter().map(|s| s.raw);
+        let caches_iter = sources.map(|s| s.raw);
 
         let result = inplace_or_alloc_from_iter(caches_iter, |caches| {
             //TODO: https://github.com/MaikKlein/ash/issues/357
@@ -882,7 +876,7 @@ impl d::Device<B> for Device {
         extent: image::Extent,
     ) -> Result<n::Framebuffer, d::OutOfMemory>
     where
-        T: IntoIterator<Item = image::FramebufferAttachment>,
+        T: Iterator<Item = image::FramebufferAttachment>,
     {
         if !self.shared.imageless_framebuffers {
             return Ok(n::Framebuffer::Legacy {
@@ -896,7 +890,6 @@ impl d::Device<B> for Device {
         let mut view_formats =
             SmallVec::<[vk::Format; 5]>::with_capacity(renderpass.attachment_count);
         let attachment_infos = attachments
-            .into_iter()
             .map(|fat| {
                 let mut info = vk::FramebufferAttachmentImageInfo::builder()
                     .usage(conv::map_image_usage(fat.usage))
@@ -1249,14 +1242,12 @@ impl d::Device<B> for Device {
         flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
-        T: IntoIterator<Item = pso::DescriptorRangeDesc>,
+        T: Iterator<Item = pso::DescriptorRangeDesc>,
     {
-        let pools_iter = descriptor_ranges
-            .into_iter()
-            .map(|pool| vk::DescriptorPoolSize {
-                ty: conv::map_descriptor_type(pool.ty),
-                descriptor_count: pool.count as u32,
-            });
+        let pools_iter = descriptor_ranges.map(|pool| vk::DescriptorPoolSize {
+            ty: conv::map_descriptor_type(pool.ty),
+            descriptor_count: pool.count as u32,
+        });
 
         let result = inplace_or_alloc_from_iter(pools_iter, |pools| {
             let info = vk::DescriptorPoolCreateInfo::builder()
@@ -1281,13 +1272,13 @@ impl d::Device<B> for Device {
         immutable_samplers: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator<Item = &'a n::Sampler>,
+        I: Iterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: Iterator<Item = &'a n::Sampler>,
     {
-        let vk_immutable_samplers_iter = immutable_samplers.into_iter().map(|is| is.0);
+        let vk_immutable_samplers_iter = immutable_samplers.map(|is| is.0);
         let mut sampler_offset = 0;
 
-        let mut bindings = binding_iter.into_iter().collect::<Vec<_>>();
+        let mut bindings = binding_iter.collect::<Vec<_>>();
         // Sorting will come handy in `write_descriptor_sets`.
         bindings.sort_by_key(|b| b.binding);
 
@@ -1331,9 +1322,9 @@ impl d::Device<B> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, B, I>)
     where
-        I: IntoIterator<Item = pso::Descriptor<'a, B>>,
+        I: Iterator<Item = pso::Descriptor<'a, B>>,
     {
-        let descriptors = op.descriptors.into_iter();
+        let descriptors = op.descriptors;
         let mut raw_writes =
             Vec::<vk::WriteDescriptorSet>::with_capacity(descriptors.size_hint().0);
         let mut image_infos = Vec::new();
@@ -1502,9 +1493,9 @@ impl d::Device<B> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a n::Memory, Segment)>,
+        I: Iterator<Item = (&'a n::Memory, Segment)>,
     {
-        let vk_ranges_iter = ranges.into_iter().map(conv::map_memory_range);
+        let vk_ranges_iter = ranges.map(conv::map_memory_range);
         let result = inplace_or_alloc_from_iter(vk_ranges_iter, |ranges| {
             self.shared.raw.flush_mapped_memory_ranges(&ranges)
         });
@@ -1519,9 +1510,9 @@ impl d::Device<B> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a n::Memory, Segment)>,
+        I: Iterator<Item = (&'a n::Memory, Segment)>,
     {
-        let vk_ranges_iter = ranges.into_iter().map(conv::map_memory_range);
+        let vk_ranges_iter = ranges.map(conv::map_memory_range);
         let result = inplace_or_alloc_from_iter(vk_ranges_iter, |ranges| {
             self.shared.raw.invalidate_mapped_memory_ranges(&ranges)
         });
@@ -1580,9 +1571,9 @@ impl d::Device<B> for Device {
         timeout_ns: u64,
     ) -> Result<bool, d::WaitError>
     where
-        I: IntoIterator<Item = &'a n::Fence>,
+        I: Iterator<Item = &'a n::Fence>,
     {
-        let vk_fences_iter = fences_iter.into_iter().map(|fence| fence.0);
+        let vk_fences_iter = fences_iter.map(|fence| fence.0);
 
         let all = match wait {
             d::WaitFor::Any => false,

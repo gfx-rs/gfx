@@ -313,7 +313,7 @@ impl hal::Instance<crate::Backend> for Instance {
         vec![PhysicalDevice::new_adapter(context)]
     }
 
-    #[cfg_attr(target_os = "macos", allow(unused, unreachable_code))]
+    #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
     unsafe fn create_surface(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,

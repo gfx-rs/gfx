@@ -260,8 +260,9 @@ where
                             stage_flags: ShaderStageFlags::FRAGMENT,
                             immutable_samplers: false,
                         },
-                    ],
-                    &[],
+                    ]
+                    .into_iter(),
+                    iter::empty(),
                 )
             }
             .expect("Can't create descriptor set layout"),
@@ -285,7 +286,8 @@ where
                             ty: pso::DescriptorType::Sampler,
                             count: 1,
                         },
-                    ],
+                    ]
+                    .into_iter(),
                     pso::DescriptorPoolCreateFlags::empty(),
                 )
             }
@@ -447,7 +449,8 @@ where
                 descriptors: vec![
                     pso::Descriptor::Image(&*image_srv, i::Layout::ShaderReadOnlyOptimal),
                     pso::Descriptor::Sampler(&*sampler),
-                ],
+                ]
+                .into_iter(),
             });
         }
 
@@ -861,7 +864,7 @@ where
             cmd_buffer.bind_graphics_descriptor_sets(
                 &self.pipeline_layout,
                 0,
-                self.desc_set.as_ref(),
+                self.desc_set.as_ref().into_iter(),
                 iter::empty(),
             );
 

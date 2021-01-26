@@ -724,7 +724,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         // TODO: deferred context => 1 cxt/queue?
         let queue_groups = families
-            .into_iter()
+            .iter()
             .map(|&(_family, prio)| {
                 assert_eq!(prio.len(), 1);
                 let mut group = queue::QueueGroup::new(queue::QueueFamilyId(0));
@@ -1145,7 +1145,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         _signal_semaphores: Is,
         fence: Option<&mut Fence>,
     ) where
-        Ic: IntoIterator<Item = &'a CommandBuffer>,
+        Ic: Iterator<Item = &'a CommandBuffer>,
     {
         let _scope = debug_scope!(&self.context, "Submit(fence={:?})", fence);
         for cmd_buf in command_buffers {
@@ -1252,11 +1252,12 @@ impl RenderPassCache {
         );
         internal.clear_attachments(
             context,
-            clears,
+            clears.into_iter(),
             Some(pso::ClearRect {
                 rect: self.target_rect,
                 layers: 0..1,
-            }),
+            })
+            .into_iter(),
             &self,
         );
 
@@ -1766,7 +1767,7 @@ fn generate_graphics_dynamic_constant_buffer_offsets<'a>(
 
     let mut exists_dynamic_constant_buffer = false;
 
-    for binding in bindings.into_iter() {
+    for binding in bindings {
         match binding.ty {
             pso::DescriptorType::Buffer {
                 format:
@@ -1839,7 +1840,7 @@ fn generate_compute_dynamic_constant_buffer_offsets<'a>(
 
     let mut exists_dynamic_constant_buffer = false;
 
-    for binding in bindings.into_iter() {
+    for binding in bindings {
         match binding.ty {
             pso::DescriptorType::Buffer {
                 format:
@@ -2092,14 +2093,13 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         attachment_infos: T,
         _first_subpass: command::SubpassContents,
     ) where
-        T: IntoIterator<Item = command::RenderAttachmentInfo<'a, Backend>>,
+        T: Iterator<Item = command::RenderAttachmentInfo<'a, Backend>>,
     {
         use pass::AttachmentLoadOp as Alo;
 
         let mut attachments = Vec::new();
 
         for (idx, (info, attachment)) in attachment_infos
-            .into_iter()
             .zip(render_pass.attachments.iter())
             .enumerate()
         {
@@ -2168,7 +2168,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _dependencies: memory::Dependencies,
         _barriers: T,
     ) where
-        T: IntoIterator<Item = memory::Barrier<'a, Backend>>,
+        T: Iterator<Item = memory::Barrier<'a, Backend>>,
     {
         // TODO: should we track and assert on resource states?
         // unimplemented!()
@@ -2181,7 +2181,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         value: command::ClearValue,
         subresource_ranges: T,
     ) where
-        T: IntoIterator<Item = image::SubresourceRange>,
+        T: Iterator<Item = image::SubresourceRange>,
     {
         for range in subresource_ranges {
             let num_levels = range.resolve_level_count(image.mip_levels);
@@ -2220,8 +2220,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
-        T: IntoIterator<Item = command::AttachmentClear>,
-        U: IntoIterator<Item = pso::ClearRect>,
+        T: Iterator<Item = command::AttachmentClear>,
+        U: Iterator<Item = pso::ClearRect>,
     {
         if let Some(ref pass) = self.render_pass_cache {
             self.cache.dirty_flag.insert(
@@ -2247,7 +2247,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _dst_layout: image::Layout,
         _regions: T,
     ) where
-        T: IntoIterator<Item = command::ImageResolve>,
+        T: Iterator<Item = command::ImageResolve>,
     {
         unimplemented!()
     }
@@ -2261,7 +2261,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         filter: image::Filter,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::ImageBlit>,
+        T: Iterator<Item = command::ImageBlit>,
     {
         self.cache
             .dirty_flag
@@ -2283,9 +2283,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_vertex_buffers<'a, T>(&mut self, first_binding: pso::BufferIndex, buffers: T)
     where
-        T: IntoIterator<Item = (&'a Buffer, buffer::SubRange)>,
+        T: Iterator<Item = (&'a Buffer, buffer::SubRange)>,
     {
-        for (i, (buf, sub)) in buffers.into_iter().enumerate() {
+        for (i, (buf, sub)) in buffers.enumerate() {
             let idx = i + first_binding as usize;
 
             if buf.is_coherent {
@@ -2301,10 +2301,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_viewports<T>(&mut self, _first_viewport: u32, viewports: T)
     where
-        T: IntoIterator<Item = pso::Viewport>,
+        T: Iterator<Item = pso::Viewport>,
     {
         let viewports = viewports
-            .into_iter()
             .map(|ref vp| conv::map_viewport(vp))
             .collect::<SmallVec<[_; 4]>>();
 
@@ -2315,12 +2314,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_scissors<T>(&mut self, _first_scissor: u32, scissors: T)
     where
-        T: IntoIterator<Item = pso::Rect>,
+        T: Iterator<Item = pso::Rect>,
     {
-        let scissors = scissors
-            .into_iter()
-            .map(|ref r| conv::map_rect(r))
-            .collect::<Vec<_>>();
+        let scissors = scissors.map(|ref r| conv::map_rect(r)).collect::<Vec<_>>();
 
         // TODO: same as for viewports
         self.context
@@ -2370,8 +2366,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator<Item = &'a DescriptorSet>,
-        J: IntoIterator<Item = command::DescriptorSetOffset>,
+        I: Iterator<Item = &'a DescriptorSet>,
+        J: Iterator<Item = command::DescriptorSetOffset>,
     {
         let _scope = debug_scope!(&self.context, "BindGraphicsDescriptorSets");
 
@@ -2384,9 +2380,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             ptr::null_mut(),
         );
 
-        let mut offset_iter = offsets.into_iter();
+        let mut offset_iter = offsets;
 
-        for (set, info) in sets.into_iter().zip(&layout.sets[first_set..]) {
+        for (set, info) in sets.zip(&layout.sets[first_set..]) {
             {
                 let coherent_buffers = set.coherent_buffers.lock();
                 for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
@@ -2562,8 +2558,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         sets: I,
         offsets: J,
     ) where
-        I: IntoIterator<Item = &'a DescriptorSet>,
-        J: IntoIterator<Item = command::DescriptorSetOffset>,
+        I: Iterator<Item = &'a DescriptorSet>,
+        J: Iterator<Item = command::DescriptorSetOffset>,
     {
         let _scope = debug_scope!(&self.context, "BindComputeDescriptorSets");
 
@@ -2575,9 +2571,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             ptr::null_mut(),
         );
 
-        let mut offset_iter = offsets.into_iter();
+        let mut offset_iter = offsets;
 
-        for (set, info) in sets.into_iter().zip(&layout.sets[first_set..]) {
+        for (set, info) in sets.zip(&layout.sets[first_set..]) {
             {
                 let coherent_buffers = set.coherent_buffers.lock();
                 for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
@@ -2697,13 +2693,13 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn copy_buffer<T>(&mut self, src: &Buffer, dst: &Buffer, regions: T)
     where
-        T: IntoIterator<Item = command::BufferCopy>,
+        T: Iterator<Item = command::BufferCopy>,
     {
         if src.is_coherent {
             self.defer_coherent_flush(src);
         }
 
-        for info in regions.into_iter() {
+        for info in regions {
             let dst_box = d3d11::D3D11_BOX {
                 left: info.src as _,
                 top: 0,
@@ -2747,7 +2743,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: image::Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::ImageCopy>,
+        T: Iterator<Item = command::ImageCopy>,
     {
         self.internal
             .copy_image_2d(&self.context, src, dst, regions);
@@ -2760,7 +2756,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: image::Layout,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::BufferImageCopy>,
+        T: Iterator<Item = command::BufferImageCopy>,
     {
         if buffer.is_coherent {
             self.defer_coherent_flush(buffer);
@@ -2777,7 +2773,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         buffer: &Buffer,
         regions: T,
     ) where
-        T: IntoIterator<Item = command::BufferImageCopy>,
+        T: Iterator<Item = command::BufferImageCopy>,
     {
         if buffer.is_coherent {
             self.defer_coherent_invalidate(buffer);
@@ -2895,8 +2891,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
     where
-        I: IntoIterator<Item = &'a ()>,
-        J: IntoIterator<Item = memory::Barrier<'a, Backend>>,
+        I: Iterator<Item = &'a ()>,
+        J: Iterator<Item = memory::Barrier<'a, Backend>>,
     {
         unimplemented!()
     }
@@ -2974,7 +2970,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn execute_commands<'a, T>(&mut self, _buffers: T)
     where
-        T: IntoIterator<Item = &'a CommandBuffer>,
+        T: Iterator<Item = &'a CommandBuffer>,
     {
         unimplemented!()
     }
@@ -3297,7 +3293,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
 
     unsafe fn free<I>(&mut self, _cbufs: I)
     where
-        I: IntoIterator<Item = CommandBuffer>,
+        I: Iterator<Item = CommandBuffer>,
     {
         // TODO:
         // unimplemented!()
@@ -4159,7 +4155,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 
     unsafe fn free<I>(&mut self, descriptor_sets: I)
     where
-        I: IntoIterator<Item = DescriptorSet>,
+        I: Iterator<Item = DescriptorSet>,
     {
         for set in descriptor_sets {
             self.allocator

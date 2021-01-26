@@ -1077,9 +1077,9 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         _signal_semaphores: Is,
         fence: Option<&mut native::Fence>,
     ) where
-        Ic: IntoIterator<Item = &'a com::CommandBuffer>,
-        Iw: IntoIterator<Item = (&'a native::Semaphore, hal::pso::PipelineStage)>,
-        Is: IntoIterator<Item = &'a native::Semaphore>,
+        Ic: Iterator<Item = &'a com::CommandBuffer>,
+        Iw: Iterator<Item = (&'a native::Semaphore, hal::pso::PipelineStage)>,
+        Is: Iterator<Item = &'a native::Semaphore>,
     {
         use crate::pool::BufferMemory;
         {

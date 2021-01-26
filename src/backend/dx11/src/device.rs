@@ -863,13 +863,12 @@ impl device::Device<Backend> for Device {
         _dependencies: Id,
     ) -> Result<RenderPass, device::OutOfMemory>
     where
-        Ia: IntoIterator<Item = pass::Attachment>,
-        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
+        Ia: Iterator<Item = pass::Attachment>,
+        Is: Iterator<Item = pass::SubpassDesc<'a>>,
     {
         Ok(RenderPass {
-            attachments: attachments.into_iter().collect(),
+            attachments: attachments.collect(),
             subpasses: subpasses
-                .into_iter()
                 .map(|desc| SubpassDesc {
                     color_attachments: desc.colors.to_vec(),
                     depth_stencil_attachment: desc.depth_stencil.cloned(),
@@ -886,8 +885,8 @@ impl device::Device<Backend> for Device {
         _push_constant_ranges: Ic,
     ) -> Result<PipelineLayout, device::OutOfMemory>
     where
-        Is: IntoIterator<Item = &'a DescriptorSetLayout>,
-        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
+        Is: Iterator<Item = &'a DescriptorSetLayout>,
+        Ic: Iterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
     {
         let mut res_offsets = MultiStageData::<RegisterData<RegisterAccumulator>>::default();
         let mut sets = Vec::new();
@@ -954,7 +953,7 @@ impl device::Device<Backend> for Device {
         _: I,
     ) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator<Item = &'a ()>,
+        I: Iterator<Item = &'a ()>,
     {
         //empty
         Ok(())
@@ -1880,7 +1879,7 @@ impl device::Device<Backend> for Device {
         _flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<DescriptorPool, device::OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
+        I: Iterator<Item = pso::DescriptorRangeDesc>,
     {
         let mut total = RegisterData::default();
         for range in ranges {
@@ -1899,11 +1898,11 @@ impl device::Device<Backend> for Device {
         _immutable_samplers: J,
     ) -> Result<DescriptorSetLayout, device::OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator<Item = &'a Sampler>,
+        I: Iterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: Iterator<Item = &'a Sampler>,
     {
         let mut total = MultiStageData::<RegisterData<_>>::default();
-        let mut bindings = layout_bindings.into_iter().collect::<Vec<_>>();
+        let mut bindings = layout_bindings.collect::<Vec<_>>();
 
         for binding in bindings.iter() {
             let content = DescriptorContent::from(binding.ty);
@@ -1940,7 +1939,7 @@ impl device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
+        I: Iterator<Item = pso::Descriptor<'a, Backend>>,
     {
         // Get baseline mapping
         let mut mapping = op
@@ -2112,12 +2111,12 @@ impl device::Device<Backend> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a Memory, memory::Segment)>,
+        I: Iterator<Item = (&'a Memory, memory::Segment)>,
     {
         let _scope = debug_scope!(&self.context, "FlushMappedRanges");
 
         // go through every range we wrote to
-        for (memory, ref segment) in ranges.into_iter() {
+        for (memory, ref segment) in ranges {
             let range = memory.resolve(segment);
             let _scope = debug_scope!(&self.context, "Range({:?})", range);
             memory.flush(&self.context, range);
@@ -2131,12 +2130,12 @@ impl device::Device<Backend> for Device {
         ranges: I,
     ) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a Memory, memory::Segment)>,
+        I: Iterator<Item = (&'a Memory, memory::Segment)>,
     {
         let _scope = debug_scope!(&self.context, "InvalidateMappedRanges");
 
         // go through every range we want to read from
-        for (memory, ref segment) in ranges.into_iter() {
+        for (memory, ref segment) in ranges {
             let range = memory.resolve(segment);
             let _scope = debug_scope!(&self.context, "Range({:?})", range);
             memory.invalidate(

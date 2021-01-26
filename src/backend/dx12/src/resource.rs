@@ -844,7 +844,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 
     unsafe fn free<I>(&mut self, descriptor_sets: I)
     where
-        I: IntoIterator<Item = DescriptorSet>,
+        I: Iterator<Item = DescriptorSet>,
     {
         for descriptor_set in descriptor_sets {
             for binding_info in descriptor_set.binding_infos {

@@ -164,7 +164,7 @@ pub struct CommandQueue;
 impl queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, Ic, Iw, Is>(&mut self, _: Ic, _: Iw, _: Is, _: Option<&mut ()>)
     where
-        Ic: IntoIterator<Item = &'a CommandBuffer>,
+        Ic: Iterator<Item = &'a CommandBuffer>,
     {
     }
 
@@ -211,7 +211,7 @@ impl device::Device<Backend> for Device {
         _: Id,
     ) -> Result<(), device::OutOfMemory>
     where
-        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
+        Is: Iterator<Item = pass::SubpassDesc<'a>>,
     {
         Ok(())
     }
@@ -222,7 +222,7 @@ impl device::Device<Backend> for Device {
         _: Ic,
     ) -> Result<(), device::OutOfMemory>
     where
-        Is: IntoIterator<Item = &'a DescriptorSetLayout>,
+        Is: Iterator<Item = &'a DescriptorSetLayout>,
     {
         Ok(())
     }
@@ -264,7 +264,7 @@ impl device::Device<Backend> for Device {
         _: I,
     ) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator<Item = &'a ()>,
+        I: Iterator<Item = &'a ()>,
     {
         Ok(())
     }
@@ -383,7 +383,7 @@ impl device::Device<Backend> for Device {
         _samplers: J,
     ) -> Result<DescriptorSetLayout, device::OutOfMemory>
     where
-        J: IntoIterator<Item = &'a ()>,
+        J: Iterator<Item = &'a ()>,
     {
         let layout = DescriptorSetLayout {
             name: String::new(),
@@ -393,7 +393,7 @@ impl device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, _: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
+        I: Iterator<Item = pso::Descriptor<'a, Backend>>,
     {
     }
 
@@ -460,14 +460,14 @@ impl device::Device<Backend> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a Memory, hal::memory::Segment)>,
+        I: Iterator<Item = (&'a Memory, hal::memory::Segment)>,
     {
         Ok(())
     }
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a Memory, hal::memory::Segment)>,
+        I: Iterator<Item = (&'a Memory, hal::memory::Segment)>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
@@ -625,7 +625,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: hal::memory::Dependencies,
         _: T,
     ) where
-        T: IntoIterator<Item = hal::memory::Barrier<'a, Backend>>,
+        T: Iterator<Item = hal::memory::Barrier<'a, Backend>>,
     {
     }
 
@@ -685,7 +685,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_vertex_buffers<'a, T>(&mut self, _: u32, _: T)
     where
-        T: IntoIterator<Item = (&'a Buffer, hal::buffer::SubRange)>,
+        T: Iterator<Item = (&'a Buffer, hal::buffer::SubRange)>,
     {
     }
 
@@ -729,7 +729,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: T,
         _: command::SubpassContents,
     ) where
-        T: IntoIterator<Item = command::RenderAttachmentInfo<'a, Backend>>,
+        T: Iterator<Item = command::RenderAttachmentInfo<'a, Backend>>,
     {
     }
 
@@ -743,7 +743,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_graphics_descriptor_sets<'a, I, J>(&mut self, _: &(), _: usize, _: I, _: J)
     where
-        I: IntoIterator<Item = &'a DescriptorSet>,
+        I: Iterator<Item = &'a DescriptorSet>,
     {
         // Do nothing
     }
@@ -754,7 +754,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_compute_descriptor_sets<'a, I, J>(&mut self, _: &(), _: usize, _: I, _: J)
     where
-        I: IntoIterator<Item = &'a DescriptorSet>,
+        I: Iterator<Item = &'a DescriptorSet>,
     {
         // Do nothing
     }
@@ -887,7 +887,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
     where
-        J: IntoIterator<Item = hal::memory::Barrier<'a, Backend>>,
+        J: Iterator<Item = hal::memory::Barrier<'a, Backend>>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
@@ -936,7 +936,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn execute_commands<'a, T>(&mut self, _: T)
     where
-        T: IntoIterator<Item = &'a CommandBuffer>,
+        T: Iterator<Item = &'a CommandBuffer>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }

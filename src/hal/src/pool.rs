@@ -59,5 +59,5 @@ pub trait CommandPool<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Free [command buffers][crate::command::CommandBuffer] allocated from this pool.
     unsafe fn free<I>(&mut self, buffers: I)
     where
-        I: IntoIterator<Item = B::CommandBuffer>;
+        I: Iterator<Item = B::CommandBuffer>;
 }

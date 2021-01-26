@@ -960,13 +960,12 @@ impl hal::device::Device<Backend> for Device {
         _dependencies: Id,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
-        Ia: IntoIterator<Item = pass::Attachment>,
-        Is: IntoIterator<Item = pass::SubpassDesc<'a>>,
+        Ia: Iterator<Item = pass::Attachment>,
+        Is: Iterator<Item = pass::SubpassDesc<'a>>,
     {
-        let attachments: Vec<pass::Attachment> = attachments.into_iter().collect();
+        let attachments: Vec<pass::Attachment> = attachments.collect();
 
         let mut subpasses: Vec<n::Subpass> = subpasses
-            .into_iter()
             .map(|sub| {
                 let mut colors: ArrayVec<[_; MAX_COLOR_ATTACHMENTS]> = sub
                     .colors
@@ -1063,8 +1062,8 @@ impl hal::device::Device<Backend> for Device {
         push_constant_ranges: Ic,
     ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
-        Is: IntoIterator<Item = &'a n::DescriptorSetLayout>,
-        Ic: IntoIterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
+        Is: Iterator<Item = &'a n::DescriptorSetLayout>,
+        Ic: Iterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
     {
         let mut stage_infos = [
             (
@@ -1137,7 +1136,7 @@ impl hal::device::Device<Backend> for Device {
         }
 
         // Second, place the descripted resources
-        for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
+        for (set_index, set_layout) in set_layouts.enumerate() {
             // remember where the resources for this set start at each shader stage
             let mut dynamic_buffers = Vec::new();
             let offsets = n::MultiStageResourceCounters {
@@ -1395,7 +1394,7 @@ impl hal::device::Device<Backend> for Device {
         sources: I,
     ) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = &'a n::PipelineCache>,
+        I: Iterator<Item = &'a n::PipelineCache>,
     {
         //TODO: reduce the locking here
         let mut dst = target.modules.whole_write();
@@ -1894,7 +1893,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
+        I: Iterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         debug!("flush_mapped_memory_ranges");
         for (memory, ref segment) in iter {
@@ -1921,7 +1920,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), d::OutOfMemory>
     where
-        I: IntoIterator<Item = (&'a n::Memory, memory::Segment)>,
+        I: Iterator<Item = (&'a n::Memory, memory::Segment)>,
     {
         let mut num_syncs = 0;
         debug!("invalidate_mapped_memory_ranges");
@@ -1981,7 +1980,7 @@ impl hal::device::Device<Backend> for Device {
         _flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorRangeDesc>,
+        I: Iterator<Item = pso::DescriptorRangeDesc>,
     {
         if self.shared.private_caps.argument_buffers {
             let mut arguments = n::ArgumentArray::default();
@@ -2031,8 +2030,8 @@ impl hal::device::Device<Backend> for Device {
         immutable_samplers: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
-        I: IntoIterator<Item = pso::DescriptorSetLayoutBinding>,
-        J: IntoIterator<Item = &'a n::Sampler>,
+        I: Iterator<Item = pso::DescriptorSetLayoutBinding>,
+        J: Iterator<Item = &'a n::Sampler>,
     {
         if self.shared.private_caps.argument_buffers {
             let mut stage_flags = pso::ShaderStageFlags::empty();
@@ -2114,7 +2113,7 @@ impl hal::device::Device<Backend> for Device {
                 binding: pso::DescriptorBinding,
                 array_index: pso::DescriptorArrayIndex,
             }
-            let mut immutable_sampler_iter = immutable_samplers.into_iter();
+            let mut immutable_sampler_iter = immutable_samplers;
             let mut tmp_samplers = Vec::new();
             let mut desc_layouts = Vec::new();
             let mut total = n::ResourceData::new();
@@ -2174,7 +2173,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_set<'a, I>(&self, op: pso::DescriptorSetWrite<'a, Backend, I>)
     where
-        I: IntoIterator<Item = pso::Descriptor<'a, Backend>>,
+        I: Iterator<Item = pso::Descriptor<'a, Backend>>,
     {
         debug!("write_descriptor_set");
         match *op.set {

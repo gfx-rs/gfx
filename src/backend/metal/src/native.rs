@@ -668,7 +668,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 
     unsafe fn free<I>(&mut self, descriptor_sets: I)
     where
-        I: IntoIterator<Item = DescriptorSet>,
+        I: Iterator<Item = DescriptorSet>,
     {
         match self {
             DescriptorPool::Emulated {
