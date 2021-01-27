@@ -11,14 +11,12 @@ use hal::{
     {buffer, device as d, format, image, pass, pso, query, queue}, {Features, MemoryTypeId},
 };
 
-use std::{ffi::CString, mem, ops::Range, pin::Pin, ptr, sync::Arc};
+use std::{ffi::CString, marker::PhantomData, mem, ops::Range, ptr, sync::Arc};
 
-use crate::{
-    command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B, Device,
-};
+use crate::{command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B};
 
 #[derive(Debug, Default)]
-struct GraphicsPipelineInfoBuf {
+struct GraphicsPipelineInfoBuf<'a> {
     // 10 is the max amount of dynamic states
     dynamic_states: ArrayVec<[vk::DynamicState; 10]>,
 
@@ -44,13 +42,11 @@ struct GraphicsPipelineInfoBuf {
     pipeline_dynamic_state: vk::PipelineDynamicStateCreateInfo,
     viewports: [vk::Viewport; 1],
     scissors: [vk::Rect2D; 1],
+
+    lifetime: PhantomData<&'a vk::Pipeline>,
 }
-impl GraphicsPipelineInfoBuf {
-    unsafe fn add_stage<'a>(
-        &mut self,
-        stage: vk::ShaderStageFlags,
-        source: &pso::EntryPoint<'a, B>,
-    ) {
+impl<'a> GraphicsPipelineInfoBuf<'a> {
+    unsafe fn add_stage(&mut self, stage: vk::ShaderStageFlags, source: &pso::EntryPoint<'a, B>) {
         let string = CString::new(source.entry).unwrap();
         self.c_strings.push(string);
         let name = self.c_strings.last().unwrap().as_c_str();
@@ -87,12 +83,8 @@ impl GraphicsPipelineInfoBuf {
         )
     }
 
-    unsafe fn initialize<'a>(
-        this: &mut Pin<&mut Self>,
-        device: &Device,
-        desc: &pso::GraphicsPipelineDesc<'a, B>,
-    ) {
-        let mut this = Pin::get_mut(this.as_mut()); // use into_inner when it gets stable
+    unsafe fn new(desc: &pso::GraphicsPipelineDesc<'a, B>, device: &super::RawDevice) -> Self {
+        let mut this = Self::default();
 
         match desc.primitive_assembler {
             pso::PrimitiveAssemblerDesc::Vertex {
@@ -199,7 +191,7 @@ impl GraphicsPipelineInfoBuf {
         this.rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
             .flags(vk::PipelineRasterizationStateCreateFlags::empty())
             .depth_clamp_enable(if desc.rasterizer.depth_clamping {
-                if device.shared.features.contains(Features::DEPTH_CLAMP) {
+                if device.features.contains(Features::DEPTH_CLAMP) {
                     true
                 } else {
                     warn!("Depth clamping was requested on a device with disabled feature");
@@ -257,7 +249,7 @@ impl GraphicsPipelineInfoBuf {
             }
             match desc.baked_states.viewport {
                 Some(ref vp) => {
-                    this.viewports = [device.shared.map_viewport(vp)];
+                    this.viewports = [device.map_viewport(vp)];
                 }
                 None => {
                     this.dynamic_states.push(vk::DynamicState::VIEWPORT);
@@ -406,19 +398,21 @@ impl GraphicsPipelineInfoBuf {
             .flags(vk::PipelineDynamicStateCreateFlags::empty())
             .dynamic_states(&this.dynamic_states)
             .build();
+
+        this
     }
 }
 
 #[derive(Debug, Default)]
-struct ComputePipelineInfoBuf {
+struct ComputePipelineInfoBuf<'a> {
     c_string: CString,
     specialization: vk::SpecializationInfo,
     entries: SmallVec<[vk::SpecializationMapEntry; 4]>,
+    lifetime: PhantomData<&'a vk::Pipeline>,
 }
-impl ComputePipelineInfoBuf {
-    unsafe fn initialize<'a>(this: &mut Pin<&mut Self>, desc: &pso::ComputePipelineDesc<'a, B>) {
-        let mut this = Pin::get_mut(this.as_mut()); // use into_inner when it gets stable
-
+impl<'a> ComputePipelineInfoBuf<'a> {
+    unsafe fn new(desc: &pso::ComputePipelineDesc<'a, B>) -> Self {
+        let mut this = Self::default();
         this.c_string = CString::new(desc.shader.entry).unwrap();
         this.entries = desc
             .shader
@@ -437,10 +431,11 @@ impl ComputePipelineInfoBuf {
             data_size: desc.shader.specialization.data.len() as _,
             p_data: desc.shader.specialization.data.as_ptr() as _,
         };
+        this
     }
 }
 
-impl d::Device<B> for Device {
+impl d::Device<B> for super::Device {
     unsafe fn allocate_memory(
         &self,
         mem_type: MemoryTypeId,
@@ -722,10 +717,7 @@ impl d::Device<B> for Device {
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         debug!("create_graphics_pipeline {:?}", desc);
-
-        let mut buf = GraphicsPipelineInfoBuf::default();
-        let mut buf = Pin::new(&mut buf);
-        GraphicsPipelineInfoBuf::initialize(&mut buf, self, desc);
+        let buf = GraphicsPipelineInfoBuf::new(desc, &self.shared);
 
         let info = {
             let (base_handle, base_index) = match desc.parent {
@@ -799,9 +791,8 @@ impl d::Device<B> for Device {
         desc: &pso::ComputePipelineDesc<'a, B>,
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
-        let mut buf = ComputePipelineInfoBuf::default();
-        let mut buf = Pin::new(&mut buf);
-        ComputePipelineInfoBuf::initialize(&mut buf, desc);
+        debug!("create_graphics_pipeline {:?}", desc);
+        let buf = ComputePipelineInfoBuf::new(desc);
 
         let info = {
             let stage = vk::PipelineShaderStageCreateInfo::builder()
@@ -1878,7 +1869,7 @@ impl d::Device<B> for Device {
     }
 }
 
-impl Device {
+impl super::Device {
     /// We only work with a subset of Ash-exposed memory types that we know.
     /// This function filters an ash mask into our mask.
     fn filter_memory_requirements(&self, ash_mask: u32) -> u32 {
@@ -2004,5 +1995,5 @@ impl Device {
 #[test]
 fn test_send_sync() {
     fn foo<T: Send + Sync>() {}
-    foo::<Device>()
+    foo::<super::Device>()
 }
