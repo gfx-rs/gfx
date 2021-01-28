@@ -1802,9 +1802,9 @@ impl hal::device::Device<Backend> for Device {
         //TODO: we can probably at least parse here and save the `Ast`
         Ok(n::ShaderModule {
             spv: raw_data.to_vec(),
-            #[cfg(all(feature = "naga", not(feature = "naga-in")))]
+            #[cfg(all(feature = "naga", not(feature = "naga-parse")))]
             naga: None,
-            #[cfg(feature = "naga-in")]
+            #[cfg(feature = "naga-parse")]
             naga: {
                 let parser =
                     naga::front::spv::Parser::new(raw_data.iter().cloned(), &Default::default());
