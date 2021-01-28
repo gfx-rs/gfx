@@ -1546,7 +1546,9 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         let fence_raw = fence.map(|fence| fence.0).unwrap_or(vk::Fence::null());
 
         let result = self.device.raw.queue_submit(*self.raw, &[*info], fence_raw);
-        assert_eq!(Ok(()), result);
+        if let Err(e) = result {
+            error!("Submit resulted in {:?}", e);
+        }
     }
 
     unsafe fn present(

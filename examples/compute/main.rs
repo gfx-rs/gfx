@@ -13,6 +13,14 @@
 extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
+#[cfg(not(any(
+    feature = "vulkan",
+    feature = "gl",
+    feature = "dx11",
+    feature = "dx12",
+    feature = "metal",
+)))]
+extern crate gfx_backend_empty as back;
 #[cfg(feature = "gl")]
 extern crate gfx_backend_gl as back;
 #[cfg(feature = "metal")]
@@ -24,13 +32,6 @@ use std::{fs, iter, ptr, slice, str::FromStr};
 
 use hal::{adapter::MemoryType, buffer, command, memory, pool, prelude::*, pso};
 
-#[cfg(any(
-    feature = "vulkan",
-    feature = "gl",
-    feature = "dx11",
-    feature = "dx12",
-    feature = "metal",
-))]
 fn main() {
     env_logger::init();
 
@@ -298,15 +299,4 @@ unsafe fn create_buffer<B: hal::Backend>(
     device.bind_buffer_memory(&memory, 0, &mut buffer).unwrap();
 
     (memory, buffer, requirements.size)
-}
-
-#[cfg(not(any(
-    feature = "vulkan",
-    feature = "gl",
-    feature = "dx11",
-    feature = "dx12",
-    feature = "metal"
-)))]
-fn main() {
-    println!("You need to enable one of the next-gen API feature (vulkan, dx12, metal) to run this example.");
 }

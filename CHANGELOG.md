@@ -1,6 +1,10 @@
 # Change Log
 
-### hal-unreleased
+### unreleased
+  - the new "bench" example is added
+  - timestamp period query is moved to the `Queue`
+
+## hal-0.7.0 (30-01-2021)
   - `Borrow` and `ExactSizeIterator` bounds are removed from the iterators
   - error improvements:
     - use `thiserror` for errors
@@ -32,7 +36,6 @@
     - now only uses OpenGL ES on Linux/Android/Web targets
     - binding model has been completely rewritten
     - various number of fixed in rendering, memory mapping, and other areas
-
 
 ### backend-dx12-unreleased
   - fix SPIR-V entry point selection

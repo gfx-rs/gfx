@@ -30,6 +30,10 @@ path = "compute/main.rs"
 name = "mesh-shading"
 path = "mesh-shading/main.rs"
 
+[[bin]]
+name = "bench"
+path = "bench/main.rs"
+
 [dependencies]
 image = "0.23.12"
 log = "0.4"
