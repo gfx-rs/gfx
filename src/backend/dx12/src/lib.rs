@@ -1143,6 +1143,13 @@ impl hal::Instance<Backend> for Instance {
                 _ => unreachable!(),
             } as _;
 
+            let (temp_queue, hr_queue) = device.create_command_queue(
+                native::CmdListType::Direct,
+                native::Priority::Normal,
+                native::CommandQueueFlags::empty(),
+                0,
+            );
+
             let physical_device = PhysicalDevice {
                 library: Arc::clone(&self.library),
                 adapter,
@@ -1250,6 +1257,16 @@ impl hal::Instance<Backend> for Instance {
                     optimal_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
                     optimal_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
                     min_vertex_input_binding_stride_alignment: 1,
+                    timestamp_period: if hr_queue == winerror::S_OK {
+                        let mut frequency = 0u64;
+                        unsafe {
+                            temp_queue.GetTimestampFrequency(&mut frequency);
+                        }
+                        (1_000_000_000.0 / frequency as f64) as f32
+                    } else {
+                        error!("Unable to create a temporary queue");
+                        0.0
+                    },
                     .. Limits::default() //TODO
                 },
                 format_properties: Arc::new(FormatProperties::new(device)),
@@ -1266,6 +1283,9 @@ impl hal::Instance<Backend> for Instance {
                 is_open: Arc::new(Mutex::new(false)),
             };
 
+            unsafe {
+                temp_queue.destroy(); //TODO: save it
+            }
             let queue_families = QUEUE_FAMILIES.to_vec();
 
             adapters.push(adapter::Adapter {
@@ -1431,10 +1451,6 @@ impl FormatProperties {
             if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0 {
                 props.optimal_tiling |=
                     f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
-                if can_linear {
-                    props.linear_tiling |=
-                        f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
-                }
             }
             if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BLENDABLE != 0 {
                 props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT_BLEND;

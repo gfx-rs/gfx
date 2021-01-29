@@ -1187,10 +1187,12 @@ impl d::Device<B> for Device {
             .raw
             .clone()
             .CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), heap.mut_void());
-        if hr == winerror::E_OUTOFMEMORY {
+        if hr != winerror::S_OK {
+            if hr != winerror::E_OUTOFMEMORY {
+                error!("Error in CreateHeap: 0x{:X}", hr);
+            }
             return Err(d::OutOfMemory::Device.into());
         }
-        assert_eq!(winerror::S_OK, hr);
 
         // The first memory heap of each group corresponds to the default heap, which is can never
         // be mapped.
@@ -3397,7 +3399,7 @@ impl d::Device<B> for Device {
 
         Ok(r::QueryPool {
             raw: query_heap,
-            ty: heap_ty,
+            ty: query_ty,
         })
     }
 
@@ -3407,13 +3409,138 @@ impl d::Device<B> for Device {
 
     unsafe fn get_query_pool_results(
         &self,
-        _pool: &r::QueryPool,
-        _queries: Range<query::Id>,
-        _data: &mut [u8],
-        _stride: buffer::Stride,
-        _flags: query::ResultFlags,
+        pool: &r::QueryPool,
+        queries: Range<query::Id>,
+        data: &mut [u8],
+        stride: buffer::Stride,
+        flags: query::ResultFlags,
     ) -> Result<bool, d::WaitError> {
-        unimplemented!()
+        let num_queries = queries.end - queries.start;
+        let size = 8 * num_queries as u64;
+        let buffer_desc = d3d12::D3D12_RESOURCE_DESC {
+            Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
+            Alignment: 0,
+            Width: size,
+            Height: 1,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: dxgiformat::DXGI_FORMAT_UNKNOWN,
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
+        };
+
+        let properties = d3d12::D3D12_HEAP_PROPERTIES {
+            Type: d3d12::D3D12_HEAP_TYPE_READBACK,
+            CPUPageProperty: d3d12::D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+            MemoryPoolPreference: d3d12::D3D12_MEMORY_POOL_UNKNOWN,
+            CreationNodeMask: 0,
+            VisibleNodeMask: 0,
+        };
+
+        let heap_desc = d3d12::D3D12_HEAP_DESC {
+            SizeInBytes: size,
+            Properties: properties,
+            Alignment: 0,
+            Flags: d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
+        };
+
+        let mut heap = native::Heap::null();
+        assert_eq!(
+            self.raw
+                .clone()
+                .CreateHeap(&heap_desc, &d3d12::ID3D12Heap::uuidof(), heap.mut_void()),
+            winerror::S_OK
+        );
+
+        let mut temp_buffer = native::Resource::null();
+        assert_eq!(
+            winerror::S_OK,
+            self.raw.clone().CreatePlacedResource(
+                heap.as_mut_ptr(),
+                0,
+                &buffer_desc,
+                d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
+                ptr::null(),
+                &d3d12::ID3D12Resource::uuidof(),
+                temp_buffer.mut_void(),
+            )
+        );
+
+        let list_type = native::CmdListType::Direct;
+        let (com_allocator, hr_alloc) = self.raw.create_command_allocator(list_type);
+        assert_eq!(
+            winerror::S_OK,
+            hr_alloc,
+            "error on command allocator creation: {:x}",
+            hr_alloc
+        );
+        let (com_list, hr_list) = self.raw.create_graphics_command_list(
+            list_type,
+            com_allocator,
+            native::PipelineState::null(),
+            0,
+        );
+        assert_eq!(
+            winerror::S_OK,
+            hr_list,
+            "error on command list creation: {:x}",
+            hr_list
+        );
+
+        let query_ty = match pool.ty {
+            query::Type::Occlusion => d3d12::D3D12_QUERY_TYPE_OCCLUSION,
+            query::Type::PipelineStatistics(_) => d3d12::D3D12_QUERY_TYPE_PIPELINE_STATISTICS,
+            query::Type::Timestamp => d3d12::D3D12_QUERY_TYPE_TIMESTAMP,
+        };
+        com_list.ResolveQueryData(
+            pool.raw.as_mut_ptr(),
+            query_ty,
+            queries.start,
+            num_queries,
+            temp_buffer.as_mut_ptr(),
+            0,
+        );
+        com_list.close();
+
+        self.queues[0]
+            .raw
+            .ExecuteCommandLists(1, &(com_list.as_mut_ptr() as *mut _));
+
+        if !flags.contains(query::ResultFlags::WAIT) {
+            warn!("Can't really not wait here")
+        }
+        let result = self.queues[0].wait_idle_impl();
+        if result.is_ok() {
+            let mut ptr = ptr::null_mut();
+            assert_eq!(
+                winerror::S_OK,
+                temp_buffer.Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, &mut ptr)
+            );
+            let src_data = slice::from_raw_parts(ptr as *const u64, num_queries as usize);
+            for (i, &value) in src_data.iter().enumerate() {
+                let dst = data.as_mut_ptr().add(i * stride as usize);
+                if flags.contains(query::ResultFlags::BITS_64) {
+                    *(dst as *mut u64) = value;
+                } else {
+                    *(dst as *mut u32) = value as u32;
+                }
+            }
+            temp_buffer.Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
+        }
+
+        temp_buffer.destroy();
+        heap.destroy();
+        com_list.destroy();
+        com_allocator.destroy();
+
+        match result {
+            Ok(()) => Ok(true),
+            Err(e) => Err(e.into()),
+        }
     }
 
     unsafe fn destroy_shader_module(&self, shader_lib: r::ShaderModule) {

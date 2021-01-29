@@ -33,7 +33,7 @@ use std::{iter, slice};
 use hal::{command as com, image as i, prelude::*};
 
 // AMD chokes on larger region counts...
-const SIZE: u32 = 1048;
+const SIZE: u32 = 512;
 // when 1, we use one-time-submit commands
 const RUNS: usize = 2;
 const FORMAT: hal::format::Format = hal::format::Format::Rgba8Unorm;
@@ -48,6 +48,7 @@ fn main() {
     println!("Running on {}", adapter.info.name);
 
     let memory_properties = adapter.physical_device.memory_properties();
+    let limits = adapter.physical_device.limits();
     let family = adapter
         .queue_families
         .iter()
@@ -69,7 +70,7 @@ fn main() {
                 i::Kind::D2(1, 1, 1, 1),
                 1,
                 FORMAT,
-                i::Tiling::Linear,
+                i::Tiling::Optimal,
                 i::Usage::TRANSFER_SRC | i::Usage::TRANSFER_DST,
                 i::ViewCapabilities::empty(),
             )
@@ -97,9 +98,10 @@ fn main() {
 
         // source buffer
         let bytes_per_texel = FORMAT.surface_desc().bits / 8;
+        let buffer_size = (bytes_per_texel as u64).max(limits.non_coherent_atom_size as u64);
 
         let mut src_buffer = device
-            .create_buffer(bytes_per_texel as u64, hal::buffer::Usage::TRANSFER_SRC)
+            .create_buffer(buffer_size, hal::buffer::Usage::TRANSFER_SRC)
             .unwrap();
         let src_buffer_requirements = device.get_buffer_requirements(&src_buffer);
         let src_buffer_type = memory_properties
@@ -126,13 +128,13 @@ fn main() {
             .map_memory(&mut src_memory_buffer, hal::memory::Segment::default())
             .unwrap();
         *(ptr as *mut u32) = 1;
-        device.unmap_memory(&mut src_memory_buffer);
         device
             .flush_mapped_memory_ranges(iter::once((
                 &src_memory_buffer,
                 hal::memory::Segment::default(),
             )))
             .unwrap();
+        device.unmap_memory(&mut src_memory_buffer);
 
         // destination image
 
@@ -141,7 +143,7 @@ fn main() {
                 i::Kind::D2(SIZE, SIZE, 1, 1),
                 1,
                 FORMAT,
-                i::Tiling::Linear,
+                i::Tiling::Optimal,
                 i::Usage::TRANSFER_DST,
                 i::ViewCapabilities::empty(),
             )
@@ -346,7 +348,7 @@ fn main() {
 
         println!("Benchmarking...");
 
-        let period = adapter.physical_device.limits().timestamp_period as f64 / 1_000_000.0;
+        let period = limits.timestamp_period as f64 / 1_000_000.0;
         let mut timings = vec![0u8; num_queries as usize * 8];
         for i in 0..RUNS {
             device.reset_fence(&mut fence).unwrap();
