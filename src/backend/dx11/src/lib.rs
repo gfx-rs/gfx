@@ -699,7 +699,32 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             // type is not unknown; or if debug device is requested but not
             // present
             if !winerror::SUCCEEDED(hr) {
-                return Err(hal::device::CreationError::InitializationFailed);
+                if cfg!(debug_assertions) {
+                    log::warn!(
+                        "Unable to create a debug device. Trying to recreate a device without D3D11_CREATE_DEVICE_DEBUG flag. More info:\n{}\n{}", 
+                        "https://docs.microsoft.com/en-us/windows/win32/direct3d11/overviews-direct3d-11-devices-layers#debug-layer", 
+                        "https://github.com/gfx-rs/gfx/issues/3112"
+                    );
+
+                    let hr = func(
+                        self.adapter.as_raw() as *mut _,
+                        d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
+                        ptr::null_mut(),
+                        0,
+                        [feature_level].as_ptr(),
+                        1,
+                        d3d11::D3D11_SDK_VERSION,
+                        &mut device as *mut *mut _ as *mut *mut _,
+                        &mut returned_level as *mut _,
+                        &mut cxt as *mut *mut _ as *mut *mut _,
+                    );
+
+                    if !winerror::SUCCEEDED(hr) {
+                        return Err(hal::device::CreationError::InitializationFailed);
+                    }
+                } else {
+                    return Err(hal::device::CreationError::InitializationFailed);
+                }
             }
 
             info!(
