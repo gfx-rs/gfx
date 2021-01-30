@@ -327,7 +327,21 @@ impl hal::Instance<Backend> for Instance {
             .application_version(version)
             .engine_name(CStr::from_bytes_with_nul(b"gfx-rs\0").unwrap())
             .engine_version(1)
-            .api_version(vk::make_version(1, 0, 0));
+            .api_version(
+                // Pick the latest version of Vulkan available.
+                match entry
+                    .try_enumerate_instance_version()
+                    // Ignore the possible `VK_ERROR_OUT_OF_HOST_MEMORY`.
+                    .unwrap()
+                {
+                    // Vulkan 1.1+
+                    Some(version) => {
+                        vk::make_version(vk::version_major(version), vk::version_minor(version), 0)
+                    }
+                    // Vulkan 1.0
+                    None => vk::make_version(1, 0, 0),
+                },
+            );
 
         let instance_extensions = entry
             .enumerate_instance_extension_properties()
