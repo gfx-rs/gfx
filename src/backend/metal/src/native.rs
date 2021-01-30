@@ -27,7 +27,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
+pub type EntryPointMap = FastHashMap<(auxil::ShaderStage, String), spirv::EntryPoint>;
 /// An index of a resource within descriptor pool.
 pub type PoolResourceIndex = u32;
 

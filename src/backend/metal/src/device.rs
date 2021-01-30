@@ -609,8 +609,17 @@ impl Device {
                     SpirvErrorCode::CompilationError(msg) => msg,
                     SpirvErrorCode::Unhandled => "Unknown compile error".into(),
                 })?;
+            let stage = match entry_point.execution_model {
+                spirv::ExecutionModel::Vertex => ShaderStage::Vertex,
+                spirv::ExecutionModel::Fragment => ShaderStage::Fragment,
+                spirv::ExecutionModel::GlCompute => ShaderStage::Compute,
+                other => {
+                    warn!("Unexpected execution_modell: {:?}", other);
+                    continue;
+                }
+            };
             entry_point_map.insert(
-                entry_point.name,
+                (stage, entry_point.name),
                 spirv::EntryPoint {
                     name: cleansed,
                     ..entry_point
@@ -651,15 +660,20 @@ impl Device {
 
         let mut entry_point_map = n::EntryPointMap::default();
         for ((pair, ep), name) in module.entry_points.iter().zip(info.entry_point_names) {
+            let (stage, execution_model) = match pair.0 {
+                naga::ShaderStage::Vertex => (ShaderStage::Vertex, spirv::ExecutionModel::Vertex),
+                naga::ShaderStage::Fragment => {
+                    (ShaderStage::Fragment, spirv::ExecutionModel::Fragment)
+                }
+                naga::ShaderStage::Compute => {
+                    (ShaderStage::Compute, spirv::ExecutionModel::GlCompute)
+                }
+            };
             entry_point_map.insert(
-                pair.1.clone(),
+                (stage, pair.1.clone()),
                 spirv::EntryPoint {
                     name,
-                    execution_model: match pair.0 {
-                        naga::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
-                        naga::ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
-                        naga::ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
-                    },
+                    execution_model,
                     work_group_size: spirv::WorkGroupSize {
                         x: ep.workgroup_size[0],
                         y: ep.workgroup_size[1],
@@ -679,6 +693,7 @@ impl Device {
             (2, 0) => MTLLanguageVersion::V2_0,
             (2, 1) => MTLLanguageVersion::V2_1,
             (2, 2) => MTLLanguageVersion::V2_2,
+            (2, 3) => MTLLanguageVersion::V2_3,
             other => panic!("Unexpected language version {:?}", other),
         };
         options.set_language_version(msl_version);
@@ -769,7 +784,9 @@ impl Device {
         };
 
         let lib = info.library.clone();
-        let (name, wg_size) = match info.entry_point_map.get(ep.entry) {
+        let entry_key = (stage, ep.entry.to_string());
+        //TODO: avoid heap-allocating the string?
+        let (name, wg_size) = match info.entry_point_map.get(&entry_key) {
             Some(p) => (
                 p.name.as_str(),
                 metal::MTLSize {
