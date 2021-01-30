@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-webgpu"
-version = "0.6.0"
+version = "0.7.0"
 description = "WebGPU backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -19,7 +19,7 @@ default = []
 name = "gfx_backend_webgpu"
 
 [dependencies]
-hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
+hal = { path = "../../hal", version = "0.7", package = "gfx-hal" }
 js-sys = "0.3.37"
 raw-window-handle = "0.3"
 wasm-bindgen = "=0.2.60"

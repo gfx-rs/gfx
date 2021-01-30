@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-metal"
-version = "0.6.0"
+version = "0.7.0"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -22,15 +22,15 @@ naga-parse = ["naga/spv-in"]
 name = "gfx_backend_metal"
 
 [dependencies]
-auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
-hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
+auxil = { path = "../../auxil/auxil", version = "0.8", package = "gfx-auxil", features = ["spirv_cross"] }
+hal = { path = "../../hal", version = "0.7", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1.4"
 log = { version = "0.4" }
 dispatch = { version = "0.2", optional = true }
-metal = { git = "https://github.com/gfx-rs/metal-rs", rev="9a12f4e7e7030f41675d1b438c88f9dd75a994cd", features = ["private"] }
+metal = { version = "0.21", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
@@ -41,8 +41,7 @@ storage-map = "0.3"
 raw-window-handle = "0.3"
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-tag = "gfx-8"
+version = "0.3"
 #TODO: remove `spv-out` once spirv-cross is deprecated
 features = ["spv-out", "msl-out"]
 optional = true
