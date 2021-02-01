@@ -329,17 +329,21 @@ impl hal::Instance<Backend> for Instance {
             .engine_version(1)
             .api_version(
                 // Pick the latest version of Vulkan available.
-                match entry
-                    .try_enumerate_instance_version()
-                    // Ignore the possible `VK_ERROR_OUT_OF_HOST_MEMORY`.
-                    .unwrap()
-                {
+                match entry.try_enumerate_instance_version() {
                     // Vulkan 1.1+
-                    Some(version) => {
+                    Ok(Some(version)) => {
                         vk::make_version(vk::version_major(version), vk::version_minor(version), 0)
                     }
+
                     // Vulkan 1.0
-                    None => vk::make_version(1, 0, 0),
+                    Ok(None) => vk::make_version(1, 0, 0),
+
+                    // Ignore out of memory since it's unlikely to happen and `Instance::create` doesn't have a way to express it in the return value.
+                    Err(err) if err == vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                        panic!("{}", err);
+                    }
+
+                    Err(_) => unreachable!(),
                 },
             );
 
