@@ -32,7 +32,7 @@ pub struct QueueGroup<B: Backend> {
     /// Family index for the queues in this group.
     pub family: QueueFamilyId,
     /// List of queues.
-    pub queues: Vec<B::CommandQueue>,
+    pub queues: Vec<B::Queue>,
 }
 
 impl<B: Backend> QueueGroup<B> {
@@ -47,7 +47,7 @@ impl<B: Backend> QueueGroup<B> {
     /// Add a command queue to the group.
     ///
     /// The queue needs to be created from this queue family.
-    pub fn add_queue(&mut self, queue: B::CommandQueue) {
+    pub fn add_queue(&mut self, queue: B::Queue) {
         self.queues.push(queue);
     }
 }

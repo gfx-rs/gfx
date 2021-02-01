@@ -4,7 +4,7 @@
 //! submitted commands buffers.
 //!
 //! There are different types of queues, which can only handle associated command buffers.
-//! `CommandQueue<B, C>` has the capability defined by `C`: graphics, compute and transfer.
+//! `Queue<B, C>` has the capability defined by `C`: graphics, compute and transfer.
 
 pub mod family;
 
@@ -64,7 +64,7 @@ pub type QueuePriority = f32;
 ///
 /// Queues can also be used for presenting to a surface
 /// (that is, flip the front buffer with the next one in the chain).
-pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
+pub trait Queue<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Submit command buffers to queue for execution.
     ///
     /// # Arguments
@@ -97,7 +97,7 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///
     /// # Safety
     ///
-    /// Unsafe for the same reasons as [`submit`][CommandQueue::submit].
+    /// Unsafe for the same reasons as [`submit`][Queue::submit].
     /// No checks are performed to verify that this queue supports present operations.
     unsafe fn present(
         &mut self,
@@ -108,4 +108,7 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Wait for the queue to be idle.
     fn wait_idle(&mut self) -> Result<(), OutOfMemory>;
+
+    /// The amount of nanoseconds that causes a timestamp query value to increment by one.
+    fn timestamp_period(&self) -> f32;
 }

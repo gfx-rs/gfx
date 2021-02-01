@@ -447,7 +447,7 @@ impl hal::Backend for Backend {
     type Surface = Surface;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = command::CommandQueue;
+    type Queue = command::Queue;
     type CommandBuffer = command::CommandBuffer;
 
     type Memory = native::Memory;

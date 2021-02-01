@@ -53,7 +53,7 @@ impl State {
 }
 
 #[derive(Debug)]
-pub struct CommandQueue {
+pub struct Queue {
     pub(crate) share: Starc<Share>,
     features: hal::Features,
     vao: Option<native::VertexArray>,
@@ -64,7 +64,7 @@ pub struct CommandQueue {
 
 const FILL_DATA_WORDS: usize = 16 << 10;
 
-impl CommandQueue {
+impl Queue {
     /// Create a new command queue.
     pub(crate) fn new(
         share: &Starc<Share>,
@@ -83,7 +83,7 @@ impl CommandQueue {
             gl.bind_buffer(glow::COPY_READ_BUFFER, None);
             buffer
         };
-        CommandQueue {
+        Queue {
             share: share.clone(),
             features,
             vao,
@@ -1069,7 +1069,7 @@ impl CommandQueue {
     }
 }
 
-impl hal::queue::CommandQueue<Backend> for CommandQueue {
+impl hal::queue::Queue<Backend> for Queue {
     unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
         command_buffers: Ic,
@@ -1134,5 +1134,9 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
             self.share.context.finish();
         }
         Ok(())
+    }
+
+    fn timestamp_period(&self) -> f32 {
+        1.0
     }
 }

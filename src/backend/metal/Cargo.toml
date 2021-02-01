@@ -30,7 +30,7 @@ bitflags = "1.0"
 copyless = "0.1.4"
 log = { version = "0.4" }
 dispatch = { version = "0.2", optional = true }
-metal = { version = "0.21", features = ["private"] }
+metal = { git = "https://github.com/gfx-rs/metal-rs", rev="439c986eb7a9b91e88b61def2daa66e4043fcbef", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
@@ -41,7 +41,8 @@ storage-map = "0.3"
 raw-window-handle = "0.3"
 
 [dependencies.naga]
-version = "0.3"
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-9"
 #TODO: remove `spv-out` once spirv-cross is deprecated
 features = ["spv-out", "msl-out"]
 optional = true

@@ -1115,6 +1115,12 @@ impl d::Device<B> for super::Device {
             image::Kind::D3(..) => vk::ImageType::TYPE_3D,
         };
 
+        //Note: this is a hack, we should expose this in the API instead
+        let layout = match tiling {
+            image::Tiling::Linear => vk::ImageLayout::PREINITIALIZED,
+            image::Tiling::Optimal => vk::ImageLayout::UNDEFINED,
+        };
+
         let info = vk::ImageCreateInfo::builder()
             .flags(flags)
             .image_type(image_type)
@@ -1126,7 +1132,7 @@ impl d::Device<B> for super::Device {
             .tiling(conv::map_tiling(tiling))
             .usage(conv::map_image_usage(usage))
             .sharing_mode(vk::SharingMode::EXCLUSIVE) // TODO:
-            .initial_layout(vk::ImageLayout::UNDEFINED);
+            .initial_layout(layout);
 
         let result = self.shared.raw.create_image(&info, None);
 

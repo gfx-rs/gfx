@@ -32,7 +32,8 @@ raw-window-handle = "0.3"
 inplace_it = "0.3.3"
 
 [dependencies.naga]
-version = "0.3"
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-9"
 features = ["spv-out"]
 optional = true
 

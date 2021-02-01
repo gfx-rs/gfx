@@ -56,7 +56,7 @@ pub struct MemoryProperties {
 pub struct Gpu<B: Backend> {
     /// [Logical device][crate::device::Device] for a given backend.
     pub device: B::Device,
-    /// The [command queues][crate::queue::CommandQueue] that the device provides.
+    /// The [command queues][crate::queue::Queue] that the device provides.
     pub queue_groups: Vec<QueueGroup<B>>,
 }
 

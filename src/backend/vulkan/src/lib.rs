@@ -849,6 +849,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 },
                 maintenance_level,
                 imageless_framebuffers,
+                timestamp_period: self.properties.limits.timestamp_period,
             }),
             vendor_id: self.properties.vendor_id,
             valid_ash_memory_types,
@@ -862,7 +863,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     queue::QueueGroup::new(queue::QueueFamilyId(family.index as usize));
                 for id in 0..priorities.len() {
                     let queue_raw = device_arc.raw.get_device_queue(family.index, id as _);
-                    family_raw.add_queue(CommandQueue {
+                    family_raw.add_queue(Queue {
                         raw: Arc::new(queue_raw),
                         device: device_arc.clone(),
                         swapchain_fn: swapchain_fn.clone(),
@@ -1282,7 +1283,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             framebuffer_stencil_sample_counts: limits.framebuffer_stencil_sample_counts.as_raw()
                 as _,
             timestamp_compute_and_graphics: limits.timestamp_compute_and_graphics != 0,
-            timestamp_period: limits.timestamp_period,
             max_color_attachments: limits.max_color_attachments as _,
             buffer_image_granularity: limits.buffer_image_granularity,
             non_coherent_atom_size: limits.non_coherent_atom_size as _,
@@ -1426,6 +1426,7 @@ pub struct RawDevice {
     extension_fns: DeviceExtensionFunctions,
     maintenance_level: u8,
     imageless_framebuffers: bool,
+    timestamp_period: f32,
 }
 
 impl fmt::Debug for RawDevice {
@@ -1497,19 +1498,19 @@ impl RawDevice {
 // Need to explicitly synchronize on submission and present.
 pub type RawCommandQueue = Arc<vk::Queue>;
 
-pub struct CommandQueue {
+pub struct Queue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
     swapchain_fn: Swapchain,
 }
 
-impl fmt::Debug for CommandQueue {
+impl fmt::Debug for Queue {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str("CommandQueue")
+        fmt.write_str("Queue")
     }
 }
 
-impl queue::CommandQueue<Backend> for CommandQueue {
+impl queue::Queue<Backend> for Queue {
     unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
         command_buffers: Ic,
@@ -1546,7 +1547,9 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         let fence_raw = fence.map(|fence| fence.0).unwrap_or(vk::Fence::null());
 
         let result = self.device.raw.queue_submit(*self.raw, &[*info], fence_raw);
-        assert_eq!(Ok(()), result);
+        if let Err(e) = result {
+            error!("Submit resulted in {:?}", e);
+        }
     }
 
     unsafe fn present(
@@ -1596,6 +1599,10 @@ impl queue::CommandQueue<Backend> for CommandQueue {
             Err(_) => unreachable!(),
         }
     }
+
+    fn timestamp_period(&self) -> f32 {
+        self.device.timestamp_period
+    }
 }
 
 #[derive(Debug)]
@@ -1614,7 +1621,7 @@ impl hal::Backend for Backend {
     type Surface = window::Surface;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = CommandQueue;
+    type Queue = Queue;
     type CommandBuffer = command::CommandBuffer;
 
     type Memory = native::Memory;

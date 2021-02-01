@@ -70,7 +70,7 @@ pub mod prelude {
         device::Device,
         pool::CommandPool,
         pso::DescriptorPool,
-        queue::{CommandQueue, QueueFamily},
+        queue::{Queue, QueueFamily},
         window::{PresentationSurface, Surface},
         Instance,
     };
@@ -453,8 +453,6 @@ pub struct Limits {
     pub framebuffer_stencil_sample_counts: image::NumSamples,
     /// Timestamp queries are supported on all compute and graphics queues.
     pub timestamp_compute_and_graphics: bool,
-    /// The amount of nanoseconds that causes a timestamp query value to increment by one.
-    pub timestamp_period: f32,
     /// Maximum number of color attachments that can be used by a subpass in a render pass.
     pub max_color_attachments: usize,
     ///
@@ -626,8 +624,8 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
 
     /// The corresponding [queue family][queue::QueueFamily] type for this backend.
     type QueueFamily: queue::QueueFamily;
-    /// The corresponding [command queue][queue::CommandQueue] type for this backend.
-    type CommandQueue: queue::CommandQueue<Self>;
+    /// The corresponding [command queue][queue::Queue] type for this backend.
+    type Queue: queue::Queue<Self>;
     /// The corresponding [command buffer][command::CommandBuffer] type for this backend.
     type CommandBuffer: command::CommandBuffer<Self>;
 

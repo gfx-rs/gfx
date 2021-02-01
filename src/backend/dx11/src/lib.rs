@@ -755,7 +755,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 let mut group = queue::QueueGroup::new(queue::QueueFamilyId(0));
 
                 // TODO: multiple queues?
-                let queue = CommandQueue {
+                let queue = Queue {
                     context: device.context.clone(),
                 };
                 group.add_queue(queue);
@@ -1149,20 +1149,20 @@ impl queue::QueueFamily for QueueFamily {
 }
 
 #[derive(Clone)]
-pub struct CommandQueue {
+pub struct Queue {
     context: ComPtr<d3d11::ID3D11DeviceContext>,
 }
 
-impl fmt::Debug for CommandQueue {
+impl fmt::Debug for Queue {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str("CommandQueue")
+        fmt.write_str("Queue")
     }
 }
 
-unsafe impl Send for CommandQueue {}
-unsafe impl Sync for CommandQueue {}
+unsafe impl Send for Queue {}
+unsafe impl Sync for Queue {}
 
-impl queue::CommandQueue<Backend> for CommandQueue {
+impl queue::Queue<Backend> for Queue {
     unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
         command_buffers: Ic,
@@ -1225,6 +1225,10 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     fn wait_idle(&mut self) -> Result<(), hal::device::OutOfMemory> {
         // unimplemented!()
         Ok(())
+    }
+
+    fn timestamp_period(&self) -> f32 {
+        1.0
     }
 }
 
@@ -4215,7 +4219,7 @@ impl hal::Backend for Backend {
     type Surface = Surface;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = CommandQueue;
+    type Queue = Queue;
     type CommandBuffer = CommandBuffer;
 
     type Memory = Memory;

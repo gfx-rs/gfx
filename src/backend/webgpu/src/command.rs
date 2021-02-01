@@ -20,9 +20,9 @@ use hal::{
 use crate::Backend;
 
 #[derive(Debug)]
-pub struct CommandQueue;
+pub struct Queue;
 
-impl hal::queue::CommandQueue<Backend> for CommandQueue {
+impl hal::queue::Queue<Backend> for Queue {
     unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
         _: Ic,

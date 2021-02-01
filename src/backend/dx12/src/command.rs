@@ -2684,7 +2684,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn begin_query(&mut self, query: query::Query<Backend>, flags: query::ControlFlags) {
         let query_ty = match query.pool.ty {
-            native::QueryHeapType::Occlusion => {
+            query::Type::Occlusion => {
                 if flags.contains(query::ControlFlags::PRECISE) {
                     self.occlusion_query = Some(OcclusionQuery::Precise(query.id));
                     d3d12::D3D12_QUERY_TYPE_OCCLUSION
@@ -2695,12 +2695,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION
                 }
             }
-            native::QueryHeapType::Timestamp => panic!("Timestap queries are issued via "),
-            native::QueryHeapType::PipelineStatistics => {
+            query::Type::Timestamp => panic!("Timestap queries are issued via "),
+            query::Type::PipelineStatistics(_) => {
                 self.pipeline_stats_query = Some(query.id);
                 d3d12::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
             }
-            _ => unreachable!(),
         };
 
         self.raw
@@ -2710,19 +2709,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn end_query(&mut self, query: query::Query<Backend>) {
         let id = query.id;
         let query_ty = match query.pool.ty {
-            native::QueryHeapType::Occlusion
-                if self.occlusion_query == Some(OcclusionQuery::Precise(id)) =>
-            {
+            query::Type::Occlusion if self.occlusion_query == Some(OcclusionQuery::Precise(id)) => {
                 self.occlusion_query = None;
                 d3d12::D3D12_QUERY_TYPE_OCCLUSION
             }
-            native::QueryHeapType::Occlusion
-                if self.occlusion_query == Some(OcclusionQuery::Binary(id)) =>
-            {
+            query::Type::Occlusion if self.occlusion_query == Some(OcclusionQuery::Binary(id)) => {
                 self.occlusion_query = None;
                 d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION
             }
-            native::QueryHeapType::PipelineStatistics if self.pipeline_stats_query == Some(id) => {
+            query::Type::PipelineStatistics(_) if self.pipeline_stats_query == Some(id) => {
                 self.pipeline_stats_query = None;
                 d3d12::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
             }

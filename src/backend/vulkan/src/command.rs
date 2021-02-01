@@ -681,7 +681,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         inplace_or_alloc_from_iter(regions_iter, |regions| {
             self.device
                 .raw
-                .cmd_copy_buffer(self.raw, src.raw, dst.raw, &regions)
+                .cmd_copy_buffer(self.raw, src.raw, dst.raw, regions)
         })
     }
 
@@ -710,7 +710,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 conv::map_image_layout(src_layout),
                 dst.raw,
                 conv::map_image_layout(dst_layout),
-                &regions,
+                regions,
             );
         });
     }
@@ -732,7 +732,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 src.raw,
                 dst.raw,
                 conv::map_image_layout(dst_layout),
-                &regions,
+                regions,
             );
         });
     }
@@ -754,7 +754,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 src.raw,
                 conv::map_image_layout(src_layout),
                 dst.raw,
-                &regions,
+                regions,
             );
         });
     }

@@ -14,7 +14,7 @@ mod command;
 mod device;
 mod window;
 
-pub use crate::command::{CommandBuffer, CommandPool, CommandQueue};
+pub use crate::command::{CommandBuffer, CommandPool, Queue};
 pub use crate::device::Device;
 pub use crate::window::{Surface, Swapchain};
 
@@ -28,7 +28,7 @@ impl hal::Backend for Backend {
     type Surface = Surface;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = command::CommandQueue;
+    type Queue = command::Queue;
     type CommandBuffer = command::CommandBuffer;
 
     type Memory = ();

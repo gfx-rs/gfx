@@ -544,7 +544,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Fences have two states - signaled and unsignaled.
     ///
     /// A fence **can** be signaled as part of the execution of a
-    /// [queue submission][crate::queue::CommandQueue::submit] command.
+    /// [queue submission][crate::queue::Queue::submit] command.
     ///
     /// Fences **can** be unsignaled on the host with
     /// [`reset_fences`][Device::reset_fences].

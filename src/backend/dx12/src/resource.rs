@@ -865,7 +865,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 #[derive(Debug)]
 pub struct QueryPool {
     pub(crate) raw: native::QueryHeap,
-    pub(crate) ty: native::QueryHeapType,
+    pub(crate) ty: hal::query::Type,
 }
 
 unsafe impl Send for QueryPool {}
