@@ -34,7 +34,8 @@ egl = { package = "khronos-egl", version = "3", features = ["dynamic"] }
 libloading = "0.6"
 
 [dependencies.naga]
-version = "0.3"
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-9"
 #TODO: remove `spv-out` once spirv-cross is deprecated
 features = ["spv-out", "glsl-out"]
 optional = true
