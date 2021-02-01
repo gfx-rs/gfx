@@ -32,7 +32,7 @@ impl hal::Backend for Backend {
     type Surface = Surface;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = CommandQueue;
+    type Queue = Queue;
     type CommandBuffer = CommandBuffer;
 
     type Memory = Memory;
@@ -92,7 +92,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         // Create the queues
         let queue_groups = {
             let mut queue_group = queue::QueueGroup::new(QUEUE_FAMILY_ID);
-            queue_group.add_queue(CommandQueue);
+            queue_group.add_queue(Queue);
             vec![queue_group]
         };
         let gpu = adapter::Gpu {
@@ -160,8 +160,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
 /// Dummy command queue doing nothing.
 #[derive(Debug)]
-pub struct CommandQueue;
-impl queue::CommandQueue<Backend> for CommandQueue {
+pub struct Queue;
+impl queue::Queue<Backend> for Queue {
     unsafe fn submit<'a, Ic, Iw, Is>(&mut self, _: Ic, _: Iw, _: Is, _: Option<&mut ()>)
     where
         Ic: Iterator<Item = &'a CommandBuffer>,
@@ -179,6 +179,10 @@ impl queue::CommandQueue<Backend> for CommandQueue {
 
     fn wait_idle(&mut self) -> Result<(), device::OutOfMemory> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
+
+    fn timestamp_period(&self) -> f32 {
+        1.0
     }
 }
 

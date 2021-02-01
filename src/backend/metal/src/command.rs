@@ -2137,7 +2137,7 @@ struct PerformanceCounters {
 }
 
 #[derive(Debug)]
-pub struct CommandQueue {
+pub struct Queue {
     shared: Arc<Shared>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
@@ -2150,12 +2150,12 @@ pub struct CommandQueue {
     pub insert_dummy_encoders: bool,
 }
 
-unsafe impl Send for CommandQueue {}
-unsafe impl Sync for CommandQueue {}
+unsafe impl Send for Queue {}
+unsafe impl Sync for Queue {}
 
-impl CommandQueue {
+impl Queue {
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
-        CommandQueue {
+        Queue {
             shared,
             retained_buffers: Vec::new(),
             retained_textures: Vec::new(),
@@ -2189,7 +2189,7 @@ impl CommandQueue {
     }
 }
 
-impl hal::queue::CommandQueue<Backend> for CommandQueue {
+impl hal::queue::Queue<Backend> for Queue {
     unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
         command_buffers: Ic,
@@ -2427,6 +2427,11 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
     fn wait_idle(&mut self) -> Result<(), OutOfMemory> {
         QueueInner::wait_idle(&self.shared.queue);
         Ok(())
+    }
+
+    fn timestamp_period(&self) -> f32 {
+        //TODO: https://github.com/gpuweb/gpuweb/issues/1325#issue-774251467
+        1.0
     }
 }
 

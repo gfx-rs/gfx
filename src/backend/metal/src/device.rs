@@ -280,7 +280,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         assert_eq!(families[0].1.len(), 1);
         let mut queue_group = QueueGroup::new(families[0].0.id());
         for _ in 0..self.shared.private_caps.exposed_queues {
-            queue_group.add_queue(command::CommandQueue::new(self.shared.clone()));
+            queue_group.add_queue(command::Queue::new(self.shared.clone()));
         }
 
         let device = Device {

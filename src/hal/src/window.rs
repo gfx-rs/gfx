@@ -35,7 +35,7 @@
 //!
 //! # let mut surface: empty::Surface = return;
 //! # let device: empty::Device = return;
-//! # let mut present_queue: empty::CommandQueue = return;
+//! # let mut present_queue: empty::Queue = return;
 //! # unsafe {
 //! let mut render_semaphore = device.create_semaphore().unwrap();
 //!

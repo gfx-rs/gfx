@@ -89,7 +89,7 @@ impl hal::Backend for Backend {
     type Surface = Surface;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = queue::CommandQueue;
+    type Queue = queue::Queue;
     type CommandBuffer = command::CommandBuffer;
 
     type Memory = native::Memory;
@@ -577,7 +577,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .map(|&(_family, priorities)| {
                     assert_eq!(priorities.len(), 1);
                     let mut family = q::QueueGroup::new(q::QueueFamilyId(0));
-                    let queue = queue::CommandQueue::new(&self.0, requested_features, vao);
+                    let queue = queue::Queue::new(&self.0, requested_features, vao);
                     family.add_queue(queue);
                     family
                 })

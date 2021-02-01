@@ -286,7 +286,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         // Exactly **one** present queue!
                         // Number of queues need to be larger than 0 else it
                         // violates the specification.
-                        let queue = CommandQueue {
+                        let queue = Queue {
                             raw: device.present_queue.clone(),
                             idle_fence: device.create_raw_fence(false),
                             idle_event: create_idle_event(),
@@ -305,7 +305,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                             );
 
                             if winerror::SUCCEEDED(hr_queue) {
-                                let queue = CommandQueue {
+                                let queue = Queue {
                                     raw: queue,
                                     idle_fence: device.create_raw_fence(false),
                                     idle_event: create_idle_event(),
@@ -458,19 +458,19 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 }
 
 #[derive(Clone)]
-pub struct CommandQueue {
+pub struct Queue {
     pub(crate) raw: native::CommandQueue,
     idle_fence: native::Fence,
     idle_event: native::Event,
 }
 
-impl fmt::Debug for CommandQueue {
+impl fmt::Debug for Queue {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str("CommandQueue")
+        fmt.write_str("Queue")
     }
 }
 
-impl CommandQueue {
+impl Queue {
     unsafe fn destroy(&self) {
         handleapi::CloseHandle(self.idle_event.0);
         self.idle_fence.destroy();
@@ -492,10 +492,10 @@ impl CommandQueue {
     }
 }
 
-unsafe impl Send for CommandQueue {}
-unsafe impl Sync for CommandQueue {}
+unsafe impl Send for Queue {}
+unsafe impl Sync for Queue {}
 
-impl q::CommandQueue<Backend> for CommandQueue {
+impl q::Queue<Backend> for Queue {
     unsafe fn submit<'a, Ic, Iw, Is>(
         &mut self,
         command_buffers: Ic,
@@ -535,6 +535,14 @@ impl q::CommandQueue<Backend> for CommandQueue {
 
     fn wait_idle(&mut self) -> Result<(), hal::device::OutOfMemory> {
         self.wait_idle_impl()
+    }
+
+    fn timestamp_period(&self) -> f32 {
+        let mut frequency = 0u64;
+        unsafe {
+            self.raw.GetTimestampFrequency(&mut frequency);
+        }
+        (1_000_000_000.0 / frequency as f64) as f32
     }
 }
 
@@ -618,7 +626,7 @@ pub struct Device {
     present_queue: native::CommandQueue,
     // List of all queues created from this device, including present queue.
     // Needed for `wait_idle`.
-    queues: Vec<CommandQueue>,
+    queues: Vec<Queue>,
     // Indicates that there is currently an active device.
     open: Arc<Mutex<bool>>,
     library: Arc<native::D3D12Lib>,
@@ -711,7 +719,7 @@ impl Device {
         }
     }
 
-    fn append_queue(&mut self, queue: CommandQueue) {
+    fn append_queue(&mut self, queue: Queue) {
         self.queues.push(queue);
     }
 
@@ -729,7 +737,7 @@ impl Drop for Device {
 
         unsafe {
             for queue in &mut self.queues {
-                let _ = q::CommandQueue::wait_idle(queue);
+                let _ = q::Queue::wait_idle(queue);
                 queue.destroy();
             }
 
@@ -1143,13 +1151,6 @@ impl hal::Instance<Backend> for Instance {
                 _ => unreachable!(),
             } as _;
 
-            let (temp_queue, hr_queue) = device.create_command_queue(
-                native::CmdListType::Direct,
-                native::Priority::Normal,
-                native::CommandQueueFlags::empty(),
-                0,
-            );
-
             let physical_device = PhysicalDevice {
                 library: Arc::clone(&self.library),
                 adapter,
@@ -1257,16 +1258,6 @@ impl hal::Instance<Backend> for Instance {
                     optimal_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
                     optimal_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
                     min_vertex_input_binding_stride_alignment: 1,
-                    timestamp_period: if hr_queue == winerror::S_OK {
-                        let mut frequency = 0u64;
-                        unsafe {
-                            temp_queue.GetTimestampFrequency(&mut frequency);
-                        }
-                        (1_000_000_000.0 / frequency as f64) as f32
-                    } else {
-                        error!("Unable to create a temporary queue");
-                        0.0
-                    },
                     .. Limits::default() //TODO
                 },
                 format_properties: Arc::new(FormatProperties::new(device)),
@@ -1283,9 +1274,6 @@ impl hal::Instance<Backend> for Instance {
                 is_open: Arc::new(Mutex::new(false)),
             };
 
-            unsafe {
-                temp_queue.destroy(); //TODO: save it
-            }
             let queue_families = QUEUE_FAMILIES.to_vec();
 
             adapters.push(adapter::Adapter {
@@ -1323,7 +1311,7 @@ impl hal::Backend for Backend {
     type Surface = window::Surface;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = CommandQueue;
+    type Queue = Queue;
     type CommandBuffer = command::CommandBuffer;
 
     type Memory = resource::Memory;

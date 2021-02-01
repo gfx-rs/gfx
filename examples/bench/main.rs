@@ -348,7 +348,7 @@ fn main() {
 
         println!("Benchmarking...");
 
-        let period = limits.timestamp_period as f64 / 1_000_000.0;
+        let period = queue_group.queues[0].timestamp_period() as f64 / 1_000_000.0;
         let mut timings = vec![0u8; num_queries as usize * 8];
         for i in 0..RUNS {
             device.reset_fence(&mut fence).unwrap();
