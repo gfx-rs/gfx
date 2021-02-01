@@ -1,6 +1,6 @@
 # Change Log
 
-### hal-unreleased
+## hal-0.7.0 (30-01-2021)
   - `Borrow` and `ExactSizeIterator` bounds are removed from the iterators
   - error improvements:
     - use `thiserror` for errors
