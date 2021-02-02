@@ -1183,6 +1183,7 @@ impl hal::Instance<Backend> for Instance {
                     Features::DRAW_INDIRECT_COUNT,
                 limits: Limits {
                     //TODO: verify all of these not linked to constants
+                    max_memory_allocation_count: !0,
                     max_bound_descriptor_sets: MAX_DESCRIPTOR_SETS as u16,
                     max_descriptor_set_uniform_buffers_dynamic: 8,
                     max_descriptor_set_storage_buffers_dynamic: 4,
@@ -1244,7 +1245,11 @@ impl hal::Instance<Backend> for Instance {
                     max_vertex_input_bindings: 31, //TODO
                     max_vertex_input_attribute_offset: 255, // TODO
                     max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
-                    max_vertex_output_components: 16, // TODO
+                    max_vertex_output_components: d3d12::D3D12_VS_OUTPUT_REGISTER_COUNT as _,
+                    max_fragment_input_components: d3d12::D3D12_PS_INPUT_REGISTER_COUNT as _,
+                    max_fragment_output_attachments: d3d12::D3D12_PS_OUTPUT_REGISTER_COUNT as _,
+                    max_fragment_dual_source_attachments: 1,
+                    max_fragment_combined_output_resources: (d3d12::D3D12_PS_OUTPUT_REGISTER_COUNT + d3d12::D3D12_PS_CS_UAV_REGISTER_COUNT) as _,
                     min_texel_buffer_offset_alignment: 1, // TODO
                     min_uniform_buffer_offset_alignment: d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as _,
                     min_storage_buffer_offset_alignment: 4, // TODO
