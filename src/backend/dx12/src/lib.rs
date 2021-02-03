@@ -590,6 +590,7 @@ impl Shared {
 
 pub struct SamplerStorage {
     map: Mutex<FastHashMap<image::SamplerDesc, descriptors_cpu::Handle>>,
+    //TODO: respect the D3D12_REQ_SAMPLER_OBJECT_COUNT_PER_DEVICE limit
     pool: Mutex<DescriptorCpuPool>,
     heap: resource::DescriptorHeap,
     origins: RwLock<resource::DescriptorOrigins>,
@@ -1212,6 +1213,7 @@ impl hal::Instance<Backend> for Instance {
                         d3d12::D3D12_RESOURCE_BINDING_TIER_3
                         | _ => full_heap_count as _,
                     } as _,
+                    max_per_stage_resources: !0,
                     max_uniform_buffer_range: (d3d12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16) as _,
                     max_storage_buffer_range: !0,
                     // Is actually 256, but need space for the descriptors in there, so leave at 128 to discourage explosions
@@ -1225,11 +1227,12 @@ impl hal::Instance<Backend> for Instance {
                     max_patch_size: 0,
                     max_viewports: d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
                     max_viewport_dimensions: [d3d12::D3D12_VIEWPORT_BOUNDS_MAX as _; 2],
-                    max_framebuffer_extent: hal::image::Extent { //TODO
-                        width: 4096,
-                        height: 4096,
+                    max_framebuffer_extent: hal::image::Extent {
+                        width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
                         depth: 1,
                     },
+                    max_framebuffer_layers: 1,
                     max_compute_work_group_count: [
                         d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
                         d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
@@ -1242,7 +1245,7 @@ impl hal::Instance<Backend> for Instance {
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
                     ],
                     max_vertex_input_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
-                    max_vertex_input_bindings: 31, //TODO
+                    max_vertex_input_bindings: d3d12::D3D12_VS_INPUT_REGISTER_COUNT as _,
                     max_vertex_input_attribute_offset: 255, // TODO
                     max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
                     max_vertex_output_components: d3d12::D3D12_VS_OUTPUT_REGISTER_COUNT as _,
@@ -1471,7 +1474,8 @@ impl FormatProperties {
                     props.buffer_features |= f::BufferFeature::STORAGE_TEXEL;
                 }
                 if can_image {
-                    // Since read-only storage is exposed as SRV, we can guarantee read-only storage without checking D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD first.
+                    // Since read-only storage is exposed as SRV, we can guarantee read-only storage
+                    // without checking D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD first.
                     props.optimal_tiling |= f::ImageFeature::STORAGE;
 
                     if data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0 {
