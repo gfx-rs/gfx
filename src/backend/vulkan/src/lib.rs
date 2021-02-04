@@ -52,10 +52,11 @@ use hal::{
 
 use std::{
     borrow::Cow,
+    collections::{HashMap, HashSet},
     ffi::{CStr, CString},
     fmt, mem, slice,
     sync::Arc,
-    thread,
+    thread, unreachable,
 };
 
 #[cfg(feature = "use-rtld-next")]
@@ -76,6 +77,7 @@ const ROUGH_MAX_ATTACHMENT_COUNT: usize = 5;
 
 pub struct RawInstance {
     inner: ash::Instance,
+    api_version: Version,
     debug_messenger: Option<DebugMessenger>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
 }
@@ -99,6 +101,38 @@ impl Drop for RawInstance {
             }
             self.inner.destroy_instance(None);
         }
+    }
+}
+
+/// Helper wrapper around `vk::make_version`.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct Version(u32);
+
+impl Version {
+    pub const V1_0: Version = Self(vk::make_version(1, 0, 0));
+    pub const V1_1: Version = Self(vk::make_version(1, 1, 0));
+    pub const V1_2: Version = Self(vk::make_version(1, 2, 0));
+
+    pub fn major(self) -> u32 {
+        vk::version_major(self.0)
+    }
+
+    pub fn minor(self) -> u32 {
+        vk::version_minor(self.0)
+    }
+
+    pub fn patch(self) -> u32 {
+        vk::version_patch(self.0)
+    }
+}
+
+impl fmt::Debug for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ApiVersion")
+            .field("major", &self.major())
+            .field("minor", &self.minor())
+            .field("patch", &self.patch())
+            .finish()
     }
 }
 
@@ -321,31 +355,33 @@ impl hal::Instance<Backend> for Instance {
                 .unwrap_or(std::ptr::null_mut())
         });
 
+        // Pick the latest version of Vulkan available.
+        let api_version = match entry.try_enumerate_instance_version() {
+            // Vulkan 1.1+
+            Ok(Some(version)) => Version(version),
+
+            // Vulkan 1.0
+            Ok(None) => Version::V1_0,
+
+            // Ignore out of memory since it's unlikely to happen and `Instance::create` doesn't have a way to express it in the return value.
+            Err(err) if err == vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                panic!("{}", err);
+            }
+
+            Err(_) => unreachable!(),
+        };
+
         let app_name = CString::new(name).unwrap();
         let app_info = vk::ApplicationInfo::builder()
             .application_name(app_name.as_c_str())
             .application_version(version)
             .engine_name(CStr::from_bytes_with_nul(b"gfx-rs\0").unwrap())
             .engine_version(1)
-            .api_version(
-                // Pick the latest version of Vulkan available.
-                match entry.try_enumerate_instance_version() {
-                    // Vulkan 1.1+
-                    Ok(Some(version)) => {
-                        vk::make_version(vk::version_major(version), vk::version_minor(version), 0)
-                    }
-
-                    // Vulkan 1.0
-                    Ok(None) => vk::make_version(1, 0, 0),
-
-                    // Ignore out of memory since it's unlikely to happen and `Instance::create` doesn't have a way to express it in the return value.
-                    Err(err) if err == vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                        panic!("{}", err);
-                    }
-
-                    Err(_) => unreachable!(),
-                },
-            );
+            .api_version(vk::make_version(
+                api_version.major(),
+                api_version.minor(),
+                0,
+            ));
 
         let instance_extensions = entry
             .enumerate_instance_extension_properties()
@@ -499,6 +535,7 @@ impl hal::Instance<Backend> for Instance {
         Ok(Instance {
             raw: Arc::new(RawInstance {
                 inner: instance,
+                api_version,
                 debug_messenger,
                 get_physical_device_properties,
             }),
@@ -698,6 +735,152 @@ pub struct DeviceCreationFeatures {
     imageless_framebuffers: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
 }
 
+/// A declaration of an extension and its dependencies.
+#[derive(Debug)]
+struct Extension {
+    name: &'static CStr,
+    required_version: Version,
+    dependencies: Vec<&'static CStr>,
+    promoted_version: Option<Version>,
+}
+
+impl Extension {
+    pub fn new(name: &'static CStr, required_version: Version) -> Self {
+        Self {
+            name,
+            required_version,
+            dependencies: Vec::new(),
+            promoted_version: None,
+        }
+    }
+
+    pub fn with_dependencies(mut self, dependencies: Vec<&'static CStr>) -> Self {
+        self.dependencies = dependencies;
+        self
+    }
+
+    pub fn promoted_to(mut self, promoted_version: Version) -> Self {
+        self.promoted_version = Some(promoted_version);
+        self
+    }
+
+    pub fn is_compatible_with_instance_version(&self, instance_version: Version) -> bool {
+        self.required_version.0
+            <= vk::make_version(instance_version.major(), instance_version.minor(), 0)
+    }
+
+    pub fn is_promoted_by_instance_version(&self, instance_version: Version) -> bool {
+        if let Some(promoted_version) = self.promoted_version {
+            vk::make_version(instance_version.major(), instance_version.minor(), 0)
+                >= promoted_version.0
+        } else {
+            false
+        }
+    }
+}
+
+/// Container to keep track of the extensions we use and their dependencies. Used for `Self::resolve_dependencies`.
+#[derive(Debug)]
+struct ExtensionsRegistry {
+    extensions: HashMap<&'static CStr, Extension>,
+}
+
+impl ExtensionsRegistry {
+    pub fn new<I>(extensions: I) -> Self
+    where
+        I: IntoIterator<Item = Extension>,
+    {
+        Self {
+            extensions: extensions
+                .into_iter()
+                .map(|extension| (extension.name, extension))
+                .collect(),
+        }
+    }
+
+    /// Resolve `requested_extensions` into the full list of transitive dependencies and filter out any extensions that are not supported or are no longer explicitly needed.
+    ///
+    /// In general, `requested_extensions` should include the extension list needed to support the oldest version of Vulkan.
+    // TODO: Should we signal if an extension that was request could not be added?
+    fn resolve_dependencies<I>(
+        &self,
+        physical_device: &PhysicalDevice,
+        instance_version: Version,
+        requested_extensions: I,
+    ) -> Vec<&'static CStr>
+    where
+        I: Iterator<Item = &'static CStr>,
+    {
+        let mut remaining = requested_extensions.collect::<Vec<_>>();
+        let mut extensions = Vec::new();
+        let mut marked = HashSet::new();
+
+        while let Some(extension_name) = remaining.pop() {
+            if let Some(extension) = self.extensions.get(extension_name) {
+                if !extensions.contains(&extension.name) {
+                    if !extension.is_compatible_with_instance_version(instance_version) {
+                        warn!(
+                            "Extension {} (requires {:?}) is unsupported in version {:?}",
+                            extension.name.to_string_lossy(),
+                            extension.required_version,
+                            instance_version
+                        );
+                        continue;
+                    }
+
+                    if extension.is_promoted_by_instance_version(instance_version) {
+                        // This extension was promoted to core, so we shouldn't request it.
+                        debug!(
+                            "Extension {} was promoted in {:?} and is no longer explicitly required.",
+                            extension.name.to_string_lossy(),
+                            extension.promoted_version,
+                        );
+                        continue;
+                    }
+
+                    // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1`, so we should try to add that instead.
+                    // Note this is the only extension we currently require that has this obsolescence deprecation state. If we gain more it may be worth refactoring `Extension` to support it.
+                    if extension.name == vk::AmdNegativeViewportHeightFn::name()
+                        && physical_device.supports_extension(vk::KhrMaintenance1Fn::name())
+                    {
+                        debug!(
+                            "Extension {} was obsoleted by {}, which is supported by the device.",
+                            extension.name.to_string_lossy(),
+                            vk::KhrMaintenance1Fn::name().to_string_lossy()
+                        );
+                        remaining.push(vk::KhrMaintenance1Fn::name());
+                        continue;
+                    }
+
+                    if physical_device.supports_extension(extension.name) {
+                        extensions.push(extension.name);
+                    } else {
+                        warn!(
+                            "Unsupported extension requested: {}",
+                            extension.name.to_string_lossy()
+                        );
+                    }
+                }
+
+                // Ensure we don't walk the dependency graph more than once.
+                if marked.contains(extension.name) {
+                    continue;
+                }
+                marked.insert(extension.name);
+
+                for &dependency in &extension.dependencies {
+                    remaining.push(dependency);
+                }
+            } else {
+                // If this trips, we have an unhandled extension that we need to add to track.
+                unreachable!()
+            }
+        }
+
+        extensions
+    }
+}
+
 impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
@@ -719,44 +902,64 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return Err(DeviceCreationError::MissingFeature);
         }
 
+        let extensions_registry = ExtensionsRegistry::new(vec![
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_AMD_negative_viewport_height.html
+            Extension::new(vk::AmdNegativeViewportHeightFn::name(), Version::V1_0)
+                .promoted_to(Version::V1_1),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_EXT_descriptor_indexing.html
+            // Depends on `VK_KHR_get_physical_device_properties2`, which is an instance extension
+            Extension::new(vk::ExtDescriptorIndexingFn::name(), Version::V1_0)
+                .with_dependencies(vec![vk::KhrMaintenance3Fn::name()])
+                .promoted_to(Version::V1_2),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_EXT_sampler_filter_minmax.html
+            // Depends on `VK_KHR_get_physical_device_properties2`, which is an instance extension
+            Extension::new(vk::ExtSamplerFilterMinmaxFn::name(), Version::V1_0)
+                .promoted_to(Version::V1_2),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_KHR_draw_indirect_count.html
+            Extension::new(DrawIndirectCount::name(), Version::V1_0).promoted_to(Version::V1_2),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_KHR_image_format_list.html
+            Extension::new(vk::KhrImageFormatListFn::name(), Version::V1_0)
+                .promoted_to(Version::V1_2),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_KHR_imageless_framebuffer.html
+            Extension::new(vk::KhrImagelessFramebufferFn::name(), Version::V1_0)
+                .with_dependencies(vec![
+                    vk::KhrMaintenance2Fn::name(),
+                    vk::KhrImageFormatListFn::name(),
+                ])
+                .promoted_to(Version::V1_2),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_KHR_maintenance1.html
+            Extension::new(vk::KhrMaintenance1Fn::name(), Version::V1_0).promoted_to(Version::V1_1),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_KHR_maintenance2.html
+            Extension::new(vk::KhrMaintenance2Fn::name(), Version::V1_0).promoted_to(Version::V1_1),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_KHR_maintenance3.html
+            // Depends on `VK_KHR_get_physical_device_properties2`, which is an instance extension
+            Extension::new(vk::KhrMaintenance3Fn::name(), Version::V1_0).promoted_to(Version::V1_1),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_KHR_swapchain.html
+            // Depends on `VK_KHR_surface`, which is an instance extension
+            Extension::new(extensions::khr::Swapchain::name(), Version::V1_0),
+            // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_NV_mesh_shader.html
+            // Depends on `VK_KHR_get_physical_device_properties2`, which is an instance extension
+            Extension::new(MeshShader::name(), Version::V1_0),
+        ]);
+
         let imageless_framebuffers = self.supports_extension(vk::KhrImagelessFramebufferFn::name());
-        let minmax_samplers = self.supports_extension(vk::ExtSamplerFilterMinmaxFn::name());
-        let maintenance_level = if imageless_framebuffers {
-            2
-        } else if self.supports_extension(vk::KhrMaintenance1Fn::name()) {
-            1
-        } else {
-            0
-        };
 
         let mut enabled_features =
             conv::map_device_features(requested_features, imageless_framebuffers);
         let enabled_extensions = {
-            let mut enabled_extensions: Vec<&'static CStr> = Vec::new();
-            enabled_extensions.push(extensions::khr::Swapchain::name());
+            let mut requested_extensions: Vec<&'static CStr> = Vec::new();
 
-            match maintenance_level {
-                0 => {
-                    if requested_features.contains(Features::NDC_Y_UP) {
-                        enabled_extensions.push(vk::AmdNegativeViewportHeightFn::name());
-                    }
-                }
-                1 => {
-                    enabled_extensions.push(vk::KhrMaintenance1Fn::name());
-                }
-                2 => {
-                    enabled_extensions.push(vk::KhrMaintenance1Fn::name());
-                    enabled_extensions.push(vk::KhrMaintenance2Fn::name());
-                }
-                _ => unreachable!(),
-            }
+            requested_extensions.push(extensions::khr::Swapchain::name());
 
-            if imageless_framebuffers {
-                enabled_extensions.push(vk::KhrImageFormatListFn::name());
-                enabled_extensions.push(vk::KhrImagelessFramebufferFn::name());
-            }
-            if minmax_samplers {
-                enabled_extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
+            requested_extensions.push(vk::KhrMaintenance1Fn::name());
+            requested_extensions.push(vk::KhrMaintenance2Fn::name());
+            requested_extensions.push(vk::KhrMaintenance3Fn::name());
+
+            requested_extensions.push(vk::KhrImagelessFramebufferFn::name());
+            requested_extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
+
+            if requested_features.contains(Features::NDC_Y_UP) {
+                requested_extensions.push(vk::AmdNegativeViewportHeightFn::name());
             }
 
             if requested_features.intersects(
@@ -764,19 +967,28 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
                     | Features::UNSIZED_DESCRIPTOR_ARRAY,
             ) {
-                enabled_extensions.push(vk::KhrMaintenance3Fn::name());
-                enabled_extensions.push(vk::ExtDescriptorIndexingFn::name());
+                requested_extensions.push(vk::ExtDescriptorIndexingFn::name());
             }
 
             if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
-                enabled_extensions.push(MeshShader::name());
+                requested_extensions.push(MeshShader::name());
             }
 
             if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
-                enabled_extensions.push(DrawIndirectCount::name());
+                requested_extensions.push(DrawIndirectCount::name());
             }
 
-            enabled_extensions
+            debug!("Requesting extensions: {:#?}", requested_extensions);
+
+            let supported_extensions = extensions_registry.resolve_dependencies(
+                &self,
+                self.instance.api_version,
+                requested_extensions.into_iter(),
+            );
+
+            debug!("Supported extensions: {:#?}", supported_extensions);
+
+            supported_extensions
         };
 
         let valid_ash_memory_types = {
@@ -865,7 +1077,18 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
                 },
-                maintenance_level,
+                is_core_1_0: {
+                    if self.instance.api_version == Version::V1_0 {
+                        let has_maintenance_extension_support = self
+                            .supports_extension(vk::KhrMaintenance1Fn::name())
+                            || self.supports_extension(vk::KhrMaintenance2Fn::name())
+                            || self.supports_extension(vk::KhrMaintenance3Fn::name());
+
+                        !has_maintenance_extension_support
+                    } else {
+                        false
+                    }
+                },
                 imageless_framebuffers,
                 timestamp_period: self.properties.limits.timestamp_period,
             }),
@@ -1442,7 +1665,8 @@ pub struct RawDevice {
     features: Features,
     instance: Arc<RawInstance>,
     extension_fns: DeviceExtensionFunctions,
-    maintenance_level: u8,
+    /// Indicates this device is running on Vulkan 1.0 with no maintenance extensions.
+    is_core_1_0: bool,
     imageless_framebuffers: bool,
     timestamp_period: f32,
 }
@@ -1467,7 +1691,7 @@ impl RawDevice {
 
     fn map_viewport(&self, rect: &hal::pso::Viewport) -> vk::Viewport {
         let flip_y = self.features.contains(hal::Features::NDC_Y_UP);
-        let shift_y = flip_y && self.maintenance_level != 0;
+        let shift_y = flip_y && !self.is_core_1_0;
         conv::map_viewport(rect, flip_y, shift_y)
     }
 
