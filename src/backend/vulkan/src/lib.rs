@@ -52,6 +52,7 @@ use hal::{
 
 use std::{
     borrow::Cow,
+    cmp,
     ffi::{CStr, CString},
     fmt, mem, slice,
     sync::Arc,
@@ -379,8 +380,7 @@ impl hal::Instance<Backend> for Instance {
                 .unwrap_or(std::ptr::null_mut())
         });
 
-        // Pick the latest version of Vulkan available.
-        let api_version = match entry.try_enumerate_instance_version() {
+        let driver_api_version = match entry.try_enumerate_instance_version() {
             // Vulkan 1.1+
             Ok(Some(version)) => version.into(),
 
@@ -402,7 +402,22 @@ impl hal::Instance<Backend> for Instance {
             .application_version(version)
             .engine_name(CStr::from_bytes_with_nul(b"gfx-rs\0").unwrap())
             .engine_version(1)
-            .api_version(api_version.into());
+            .api_version({
+                // Pick the latest API version available, but don't go later than the SDK version used by `gfx_backend_vulkan`.
+                cmp::min(driver_api_version, {
+                    // This is the max Vulkan API version supported by `gfx_backend_vulkan`.
+                    //
+                    // If we want to increment this, there are some things that must be done first:
+                    //  - Audit the behavioral differences between the previous and new API versions.
+                    //  - Audit all extensions used by this backend:
+                    //    - If any were promoted in the new API version and the behavior has changed, we must handle the new behavior in addition to the old behavior.
+                    //    - If any were obsoleted in the new API version, we must implement a fallback for the new API version
+                    //
+                    // TODO: This should be replaced by `vk::HEADER_VERSION_COMPLETE` (added in `ash@6f488cd`) and this comment moved to either `README.md` or `Cargo.toml`.
+                    Version::V1_2
+                })
+                .into()
+            });
 
         let instance_extensions = entry
             .enumerate_instance_extension_properties()
