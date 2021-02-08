@@ -412,6 +412,7 @@ impl hal::Instance<Backend> for Instance {
                     //  - Audit all extensions used by this backend:
                     //    - If any were promoted in the new API version and the behavior has changed, we must handle the new behavior in addition to the old behavior.
                     //    - If any were obsoleted in the new API version, we must implement a fallback for the new API version
+                    //    - If any are non-KHR-vendored, we must ensure the new behavior is still correct (since backwards-compatibility is not guaranteed).
                     //
                     // TODO: This should be replaced by `vk::HEADER_VERSION_COMPLETE` (added in `ash@6f488cd`) and this comment moved to either `README.md` or `Cargo.toml`.
                     Version::V1_2
