@@ -104,7 +104,8 @@ impl Drop for RawInstance {
 }
 
 /// Helper wrapper around `vk::make_version`.
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(transparent)]
 pub struct Version(u32);
 
 impl Version {
@@ -112,16 +113,28 @@ impl Version {
     pub const V1_1: Version = Self(vk::make_version(1, 1, 0));
     pub const V1_2: Version = Self(vk::make_version(1, 2, 0));
 
-    pub fn major(self) -> u32 {
+    pub fn make_version(major: u32, minor: u32, patch: u32) -> Self {
+        assert!(major < (1 << 10));
+        assert!(minor < (1 << 10));
+        assert!(patch < (1 << 12));
+        Self(vk::make_version(major, minor, patch))
+    }
+
+    pub const fn major(self) -> u32 {
         vk::version_major(self.0)
     }
 
-    pub fn minor(self) -> u32 {
+    pub const fn minor(self) -> u32 {
         vk::version_minor(self.0)
     }
 
-    pub fn patch(self) -> u32 {
+    pub const fn patch(self) -> u32 {
         vk::version_patch(self.0)
+    }
+
+    /// Return a `Version` with the major and minor components copied and the patch component set to 0.
+    pub const fn without_patch(self) -> Self {
+        Self(vk::make_version(self.major(), self.minor(), 0))
     }
 }
 
@@ -945,15 +958,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
                 },
-                supports_y_flip: {
-                    if self.api_version == Version::V1_0 {
-                        self.supports_extension(vk::KhrMaintenance1Fn::name())
-                            || self.supports_extension(vk::KhrMaintenance2Fn::name())
-                            || self.supports_extension(vk::KhrMaintenance3Fn::name())
-                    } else {
-                        true
-                    }
-                },
+                flip_y_requires_shift: self.api_version >= Version::V1_1
+                    || self.supports_extension(vk::KhrMaintenance1Fn::name()),
                 imageless_framebuffers,
                 timestamp_period: self.properties.limits.timestamp_period,
             }),
@@ -1530,7 +1536,10 @@ pub struct RawDevice {
     features: Features,
     instance: Arc<RawInstance>,
     extension_fns: DeviceExtensionFunctions,
-    supports_y_flip: bool,
+    /// The `hal::Features::NDC_Y_UP` flag is implemented with either `VK_AMD_negative_viewport_height` or `VK_KHR_maintenance1`/1.1+. The AMD extension for negative viewport height does not require a Y shift.
+    ///
+    /// This flag is `true` if the device has `VK_KHR_maintenance1`/1.1+ and `false` otherwise (i.e. in the case of `VK_AMD_negative_viewport_height`).
+    flip_y_requires_shift: bool,
     imageless_framebuffers: bool,
     timestamp_period: f32,
 }
@@ -1555,7 +1564,7 @@ impl RawDevice {
 
     fn map_viewport(&self, rect: &hal::pso::Viewport) -> vk::Viewport {
         let flip_y = self.features.contains(hal::Features::NDC_Y_UP);
-        let shift_y = flip_y && self.supports_y_flip;
+        let shift_y = flip_y && self.flip_y_requires_shift;
         conv::map_viewport(rect, flip_y, shift_y)
     }
 

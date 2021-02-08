@@ -40,18 +40,14 @@ impl Extension {
 
     /// Return `true` if this extension is compatible with `device_version` and can be requested when creating the device.
     pub fn is_compatible_with_version(&self, device_version: Version) -> bool {
-        self.required_version.0
-            <= vk::make_version(device_version.major(), device_version.minor(), 0)
+        self.required_version <= device_version.without_patch()
     }
 
     /// Return `true` if this extension was promoted to core Vulkan in `device_version` and should not be explicitly requested when creating the device.
     pub fn is_promoted_by_version(&self, device_version: Version) -> bool {
-        if let Some(promoted_version) = self.promoted_version {
-            vk::make_version(device_version.major(), device_version.minor(), 0)
-                >= promoted_version.0
-        } else {
-            false
-        }
+        self.promoted_version.map_or(false, |promoted_version| {
+            device_version.without_patch() >= promoted_version
+        })
     }
 }
 
@@ -124,7 +120,9 @@ impl ExtensionsResolver {
                         continue;
                     }
 
-                    // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1`, so we should try to add that instead.
+                    // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1`, so we must try to add that instead.
+                    // See: https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_AMD_negative_viewport_height.html#_obsoletion_by_vk_khr_maintenance1_and_vulkan_1_1
+                    //
                     // Note this is the only extension we currently require that has this obsolescence deprecation state. If we gain more it may be worth refactoring `Extension` to support it.
                     if extension.name == vk::AmdNegativeViewportHeightFn::name()
                         && physical_device.supports_extension(vk::KhrMaintenance1Fn::name())
