@@ -442,7 +442,7 @@ impl hal::Instance<Backend> for Instance {
             Ok((library_dxgi, factory, dxgi_version)) => {
                 info!("DXGI version: {:?}", dxgi_version);
                 let library_d3d11 = Arc::new(
-                    libloading::Library::new("d3d11.dll").map_err(|_| hal::UnsupportedBackend)?,
+                    unsafe { libloading::Library::new("d3d11.dll").map_err(|_| hal::UnsupportedBackend)? },
                 );
                 Ok(Instance {
                     factory,

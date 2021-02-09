@@ -31,7 +31,7 @@ raw-window-handle = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 egl = { package = "khronos-egl", version = "3", features = ["dynamic"] }
-libloading = "0.6"
+libloading = "0.7"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"

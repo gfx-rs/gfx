@@ -67,11 +67,13 @@ type WlEglWindowDestroyFun = unsafe extern "system" fn(window: *const raw::c_voi
 
 fn open_x_display() -> Option<(ptr::NonNull<raw::c_void>, libloading::Library)> {
     log::info!("Loading X11 library to get the current display");
-    let library = libloading::Library::new("libX11.so").ok()?;
-    let func: libloading::Symbol<XOpenDisplayFun> =
-        unsafe { library.get(b"XOpenDisplay").unwrap() };
-    let result = unsafe { func(ptr::null()) };
-    ptr::NonNull::new(result).map(|ptr| (ptr, library))
+    unsafe {
+        let library = libloading::Library::new("libX11.so").ok()?;
+        let func: libloading::Symbol<XOpenDisplayFun> =
+            library.get(b"XOpenDisplay").unwrap();
+        let result = func(ptr::null());
+        ptr::NonNull::new(result).map(|ptr| (ptr, library))
+    }
 }
 
 fn test_wayland_display() -> Option<libloading::Library> {
@@ -79,14 +81,16 @@ fn test_wayland_display() -> Option<libloading::Library> {
      * is an active wayland display available.
      */
     log::info!("Loading Wayland library to get the current display");
-    let client_library = libloading::Library::new("libwayland-client.so").ok()?;
-    let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
-        unsafe { client_library.get(b"wl_display_connect").unwrap() };
-    let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> =
-        unsafe { client_library.get(b"wl_display_disconnect").unwrap() };
-    let display = ptr::NonNull::new(unsafe { wl_display_connect(ptr::null()) })?;
-    unsafe { wl_display_disconnect(display.as_ptr()) };
-    let library = libloading::Library::new("libwayland-egl.so").ok()?;
+    let library = unsafe {
+        let client_library = libloading::Library::new("libwayland-client.so").ok()?;
+        let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
+            client_library.get(b"wl_display_connect").unwrap();
+        let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> =
+            client_library.get(b"wl_display_disconnect").unwrap();
+        let display = ptr::NonNull::new(wl_display_connect(ptr::null()))?;
+        wl_display_disconnect(display.as_ptr());
+        libloading::Library::new("libwayland-egl.so").ok()? 
+    };
     Some(library)
 }
 
