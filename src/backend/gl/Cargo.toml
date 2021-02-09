@@ -35,7 +35,7 @@ libloading = "0.6"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-9"
+tag = "gfx-10"
 #TODO: remove `spv-out` once spirv-cross is deprecated
 features = ["spv-out", "glsl-out"]
 optional = true
