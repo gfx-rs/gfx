@@ -25,8 +25,7 @@ use crate::{debug::set_debug_name, device::DepthStencilState};
 use auxil::ShaderStage;
 use hal::{
     adapter, buffer, command, format, image, memory, pass, pso, query, queue, window, DrawCount,
-    IndexCount, IndexType, InstanceCount, Limits, TaskCount, VertexCount, VertexOffset,
-    WorkGroupCount,
+    IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
 };
 use range_alloc::RangeAllocator;
 use smallvec::SmallVec;
@@ -215,7 +214,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
     };
 
     let max_image_uav = 2;
-    let max_buffer_uav = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize - max_image_uav;
+    let max_buffer_uav = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - max_image_uav;
 
     let max_input_slots = match feature_level {
         d3dcommon::D3D_FEATURE_LEVEL_9_1
@@ -258,15 +257,18 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         max_image_3d_size: max_texture_w_dimension,
         max_image_cube_size: max_texture_cube_dimension,
         max_image_array_layers: max_texture_cube_dimension as _,
-        max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT as _,
-        // Leave top buffer for push constants
-        max_per_stage_descriptor_uniform_buffers: max_constant_buffers as _,
-        max_per_stage_descriptor_storage_buffers: max_buffer_uav,
-        max_per_stage_descriptor_storage_images: max_image_uav,
-        max_per_stage_descriptor_sampled_images:
-            d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
-        max_descriptor_set_uniform_buffers_dynamic: max_constant_buffers as _,
-        max_descriptor_set_storage_buffers_dynamic: 0, // TODO: Implement dynamic offsets for storage buffers
+        descriptor_limits: hal::DescriptorLimits {
+            max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT as _,
+            // Leave top buffer for push constants
+            max_per_stage_descriptor_uniform_buffers: max_constant_buffers as _,
+            max_per_stage_descriptor_storage_buffers: max_buffer_uav,
+            max_per_stage_descriptor_sampled_images:
+                d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
+            max_per_stage_descriptor_storage_images: max_image_uav,
+            max_descriptor_set_uniform_buffers_dynamic: max_constant_buffers as _,
+            max_descriptor_set_storage_buffers_dynamic: 0, // TODO: Implement dynamic offsets for storage buffers
+            ..hal::DescriptorLimits::default()             // TODO
+        },
         max_bound_descriptor_sets: pso::DescriptorSetIndex::MAX,
         max_texel_elements: max_texture_uv_dimension as _, //TODO
         max_patch_size: d3d11::D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT as _,
@@ -546,7 +548,15 @@ impl hal::Instance<Backend> for Instance {
                 adapter,
                 library_d3d11: Arc::clone(&self.library_d3d11),
                 features,
-                limits,
+                properties: hal::PhysicalDeviceProperties {
+                    limits,
+                    dynamic_pipeline_states: hal::DynamicStates::VIEWPORT
+                        | hal::DynamicStates::SCISSOR
+                        | hal::DynamicStates::BLEND_COLOR
+                        | hal::DynamicStates::DEPTH_BOUNDS
+                        | hal::DynamicStates::STENCIL_REFERENCE,
+                    ..hal::PhysicalDeviceProperties::default()
+                },
                 memory_properties,
                 format_properties,
             };
@@ -584,7 +594,7 @@ pub struct PhysicalDevice {
     adapter: ComPtr<IDXGIAdapter>,
     library_d3d11: Arc<libloading::Library>,
     features: hal::Features,
-    limits: hal::Limits,
+    properties: hal::PhysicalDeviceProperties,
     memory_properties: adapter::MemoryProperties,
     format_properties: [format::Properties; format::NUM_FORMATS],
 }
@@ -881,20 +891,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.features
     }
 
-    fn capabilities(&self) -> hal::Capabilities {
-        use hal::DynamicStates as Ds;
-        hal::Capabilities {
-            performance_caveats: hal::PerformanceCaveats::empty(),
-            dynamic_pipeline_states: Ds::VIEWPORT
-                | Ds::SCISSOR
-                | Ds::BLEND_COLOR
-                | Ds::DEPTH_BOUNDS
-                | Ds::STENCIL_REFERENCE,
-        }
-    }
-
-    fn limits(&self) -> Limits {
-        self.limits
+    fn properties(&self) -> hal::PhysicalDeviceProperties {
+        self.properties
     }
 }
 

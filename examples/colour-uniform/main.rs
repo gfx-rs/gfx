@@ -591,7 +591,7 @@ impl<B: Backend> AdapterState<B> {
 
     fn new_adapter(adapter: Adapter<B>) -> Self {
         let memory_types = adapter.physical_device.memory_properties().memory_types;
-        let limits = adapter.physical_device.limits();
+        let limits = adapter.physical_device.properties().limits;
         println!("{:?}", limits);
 
         AdapterState {

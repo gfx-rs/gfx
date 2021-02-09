@@ -187,11 +187,7 @@ impl hal::adapter::PhysicalDevice<Backend> for PhysicalDevice {
         todo!()
     }
 
-    fn capabilities(&self) -> hal::Capabilities {
-        todo!()
-    }
-
-    fn limits(&self) -> hal::Limits {
+    fn properties(&self) -> hal::PhysicalDeviceProperties {
         todo!()
     }
 }

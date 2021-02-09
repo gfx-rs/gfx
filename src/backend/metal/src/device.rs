@@ -45,7 +45,7 @@ use std::{
 };
 
 const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
-const SHADER_STAGE_COUNT: usize = 3;
+const SHADER_STAGE_COUNT: u32 = 3;
 
 #[derive(Clone, Debug)]
 enum FunctionError {
@@ -468,110 +468,110 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         features
     }
 
-    fn capabilities(&self) -> hal::Capabilities {
+    fn properties(&self) -> hal::PhysicalDeviceProperties {
+        let pc = &self.shared.private_caps;
+        let device = self.shared.device.lock();
+
         let mut caveats = hal::PerformanceCaveats::empty();
         if !self.shared.private_caps.base_vertex_instance_drawing {
             caveats |= hal::PerformanceCaveats::BASE_VERTEX_INSTANCE_DRAWING;
         }
-        hal::Capabilities {
+        hal::PhysicalDeviceProperties {
+            limits: hal::Limits {
+                max_image_1d_size: pc.max_texture_size as _,
+                max_image_2d_size: pc.max_texture_size as _,
+                max_image_3d_size: pc.max_texture_3d_size as _,
+                max_image_cube_size: pc.max_texture_size as _,
+                max_image_array_layers: pc.max_texture_layers as _,
+                max_texel_elements: (pc.max_texture_size * pc.max_texture_size) as usize,
+                max_uniform_buffer_range: pc.max_buffer_size,
+                max_storage_buffer_range: pc.max_buffer_size,
+                // "Maximum length of an inlined constant data buffer, per graphics or compute function"
+                max_push_constants_size: 0x1000,
+                max_sampler_allocation_count: !0,
+                max_bound_descriptor_sets: MAX_BOUND_DESCRIPTOR_SETS as _,
+                descriptor_limits: hal::DescriptorLimits {
+                    max_per_stage_descriptor_samplers: pc.max_samplers_per_stage,
+                    max_per_stage_descriptor_uniform_buffers: pc.max_buffers_per_stage,
+                    max_per_stage_descriptor_storage_buffers: pc.max_buffers_per_stage,
+                    max_per_stage_descriptor_sampled_images: pc
+                        .max_textures_per_stage
+                        .min(pc.max_samplers_per_stage)
+                        as u32,
+                    max_per_stage_descriptor_storage_images: pc.max_textures_per_stage,
+                    max_per_stage_descriptor_input_attachments: pc.max_textures_per_stage, //TODO
+                    max_per_stage_resources: 0x100,                                        //TODO
+                    max_descriptor_set_samplers: pc.max_samplers_per_stage * SHADER_STAGE_COUNT,
+                    max_descriptor_set_uniform_buffers: pc.max_buffers_per_stage
+                        * SHADER_STAGE_COUNT,
+                    max_descriptor_set_uniform_buffers_dynamic: 8 * SHADER_STAGE_COUNT,
+                    max_descriptor_set_storage_buffers: pc.max_buffers_per_stage
+                        * SHADER_STAGE_COUNT,
+                    max_descriptor_set_storage_buffers_dynamic: 4 * SHADER_STAGE_COUNT,
+                    max_descriptor_set_sampled_images: pc
+                        .max_textures_per_stage
+                        .min(pc.max_samplers_per_stage)
+                        * SHADER_STAGE_COUNT,
+                    max_descriptor_set_storage_images: pc.max_textures_per_stage
+                        * SHADER_STAGE_COUNT,
+                    max_descriptor_set_input_attachments: pc.max_textures_per_stage
+                        * SHADER_STAGE_COUNT,
+                },
+                max_fragment_input_components: pc.max_fragment_input_components as usize,
+                max_framebuffer_layers: 2048, // TODO: Determine is this is the correct value
+                max_memory_allocation_count: 4096, // TODO: Determine is this is the correct value
+
+                max_patch_size: 0, // No tessellation
+
+                // Note: The maximum number of supported viewports and scissor rectangles varies by device.
+                // TODO: read from Metal Feature Sets.
+                max_viewports: 1,
+                max_viewport_dimensions: [pc.max_texture_size as _; 2],
+                max_framebuffer_extent: hal::image::Extent {
+                    //TODO
+                    width: pc.max_texture_size as _,
+                    height: pc.max_texture_size as _,
+                    depth: pc.max_texture_layers as _,
+                },
+                min_memory_map_alignment: 4,
+
+                optimal_buffer_copy_offset_alignment: pc.buffer_alignment,
+                optimal_buffer_copy_pitch_alignment: 4,
+                min_texel_buffer_offset_alignment: pc.buffer_alignment,
+                min_uniform_buffer_offset_alignment: pc.buffer_alignment,
+                min_storage_buffer_offset_alignment: pc.buffer_alignment,
+
+                max_compute_work_group_count: [!0; 3], // really undefined
+                max_compute_work_group_size: {
+                    let size = device.max_threads_per_threadgroup();
+                    [size.width as u32, size.height as u32, size.depth as u32]
+                },
+                max_compute_shared_memory_size: pc.max_total_threadgroup_memory as usize,
+
+                max_vertex_input_attributes: 31,
+                max_vertex_input_bindings: 31,
+                max_vertex_input_attribute_offset: 255, // TODO
+                max_vertex_input_binding_stride: 256,   // TODO
+                max_vertex_output_components: pc.max_fragment_input_components as usize,
+
+                framebuffer_color_sample_counts: 0b101, // TODO
+                framebuffer_depth_sample_counts: 0b101, // TODO
+                framebuffer_stencil_sample_counts: 0b101, // TODO
+                max_color_attachments: pc.max_color_render_targets as usize,
+
+                buffer_image_granularity: 1,
+                // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
+                // and those need to operate on sizes being multiples of 4.
+                non_coherent_atom_size: 4,
+                max_sampler_anisotropy: 16.,
+                min_vertex_input_binding_stride_alignment: STRIDE_GRANULARITY as u64,
+
+                ..hal::Limits::default() // TODO!
+            },
             performance_caveats: caveats,
             dynamic_pipeline_states: hal::DynamicStates::all(),
-        }
-    }
 
-    fn limits(&self) -> hal::Limits {
-        let pc = &self.shared.private_caps;
-        let device = self.shared.device.lock();
-        hal::Limits {
-            max_image_1d_size: pc.max_texture_size as _,
-            max_image_2d_size: pc.max_texture_size as _,
-            max_image_3d_size: pc.max_texture_3d_size as _,
-            max_image_cube_size: pc.max_texture_size as _,
-            max_image_array_layers: pc.max_texture_layers as _,
-            max_texel_elements: (pc.max_texture_size * pc.max_texture_size) as usize,
-            max_uniform_buffer_range: pc.max_buffer_size,
-            max_storage_buffer_range: pc.max_buffer_size,
-            // "Maximum length of an inlined constant data buffer, per graphics or compute function"
-            max_push_constants_size: 0x1000,
-            max_sampler_allocation_count: !0,
-            max_bound_descriptor_sets: MAX_BOUND_DESCRIPTOR_SETS as _,
-            max_descriptor_set_samplers: pc.max_samplers_per_stage as usize * SHADER_STAGE_COUNT,
-            max_descriptor_set_uniform_buffers: pc.max_buffers_per_stage as usize
-                * SHADER_STAGE_COUNT,
-            max_descriptor_set_uniform_buffers_dynamic: 8 * SHADER_STAGE_COUNT,
-            max_descriptor_set_storage_buffers: pc.max_buffers_per_stage as usize
-                * SHADER_STAGE_COUNT,
-            max_descriptor_set_storage_buffers_dynamic: 4 * SHADER_STAGE_COUNT,
-            max_descriptor_set_sampled_images: pc
-                .max_textures_per_stage
-                .min(pc.max_samplers_per_stage)
-                as usize
-                * SHADER_STAGE_COUNT,
-            max_descriptor_set_storage_images: pc.max_textures_per_stage as usize
-                * SHADER_STAGE_COUNT,
-            max_descriptor_set_input_attachments: pc.max_textures_per_stage as usize
-                * SHADER_STAGE_COUNT,
-            max_fragment_input_components: pc.max_fragment_input_components as usize,
-            max_framebuffer_layers: 2048, // TODO: Determine is this is the correct value
-            max_memory_allocation_count: 4096, // TODO: Determine is this is the correct value
-
-            max_per_stage_descriptor_samplers: pc.max_samplers_per_stage as usize,
-            max_per_stage_descriptor_uniform_buffers: pc.max_buffers_per_stage as usize,
-            max_per_stage_descriptor_storage_buffers: pc.max_buffers_per_stage as usize,
-            max_per_stage_descriptor_sampled_images: pc
-                .max_textures_per_stage
-                .min(pc.max_samplers_per_stage)
-                as usize,
-            max_per_stage_descriptor_storage_images: pc.max_textures_per_stage as usize,
-            max_per_stage_descriptor_input_attachments: pc.max_textures_per_stage as usize, //TODO
-            max_per_stage_resources: 0x100,                                                 //TODO
-
-            max_patch_size: 0, // No tessellation
-
-            // Note: The maximum number of supported viewports and scissor rectangles varies by device.
-            // TODO: read from Metal Feature Sets.
-            max_viewports: 1,
-            max_viewport_dimensions: [pc.max_texture_size as _; 2],
-            max_framebuffer_extent: hal::image::Extent {
-                //TODO
-                width: pc.max_texture_size as _,
-                height: pc.max_texture_size as _,
-                depth: pc.max_texture_layers as _,
-            },
-            min_memory_map_alignment: 4,
-
-            optimal_buffer_copy_offset_alignment: pc.buffer_alignment,
-            optimal_buffer_copy_pitch_alignment: 4,
-            min_texel_buffer_offset_alignment: pc.buffer_alignment,
-            min_uniform_buffer_offset_alignment: pc.buffer_alignment,
-            min_storage_buffer_offset_alignment: pc.buffer_alignment,
-
-            max_compute_work_group_count: [!0; 3], // really undefined
-            max_compute_work_group_size: {
-                let size = device.max_threads_per_threadgroup();
-                [size.width as u32, size.height as u32, size.depth as u32]
-            },
-            max_compute_shared_memory_size: pc.max_total_threadgroup_memory as usize,
-
-            max_vertex_input_attributes: 31,
-            max_vertex_input_bindings: 31,
-            max_vertex_input_attribute_offset: 255, // TODO
-            max_vertex_input_binding_stride: 256,   // TODO
-            max_vertex_output_components: pc.max_fragment_input_components as usize,
-
-            framebuffer_color_sample_counts: 0b101,   // TODO
-            framebuffer_depth_sample_counts: 0b101,   // TODO
-            framebuffer_stencil_sample_counts: 0b101, // TODO
-            max_color_attachments: pc.max_color_render_targets as usize,
-
-            buffer_image_granularity: 1,
-            // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
-            // and those need to operate on sizes being multiples of 4.
-            non_coherent_atom_size: 4,
-            max_sampler_anisotropy: 16.,
-            min_vertex_input_binding_stride_alignment: STRIDE_GRANULARITY as u64,
-
-            ..hal::Limits::default() // TODO!
+            ..hal::PhysicalDeviceProperties::default()
         }
     }
 }

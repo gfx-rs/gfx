@@ -47,7 +47,7 @@ use hal::{
     pso::{PatchSize, PipelineStage},
     queue,
     window::{OutOfDate, PresentError, Suboptimal, SurfaceLost},
-    Capabilities, DynamicStates, Features, Limits,
+    PhysicalDeviceProperties, DescriptorLimits, DynamicStates, Features, Limits,
 };
 
 use std::{
@@ -798,16 +798,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 }
             }
 
-            if requested_features.intersects(
-                Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
-                    | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
-                    | Features::UNSIZED_DESCRIPTOR_ARRAY,
-            ) {
+            if requested_features.intersects(Features::DESCRIPTOR_INDEXING_MASK) {
                 requested_extensions.push(vk::ExtDescriptorIndexingFn::name());
                 requested_extensions.push(vk::KhrMaintenance3Fn::name()); // Required for `ExtDescriptorIndexingFn`
             }
 
-            if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
+            if requested_features.intersects(Features::MESH_SHADER_MASK) {
                 requested_extensions.push(MeshShader::name());
             }
 
@@ -893,12 +889,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         let swapchain_fn = Swapchain::new(&self.instance.inner, &device_raw);
 
-        let mesh_fn =
-            if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
-                Some(MeshShader::new(&self.instance.inner, &device_raw))
-            } else {
-                None
-            };
+        let mesh_fn = if requested_features.intersects(Features::MESH_SHADER_MASK) {
+            Some(MeshShader::new(&self.instance.inner, &device_raw))
+        } else {
+            None
+        };
 
         let indirect_count_fn = if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
             Some(DrawIndirectCount::new(&self.instance.inner, &device_raw))
@@ -1094,6 +1089,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     == info::intel::DEVICE_SKY_LAKE_MASK);
 
         let mut descriptor_indexing_features = None;
+        let mut mesh_shader_features = None;
         let features = if let Some(ref get_device_properties) =
             self.instance.get_physical_device_properties
         {
@@ -1108,6 +1104,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     Some(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
 
                 let mut_ref = descriptor_indexing_features.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
+            if self.supports_extension(MeshShader::name()) {
+                mesh_shader_features =
+                    Some(vk::PhysicalDeviceMeshShaderFeaturesNV::builder().build());
+
+                let mut_ref = mesh_shader_features.as_mut().unwrap();
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
@@ -1154,6 +1158,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
             if desc_indexing.runtime_descriptor_array != 0 {
                 bits |= Features::UNSIZED_DESCRIPTOR_ARRAY;
+            }
+        }
+        if let Some(ref mesh_shader) = mesh_shader_features {
+            if mesh_shader.task_shader != 0 {
+                bits |= Features::TASK_SHADER;
+            }
+            if mesh_shader.mesh_shader != 0 {
+                bits |= Features::MESH_SHADER;
             }
         }
 
@@ -1322,139 +1334,195 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         if features.inherited_queries != 0 {
             bits |= Features::INHERITED_QUERIES;
         }
-        if self.supports_extension(MeshShader::name()) {
-            bits |= Features::TASK_SHADER;
-            bits |= Features::MESH_SHADER
-        }
 
         bits
     }
 
-    fn capabilities(&self) -> Capabilities {
-        Capabilities {
+    fn properties(&self) -> PhysicalDeviceProperties {
+        let limits = {
+            let limits = &self.properties.limits;
+
+            let max_group_count = limits.max_compute_work_group_count;
+            let max_group_size = limits.max_compute_work_group_size;
+
+            Limits {
+                max_image_1d_size: limits.max_image_dimension1_d,
+                max_image_2d_size: limits.max_image_dimension2_d,
+                max_image_3d_size: limits.max_image_dimension3_d,
+                max_image_cube_size: limits.max_image_dimension_cube,
+                max_image_array_layers: limits.max_image_array_layers as _,
+                max_texel_elements: limits.max_texel_buffer_elements as _,
+                max_patch_size: limits.max_tessellation_patch_size as PatchSize,
+                max_viewports: limits.max_viewports as _,
+                max_viewport_dimensions: limits.max_viewport_dimensions,
+                max_framebuffer_extent: image::Extent {
+                    width: limits.max_framebuffer_width,
+                    height: limits.max_framebuffer_height,
+                    depth: limits.max_framebuffer_layers,
+                },
+                max_compute_work_group_count: [
+                    max_group_count[0] as _,
+                    max_group_count[1] as _,
+                    max_group_count[2] as _,
+                ],
+                max_compute_work_group_size: [
+                    max_group_size[0] as _,
+                    max_group_size[1] as _,
+                    max_group_size[2] as _,
+                ],
+                max_vertex_input_attributes: limits.max_vertex_input_attributes as _,
+                max_vertex_input_bindings: limits.max_vertex_input_bindings as _,
+                max_vertex_input_attribute_offset: limits.max_vertex_input_attribute_offset as _,
+                max_vertex_input_binding_stride: limits.max_vertex_input_binding_stride as _,
+                max_vertex_output_components: limits.max_vertex_output_components as _,
+                optimal_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment
+                    as _,
+                optimal_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment
+                    as _,
+                min_texel_buffer_offset_alignment: limits.min_texel_buffer_offset_alignment as _,
+                min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment
+                    as _,
+                min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment
+                    as _,
+                framebuffer_color_sample_counts: limits.framebuffer_color_sample_counts.as_raw()
+                    as _,
+                framebuffer_depth_sample_counts: limits.framebuffer_depth_sample_counts.as_raw()
+                    as _,
+                framebuffer_stencil_sample_counts: limits.framebuffer_stencil_sample_counts.as_raw()
+                    as _,
+                timestamp_compute_and_graphics: limits.timestamp_compute_and_graphics != 0,
+                max_color_attachments: limits.max_color_attachments as _,
+                buffer_image_granularity: limits.buffer_image_granularity,
+                non_coherent_atom_size: limits.non_coherent_atom_size as _,
+                max_sampler_anisotropy: limits.max_sampler_anisotropy,
+                min_vertex_input_binding_stride_alignment: 1,
+                max_bound_descriptor_sets: limits.max_bound_descriptor_sets as _,
+                max_compute_shared_memory_size: limits.max_compute_shared_memory_size as _,
+                max_compute_work_group_invocations: limits.max_compute_work_group_invocations as _,
+                descriptor_limits: DescriptorLimits {
+                    max_per_stage_descriptor_samplers: limits.max_per_stage_descriptor_samplers,
+                    max_per_stage_descriptor_storage_buffers: limits
+                        .max_per_stage_descriptor_storage_buffers,
+                    max_per_stage_descriptor_uniform_buffers: limits
+                        .max_per_stage_descriptor_uniform_buffers,
+                    max_per_stage_descriptor_sampled_images: limits
+                        .max_per_stage_descriptor_sampled_images,
+                    max_per_stage_descriptor_storage_images: limits
+                        .max_per_stage_descriptor_storage_images,
+                    max_per_stage_descriptor_input_attachments: limits
+                        .max_per_stage_descriptor_input_attachments,
+                    max_per_stage_resources: limits.max_per_stage_resources,
+                    max_descriptor_set_samplers: limits.max_descriptor_set_samplers,
+                    max_descriptor_set_uniform_buffers: limits.max_descriptor_set_uniform_buffers,
+                    max_descriptor_set_uniform_buffers_dynamic: limits
+                        .max_descriptor_set_uniform_buffers_dynamic,
+                    max_descriptor_set_storage_buffers: limits.max_descriptor_set_storage_buffers,
+                    max_descriptor_set_storage_buffers_dynamic: limits
+                        .max_descriptor_set_storage_buffers_dynamic,
+                    max_descriptor_set_sampled_images: limits.max_descriptor_set_sampled_images,
+                    max_descriptor_set_storage_images: limits.max_descriptor_set_storage_images,
+                    max_descriptor_set_input_attachments: limits
+                        .max_descriptor_set_input_attachments,
+                },
+                max_draw_indexed_index_value: limits.max_draw_indexed_index_value,
+                max_draw_indirect_count: limits.max_draw_indirect_count,
+                max_fragment_combined_output_resources: limits
+                    .max_fragment_combined_output_resources
+                    as _,
+                max_fragment_dual_source_attachments: limits.max_fragment_dual_src_attachments as _,
+                max_fragment_input_components: limits.max_fragment_input_components as _,
+                max_fragment_output_attachments: limits.max_fragment_output_attachments as _,
+                max_framebuffer_layers: limits.max_framebuffer_layers as _,
+                max_geometry_input_components: limits.max_geometry_input_components as _,
+                max_geometry_output_components: limits.max_geometry_output_components as _,
+                max_geometry_output_vertices: limits.max_geometry_output_vertices as _,
+                max_geometry_shader_invocations: limits.max_geometry_shader_invocations as _,
+                max_geometry_total_output_components: limits.max_geometry_total_output_components
+                    as _,
+                max_memory_allocation_count: limits.max_memory_allocation_count as _,
+                max_push_constants_size: limits.max_push_constants_size as _,
+                max_sampler_allocation_count: limits.max_sampler_allocation_count as _,
+                max_sampler_lod_bias: limits.max_sampler_lod_bias as _,
+                max_storage_buffer_range: limits.max_storage_buffer_range as _,
+                max_uniform_buffer_range: limits.max_uniform_buffer_range as _,
+                min_memory_map_alignment: limits.min_memory_map_alignment,
+                standard_sample_locations: limits.standard_sample_locations == ash::vk::TRUE,
+            }
+        };
+
+        let mut descriptor_indexing_capabilities = hal::DescriptorIndexingProperties::default();
+        let mut mesh_shader_capabilities = hal::MeshShaderProperties::default();
+
+        if let Some(get_physical_device_properties) =
+            self.instance.get_physical_device_properties.as_ref()
+        {
+            let mut descriptor_indexing_properties =
+                vk::PhysicalDeviceDescriptorIndexingPropertiesEXT::builder();
+            let mut mesh_shader_properties = vk::PhysicalDeviceMeshShaderPropertiesNV::builder();
+
+            unsafe {
+                get_physical_device_properties.get_physical_device_properties2_khr(
+                    self.handle,
+                    &mut vk::PhysicalDeviceProperties2::builder()
+                        .push_next(&mut mesh_shader_properties)
+                        .push_next(&mut descriptor_indexing_properties)
+                        .build() as *mut _,
+                );
+            }
+
+            descriptor_indexing_capabilities = hal::DescriptorIndexingProperties {
+                shader_uniform_buffer_array_non_uniform_indexing_native:
+                    descriptor_indexing_properties
+                        .shader_uniform_buffer_array_non_uniform_indexing_native
+                        == vk::TRUE,
+                shader_sampled_image_array_non_uniform_indexing_native:
+                    descriptor_indexing_properties
+                        .shader_sampled_image_array_non_uniform_indexing_native
+                        == vk::TRUE,
+                shader_storage_buffer_array_non_uniform_indexing_native:
+                    descriptor_indexing_properties
+                        .shader_storage_buffer_array_non_uniform_indexing_native
+                        == vk::TRUE,
+                shader_storage_image_array_non_uniform_indexing_native:
+                    descriptor_indexing_properties
+                        .shader_storage_image_array_non_uniform_indexing_native
+                        == vk::TRUE,
+                shader_input_attachment_array_non_uniform_indexing_native:
+                    descriptor_indexing_properties
+                        .shader_input_attachment_array_non_uniform_indexing_native
+                        == vk::TRUE,
+                quad_divergent_implicit_lod: descriptor_indexing_properties
+                    .quad_divergent_implicit_lod
+                    == vk::TRUE,
+            };
+
+            mesh_shader_capabilities = hal::MeshShaderProperties {
+                max_draw_mesh_tasks_count: mesh_shader_properties.max_draw_mesh_tasks_count,
+                max_task_work_group_invocations: mesh_shader_properties
+                    .max_task_work_group_invocations,
+                max_task_work_group_size: mesh_shader_properties.max_task_work_group_size,
+                max_task_total_memory_size: mesh_shader_properties.max_task_total_memory_size,
+                max_task_output_count: mesh_shader_properties.max_task_output_count,
+                max_mesh_work_group_invocations: mesh_shader_properties
+                    .max_mesh_work_group_invocations,
+                max_mesh_work_group_size: mesh_shader_properties.max_mesh_work_group_size,
+                max_mesh_total_memory_size: mesh_shader_properties.max_mesh_total_memory_size,
+                max_mesh_output_vertices: mesh_shader_properties.max_mesh_output_vertices,
+                max_mesh_output_primitives: mesh_shader_properties.max_mesh_output_primitives,
+                max_mesh_multiview_view_count: mesh_shader_properties.max_mesh_multiview_view_count,
+                mesh_output_per_vertex_granularity: mesh_shader_properties
+                    .mesh_output_per_vertex_granularity,
+                mesh_output_per_primitive_granularity: mesh_shader_properties
+                    .mesh_output_per_primitive_granularity,
+            };
+        }
+
+        PhysicalDeviceProperties {
+            limits,
+            descriptor_indexing: descriptor_indexing_capabilities,
+            mesh_shader: mesh_shader_capabilities,
             performance_caveats: Default::default(),
             dynamic_pipeline_states: DynamicStates::all(),
-        }
-    }
-
-    fn limits(&self) -> Limits {
-        let limits = &self.properties.limits;
-        let max_group_count = limits.max_compute_work_group_count;
-        let max_group_size = limits.max_compute_work_group_size;
-
-        Limits {
-            max_image_1d_size: limits.max_image_dimension1_d,
-            max_image_2d_size: limits.max_image_dimension2_d,
-            max_image_3d_size: limits.max_image_dimension3_d,
-            max_image_cube_size: limits.max_image_dimension_cube,
-            max_image_array_layers: limits.max_image_array_layers as _,
-            max_texel_elements: limits.max_texel_buffer_elements as _,
-            max_patch_size: limits.max_tessellation_patch_size as PatchSize,
-            max_viewports: limits.max_viewports as _,
-            max_viewport_dimensions: limits.max_viewport_dimensions,
-            max_framebuffer_extent: image::Extent {
-                width: limits.max_framebuffer_width,
-                height: limits.max_framebuffer_height,
-                depth: limits.max_framebuffer_layers,
-            },
-            max_compute_work_group_count: [
-                max_group_count[0] as _,
-                max_group_count[1] as _,
-                max_group_count[2] as _,
-            ],
-            max_compute_work_group_size: [
-                max_group_size[0] as _,
-                max_group_size[1] as _,
-                max_group_size[2] as _,
-            ],
-            max_vertex_input_attributes: limits.max_vertex_input_attributes as _,
-            max_vertex_input_bindings: limits.max_vertex_input_bindings as _,
-            max_vertex_input_attribute_offset: limits.max_vertex_input_attribute_offset as _,
-            max_vertex_input_binding_stride: limits.max_vertex_input_binding_stride as _,
-            max_vertex_output_components: limits.max_vertex_output_components as _,
-            optimal_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as _,
-            optimal_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment
-                as _,
-            min_texel_buffer_offset_alignment: limits.min_texel_buffer_offset_alignment as _,
-            min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as _,
-            min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as _,
-            framebuffer_color_sample_counts: limits.framebuffer_color_sample_counts.as_raw() as _,
-            framebuffer_depth_sample_counts: limits.framebuffer_depth_sample_counts.as_raw() as _,
-            framebuffer_stencil_sample_counts: limits.framebuffer_stencil_sample_counts.as_raw()
-                as _,
-            timestamp_compute_and_graphics: limits.timestamp_compute_and_graphics != 0,
-            max_color_attachments: limits.max_color_attachments as _,
-            buffer_image_granularity: limits.buffer_image_granularity,
-            non_coherent_atom_size: limits.non_coherent_atom_size as _,
-            max_sampler_anisotropy: limits.max_sampler_anisotropy,
-            min_vertex_input_binding_stride_alignment: 1,
-            max_bound_descriptor_sets: limits.max_bound_descriptor_sets as _,
-            max_compute_shared_memory_size: limits.max_compute_shared_memory_size as _,
-            max_compute_work_group_invocations: limits.max_compute_work_group_invocations as _,
-            max_descriptor_set_input_attachments: limits.max_descriptor_set_input_attachments as _,
-            max_descriptor_set_sampled_images: limits.max_descriptor_set_sampled_images as _,
-            max_descriptor_set_samplers: limits.max_descriptor_set_samplers as _,
-            max_descriptor_set_storage_buffers: limits.max_descriptor_set_storage_buffers as _,
-            max_descriptor_set_storage_buffers_dynamic: limits
-                .max_descriptor_set_storage_buffers_dynamic
-                as _,
-            max_descriptor_set_storage_images: limits.max_descriptor_set_storage_images as _,
-            max_descriptor_set_uniform_buffers: limits.max_descriptor_set_uniform_buffers as _,
-            max_descriptor_set_uniform_buffers_dynamic: limits
-                .max_descriptor_set_uniform_buffers_dynamic
-                as _,
-            max_draw_indexed_index_value: limits.max_draw_indexed_index_value,
-            max_draw_indirect_count: limits.max_draw_indirect_count,
-            max_fragment_combined_output_resources: limits.max_fragment_combined_output_resources
-                as _,
-            max_fragment_dual_source_attachments: limits.max_fragment_dual_src_attachments as _,
-            max_fragment_input_components: limits.max_fragment_input_components as _,
-            max_fragment_output_attachments: limits.max_fragment_output_attachments as _,
-            max_framebuffer_layers: limits.max_framebuffer_layers as _,
-            max_geometry_input_components: limits.max_geometry_input_components as _,
-            max_geometry_output_components: limits.max_geometry_output_components as _,
-            max_geometry_output_vertices: limits.max_geometry_output_vertices as _,
-            max_geometry_shader_invocations: limits.max_geometry_shader_invocations as _,
-            max_geometry_total_output_components: limits.max_geometry_total_output_components as _,
-            max_memory_allocation_count: limits.max_memory_allocation_count as _,
-            max_per_stage_descriptor_input_attachments: limits
-                .max_per_stage_descriptor_input_attachments
-                as _,
-            max_per_stage_descriptor_sampled_images: limits.max_per_stage_descriptor_sampled_images
-                as _,
-            max_per_stage_descriptor_samplers: limits.max_per_stage_descriptor_samplers as _,
-            max_per_stage_descriptor_storage_buffers: limits
-                .max_per_stage_descriptor_storage_buffers
-                as _,
-            max_per_stage_descriptor_storage_images: limits.max_per_stage_descriptor_storage_images
-                as _,
-            max_per_stage_descriptor_uniform_buffers: limits
-                .max_per_stage_descriptor_uniform_buffers
-                as _,
-            max_per_stage_resources: limits.max_per_stage_resources as _,
-            max_push_constants_size: limits.max_push_constants_size as _,
-            max_sampler_allocation_count: limits.max_sampler_allocation_count as _,
-            max_sampler_lod_bias: limits.max_sampler_lod_bias as _,
-            max_storage_buffer_range: limits.max_storage_buffer_range as _,
-            max_uniform_buffer_range: limits.max_uniform_buffer_range as _,
-            min_memory_map_alignment: limits.min_memory_map_alignment,
-            standard_sample_locations: limits.standard_sample_locations == ash::vk::TRUE,
-
-            // TODO: Implement Limits for Mesh Shaders
-            //       Depends on VkPhysicalDeviceMeshShaderPropertiesNV which depends on VkPhysicalProperties2
-            max_draw_mesh_tasks_count: 0,
-            max_task_work_group_invocations: 0,
-            max_task_work_group_size: [0; 3],
-            max_task_total_memory_size: 0,
-            max_task_output_count: 0,
-            max_mesh_work_group_invocations: 0,
-            max_mesh_work_group_size: [0; 3],
-            max_mesh_total_memory_size: 0,
-            max_mesh_output_vertices: 0,
-            max_mesh_output_primitives: 0,
-            max_mesh_multiview_view_count: 0,
-            mesh_output_per_vertex_granularity: 0,
-            mesh_output_per_primitive_granularity: 0,
         }
     }
 

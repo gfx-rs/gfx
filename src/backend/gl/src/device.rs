@@ -849,7 +849,7 @@ impl d::Device<B> for Device {
         flags: CommandPoolCreateFlags,
     ) -> Result<CommandPool, d::OutOfMemory> {
         let fbo = create_fbo_internal(&self.share);
-        let limits = self.share.limits.into();
+        let limits = self.share.public_caps.limits.into();
         let memory = if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
             BufferMemory::Individual {
                 storage: FastHashMap::default(),
@@ -889,7 +889,7 @@ impl d::Device<B> for Device {
         let subpasses = subpasses
             .map(|subpass| {
                 assert!(
-                    subpass.colors.len() <= self.share.limits.max_color_attachments,
+                    subpass.colors.len() <= self.share.public_caps.limits.max_color_attachments,
                     "Color attachment limit exceeded"
                 );
                 let color_attachments = subpass.colors.iter().map(|&(index, _)| index).collect();
@@ -1082,7 +1082,7 @@ impl d::Device<B> for Device {
         desc: &pso::ComputePipelineDesc<'a, B>,
         _cache: Option<&()>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
-        if self.share.limits.max_compute_work_group_count[0] == 0 {
+        if self.share.public_caps.limits.max_compute_work_group_count[0] == 0 {
             return Err(pso::CreationError::UnsupportedPipeline);
         }
         let shader = (naga::ShaderStage::Compute, Some(&desc.shader));

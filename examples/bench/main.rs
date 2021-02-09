@@ -48,7 +48,7 @@ fn main() {
     println!("Running on {}", adapter.info.name);
 
     let memory_properties = adapter.physical_device.memory_properties();
-    let limits = adapter.physical_device.limits();
+    let limits = adapter.physical_device.properties().limits;
     let family = adapter
         .queue_families
         .iter()
