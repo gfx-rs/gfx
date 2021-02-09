@@ -112,6 +112,17 @@ bitflags!(
     }
 );
 
+impl From<naga::ShaderStage> for ShaderStageFlags {
+    fn from(stage: naga::ShaderStage) -> Self {
+        use naga::ShaderStage as Ss;
+        match stage {
+            Ss::Vertex => Self::VERTEX,
+            Ss::Fragment => Self::FRAGMENT,
+            Ss::Compute => Self::COMPUTE,
+        }
+    }
+}
+
 /// Shader entry point.
 #[derive(Debug)]
 pub struct EntryPoint<'a, B: Backend> {

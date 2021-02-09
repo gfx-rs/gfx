@@ -72,6 +72,7 @@ optional = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.gfx-backend-metal]
 path = "../src/backend/metal"
+features = ["cross"]
 version = "0.7"
 optional = true
 

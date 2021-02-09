@@ -1,9 +1,9 @@
 use crate::{
     conversions as conv,
     internal::{BlitVertex, ClearKey, ClearVertex},
-    native, soft, window, AsNative, Backend, BufferPtr, OnlineRecording, PrivateDisabilities,
-    ResourceIndex, ResourcePtr, SamplerPtr, Shared, TexturePtr, MAX_BOUND_DESCRIPTOR_SETS,
-    MAX_COLOR_ATTACHMENTS,
+    native, soft, window, AsNative, Backend, BufferPtr, FastHashMap, OnlineRecording,
+    PrivateDisabilities, ResourceIndex, ResourcePtr, SamplerPtr, Shared, TexturePtr,
+    MAX_BOUND_DESCRIPTOR_SETS, MAX_COLOR_ATTACHMENTS,
 };
 
 use hal::{
@@ -19,7 +19,6 @@ use hal::{
 };
 
 use arrayvec::ArrayVec;
-use auxil::{FastHashMap, ShaderStage};
 use block::ConcreteBlock;
 use cocoa_foundation::foundation::NSUInteger;
 use copyless::VecHelper;
@@ -454,7 +453,7 @@ impl State {
 
         let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_ps));
         let push_constants = self.push_constants.as_slice();
-        let com_resources = [ShaderStage::Vertex, ShaderStage::Fragment]
+        let com_resources = [naga::ShaderStage::Vertex, naga::ShaderStage::Fragment]
             .iter()
             .zip(render_resources)
             .flat_map(move |(&stage, resources)| {
@@ -577,7 +576,7 @@ impl State {
         }
 
         Some(soft::RenderCommand::BindBuffers {
-            stage: ShaderStage::Vertex,
+            stage: naga::ShaderStage::Vertex,
             index: start as ResourceIndex,
             buffers: (
                 &self.resources_vs.buffers[start..end],
@@ -631,7 +630,7 @@ impl State {
     ) -> soft::RenderCommand<&soft::Ref> {
         self.resources_vs.push_constants = Some(pc);
         soft::RenderCommand::BindBufferData {
-            stage: ShaderStage::Vertex,
+            stage: naga::ShaderStage::Vertex,
             index: pc.buffer_index,
             words: &self.push_constants[..pc.count as usize],
         }
@@ -643,7 +642,7 @@ impl State {
     ) -> soft::RenderCommand<&soft::Ref> {
         self.resources_ps.push_constants = Some(pc);
         soft::RenderCommand::BindBufferData {
-            stage: ShaderStage::Fragment,
+            stage: naga::ShaderStage::Fragment,
             index: pc.buffer_index,
             words: &self.push_constants[..pc.count as usize],
         }
@@ -1723,8 +1722,10 @@ where
         } => {
             let native = Some(buffer.as_native());
             match stage {
-                ShaderStage::Vertex => encoder.set_vertex_buffer(index as _, native, offset as _),
-                ShaderStage::Fragment => {
+                naga::ShaderStage::Vertex => {
+                    encoder.set_vertex_buffer(index as _, native, offset as _)
+                }
+                naga::ShaderStage::Fragment => {
                     encoder.set_fragment_buffer(index as _, native, offset as _)
                 }
                 _ => unreachable!(),
@@ -1744,8 +1745,10 @@ where
                 };
                 let offsets = buffers.as_slice(resources);
                 match stage {
-                    ShaderStage::Vertex => encoder.set_vertex_buffers(index as _, data, offsets),
-                    ShaderStage::Fragment => {
+                    naga::ShaderStage::Vertex => {
+                        encoder.set_vertex_buffers(index as _, data, offsets)
+                    }
+                    naga::ShaderStage::Fragment => {
                         encoder.set_fragment_buffers(index as _, data, offsets)
                     }
                     _ => unreachable!(),
@@ -1759,12 +1762,12 @@ where
         } => {
             let slice = words.borrow();
             match stage {
-                ShaderStage::Vertex => encoder.set_vertex_bytes(
+                naga::ShaderStage::Vertex => encoder.set_vertex_bytes(
                     index as _,
                     (slice.len() * WORD_SIZE) as u64,
                     slice.as_ptr() as _,
                 ),
-                ShaderStage::Fragment => encoder.set_fragment_bytes(
+                naga::ShaderStage::Fragment => encoder.set_fragment_bytes(
                     index as _,
                     (slice.len() * WORD_SIZE) as u64,
                     slice.as_ptr() as _,
@@ -1785,8 +1788,8 @@ where
                     mem::transmute(values)
                 };
                 match stage {
-                    ShaderStage::Vertex => encoder.set_vertex_textures(index as _, data),
-                    ShaderStage::Fragment => encoder.set_fragment_textures(index as _, data),
+                    naga::ShaderStage::Vertex => encoder.set_vertex_textures(index as _, data),
+                    naga::ShaderStage::Fragment => encoder.set_fragment_textures(index as _, data),
                     _ => unreachable!(),
                 }
             }
@@ -1804,8 +1807,12 @@ where
                     mem::transmute(values)
                 };
                 match stage {
-                    ShaderStage::Vertex => encoder.set_vertex_sampler_states(index as _, data),
-                    ShaderStage::Fragment => encoder.set_fragment_sampler_states(index as _, data),
+                    naga::ShaderStage::Vertex => {
+                        encoder.set_vertex_sampler_states(index as _, data)
+                    }
+                    naga::ShaderStage::Fragment => {
+                        encoder.set_fragment_sampler_states(index as _, data)
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -2978,7 +2985,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     // always passing the attachment clears as `ClearColor::Sfloat` atm.
                     raw_value = com::ClearColor::from(value);
                     let com = soft::RenderCommand::BindBufferData {
-                        stage: ShaderStage::Fragment,
+                        stage: naga::ShaderStage::Fragment,
                         index: 0,
                         words: slice::from_raw_parts(
                             raw_value.float32.as_ptr() as *const u32,
@@ -3022,7 +3029,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             let com_vertex = if vertex_is_dirty {
                 vertex_is_dirty = false;
                 Some(soft::RenderCommand::BindBufferData {
-                    stage: ShaderStage::Vertex,
+                    stage: naga::ShaderStage::Vertex,
                     index: 0,
                     words: slice::from_raw_parts(
                         vertices.as_ptr() as *const u32,
@@ -3083,7 +3090,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.state.resources_vs.buffer_offsets.first(),
         ) {
             (Some(&Some(buffer)), Some(&offset)) => Some(soft::RenderCommand::BindBuffer {
-                stage: ShaderStage::Vertex,
+                stage: naga::ShaderStage::Vertex,
                 index: 0,
                 buffer,
                 offset,
@@ -3095,7 +3102,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.state.resources_ps.buffer_offsets.first(),
         ) {
             (Some(&Some(buffer)), Some(&offset)) => Some(soft::RenderCommand::BindBuffer {
-                stage: ShaderStage::Fragment,
+                stage: naga::ShaderStage::Fragment,
                 index: 0,
                 buffer,
                 offset,
@@ -3266,12 +3273,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let prelude = [
             soft::RenderCommand::BindPipeline(&**pso),
             soft::RenderCommand::BindSamplers {
-                stage: ShaderStage::Fragment,
+                stage: naga::ShaderStage::Fragment,
                 index: 0,
                 samplers: &[Some(AsNative::from(sampler))][..],
             },
             soft::RenderCommand::BindTextures {
-                stage: ShaderStage::Fragment,
+                stage: naga::ShaderStage::Fragment,
                 index: 0,
                 textures: &[Some(src_native)][..],
             },
@@ -3341,7 +3348,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         height: ext.height as _,
                     }),
                     soft::RenderCommand::BindBufferData {
-                        stage: ShaderStage::Vertex,
+                        stage: naga::ShaderStage::Vertex,
                         index: 0,
                         words: slice::from_raw_parts(
                             list.as_ptr() as *const u32,
@@ -3853,7 +3860,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             Some(AsNative::from(raw.as_ref()));
                         self.state.resources_vs.buffer_offsets[index as usize] = raw_offset;
                         pre.issue(soft::RenderCommand::BindBuffer {
-                            stage: ShaderStage::Vertex,
+                            stage: naga::ShaderStage::Vertex,
                             index,
                             buffer: AsNative::from(raw.as_ref()),
                             offset: raw_offset,
@@ -3865,7 +3872,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             Some(AsNative::from(raw.as_ref()));
                         self.state.resources_ps.buffer_offsets[index as usize] = raw_offset;
                         pre.issue(soft::RenderCommand::BindBuffer {
-                            stage: ShaderStage::Fragment,
+                            stage: naga::ShaderStage::Fragment,
                             index,
                             buffer: AsNative::from(raw.as_ref()),
                             offset: raw_offset,
@@ -3894,15 +3901,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
 
         // now bind all the affected resources
-        for (stage, cache, range) in
-            iter::once((ShaderStage::Vertex, &self.state.resources_vs, bind_range.vs)).chain(
-                iter::once((
-                    ShaderStage::Fragment,
-                    &self.state.resources_ps,
-                    bind_range.ps,
-                )),
-            )
-        {
+        for (stage, cache, range) in iter::once((
+            naga::ShaderStage::Vertex,
+            &self.state.resources_vs,
+            bind_range.vs,
+        ))
+        .chain(iter::once((
+            naga::ShaderStage::Fragment,
+            &self.state.resources_ps,
+            bind_range.ps,
+        ))) {
             if range.textures.start != range.textures.end {
                 pre.issue(soft::RenderCommand::BindTextures {
                     stage,
