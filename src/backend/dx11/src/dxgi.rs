@@ -90,7 +90,7 @@ fn create_dxgi_factory1(
 pub(crate) fn get_dxgi_factory(
 ) -> Result<(libloading::Library, ComPtr<dxgi::IDXGIFactory>, DxgiVersion), winerror::HRESULT> {
     // The returned Com-pointer is only safe to use for the lifetime of the Library.
-    let library = libloading::Library::new("dxgi.dll").map_err(|_| -1)?;
+    let library = unsafe { libloading::Library::new("dxgi.dll").map_err(|_| -1)? };
     let func: libloading::Symbol<DxgiFun> =
         unsafe { library.get(b"CreateDXGIFactory1") }.map_err(|_| -1)?;
 

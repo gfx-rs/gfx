@@ -24,7 +24,7 @@ auxil = { path = "../../auxil/auxil", version = "0.8", package = "gfx-auxil", fe
 hal = { path = "../../hal", version = "0.7", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
-libloading = "0.6"
+libloading = "0.7"
 log = { version = "0.4" }
 smallvec = "1.0"
 spirv_cross = { version = "0.23", features = ["hlsl"] }
