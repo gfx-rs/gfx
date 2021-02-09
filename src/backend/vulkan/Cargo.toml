@@ -14,7 +14,7 @@ edition = "2018"
 
 [features]
 default = []
-use-rtld-next = ["shared_library"]
+use-rtld-next = ["libc"]
 
 [lib]
 name = "gfx_backend_vulkan"
@@ -23,7 +23,7 @@ name = "gfx_backend_vulkan"
 arrayvec = "0.5"
 byteorder = "1"
 log = { version = "0.4" }
-shared_library = { version = "0.1.9", optional = true }
+libc = { version = "0.2", optional = true }
 ash = "0.31"
 hal = { path = "../../hal", version = "0.7", package = "gfx-hal" }
 parking_lot = "0.11"
