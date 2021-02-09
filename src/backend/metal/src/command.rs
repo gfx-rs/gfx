@@ -2624,6 +2624,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             let subpass = &sp.main_pass.subpasses[sp.index as usize];
             self.state.target.formats = subpass.attachments.map(|at| (at.format, at.channel));
             self.state.target.aspects = Aspects::empty();
+            self.state.target.samples = subpass.samples;
             if !subpass.attachments.colors.is_empty() {
                 self.state.target.aspects |= Aspects::COLOR;
             }
@@ -3519,7 +3520,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         //Note: we stack the subpasses in the opposite order
         for subpass in render_pass.subpasses.iter().rev() {
             let mut combined_aspects = Aspects::empty();
-            let mut sample_count = 0;
             let descriptor = autoreleasepool(|| {
                 let descriptor = self
                     .pool_shared
@@ -3536,7 +3536,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     let desc = descriptor.color_attachments().object_at(i as _).unwrap();
 
                     combined_aspects |= Aspects::COLOR;
-                    sample_count = sample_count.max(rat.samples);
                     desc.set_texture(Some(texture.as_ref()));
 
                     if at.ops.contains(native::AttachmentOps::LOAD) {
@@ -3559,7 +3558,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     let rat = &render_pass.attachments[at.id];
                     let &(ref texture, ref clear_value) = &self.temp.render_attachments[at.id];
                     let aspects = rat.format.unwrap().surface_desc().aspects;
-                    sample_count = sample_count.max(rat.samples);
                     combined_aspects |= aspects;
 
                     if aspects.contains(Aspects::DEPTH) {
@@ -3600,7 +3598,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 combined_aspects,
                 formats: subpass.attachments.map(|at| (at.format, at.channel)),
                 operations: subpass.attachments.map(|at| at.ops),
-                sample_count,
+                sample_count: subpass.samples,
             });
         }
 
