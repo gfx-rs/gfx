@@ -61,8 +61,6 @@ use std::{
 
 #[cfg(feature = "use-rtld-next")]
 use ash::EntryCustom;
-#[cfg(feature = "use-rtld-next")]
-use shared_library::dynamic_library::{DynamicLibrary, SpecialHandles};
 
 mod command;
 mod conv;
@@ -376,8 +374,7 @@ impl hal::Instance<Backend> for Instance {
 
         #[cfg(feature = "use-rtld-next")]
         let entry = EntryCustom::new_custom((), |_, name| unsafe {
-            DynamicLibrary::symbol_special(SpecialHandles::Next, &*name.to_string_lossy())
-                .unwrap_or(std::ptr::null_mut())
+            libc::dlsym(libc::RTLD_NEXT, name.as_ptr())
         });
 
         let driver_api_version = match entry.try_enumerate_instance_version() {
