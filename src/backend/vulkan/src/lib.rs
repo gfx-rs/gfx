@@ -225,15 +225,12 @@ unsafe fn display_debug_utils_object_name_info_ext(
 
                 match object_name {
                     Some(name) => format!(
-                        "(type: {:?}, hndl: {}, name: {})",
-                        obj_info.object_type,
-                        &obj_info.object_handle.to_string(),
-                        name
+                        "(type: {:?}, hndl: 0x{:x}, name: {})",
+                        obj_info.object_type, obj_info.object_handle, name
                     ),
                     None => format!(
-                        "(type: {:?}, hndl: {})",
-                        obj_info.object_type,
-                        &obj_info.object_handle.to_string()
+                        "(type: {:?}, hndl: 0x{:x})",
+                        obj_info.object_type, obj_info.object_handle
                     ),
                 }
             })
@@ -301,11 +298,8 @@ unsafe extern "system" fn debug_utils_messenger_callback(
 
     log!(message_severity, "{}\n", {
         let mut msg = format!(
-            "\n{} [{} ({})] : {}",
-            message_type,
-            message_id_name,
-            &message_id_number.to_string(),
-            message
+            "\n{} [{} (0x{:x})] : {}",
+            message_type, message_id_name, message_id_number, message
         );
 
         for &(info_label, ref info) in additional_info.iter() {
