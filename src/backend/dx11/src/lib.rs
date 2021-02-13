@@ -3844,7 +3844,7 @@ impl DescriptorSetInfo {
         &self,
         stage: ShaderStage,
         binding_index: pso::DescriptorBinding,
-    ) -> (DescriptorContent, RegisterData<ResourceIndex>) {
+    ) -> Option<(DescriptorContent, RegisterData<ResourceIndex>)> {
         let mut res_offsets = self
             .registers
             .map_register(|info| info.res_index as DescriptorIndex)
@@ -3855,11 +3855,11 @@ impl DescriptorSetInfo {
             }
             let content = DescriptorContent::from(binding.ty);
             if binding.binding == binding_index {
-                return (content, res_offsets.map(|offset| *offset as ResourceIndex));
+                return Some((content, res_offsets.map(|offset| *offset as ResourceIndex)));
             }
             res_offsets.add_content_many(content, 1);
         }
-        panic!("Unable to find binding {:?}", binding_index);
+        None
     }
 
     fn find_uav_register(
