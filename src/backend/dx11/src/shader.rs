@@ -126,14 +126,7 @@ pub(crate) fn compile_spirv_entrypoint(
         .get_cleansed_entry_point_name(source.entry, conv::map_stage(stage))
         .map_err(gen_query_error)?;
 
-    // TODO: opt: don't query *all* entry points.
-    let entry_points = ast.get_entry_points().map_err(gen_query_error)?;
-    let ep = entry_points
-        .iter()
-        .find(|entry_point| entry_point.name == real_name)
-        .ok_or(pso::CreationError::MissingEntryPoint(source.entry.into()))?;
-    let stage = conv::map_execution_model(ep.execution_model);
-    let shader = compile_hlsl_shader(stage, shader_model, &ep.name, shader_code.as_bytes())?;
+    let shader = compile_hlsl_shader(stage, shader_model, &real_name, shader_code.as_bytes())?;
     Ok(Some(unsafe { ComPtr::from_raw(shader) }))
 }
 
@@ -229,10 +222,10 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(image.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        let (_content, res_index) = layout.sets[set].find_register(stage, binding);
-
-        ast.set_decoration(image.id, spirv::Decoration::Binding, res_index.t as u32)
-            .map_err(gen_unexpected_error)?;
+        if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+            ast.set_decoration(image.id, spirv::Decoration::Binding, res_index.t as u32)
+                .map_err(gen_unexpected_error)?;
+        }
     }
 
     for uniform_buffer in &shader_resources.uniform_buffers {
@@ -242,14 +235,14 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(uniform_buffer.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        let (_content, res_index) = layout.sets[set].find_register(stage, binding);
-
-        ast.set_decoration(
-            uniform_buffer.id,
-            spirv::Decoration::Binding,
-            res_index.c as u32,
-        )
-        .map_err(gen_unexpected_error)?;
+        if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+            ast.set_decoration(
+                uniform_buffer.id,
+                spirv::Decoration::Binding,
+                res_index.c as u32,
+            )
+            .map_err(gen_unexpected_error)?;
+        }
     }
 
     for storage_buffer in &shader_resources.storage_buffers {
@@ -269,7 +262,11 @@ fn patch_spirv_resources(
         };
 
         let (_content, res_index) = if read_only {
-            layout.sets[set].find_register(stage, binding)
+            if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+                (_content, res_index)
+            } else {
+                continue;
+            }
         } else {
             layout.sets[set].find_uav_register(stage, binding)
         };
@@ -321,10 +318,10 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(sampler.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        let (_content, res_index) = layout.sets[set].find_register(stage, binding);
-
-        ast.set_decoration(sampler.id, spirv::Decoration::Binding, res_index.s as u32)
-            .map_err(gen_unexpected_error)?;
+        if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+            ast.set_decoration(sampler.id, spirv::Decoration::Binding, res_index.s as u32)
+                .map_err(gen_unexpected_error)?;
+        }
     }
 
     for image in &shader_resources.sampled_images {
@@ -334,10 +331,10 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(image.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        let (_content, res_index) = layout.sets[set].find_register(stage, binding);
-
-        ast.set_decoration(image.id, spirv::Decoration::Binding, res_index.t as u32)
-            .map_err(gen_unexpected_error)?;
+        if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+            ast.set_decoration(image.id, spirv::Decoration::Binding, res_index.t as u32)
+                .map_err(gen_unexpected_error)?;
+        }
     }
 
     assert!(

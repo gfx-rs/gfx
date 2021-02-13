@@ -541,7 +541,6 @@ impl Device {
                     .get_cleansed_entry_point_name(source.entry, execution_model)
                     .map_err(gen_query_error)?;
 
-                let stage = conv::map_execution_model(execution_model);
                 let shader = compile_shader(
                     stage,
                     shader_model,
