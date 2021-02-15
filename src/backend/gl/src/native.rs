@@ -6,7 +6,7 @@ use hal::{
     pass, pso, window as w,
 };
 
-use std::{borrow::Borrow, ops::Range, sync::Arc};
+use std::{borrow::Borrow, fmt, ops::Range, sync::Arc};
 
 pub type TextureTarget = u32;
 pub type TextureFormat = u32;
@@ -276,12 +276,17 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
     }
 }
 
-#[derive(Debug)]
-pub enum ShaderModule {
-    Raw(Shader),
-    Spirv(Vec<u32>),
-    #[cfg(feature = "naga")]
-    Naga(naga::Module, Vec<u32>),
+pub struct ShaderModule {
+    pub(crate) prefer_naga: bool,
+    #[cfg(feature = "cross")]
+    pub(crate) spv: Vec<u32>,
+    pub(crate) naga: Option<naga::Module>,
+}
+
+impl fmt::Debug for ShaderModule {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "ShaderModule()")
+    }
 }
 
 #[derive(Debug)]

@@ -139,6 +139,7 @@ pub struct Device {
     memory_types: Vec<adapter::MemoryType>,
     features: hal::Features,
     pub online_recording: OnlineRecording,
+    pub always_prefer_naga: bool,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -285,6 +286,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             memory_types: self.memory_types.clone(),
             features: requested_features,
             online_recording: OnlineRecording::default(),
+            always_prefer_naga: false,
         };
 
         Ok(adapter::Gpu {
@@ -652,7 +654,7 @@ impl Device {
         naga_options: &naga::back::msl::Options,
     ) -> Result<n::ModuleInfo, d::ShaderError> {
         let (source, info) = naga::back::msl::write_string(module, naga_options)
-            .map_err(|e| d::ShaderError::CompilationFailed(format!("{:?}", e)))?;
+            .map_err(|e| d::ShaderError::CompilationFailed(format!("MSL: {:?}", e)))?;
 
         let mut entry_point_map = n::EntryPointMap::default();
         for ((pair, ep), name) in module.entry_points.iter().zip(info.entry_point_names) {
@@ -737,11 +739,13 @@ impl Device {
             }
             _ => {
                 let mut result = Err(d::ShaderError::CompilationFailed(String::new()));
-                if let Some(ref module) = ep.module.naga {
-                    result =
-                        Self::compile_shader_library_naga(device, module, &layout.naga_options);
-                    if let Err(d::ShaderError::CompilationFailed(ref msg)) = result {
-                        warn!("Naga: {:?}", msg);
+                if ep.module.prefer_naga {
+                    if let Some(ref module) = ep.module.naga {
+                        result =
+                            Self::compile_shader_library_naga(device, module, &layout.naga_options);
+                        if let Err(d::ShaderError::CompilationFailed(ref msg)) = result {
+                            warn!("Naga: {:?}", msg);
+                        }
                     }
                 }
                 #[cfg(feature = "cross")]
@@ -755,6 +759,15 @@ impl Device {
                         stage,
                     )
                     .map_err(d::ShaderError::CompilationFailed);
+                }
+                if result.is_err() && !ep.module.prefer_naga {
+                    if let Some(ref module) = ep.module.naga {
+                        result =
+                            Self::compile_shader_library_naga(device, module, &layout.naga_options);
+                        if let Err(d::ShaderError::CompilationFailed(ref msg)) = result {
+                            warn!("Naga: {:?}", msg);
+                        }
+                    }
                 }
                 info_owned = result.map_err(|e| {
                     error!("Error compiling the shader {:?}", e);
@@ -1811,8 +1824,8 @@ impl hal::device::Device<Backend> for Device {
         &self,
         raw_data: &[u32],
     ) -> Result<n::ShaderModule, d::ShaderError> {
-        //TODO: we can probably at least parse here and save the `Ast`
         Ok(n::ShaderModule {
+            prefer_naga: self.always_prefer_naga,
             #[cfg(feature = "cross")]
             spv: raw_data.to_vec(),
             naga: {
@@ -1843,6 +1856,7 @@ impl hal::device::Device<Backend> for Device {
         module: naga::Module,
     ) -> Result<n::ShaderModule, (d::ShaderError, naga::Module)> {
         Ok(n::ShaderModule {
+            prefer_naga: true,
             #[cfg(feature = "cross")]
             spv: {
                 use naga::back::spv;
