@@ -256,3 +256,13 @@ pub fn describe_format(format: Format) -> Option<FormatDescription> {
         _ => return None,
     })
 }
+
+#[cfg(feature = "cross")]
+pub fn map_naga_stage_to_cross(stage: naga::ShaderStage) -> spirv_cross::spirv::ExecutionModel {
+    use spirv_cross::spirv::ExecutionModel as Em;
+    match stage {
+        naga::ShaderStage::Vertex => Em::Vertex,
+        naga::ShaderStage::Fragment => Em::Fragment,
+        naga::ShaderStage::Compute => Em::GlCompute,
+    }
+}

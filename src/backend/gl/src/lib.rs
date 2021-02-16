@@ -27,7 +27,9 @@ extern crate log;
 
 use std::{
     cell::Cell,
+    collections::HashMap,
     fmt,
+    hash::BuildHasherDefault,
     ops::{Deref, Range},
     sync::{Arc, Weak},
     thread,
@@ -59,6 +61,7 @@ pub use glow::Context as GlContext;
 use glow::HasContext;
 
 type ColorSlot = u8;
+type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<fxhash::FxHasher>>;
 
 // we can support more samplers if not every one of them is used at a time,
 // but it probably doesn't worth it.

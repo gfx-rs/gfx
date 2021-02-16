@@ -78,6 +78,8 @@ use objc::{
 use parking_lot::{Condvar, Mutex};
 
 use std::{
+    collections::HashMap,
+    hash::BuildHasherDefault,
     mem,
     os::raw::c_void,
     ptr::NonNull,
@@ -97,6 +99,7 @@ pub use crate::device::{Device, LanguageVersion, PhysicalDevice};
 pub use crate::window::Surface;
 
 pub type GraphicsCommandPool = CommandPool;
+type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<fxhash::FxHasher>>;
 
 //TODO: investigate why exactly using `u8` here is slower (~5% total).
 /// A type representing Metal binding's resource index.

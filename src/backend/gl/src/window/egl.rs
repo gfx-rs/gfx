@@ -69,8 +69,7 @@ fn open_x_display() -> Option<(ptr::NonNull<raw::c_void>, libloading::Library)> 
     log::info!("Loading X11 library to get the current display");
     unsafe {
         let library = libloading::Library::new("libX11.so").ok()?;
-        let func: libloading::Symbol<XOpenDisplayFun> =
-            library.get(b"XOpenDisplay").unwrap();
+        let func: libloading::Symbol<XOpenDisplayFun> = library.get(b"XOpenDisplay").unwrap();
         let result = func(ptr::null());
         ptr::NonNull::new(result).map(|ptr| (ptr, library))
     }
@@ -89,7 +88,7 @@ fn test_wayland_display() -> Option<libloading::Library> {
             client_library.get(b"wl_display_disconnect").unwrap();
         let display = ptr::NonNull::new(wl_display_connect(ptr::null()))?;
         wl_display_disconnect(display.as_ptr());
-        libloading::Library::new("libwayland-egl.so").ok()? 
+        libloading::Library::new("libwayland-egl.so").ok()?
     };
     Some(library)
 }

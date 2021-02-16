@@ -793,3 +793,13 @@ pub fn map_cull_face(face: pso::Face) -> Option<MTLCullMode> {
         _ => None,
     }
 }
+
+#[cfg(feature = "cross")]
+pub fn map_naga_stage_to_cross(stage: naga::ShaderStage) -> spirv_cross::spirv::ExecutionModel {
+    use spirv_cross::spirv::ExecutionModel as Em;
+    match stage {
+        naga::ShaderStage::Vertex => Em::Vertex,
+        naga::ShaderStage::Fragment => Em::Fragment,
+        naga::ShaderStage::Compute => Em::GlCompute,
+    }
+}
