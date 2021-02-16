@@ -906,6 +906,35 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             None
         };
 
+        #[cfg(feature = "naga")]
+        let naga_options = {
+            use naga::back::spv;
+            let capabilities = [
+                spv::Capability::Shader,
+                spv::Capability::Matrix,
+                spv::Capability::InputAttachment,
+                spv::Capability::Sampled1D,
+                spv::Capability::Image1D,
+                spv::Capability::SampledBuffer,
+                spv::Capability::ImageBuffer,
+                spv::Capability::ImageQuery,
+                spv::Capability::DerivativeControl,
+                //TODO: fill out the rest
+            ]
+            .iter()
+            .cloned()
+            .collect();
+            let mut flags = spv::WriterFlags::empty();
+            if cfg!(debug_assertions) {
+                flags |= spv::WriterFlags::DEBUG;
+            }
+            spv::Options {
+                lang_version: (1, 0),
+                flags,
+                capabilities,
+            }
+        };
+
         let device = Device {
             shared: Arc::new(RawDevice {
                 raw: device_raw,
@@ -922,6 +951,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }),
             vendor_id: self.properties.vendor_id,
             valid_ash_memory_types,
+            #[cfg(feature = "naga")]
+            naga_options,
         };
 
         let device_arc = Arc::clone(&device.shared);
@@ -1682,6 +1713,8 @@ pub struct Device {
     shared: Arc<RawDevice>,
     vendor_id: u32,
     valid_ash_memory_types: u32,
+    #[cfg(feature = "naga")]
+    naga_options: naga::back::spv::Options,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

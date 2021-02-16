@@ -943,33 +943,11 @@ impl d::Device<B> for super::Device {
     #[cfg(feature = "naga")]
     unsafe fn create_shader_module_from_naga(
         &self,
-        module: naga::Module,
-    ) -> Result<n::ShaderModule, (d::ShaderError, naga::Module)> {
-        use naga::back::spv;
-        let mut flags = spv::WriterFlags::empty();
-        if cfg!(debug_assertions) {
-            flags |= spv::WriterFlags::DEBUG;
-        }
-
-        let caps = [
-            spv::Capability::Shader,
-            spv::Capability::Matrix,
-            spv::Capability::InputAttachment,
-            spv::Capability::Sampled1D,
-            spv::Capability::Image1D,
-            spv::Capability::SampledBuffer,
-            spv::Capability::ImageBuffer,
-            spv::Capability::ImageQuery,
-            spv::Capability::DerivativeControl,
-            //TODO: fill out the rest
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        match spv::write_vec(&module, flags, caps) {
-            Ok(spv) => self.create_shader_module(&spv).map_err(|e| (e, module)),
-            Err(e) => return Err((d::ShaderError::CompilationFailed(format!("{}", e)), module)),
+        shader: d::NagaShader,
+    ) -> Result<n::ShaderModule, (d::ShaderError, d::NagaShader)> {
+        match naga::back::spv::write_vec(&shader.module, &self.naga_options) {
+            Ok(spv) => self.create_shader_module(&spv).map_err(|e| (e, shader)),
+            Err(e) => return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader)),
         }
     }
 

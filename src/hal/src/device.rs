@@ -162,6 +162,15 @@ pub enum ShaderModuleDesc<'a> {
     SpirV(&'a [u32]),
 }
 
+/// Naga shader module.
+#[allow(missing_debug_implementations)]
+pub struct NagaShader {
+    /// Shader module IR.
+    pub module: naga::Module,
+    /// Analysis of the module.
+    pub analysis: naga::proc::analyzer::Analysis,
+}
+
 /// Logical device handle, responsible for creating and managing resources
 /// for the physical device it was created from.
 ///
@@ -354,9 +363,9 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Create a new shader module from the `naga` module.
     unsafe fn create_shader_module_from_naga(
         &self,
-        module: naga::Module,
-    ) -> Result<B::ShaderModule, (ShaderError, naga::Module)> {
-        Err((ShaderError::Unsupported, module))
+        shader: NagaShader,
+    ) -> Result<B::ShaderModule, (ShaderError, NagaShader)> {
+        Err((ShaderError::Unsupported, shader))
     }
 
     /// Destroy a shader module module

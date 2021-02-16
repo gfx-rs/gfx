@@ -140,6 +140,8 @@ pub struct Device {
     features: hal::Features,
     pub online_recording: OnlineRecording,
     pub always_prefer_naga: bool,
+    #[cfg(feature = "cross")]
+    spv_options: naga::back::spv::Options,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -280,6 +282,35 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             queue_group.add_queue(command::Queue::new(self.shared.clone()));
         }
 
+        #[cfg(feature = "cross")]
+        let spv_options = {
+            use naga::back::spv;
+            let capabilities = [
+                spv::Capability::Shader,
+                spv::Capability::Matrix,
+                spv::Capability::InputAttachment,
+                spv::Capability::Sampled1D,
+                spv::Capability::Image1D,
+                spv::Capability::SampledBuffer,
+                spv::Capability::ImageBuffer,
+                spv::Capability::ImageQuery,
+                spv::Capability::DerivativeControl,
+                //TODO: fill out the rest
+            ]
+            .iter()
+            .cloned()
+            .collect();
+            let mut flags = spv::WriterFlags::empty();
+            if cfg!(debug_assertions) {
+                flags |= spv::WriterFlags::DEBUG;
+            }
+            spv::Options {
+                lang_version: (1, 0),
+                flags,
+                capabilities,
+            }
+        };
+
         let device = Device {
             shared: self.shared.clone(),
             invalidation_queue: command::QueueInner::new(&*device, Some(1)),
@@ -287,6 +318,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             features: requested_features,
             online_recording: OnlineRecording::default(),
             always_prefer_naga: false,
+            #[cfg(feature = "cross")]
+            spv_options,
         };
 
         Ok(adapter::Gpu {
@@ -650,14 +683,20 @@ impl Device {
 
     fn compile_shader_library_naga(
         device: &Mutex<metal::Device>,
-        module: &naga::Module,
+        shader: &d::NagaShader,
         naga_options: &naga::back::msl::Options,
     ) -> Result<n::ModuleInfo, d::ShaderError> {
-        let (source, info) = naga::back::msl::write_string(module, naga_options)
-            .map_err(|e| d::ShaderError::CompilationFailed(format!("MSL: {:?}", e)))?;
+        let (source, info) =
+            naga::back::msl::write_string(&shader.module, &shader.analysis, naga_options)
+                .map_err(|e| d::ShaderError::CompilationFailed(format!("MSL: {:?}", e)))?;
 
         let mut entry_point_map = n::EntryPointMap::default();
-        for ((pair, ep), name) in module.entry_points.iter().zip(info.entry_point_names) {
+        for ((pair, ep), name) in shader
+            .module
+            .entry_points
+            .iter()
+            .zip(info.entry_point_names)
+        {
             entry_point_map.insert(
                 pair.clone(),
                 n::EntryPoint {
@@ -740,9 +779,9 @@ impl Device {
             _ => {
                 let mut result = Err(d::ShaderError::CompilationFailed(String::new()));
                 if ep.module.prefer_naga {
-                    if let Some(ref module) = ep.module.naga {
+                    if let Some(ref shader) = ep.module.naga {
                         result =
-                            Self::compile_shader_library_naga(device, module, &layout.naga_options);
+                            Self::compile_shader_library_naga(device, shader, &layout.naga_options);
                         if let Err(d::ShaderError::CompilationFailed(ref msg)) = result {
                             warn!("Naga: {:?}", msg);
                         }
@@ -761,9 +800,9 @@ impl Device {
                     .map_err(d::ShaderError::CompilationFailed);
                 }
                 if result.is_err() && !ep.module.prefer_naga {
-                    if let Some(ref module) = ep.module.naga {
+                    if let Some(ref shader) = ep.module.naga {
                         result =
-                            Self::compile_shader_library_naga(device, module, &layout.naga_options);
+                            Self::compile_shader_library_naga(device, shader, &layout.naga_options);
                         if let Err(d::ShaderError::CompilationFailed(ref msg)) = result {
                             warn!("Naga: {:?}", msg);
                         }
@@ -1835,7 +1874,7 @@ impl hal::device::Device<Backend> for Device {
                     Ok(module) => {
                         debug!("Naga module {:#?}", module);
                         match naga::proc::Validator::new().validate(&module) {
-                            Ok(()) => Some(module),
+                            Ok(analysis) => Some(d::NagaShader { module, analysis }),
                             Err(e) => {
                                 warn!("Naga validation failed: {:?}", e);
                                 None
@@ -1853,36 +1892,18 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn create_shader_module_from_naga(
         &self,
-        module: naga::Module,
-    ) -> Result<n::ShaderModule, (d::ShaderError, naga::Module)> {
+        shader: d::NagaShader,
+    ) -> Result<n::ShaderModule, (d::ShaderError, d::NagaShader)> {
         Ok(n::ShaderModule {
             prefer_naga: true,
             #[cfg(feature = "cross")]
-            spv: {
-                use naga::back::spv;
-                let mut flags = spv::WriterFlags::empty();
-                if cfg!(debug_assertions) {
-                    flags |= spv::WriterFlags::DEBUG;
-                }
-                let caps = [
-                    spv::Capability::Shader,
-                    spv::Capability::Matrix,
-                    spv::Capability::Sampled1D,
-                    spv::Capability::Image1D,
-                    spv::Capability::DerivativeControl,
-                    //TODO: fill out the rest
-                ]
-                .iter()
-                .cloned()
-                .collect();
-                match spv::write_vec(&module, flags, caps) {
-                    Ok(spv) => spv,
-                    Err(e) => {
-                        return Err((d::ShaderError::CompilationFailed(format!("{}", e)), module))
-                    }
+            spv: match naga::back::spv::write_vec(&shader.module, &self.spv_options) {
+                Ok(spv) => spv,
+                Err(e) => {
+                    return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader))
                 }
             },
-            naga: Some(module),
+            naga: Some(shader),
         })
     }
 
