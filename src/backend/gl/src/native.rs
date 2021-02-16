@@ -280,7 +280,7 @@ pub struct ShaderModule {
     pub(crate) prefer_naga: bool,
     #[cfg(feature = "cross")]
     pub(crate) spv: Vec<u32>,
-    pub(crate) naga: Option<naga::Module>,
+    pub(crate) naga: Option<hal::device::NagaShader>,
 }
 
 impl fmt::Debug for ShaderModule {
