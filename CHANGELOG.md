@@ -3,6 +3,9 @@
 ### unreleased
   - the new "bench" example is added
   - timestamp period query is moved to the `Queue`
+  - `DescriptorLimits` is added to consolidate descriptor-related limits and its fields changed from `usize` to `u32`
+  - `Limits` and `Capabilities` structures merged together as `PhysicalDeviceProperties`
+  - Entries for Mesh Shading and Descriptor Indexing added to `PhysicalDeviceProperties`
 
 ## hal-0.7.0 (30-01-2021)
   - `Borrow` and `ExactSizeIterator` bounds are removed from the iterators
