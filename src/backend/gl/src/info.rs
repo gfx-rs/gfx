@@ -6,9 +6,9 @@ use std::{collections::HashSet, fmt, str};
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Version {
-    pub is_embedded: bool,
     pub major: u32,
     pub minor: u32,
+    pub is_embedded: bool,
     pub revision: Option<u32>,
     pub vendor_info: String,
 }
@@ -17,9 +17,9 @@ impl Version {
     /// Create a new OpenGL version number
     pub fn new(major: u32, minor: u32, revision: Option<u32>, vendor_info: String) -> Self {
         Version {
-            is_embedded: false,
             major: major,
             minor: minor,
+            is_embedded: false,
             revision: revision,
             vendor_info,
         }
@@ -27,9 +27,9 @@ impl Version {
     /// Create a new OpenGL ES version number
     pub fn new_embedded(major: u32, minor: u32, vendor_info: String) -> Self {
         Version {
-            is_embedded: true,
             major,
             minor,
+            is_embedded: true,
             revision: None,
             vendor_info,
         }
@@ -61,9 +61,9 @@ impl Version {
         let is_webgl = src.contains(webgl_sig);
         if is_webgl {
             return Ok(Version {
-                is_embedded: true,
                 major: 2,
                 minor: 0,
+                is_embedded: true,
                 revision: None,
                 vendor_info: "".to_string(),
             });
@@ -98,9 +98,9 @@ impl Version {
 
         match (major, minor, revision) {
             (Some(major), Some(minor), revision) => Ok(Version {
-                is_embedded: is_es,
                 major,
                 minor,
+                is_embedded: is_es,
                 revision,
                 vendor_info,
             }),
@@ -315,7 +315,7 @@ impl Info {
 
     pub fn is_embedded_version_supported(&self, major: u32, minor: u32) -> bool {
         self.version.is_embedded
-            && self.version >= Version::new(major, minor, None, String::from(""))
+            && self.version >= Version::new_embedded(major, minor, String::from(""))
     }
 
     /// Returns `true` if the implementation supports the extension
