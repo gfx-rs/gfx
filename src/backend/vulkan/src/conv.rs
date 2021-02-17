@@ -520,11 +520,7 @@ pub(crate) fn map_device_features(
             .variable_multisample_rate(features.contains(Features::VARIABLE_MULTISAMPLE_RATE))
             .inherited_queries(features.contains(Features::INHERITED_QUERIES))
             .build(),
-        descriptor_indexing: if features.intersects(
-            Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
-                | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
-                | Features::UNSIZED_DESCRIPTOR_ARRAY,
-        ) {
+        descriptor_indexing: if features.intersects(Features::DESCRIPTOR_INDEXING_MASK) {
             Some(
                 vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder()
                     .shader_sampled_image_array_non_uniform_indexing(
@@ -539,7 +535,7 @@ pub(crate) fn map_device_features(
         } else {
             None
         },
-        mesh_shaders: if features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
+        mesh_shaders: if features.intersects(Features::MESH_SHADER_MASK) {
             Some(
                 vk::PhysicalDeviceMeshShaderFeaturesNV::builder()
                     .task_shader(features.contains(Features::TASK_SHADER))

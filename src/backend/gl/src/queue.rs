@@ -394,7 +394,10 @@ impl Queue {
 
                 let num_viewports = viewports.len();
                 assert_eq!(num_viewports, depth_ranges.len());
-                assert!(0 < num_viewports && num_viewports <= self.share.limits.max_viewports);
+                assert!(
+                    0 < num_viewports
+                        && num_viewports <= self.share.public_caps.limits.max_viewports
+                );
 
                 if num_viewports == 1 {
                     let view = viewports[0];
@@ -430,7 +433,9 @@ impl Queue {
                 let gl = &self.share.context;
                 let scissors = Self::get::<[i32; 4]>(data_buf, data_ptr);
                 let num_scissors = scissors.len();
-                assert!(0 < num_scissors && num_scissors <= self.share.limits.max_viewports);
+                assert!(
+                    0 < num_scissors && num_scissors <= self.share.public_caps.limits.max_viewports
+                );
 
                 if num_scissors == 1 {
                     let scissor = scissors[0];

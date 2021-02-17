@@ -35,7 +35,7 @@ mod window;
 
 use auxil::FastHashMap;
 use hal::{
-    adapter, format as f, image, memory, pso::PipelineStage, queue as q, Capabilities, Features,
+    adapter, format as f, image, memory, pso::PipelineStage, queue as q, PhysicalDeviceProperties, Features,
     Limits,
 };
 use range_alloc::RangeAllocator;
@@ -210,7 +210,7 @@ struct Workarounds {
 // most owning fields last.
 pub struct PhysicalDevice {
     features: Features,
-    limits: Limits,
+    properties: PhysicalDeviceProperties,
     format_properties: Arc<FormatProperties>,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -441,19 +441,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.features
     }
 
-    fn capabilities(&self) -> Capabilities {
-        use hal::DynamicStates as Ds;
-        Capabilities {
-            performance_caveats: hal::PerformanceCaveats::empty(),
-            dynamic_pipeline_states: Ds::VIEWPORT
-                | Ds::SCISSOR
-                | Ds::BLEND_COLOR
-                | Ds::STENCIL_REFERENCE,
-        }
-    }
-
-    fn limits(&self) -> Limits {
-        self.limits
+    fn properties(&self) -> PhysicalDeviceProperties {
+        self.properties
     }
 }
 
@@ -1182,91 +1171,102 @@ impl hal::Instance<Backend> for Instance {
                     Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING |
                     Features::UNSIZED_DESCRIPTOR_ARRAY |
                     Features::DRAW_INDIRECT_COUNT,
-                limits: Limits {
-                    //TODO: verify all of these not linked to constants
-                    max_memory_allocation_count: !0,
-                    max_bound_descriptor_sets: MAX_DESCRIPTOR_SETS as u16,
-                    max_descriptor_set_uniform_buffers_dynamic: 8,
-                    max_descriptor_set_storage_buffers_dynamic: 4,
-                    max_descriptor_set_sampled_images: full_heap_count,
-                    max_descriptor_set_storage_buffers: uav_limit,
-                    max_descriptor_set_storage_images: uav_limit,
-                    max_descriptor_set_uniform_buffers: full_heap_count,
-                    max_descriptor_set_samplers: d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE as _,
-                    max_per_stage_descriptor_sampled_images: match features.ResourceBindingTier {
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
-                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
-                        | _ => full_heap_count,
-                    } as _,
-                    max_per_stage_descriptor_samplers: match features.ResourceBindingTier {
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
-                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
-                        | _ => d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE
-                    } as _,
-                    max_per_stage_descriptor_storage_buffers: uav_limit,
-                    max_per_stage_descriptor_storage_images: uav_limit,
-                    max_per_stage_descriptor_uniform_buffers: match features.ResourceBindingTier {
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_1
-                        | d3d12::D3D12_RESOURCE_BINDING_TIER_2 => d3d12::D3D12_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_3
-                        | _ => full_heap_count as _,
-                    } as _,
-                    max_per_stage_resources: !0,
-                    max_uniform_buffer_range: (d3d12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16) as _,
-                    max_storage_buffer_range: !0,
-                    // Is actually 256, but need space for the descriptors in there, so leave at 128 to discourage explosions
-                    max_push_constants_size: 128,
-                    max_image_1d_size: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION as _,
-                    max_image_2d_size: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
-                    max_image_3d_size: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
-                    max_image_cube_size: d3d12::D3D12_REQ_TEXTURECUBE_DIMENSION as _,
-                    max_image_array_layers: d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
-                    max_texel_elements: 0,
-                    max_patch_size: 0,
-                    max_viewports: d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
-                    max_viewport_dimensions: [d3d12::D3D12_VIEWPORT_BOUNDS_MAX as _; 2],
-                    max_framebuffer_extent: hal::image::Extent {
-                        width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
-                        height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
-                        depth: 1,
+                properties: PhysicalDeviceProperties {
+                    limits: Limits {
+                        //TODO: verify all of these not linked to constants
+                        max_memory_allocation_count: !0,
+                        max_bound_descriptor_sets: MAX_DESCRIPTOR_SETS as u16,
+                        descriptor_limits: hal::DescriptorLimits {
+                            max_per_stage_descriptor_samplers: match features.ResourceBindingTier {
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_2 | d3d12::D3D12_RESOURCE_BINDING_TIER_3 | _ => d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
+                            } as _,
+                            max_per_stage_descriptor_uniform_buffers: match features.ResourceBindingTier
+                            {
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_1 | d3d12::D3D12_RESOURCE_BINDING_TIER_2 => {
+                                    d3d12::D3D12_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT
+                                }
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_3 | _ => full_heap_count as _,
+                            } as _,
+                            max_per_stage_descriptor_storage_buffers: uav_limit,
+                            max_per_stage_descriptor_sampled_images: match features.ResourceBindingTier
+                            {
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_2
+                                | d3d12::D3D12_RESOURCE_BINDING_TIER_3
+                                | _ => full_heap_count,
+                            } as _,
+                            max_per_stage_descriptor_storage_images: uav_limit,
+                            max_per_stage_resources: !0,
+                            max_descriptor_set_samplers: d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE as _,
+                            max_descriptor_set_uniform_buffers: full_heap_count,
+                            max_descriptor_set_uniform_buffers_dynamic: 8,
+                            max_descriptor_set_storage_buffers: uav_limit,
+                            max_descriptor_set_storage_buffers_dynamic: 4,
+                            max_descriptor_set_sampled_images: full_heap_count,
+                            max_descriptor_set_storage_images: uav_limit,
+                            ..hal::DescriptorLimits::default() // TODO
+                        },
+                        max_uniform_buffer_range: (d3d12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16)
+                            as _,
+                        max_storage_buffer_range: !0,
+                        // Is actually 256, but need space for the descriptors in there, so leave at 128 to discourage explosions
+                        max_push_constants_size: 128,
+                        max_image_1d_size: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION as _,
+                        max_image_2d_size: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
+                        max_image_3d_size: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
+                        max_image_cube_size: d3d12::D3D12_REQ_TEXTURECUBE_DIMENSION as _,
+                        max_image_array_layers: d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
+                        max_texel_elements: 0,
+                        max_patch_size: 0,
+                        max_viewports: d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
+                        max_viewport_dimensions: [d3d12::D3D12_VIEWPORT_BOUNDS_MAX as _; 2],
+                        max_framebuffer_extent: hal::image::Extent {
+                            width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                            height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                            depth: 1,
+                        },
+                        max_framebuffer_layers: 1,
+                        max_compute_work_group_count: [
+                            d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                            d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                            d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                        ],
+                        max_compute_work_group_invocations: d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+                        max_compute_work_group_size: [
+                            d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
+                            d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
+                            d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
+                        ],
+                        max_vertex_input_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
+                        max_vertex_input_bindings: d3d12::D3D12_VS_INPUT_REGISTER_COUNT as _,
+                        max_vertex_input_attribute_offset: 255, // TODO
+                        max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
+                        max_vertex_output_components: d3d12::D3D12_VS_OUTPUT_REGISTER_COUNT as _,
+                        max_fragment_input_components: d3d12::D3D12_PS_INPUT_REGISTER_COUNT as _,
+                        max_fragment_output_attachments: d3d12::D3D12_PS_OUTPUT_REGISTER_COUNT as _,
+                        max_fragment_dual_source_attachments: 1,
+                        max_fragment_combined_output_resources: (d3d12::D3D12_PS_OUTPUT_REGISTER_COUNT + d3d12::D3D12_PS_CS_UAV_REGISTER_COUNT) as _,
+                        min_texel_buffer_offset_alignment: 1, // TODO
+                        min_uniform_buffer_offset_alignment: d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as _,
+                        min_storage_buffer_offset_alignment: 4, // TODO
+                        framebuffer_color_sample_counts: sample_count_mask,
+                        framebuffer_depth_sample_counts: sample_count_mask,
+                        framebuffer_stencil_sample_counts: sample_count_mask,
+                        max_color_attachments: d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
+                        buffer_image_granularity: 1,
+                        non_coherent_atom_size: 1, //TODO: confirm
+                        max_sampler_anisotropy: 16.,
+                        optimal_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
+                        optimal_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
+                        min_vertex_input_binding_stride_alignment: 1,
+                        ..Limits::default() //TODO
                     },
-                    max_framebuffer_layers: 1,
-                    max_compute_work_group_count: [
-                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                    ],
-                    max_compute_work_group_invocations: d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
-                    max_compute_work_group_size: [
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
-                    ],
-                    max_vertex_input_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
-                    max_vertex_input_bindings: d3d12::D3D12_VS_INPUT_REGISTER_COUNT as _,
-                    max_vertex_input_attribute_offset: 255, // TODO
-                    max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
-                    max_vertex_output_components: d3d12::D3D12_VS_OUTPUT_REGISTER_COUNT as _,
-                    max_fragment_input_components: d3d12::D3D12_PS_INPUT_REGISTER_COUNT as _,
-                    max_fragment_output_attachments: d3d12::D3D12_PS_OUTPUT_REGISTER_COUNT as _,
-                    max_fragment_dual_source_attachments: 1,
-                    max_fragment_combined_output_resources: (d3d12::D3D12_PS_OUTPUT_REGISTER_COUNT + d3d12::D3D12_PS_CS_UAV_REGISTER_COUNT) as _,
-                    min_texel_buffer_offset_alignment: 1, // TODO
-                    min_uniform_buffer_offset_alignment: d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as _,
-                    min_storage_buffer_offset_alignment: 4, // TODO
-                    framebuffer_color_sample_counts: sample_count_mask,
-                    framebuffer_depth_sample_counts: sample_count_mask,
-                    framebuffer_stencil_sample_counts: sample_count_mask,
-                    max_color_attachments: d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
-                    buffer_image_granularity: 1,
-                    non_coherent_atom_size: 1, //TODO: confirm
-                    max_sampler_anisotropy: 16.,
-                    optimal_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
-                    optimal_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
-                    min_vertex_input_binding_stride_alignment: 1,
-                    .. Limits::default() //TODO
+                    dynamic_pipeline_states: hal::DynamicStates::VIEWPORT
+                        | hal::DynamicStates::SCISSOR
+                        | hal::DynamicStates::BLEND_COLOR
+                        | hal::DynamicStates::STENCIL_REFERENCE,
+                    ..PhysicalDeviceProperties::default()
                 },
                 format_properties: Arc::new(FormatProperties::new(device)),
                 private_caps: PrivateCapabilities {

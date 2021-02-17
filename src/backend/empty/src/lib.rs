@@ -145,14 +145,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         hal::Features::empty()
     }
 
-    fn capabilities(&self) -> hal::Capabilities {
-        Default::default()
-    }
-
-    fn limits(&self) -> hal::Limits {
-        hal::Limits {
-            non_coherent_atom_size: 1,
-            optimal_buffer_copy_pitch_alignment: 1,
+    fn properties(&self) -> hal::PhysicalDeviceProperties {
+        hal::PhysicalDeviceProperties {
+            limits: hal::Limits {
+                non_coherent_atom_size: 1,
+                optimal_buffer_copy_pitch_alignment: 1,
+                ..Default::default()
+            },
             ..Default::default()
         }
     }

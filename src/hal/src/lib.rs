@@ -105,11 +105,13 @@ bitflags! {
         /// Bit mask of Vulkan Core/Extension features.
         const CORE_MASK = 0xFFFF_FFFF_FFFF_FFFF;
         /// Bit mask of Vulkan Portability features.
-        const PORTABILITY_MASK  = 0x0000_FFFF_0000_0000_0000_0000;
+        const PORTABILITY_MASK  = 0xFFFF << 64;
         /// Bit mask for extra WebGPU features.
-        const WEBGPU_MASK = 0xFFFF_0000_0000_0000_0000_0000;
+        const WEBGPU_MASK = 0xFFFF << 80;
         /// Bit mask for all extensions.
-        const EXTENSIONS_MASK = 0xFFFF_FFFF_0000_0000_0000_0000_0000_0000;
+        const EXTENSIONS_MASK = 0xFFFF_FFFF << 96;
+
+        // Bits for Vulkan Core/Extension features
 
         /// Support for robust buffer access.
         /// Buffer access by SPIR-V shaders is checked against the buffer/image boundaries.
@@ -238,8 +240,13 @@ bitflags! {
         const STORAGE_TEXTURE_DESCRIPTOR_INDEXING = 0x0400_0000_0000_0000;
         /// Allow descriptor arrays to be unsized in shaders
         const UNSIZED_DESCRIPTOR_ARRAY = 0x0800_0000_0000_0000;
+        /// Mask for all the features associated with descriptor indexing.
+        const DESCRIPTOR_INDEXING_MASK = Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING.bits | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING.bits | Features::UNSIZED_DESCRIPTOR_ARRAY.bits;
+
         /// Enable draw_indirect_count and draw_indexed_indirect_count
         const DRAW_INDIRECT_COUNT = 0x1000_0000_0000_0000;
+
+        // Bits for Vulkan Portability features
 
         /// Support triangle fan primitive topology.
         const TRIANGLE_FAN = 0x0001 << 64;
@@ -256,13 +263,19 @@ bitflags! {
         /// Can create non-normalized samplers in regular descriptor sets.
         const MUTABLE_UNNORMALIZED_SAMPLER = 0x0040 << 64;
 
+        // Bits for WebGPU features
+
         /// Make the NDC coordinate system pointing Y up, to match D3D and Metal.
         const NDC_Y_UP = 0x0001 << 80;
 
+        // Bits for Extensions
+
         /// Supports task shader stage.
-        const TASK_SHADER = 0x0001 << 96;
+        const TASK_SHADER = 0x0000_0001 << 96;
         /// Supports mesh shader stage.
-        const MESH_SHADER = 0x0002 << 96;
+        const MESH_SHADER = 0x0000_0002 << 96;
+        /// Mask for all the features associated with mesh shader stages.
+        const MESH_SHADER_MASK = Features::TASK_SHADER.bits | Features::MESH_SHADER.bits;
     }
 }
 
@@ -303,16 +316,59 @@ bitflags! {
     }
 }
 
-/// Capabilities of physical devices that are exposed but
-/// do not need to be explicitly opted into.
-//TODO: should we move `Limits` in here?
+/// Properties of physical devices that are exposed but do not need to be explicitly opted into.
+///
+/// This contains things like resource limits, alignment requirements, and finer-grained feature
+/// capabilities.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Capabilities {
+pub struct PhysicalDeviceProperties {
+    /// Core limits.
+    pub limits: Limits,
+    /// Descriptor Indexing properties.
+    pub descriptor_indexing: DescriptorIndexingProperties,
+    /// Mesh Shader properties.
+    pub mesh_shader: MeshShaderProperties,
     /// Performance caveats.
     pub performance_caveats: PerformanceCaveats,
     /// Dynamic pipeline states.
     pub dynamic_pipeline_states: DynamicStates,
+}
+
+///
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DescriptorLimits {
+    ///
+    pub max_per_stage_descriptor_samplers: u32,
+    ///
+    pub max_per_stage_descriptor_uniform_buffers: u32,
+    ///
+    pub max_per_stage_descriptor_storage_buffers: u32,
+    ///
+    pub max_per_stage_descriptor_sampled_images: u32,
+    ///
+    pub max_per_stage_descriptor_storage_images: u32,
+    ///
+    pub max_per_stage_descriptor_input_attachments: u32,
+    ///
+    pub max_per_stage_resources: u32,
+    ///
+    pub max_descriptor_set_samplers: u32,
+    ///
+    pub max_descriptor_set_uniform_buffers: u32,
+    ///
+    pub max_descriptor_set_uniform_buffers_dynamic: u32,
+    ///
+    pub max_descriptor_set_storage_buffers: u32,
+    ///
+    pub max_descriptor_set_storage_buffers_dynamic: u32,
+    ///
+    pub max_descriptor_set_sampled_images: u32,
+    ///
+    pub max_descriptor_set_storage_images: u32,
+    ///
+    pub max_descriptor_set_input_attachments: u32,
 }
 
 /// Resource limits of a particular graphics device.
@@ -346,36 +402,7 @@ pub struct Limits {
     ///
     pub max_framebuffer_layers: usize,
     ///
-    pub max_per_stage_descriptor_samplers: usize,
-    ///
-    pub max_per_stage_descriptor_uniform_buffers: usize,
-    ///
-    pub max_per_stage_descriptor_storage_buffers: usize,
-    ///
-    pub max_per_stage_descriptor_sampled_images: usize,
-    ///
-    pub max_per_stage_descriptor_storage_images: usize,
-    ///
-    pub max_per_stage_descriptor_input_attachments: usize,
-    ///
-    pub max_per_stage_resources: usize,
-
-    ///
-    pub max_descriptor_set_samplers: usize,
-    ///
-    pub max_descriptor_set_uniform_buffers: usize,
-    ///
-    pub max_descriptor_set_uniform_buffers_dynamic: usize,
-    ///
-    pub max_descriptor_set_storage_buffers: usize,
-    ///
-    pub max_descriptor_set_storage_buffers_dynamic: usize,
-    ///
-    pub max_descriptor_set_sampled_images: usize,
-    ///
-    pub max_descriptor_set_storage_images: usize,
-    ///
-    pub max_descriptor_set_input_attachments: usize,
+    pub descriptor_limits: DescriptorLimits,
 
     /// Maximum number of vertex input attributes that can be specified for a graphics pipeline.
     pub max_vertex_input_attributes: usize,
@@ -467,7 +494,30 @@ pub struct Limits {
 
     /// The alignment of the vertex buffer stride.
     pub min_vertex_input_binding_stride_alignment: buffer::Offset,
+}
 
+/// Feature capabilities related to Descriptor Indexing.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DescriptorIndexingProperties {
+    ///
+    pub shader_uniform_buffer_array_non_uniform_indexing_native: bool,
+    ///
+    pub shader_sampled_image_array_non_uniform_indexing_native: bool,
+    ///
+    pub shader_storage_buffer_array_non_uniform_indexing_native: bool,
+    ///
+    pub shader_storage_image_array_non_uniform_indexing_native: bool,
+    ///
+    pub shader_input_attachment_array_non_uniform_indexing_native: bool,
+    ///
+    pub quad_divergent_implicit_lod: bool,
+}
+
+/// Resource limits related to the Mesh Shaders.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct MeshShaderProperties {
     /// The maximum number of local workgroups that can be launched by a single draw mesh tasks command
     pub max_draw_mesh_tasks_count: u32,
     /// The maximum total number of task shader invocations in a single local workgroup. The product of the X, Y, and

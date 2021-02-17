@@ -190,7 +190,7 @@ impl<B: hal::Backend> Scene<B> {
     ) -> Result<Self, ()> {
         info!("creating Scene from {:?}", data_path);
         let memory_types = adapter.physical_device.memory_properties().memory_types;
-        let limits = adapter.physical_device.limits();
+        let limits = adapter.physical_device.properties().limits;
 
         // initialize graphics
         let mut gpu = unsafe {

@@ -118,7 +118,7 @@ impl Harness {
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
             let supported_features = adapter.physical_device.features();
-            let limits = adapter.physical_device.limits();
+            let limits = adapter.physical_device.properties().limits;
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
 
