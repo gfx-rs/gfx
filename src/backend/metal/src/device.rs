@@ -685,10 +685,15 @@ impl Device {
         device: &Mutex<metal::Device>,
         shader: &d::NagaShader,
         naga_options: &naga::back::msl::Options,
-    ) -> Result<n::ModuleInfo, d::ShaderError> {
+    ) -> Result<n::ModuleInfo, String> {
         let (source, info) =
-            naga::back::msl::write_string(&shader.module, &shader.analysis, naga_options)
-                .map_err(|e| d::ShaderError::CompilationFailed(format!("MSL: {:?}", e)))?;
+            match naga::back::msl::write_string(&shader.module, &shader.analysis, naga_options) {
+                Ok(pair) => pair,
+                Err(e) => {
+                    warn!("Naga: {:?}", e);
+                    return Err(format!("MSL: {:?}", e));
+                }
+            };
 
         let mut entry_point_map = n::EntryPointMap::default();
         for ((pair, ep), name) in shader
@@ -724,7 +729,7 @@ impl Device {
         let library = device
             .lock()
             .new_library_with_source(source.as_ref(), &options)
-            .map_err(|err| d::ShaderError::CompilationFailed(err.into()))?;
+            .map_err(|err| format!("{:?}", err))?;
 
         Ok(n::ModuleInfo {
             library,
@@ -777,14 +782,13 @@ impl Device {
                 &*info_guard
             }
             _ => {
-                let mut result = Err(d::ShaderError::CompilationFailed(String::new()));
+                let mut result = Err(String::new());
                 if ep.module.prefer_naga {
-                    if let Some(ref shader) = ep.module.naga {
-                        result =
-                            Self::compile_shader_library_naga(device, shader, &layout.naga_options);
-                        if let Err(d::ShaderError::CompilationFailed(ref msg)) = result {
-                            warn!("Naga: {:?}", msg);
+                    result = match ep.module.naga {
+                        Ok(ref shader) => {
+                            Self::compile_shader_library_naga(device, shader, &layout.naga_options)
                         }
+                        Err(ref e) => Err(e.clone()),
                     }
                 }
                 #[cfg(feature = "cross")]
@@ -796,16 +800,14 @@ impl Device {
                         self.shared.private_caps.msl_version,
                         &ep.specialization,
                         stage,
-                    )
-                    .map_err(d::ShaderError::CompilationFailed);
+                    );
                 }
                 if result.is_err() && !ep.module.prefer_naga {
-                    if let Some(ref shader) = ep.module.naga {
-                        result =
-                            Self::compile_shader_library_naga(device, shader, &layout.naga_options);
-                        if let Err(d::ShaderError::CompilationFailed(ref msg)) = result {
-                            warn!("Naga: {:?}", msg);
+                    result = match ep.module.naga {
+                        Ok(ref shader) => {
+                            Self::compile_shader_library_naga(device, shader, &layout.naga_options)
                         }
+                        Err(ref e) => Err(e.clone()),
                     }
                 }
                 info_owned = result.map_err(|e| {
@@ -1874,17 +1876,11 @@ impl hal::device::Device<Backend> for Device {
                     Ok(module) => {
                         debug!("Naga module {:#?}", module);
                         match naga::proc::Validator::new().validate(&module) {
-                            Ok(analysis) => Some(d::NagaShader { module, analysis }),
-                            Err(e) => {
-                                warn!("Naga validation failed: {:?}", e);
-                                None
-                            }
+                            Ok(analysis) => Ok(d::NagaShader { module, analysis }),
+                            Err(e) => Err(format!("Naga validation: {:?}", e)),
                         }
                     }
-                    Err(e) => {
-                        warn!("Naga parsing failed: {:?}", e);
-                        None
-                    }
+                    Err(e) => Err(format!("Naga parsing: {:?}", e)),
                 }
             },
         })
@@ -1903,7 +1899,7 @@ impl hal::device::Device<Backend> for Device {
                     return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader))
                 }
             },
-            naga: Some(shader),
+            naga: Ok(shader),
         })
     }
 
