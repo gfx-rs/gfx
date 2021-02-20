@@ -47,7 +47,7 @@ use hal::{
     pso::{PatchSize, PipelineStage},
     queue,
     window::{OutOfDate, PresentError, Suboptimal, SurfaceLost},
-    PhysicalDeviceProperties, DescriptorLimits, DynamicStates, Features, Limits,
+    DescriptorLimits, DynamicStates, Features, Limits, PhysicalDeviceProperties,
 };
 
 use std::{

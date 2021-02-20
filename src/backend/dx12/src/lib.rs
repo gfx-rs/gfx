@@ -35,8 +35,8 @@ mod window;
 
 use auxil::FastHashMap;
 use hal::{
-    adapter, format as f, image, memory, pso::PipelineStage, queue as q, PhysicalDeviceProperties, Features,
-    Limits,
+    adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Limits,
+    PhysicalDeviceProperties,
 };
 use range_alloc::RangeAllocator;
 

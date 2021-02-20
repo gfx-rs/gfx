@@ -1,6 +1,6 @@
 use crate::{Error, GlContainer, MAX_COLOR_ATTACHMENTS};
 use glow::HasContext;
-use hal::{PhysicalDeviceProperties, DynamicStates, Features, Limits, PerformanceCaveats};
+use hal::{DynamicStates, Features, Limits, PerformanceCaveats, PhysicalDeviceProperties};
 use std::{collections::HashSet, fmt, str};
 
 /// A version number for a specific component of an OpenGL implementation
@@ -349,7 +349,13 @@ impl Info {
 /// capabilities.
 pub(crate) fn query_all(
     gl: &GlContainer,
-) -> (Info, Features, LegacyFeatures, PhysicalDeviceProperties, PrivateCaps) {
+) -> (
+    Info,
+    Features,
+    LegacyFeatures,
+    PhysicalDeviceProperties,
+    PrivateCaps,
+) {
     use self::Requirement::*;
     let info = Info::get(gl);
     let max_texture_size = get_usize(gl, glow::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
