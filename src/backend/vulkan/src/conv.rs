@@ -7,7 +7,7 @@ use hal::{
     memory::Segment,
     pass, pso, query,
     window::{CompositeAlphaMode, PresentMode},
-    Features, IndexType,
+    IndexType,
 };
 
 use std::mem;

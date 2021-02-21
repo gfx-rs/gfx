@@ -1,3 +1,24 @@
+use ash::{
+    extensions::{self, khr::DrawIndirectCount, khr::Swapchain, nv::MeshShader},
+    version::{DeviceV1_0, InstanceV1_0},
+    vk,
+};
+
+use hal::{
+    adapter,
+    device::{CreationError, OutOfMemory},
+    format, image,
+    pso::PatchSize,
+    queue, DescriptorLimits, DynamicStates, Features, Limits, PhysicalDeviceProperties,
+};
+
+use std::{ffi::CStr, fmt, mem, sync::Arc, unreachable};
+
+use crate::{
+    conv, info, Backend, Device, DeviceExtensionFunctions, Queue, QueueFamily, RawDevice,
+    RawInstance, Version,
+};
+
 pub(crate) fn map_device_features(
     features: Features,
     imageless_framebuffers: bool,
@@ -120,12 +141,12 @@ pub(crate) fn map_device_features(
 }
 
 pub struct PhysicalDevice {
-    api_version: Version,
-    instance: Arc<RawInstance>,
-    handle: vk::PhysicalDevice,
-    extensions: Vec<vk::ExtensionProperties>,
-    properties: vk::PhysicalDeviceProperties,
-    known_memory_flags: vk::MemoryPropertyFlags,
+    pub(crate) api_version: Version,
+    pub(crate) instance: Arc<RawInstance>,
+    pub(crate) handle: vk::PhysicalDevice,
+    pub(crate) extensions: Vec<vk::ExtensionProperties>,
+    pub(crate) properties: vk::PhysicalDeviceProperties,
+    pub(crate) known_memory_flags: vk::MemoryPropertyFlags,
 }
 
 impl PhysicalDevice {
@@ -154,7 +175,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         families: &[(&QueueFamily, &[queue::QueuePriority])],
         requested_features: Features,
-    ) -> Result<adapter::Gpu<Backend>, DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, CreationError> {
         let family_infos = families
             .iter()
             .map(|&(family, priorities)| {
@@ -167,14 +188,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .collect::<Vec<_>>();
 
         if !self.features().contains(requested_features) {
-            return Err(DeviceCreationError::MissingFeature);
+            return Err(CreationError::MissingFeature);
         }
 
         let imageless_framebuffers = self.api_version >= Version::V1_2
             || self.supports_extension(vk::KhrImagelessFramebufferFn::name());
 
-        let mut enabled_features =
-            conv::map_device_features(requested_features, imageless_framebuffers);
+        let mut enabled_features = map_device_features(requested_features, imageless_framebuffers);
         let enabled_extensions = {
             let mut requested_extensions: Vec<&'static CStr> = Vec::new();
 
@@ -275,16 +295,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 Err(e) => {
                     return Err(match e {
                         vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                            DeviceCreationError::OutOfMemory(OutOfMemory::Host)
+                            CreationError::OutOfMemory(OutOfMemory::Host)
                         }
                         vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
-                            DeviceCreationError::OutOfMemory(OutOfMemory::Device)
+                            CreationError::OutOfMemory(OutOfMemory::Device)
                         }
                         vk::Result::ERROR_INITIALIZATION_FAILED => {
-                            DeviceCreationError::InitializationFailed
+                            CreationError::InitializationFailed
                         }
-                        vk::Result::ERROR_DEVICE_LOST => DeviceCreationError::DeviceLost,
-                        vk::Result::ERROR_TOO_MANY_OBJECTS => DeviceCreationError::TooManyObjects,
+                        vk::Result::ERROR_DEVICE_LOST => CreationError::DeviceLost,
+                        vk::Result::ERROR_TOO_MANY_OBJECTS => CreationError::TooManyObjects,
                         _ => unreachable!(),
                     })
                 }

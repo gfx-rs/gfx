@@ -42,19 +42,19 @@ use ash::{
 
 use hal::{
     adapter,
-    device::{CreationError as DeviceCreationError, DeviceLost, OutOfMemory},
-    format, image, memory,
-    pso::{PatchSize, PipelineStage},
+    device::{DeviceLost, OutOfMemory},
+    image, memory,
+    pso::PipelineStage,
     queue,
     window::{OutOfDate, PresentError, Suboptimal, SurfaceLost},
-    DescriptorLimits, DynamicStates, Features, Limits, PhysicalDeviceProperties,
+    Features,
 };
 
 use std::{
     borrow::Cow,
     cmp,
     ffi::{CStr, CString},
-    fmt, mem, slice,
+    fmt, slice,
     sync::Arc,
     thread, unreachable,
 };
@@ -67,8 +67,11 @@ mod conv;
 mod device;
 mod info;
 mod native;
+mod physical_device;
 mod pool;
 mod window;
+
+pub use physical_device::*;
 
 // Sets up the maximum count we expect in most cases, but maybe not all of them.
 const ROUGH_MAX_ATTACHMENT_COUNT: usize = 5;
