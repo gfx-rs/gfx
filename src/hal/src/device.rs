@@ -73,10 +73,6 @@ pub enum CreationError {
     /// Device initialization failed due to implementation specific errors.
     #[error("Implementation specific error occurred")]
     InitializationFailed,
-    /// At least one of the user requested extensions if not supported by the
-    /// physical device.
-    #[error("Requested extension is missing")]
-    MissingExtension,
     /// At least one of the user requested features if not supported by the
     /// physical device.
     ///
