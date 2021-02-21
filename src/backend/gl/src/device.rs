@@ -522,17 +522,12 @@ impl Device {
 
     fn reflect_shader(
         module: &naga::Module,
-        entry_point: &(naga::ShaderStage, String),
+        ep_info: &naga::proc::analyzer::FunctionInfo,
         texture_mapping: FastHashMap<String, naga::back::glsl::TextureMapping>,
         context: CompilationContext,
     ) {
-        let ep = &module.entry_points[entry_point];
-        for ((_, var), usage) in module
-            .global_variables
-            .iter()
-            .zip(ep.function.global_usage.iter())
-        {
-            if usage.is_empty() {
+        for (handle, var) in module.global_variables.iter() {
+            if ep_info[handle].is_empty() {
                 continue;
             }
             let register = match var.class {
@@ -609,13 +604,15 @@ impl Device {
             Ok(texture_mapping) => {
                 Self::reflect_shader(
                     &shader.module,
-                    &options.entry_point,
+                    shader
+                        .analysis
+                        .get_entry_point(options.shader_stage, &options.entry_point),
                     texture_mapping,
                     context,
                 );
                 let source = String::from_utf8(output).unwrap();
                 debug!("Naga generated shader:\n{}", source);
-                Self::create_shader_module_raw(gl, &source, options.entry_point.0)
+                Self::create_shader_module_raw(gl, &source, options.shader_stage)
             }
             Err(e) => {
                 warn!("Naga GLSL write: {}", e);
@@ -641,7 +638,8 @@ impl Device {
                     Version::Desktop(value)
                 }
             },
-            entry_point: (stage, ep.entry.to_string()),
+            shader_stage: stage,
+            entry_point: ep.entry.to_string(),
         };
 
         let mut result = Err(d::ShaderError::CompilationFailed(String::new()));
@@ -1216,7 +1214,11 @@ impl d::Device<B> for Device {
         Ok(n::ShaderModule {
             prefer_naga: true,
             #[cfg(feature = "cross")]
-            spv: match naga::back::spv::write_vec(&shader.module, &self.spv_options) {
+            spv: match naga::back::spv::write_vec(
+                &shader.module,
+                &shader.analysis,
+                &self.spv_options,
+            ) {
                 Ok(spv) => spv,
                 Err(e) => {
                     return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader))
