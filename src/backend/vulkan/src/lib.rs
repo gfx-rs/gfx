@@ -772,7 +772,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return Err(DeviceCreationError::MissingFeature);
         }
 
-        let imageless_framebuffers = self.supports_extension(vk::KhrImagelessFramebufferFn::name());
+        let imageless_framebuffers = self.api_version >= Version::V1_2
+            || self.supports_extension(vk::KhrImagelessFramebufferFn::name());
 
         let mut enabled_features =
             conv::map_device_features(requested_features, imageless_framebuffers);
@@ -781,11 +782,15 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
             requested_extensions.push(extensions::khr::Swapchain::name());
 
-            requested_extensions.push(vk::KhrMaintenance1Fn::name());
+            if self.api_version < Version::V1_1 {
+                requested_extensions.push(vk::KhrMaintenance1Fn::name());
+                requested_extensions.push(vk::KhrMaintenance2Fn::name());
+            }
 
-            requested_extensions.push(vk::KhrImagelessFramebufferFn::name());
-            requested_extensions.push(vk::KhrImageFormatListFn::name()); // Required for `KhrImagelessFramebufferFn`
-            requested_extensions.push(vk::KhrMaintenance2Fn::name()); // Required for `KhrImagelessFramebufferFn`
+            if imageless_framebuffers && self.api_version < Version::V1_2 {
+                requested_extensions.push(vk::KhrImagelessFramebufferFn::name());
+                requested_extensions.push(vk::KhrImageFormatListFn::name()); // Required for `KhrImagelessFramebufferFn`
+            }
 
             requested_extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
 
@@ -798,7 +803,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 }
             }
 
-            if requested_features.intersects(Features::DESCRIPTOR_INDEXING_MASK) {
+            if requested_features.intersects(Features::DESCRIPTOR_INDEXING_MASK)
+                && self.api_version < Version::V1_2
+            {
                 requested_extensions.push(vk::ExtDescriptorIndexingFn::name());
                 requested_extensions.push(vk::KhrMaintenance3Fn::name()); // Required for `ExtDescriptorIndexingFn`
             }
@@ -817,7 +824,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
             if !unsupported_extensions.is_empty() {
                 warn!("Missing extensions: {:?}", unsupported_extensions);
-                return Err(DeviceCreationError::MissingExtension);
             }
 
             debug!("Supported extensions: {:?}", supported_extensions);
