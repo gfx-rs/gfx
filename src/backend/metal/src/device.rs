@@ -1390,8 +1390,9 @@ impl hal::device::Device<Backend> for Device {
                 MTLLanguageVersion::V2_2 => (2, 2),
                 MTLLanguageVersion::V2_3 => (2, 3),
             },
-            spirv_cross_compatibility: true,
             binding_map,
+            spirv_cross_compatibility: cfg!(feature = "cross"),
+            fake_missing_bindings: false,
         };
 
         Ok(n::PipelineLayout {
@@ -1893,7 +1894,11 @@ impl hal::device::Device<Backend> for Device {
         Ok(n::ShaderModule {
             prefer_naga: true,
             #[cfg(feature = "cross")]
-            spv: match naga::back::spv::write_vec(&shader.module, &self.spv_options) {
+            spv: match naga::back::spv::write_vec(
+                &shader.module,
+                &shader.analysis,
+                &self.spv_options,
+            ) {
                 Ok(spv) => spv,
                 Err(e) => {
                     return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader))
