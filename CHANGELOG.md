@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-gl-0.7.1 (24-02-2021)
+  - Fix WebGL adapter creation
+
 ## hal-0.7.0 (30-01-2021)
   - `Borrow` and `ExactSizeIterator` bounds are removed from the iterators
   - error improvements:
