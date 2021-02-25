@@ -30,7 +30,7 @@ parking_lot = "0.11"
 raw-window-handle = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-egl = { package = "khronos-egl", version = "3", features = ["dynamic"] }
+egl = { package = "khronos-egl", version = "4", features = ["dynamic"] }
 libloading = "0.7"
 
 [dependencies.auxil]
