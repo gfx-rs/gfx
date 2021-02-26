@@ -12,162 +12,673 @@ use hal::{
     queue, DescriptorLimits, DynamicStates, Features, Limits, PhysicalDeviceProperties,
 };
 
-use std::{ffi::CStr, fmt, mem, sync::Arc, unreachable};
+use std::{ffi::CStr, fmt, mem, ptr, sync::Arc, unreachable};
 
 use crate::{
     conv, info, Backend, Device, DeviceExtensionFunctions, Queue, QueueFamily, RawDevice,
     RawInstance, Version,
 };
 
-pub(crate) fn map_device_features(
-    features: Features,
-    imageless_framebuffers: bool,
-) -> crate::DeviceCreationFeatures {
-    crate::DeviceCreationFeatures {
-        // vk::PhysicalDeviceFeatures is a struct composed of Bool32's while
-        // Features is a bitfield so we need to map everything manually
-        core: vk::PhysicalDeviceFeatures::builder()
-            .robust_buffer_access(features.contains(Features::ROBUST_BUFFER_ACCESS))
-            .full_draw_index_uint32(features.contains(Features::FULL_DRAW_INDEX_U32))
-            .image_cube_array(features.contains(Features::IMAGE_CUBE_ARRAY))
-            .independent_blend(features.contains(Features::INDEPENDENT_BLENDING))
-            .geometry_shader(features.contains(Features::GEOMETRY_SHADER))
-            .tessellation_shader(features.contains(Features::TESSELLATION_SHADER))
-            .sample_rate_shading(features.contains(Features::SAMPLE_RATE_SHADING))
-            .dual_src_blend(features.contains(Features::DUAL_SRC_BLENDING))
-            .logic_op(features.contains(Features::LOGIC_OP))
-            .multi_draw_indirect(features.contains(Features::MULTI_DRAW_INDIRECT))
-            .draw_indirect_first_instance(features.contains(Features::DRAW_INDIRECT_FIRST_INSTANCE))
-            .depth_clamp(features.contains(Features::DEPTH_CLAMP))
-            .depth_bias_clamp(features.contains(Features::DEPTH_BIAS_CLAMP))
-            .fill_mode_non_solid(features.contains(Features::NON_FILL_POLYGON_MODE))
-            .depth_bounds(features.contains(Features::DEPTH_BOUNDS))
-            .wide_lines(features.contains(Features::LINE_WIDTH))
-            .large_points(features.contains(Features::POINT_SIZE))
-            .alpha_to_one(features.contains(Features::ALPHA_TO_ONE))
-            .multi_viewport(features.contains(Features::MULTI_VIEWPORTS))
-            .sampler_anisotropy(features.contains(Features::SAMPLER_ANISOTROPY))
-            .texture_compression_etc2(features.contains(Features::FORMAT_ETC2))
-            .texture_compression_astc_ldr(features.contains(Features::FORMAT_ASTC_LDR))
-            .texture_compression_bc(features.contains(Features::FORMAT_BC))
-            .occlusion_query_precise(features.contains(Features::PRECISE_OCCLUSION_QUERY))
-            .pipeline_statistics_query(features.contains(Features::PIPELINE_STATISTICS_QUERY))
-            .vertex_pipeline_stores_and_atomics(
-                features.contains(Features::VERTEX_STORES_AND_ATOMICS),
-            )
-            .fragment_stores_and_atomics(features.contains(Features::FRAGMENT_STORES_AND_ATOMICS))
-            .shader_tessellation_and_geometry_point_size(
-                features.contains(Features::SHADER_TESSELLATION_AND_GEOMETRY_POINT_SIZE),
-            )
-            .shader_image_gather_extended(features.contains(Features::SHADER_IMAGE_GATHER_EXTENDED))
-            .shader_storage_image_extended_formats(
-                features.contains(Features::SHADER_STORAGE_IMAGE_EXTENDED_FORMATS),
-            )
-            .shader_storage_image_multisample(
-                features.contains(Features::SHADER_STORAGE_IMAGE_MULTISAMPLE),
-            )
-            .shader_storage_image_read_without_format(
-                features.contains(Features::SHADER_STORAGE_IMAGE_READ_WITHOUT_FORMAT),
-            )
-            .shader_storage_image_write_without_format(
-                features.contains(Features::SHADER_STORAGE_IMAGE_WRITE_WITHOUT_FORMAT),
-            )
-            .shader_uniform_buffer_array_dynamic_indexing(
-                features.contains(Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING),
-            )
-            .shader_sampled_image_array_dynamic_indexing(
-                features.contains(Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
-            )
-            .shader_storage_buffer_array_dynamic_indexing(
-                features.contains(Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING),
-            )
-            .shader_storage_image_array_dynamic_indexing(
-                features.contains(Features::SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING),
-            )
-            .shader_clip_distance(features.contains(Features::SHADER_CLIP_DISTANCE))
-            .shader_cull_distance(features.contains(Features::SHADER_CULL_DISTANCE))
-            .shader_float64(features.contains(Features::SHADER_FLOAT64))
-            .shader_int64(features.contains(Features::SHADER_INT64))
-            .shader_int16(features.contains(Features::SHADER_INT16))
-            .shader_resource_residency(features.contains(Features::SHADER_RESOURCE_RESIDENCY))
-            .shader_resource_min_lod(features.contains(Features::SHADER_RESOURCE_MIN_LOD))
-            .sparse_binding(features.contains(Features::SPARSE_BINDING))
-            .sparse_residency_buffer(features.contains(Features::SPARSE_RESIDENCY_BUFFER))
-            .sparse_residency_image2_d(features.contains(Features::SPARSE_RESIDENCY_IMAGE_2D))
-            .sparse_residency_image3_d(features.contains(Features::SPARSE_RESIDENCY_IMAGE_3D))
-            .sparse_residency2_samples(features.contains(Features::SPARSE_RESIDENCY_2_SAMPLES))
-            .sparse_residency4_samples(features.contains(Features::SPARSE_RESIDENCY_4_SAMPLES))
-            .sparse_residency8_samples(features.contains(Features::SPARSE_RESIDENCY_8_SAMPLES))
-            .sparse_residency16_samples(features.contains(Features::SPARSE_RESIDENCY_16_SAMPLES))
-            .sparse_residency_aliased(features.contains(Features::SPARSE_RESIDENCY_ALIASED))
-            .variable_multisample_rate(features.contains(Features::VARIABLE_MULTISAMPLE_RATE))
-            .inherited_queries(features.contains(Features::INHERITED_QUERIES))
-            .build(),
-        descriptor_indexing: if features.intersects(Features::DESCRIPTOR_INDEXING_MASK) {
-            Some(
-                vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder()
-                    .shader_sampled_image_array_non_uniform_indexing(
-                        features.contains(Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
-                    )
-                    .shader_storage_image_array_non_uniform_indexing(
-                        features.contains(Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING),
-                    )
-                    .runtime_descriptor_array(features.contains(Features::UNSIZED_DESCRIPTOR_ARRAY))
-                    .build(),
-            )
+/// Aggregate of the `vk::PhysicalDevice*Features` structs used by `gfx`.
+#[derive(Debug, Default)]
+pub struct PhysicalDeviceFeatures {
+    core: vk::PhysicalDeviceFeatures,
+    vulkan_1_2: Option<vk::PhysicalDeviceVulkan12Features>,
+    descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
+    mesh_shader: Option<vk::PhysicalDeviceMeshShaderFeaturesNV>,
+    imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
+}
+
+// This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
+unsafe impl Send for PhysicalDeviceFeatures {}
+unsafe impl Sync for PhysicalDeviceFeatures {}
+
+impl PhysicalDeviceFeatures {
+    /// Add the members of `self` into `info.enabled_features` and its `p_next` chain.
+    fn add_to_device_create_builder<'a>(
+        &'a mut self,
+        mut info: vk::DeviceCreateInfoBuilder<'a>,
+    ) -> vk::DeviceCreateInfoBuilder<'a> {
+        info = info.enabled_features(&self.core);
+
+        if let Some(ref mut feature) = self.vulkan_1_2 {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.descriptor_indexing {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.mesh_shader {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.imageless_framebuffer {
+            info = info.push_next(feature);
+        }
+
+        info
+    }
+
+    /// Create a `PhysicalDeviceFeatures` that will be used to create a logical device.
+    ///
+    /// `requested_features` should be the same as what was used to generate `enabled_extensions`.
+    fn from_extensions_and_requested_features(
+        api_version: Version,
+        enabled_extensions: &[&'static CStr],
+        requested_features: Features,
+    ) -> PhysicalDeviceFeatures {
+        // This must follow the "Valid Usage" requirements of [`VkDeviceCreateInfo`](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkDeviceCreateInfo.html).
+        let features = requested_features;
+        PhysicalDeviceFeatures {
+            // vk::PhysicalDeviceFeatures is a struct composed of Bool32's while
+            // Features is a bitfield so we need to map everything manually
+            core: vk::PhysicalDeviceFeatures::builder()
+                .robust_buffer_access(features.contains(Features::ROBUST_BUFFER_ACCESS))
+                .full_draw_index_uint32(features.contains(Features::FULL_DRAW_INDEX_U32))
+                .image_cube_array(features.contains(Features::IMAGE_CUBE_ARRAY))
+                .independent_blend(features.contains(Features::INDEPENDENT_BLENDING))
+                .geometry_shader(features.contains(Features::GEOMETRY_SHADER))
+                .tessellation_shader(features.contains(Features::TESSELLATION_SHADER))
+                .sample_rate_shading(features.contains(Features::SAMPLE_RATE_SHADING))
+                .dual_src_blend(features.contains(Features::DUAL_SRC_BLENDING))
+                .logic_op(features.contains(Features::LOGIC_OP))
+                .multi_draw_indirect(features.contains(Features::MULTI_DRAW_INDIRECT))
+                .draw_indirect_first_instance(
+                    features.contains(Features::DRAW_INDIRECT_FIRST_INSTANCE),
+                )
+                .depth_clamp(features.contains(Features::DEPTH_CLAMP))
+                .depth_bias_clamp(features.contains(Features::DEPTH_BIAS_CLAMP))
+                .fill_mode_non_solid(features.contains(Features::NON_FILL_POLYGON_MODE))
+                .depth_bounds(features.contains(Features::DEPTH_BOUNDS))
+                .wide_lines(features.contains(Features::LINE_WIDTH))
+                .large_points(features.contains(Features::POINT_SIZE))
+                .alpha_to_one(features.contains(Features::ALPHA_TO_ONE))
+                .multi_viewport(features.contains(Features::MULTI_VIEWPORTS))
+                .sampler_anisotropy(features.contains(Features::SAMPLER_ANISOTROPY))
+                .texture_compression_etc2(features.contains(Features::FORMAT_ETC2))
+                .texture_compression_astc_ldr(features.contains(Features::FORMAT_ASTC_LDR))
+                .texture_compression_bc(features.contains(Features::FORMAT_BC))
+                .occlusion_query_precise(features.contains(Features::PRECISE_OCCLUSION_QUERY))
+                .pipeline_statistics_query(features.contains(Features::PIPELINE_STATISTICS_QUERY))
+                .vertex_pipeline_stores_and_atomics(
+                    features.contains(Features::VERTEX_STORES_AND_ATOMICS),
+                )
+                .fragment_stores_and_atomics(
+                    features.contains(Features::FRAGMENT_STORES_AND_ATOMICS),
+                )
+                .shader_tessellation_and_geometry_point_size(
+                    features.contains(Features::SHADER_TESSELLATION_AND_GEOMETRY_POINT_SIZE),
+                )
+                .shader_image_gather_extended(
+                    features.contains(Features::SHADER_IMAGE_GATHER_EXTENDED),
+                )
+                .shader_storage_image_extended_formats(
+                    features.contains(Features::SHADER_STORAGE_IMAGE_EXTENDED_FORMATS),
+                )
+                .shader_storage_image_multisample(
+                    features.contains(Features::SHADER_STORAGE_IMAGE_MULTISAMPLE),
+                )
+                .shader_storage_image_read_without_format(
+                    features.contains(Features::SHADER_STORAGE_IMAGE_READ_WITHOUT_FORMAT),
+                )
+                .shader_storage_image_write_without_format(
+                    features.contains(Features::SHADER_STORAGE_IMAGE_WRITE_WITHOUT_FORMAT),
+                )
+                .shader_uniform_buffer_array_dynamic_indexing(
+                    features.contains(Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING),
+                )
+                .shader_sampled_image_array_dynamic_indexing(
+                    features.contains(Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
+                )
+                .shader_storage_buffer_array_dynamic_indexing(
+                    features.contains(Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING),
+                )
+                .shader_storage_image_array_dynamic_indexing(
+                    features.contains(Features::SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING),
+                )
+                .shader_clip_distance(features.contains(Features::SHADER_CLIP_DISTANCE))
+                .shader_cull_distance(features.contains(Features::SHADER_CULL_DISTANCE))
+                .shader_float64(features.contains(Features::SHADER_FLOAT64))
+                .shader_int64(features.contains(Features::SHADER_INT64))
+                .shader_int16(features.contains(Features::SHADER_INT16))
+                .shader_resource_residency(features.contains(Features::SHADER_RESOURCE_RESIDENCY))
+                .shader_resource_min_lod(features.contains(Features::SHADER_RESOURCE_MIN_LOD))
+                .sparse_binding(features.contains(Features::SPARSE_BINDING))
+                .sparse_residency_buffer(features.contains(Features::SPARSE_RESIDENCY_BUFFER))
+                .sparse_residency_image2_d(features.contains(Features::SPARSE_RESIDENCY_IMAGE_2D))
+                .sparse_residency_image3_d(features.contains(Features::SPARSE_RESIDENCY_IMAGE_3D))
+                .sparse_residency2_samples(features.contains(Features::SPARSE_RESIDENCY_2_SAMPLES))
+                .sparse_residency4_samples(features.contains(Features::SPARSE_RESIDENCY_4_SAMPLES))
+                .sparse_residency8_samples(features.contains(Features::SPARSE_RESIDENCY_8_SAMPLES))
+                .sparse_residency16_samples(
+                    features.contains(Features::SPARSE_RESIDENCY_16_SAMPLES),
+                )
+                .sparse_residency_aliased(features.contains(Features::SPARSE_RESIDENCY_ALIASED))
+                .variable_multisample_rate(features.contains(Features::VARIABLE_MULTISAMPLE_RATE))
+                .inherited_queries(features.contains(Features::INHERITED_QUERIES))
+                .build(),
+            vulkan_1_2: if api_version >= Version::V1_2 {
+                Some(
+                    vk::PhysicalDeviceVulkan12Features::builder()
+                        .sampler_mirror_clamp_to_edge(
+                            features.contains(Features::SAMPLER_MIRROR_CLAMP_EDGE),
+                        )
+                        .draw_indirect_count(features.contains(Features::DRAW_INDIRECT_COUNT))
+                        .descriptor_indexing(
+                            features.intersects(Features::DESCRIPTOR_INDEXING_MASK),
+                        )
+                        .sampler_filter_minmax(true)
+                        .imageless_framebuffer(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            descriptor_indexing: if enabled_extensions
+                .contains(&vk::ExtDescriptorIndexingFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder()
+                        .shader_sampled_image_array_non_uniform_indexing(
+                            features.contains(Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
+                        )
+                        .shader_storage_image_array_non_uniform_indexing(
+                            features.contains(Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING),
+                        )
+                        .runtime_descriptor_array(
+                            features.contains(Features::UNSIZED_DESCRIPTOR_ARRAY),
+                        )
+                        .build(),
+                )
+            } else {
+                None
+            },
+            mesh_shader: if enabled_extensions.contains(&vk::NvMeshShaderFn::name()) {
+                Some(
+                    vk::PhysicalDeviceMeshShaderFeaturesNV::builder()
+                        .task_shader(features.contains(Features::TASK_SHADER))
+                        .mesh_shader(features.contains(Features::MESH_SHADER))
+                        .build(),
+                )
+            } else {
+                None
+            },
+            imageless_framebuffer: if enabled_extensions
+                .contains(&vk::KhrImagelessFramebufferFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder()
+                        .imageless_framebuffer(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+        }
+    }
+
+    /// Get the `hal::Features` corresponding to the raw physical device's features and properties.
+    fn to_hal_features(&self, info: &PhysicalDeviceInfo) -> Features {
+        let mut bits = Features::empty()
+            | Features::TRIANGLE_FAN
+            | Features::SEPARATE_STENCIL_REF_VALUES
+            | Features::SAMPLER_MIP_LOD_BIAS
+            | Features::SAMPLER_BORDER_COLOR
+            | Features::MUTABLE_COMPARISON_SAMPLER
+            | Features::MUTABLE_UNNORMALIZED_SAMPLER
+            | Features::TEXTURE_DESCRIPTOR_ARRAY;
+
+        if self.core.robust_buffer_access != 0 {
+            bits |= Features::ROBUST_BUFFER_ACCESS;
+        }
+        if self.core.full_draw_index_uint32 != 0 {
+            bits |= Features::FULL_DRAW_INDEX_U32;
+        }
+        if self.core.image_cube_array != 0 {
+            bits |= Features::IMAGE_CUBE_ARRAY;
+        }
+        if self.core.independent_blend != 0 {
+            bits |= Features::INDEPENDENT_BLENDING;
+        }
+        if self.core.geometry_shader != 0 {
+            bits |= Features::GEOMETRY_SHADER;
+        }
+        if self.core.tessellation_shader != 0 {
+            bits |= Features::TESSELLATION_SHADER;
+        }
+        if self.core.sample_rate_shading != 0 {
+            bits |= Features::SAMPLE_RATE_SHADING;
+        }
+        if self.core.dual_src_blend != 0 {
+            bits |= Features::DUAL_SRC_BLENDING;
+        }
+        if self.core.logic_op != 0 {
+            bits |= Features::LOGIC_OP;
+        }
+        if self.core.multi_draw_indirect != 0 {
+            bits |= Features::MULTI_DRAW_INDIRECT;
+        }
+        if self.core.draw_indirect_first_instance != 0 {
+            bits |= Features::DRAW_INDIRECT_FIRST_INSTANCE;
+        }
+        if self.core.depth_clamp != 0 {
+            bits |= Features::DEPTH_CLAMP;
+        }
+        if self.core.depth_bias_clamp != 0 {
+            bits |= Features::DEPTH_BIAS_CLAMP;
+        }
+        if self.core.fill_mode_non_solid != 0 {
+            bits |= Features::NON_FILL_POLYGON_MODE;
+        }
+        if self.core.depth_bounds != 0 {
+            bits |= Features::DEPTH_BOUNDS;
+        }
+        if self.core.wide_lines != 0 {
+            bits |= Features::LINE_WIDTH;
+        }
+        if self.core.large_points != 0 {
+            bits |= Features::POINT_SIZE;
+        }
+        if self.core.alpha_to_one != 0 {
+            bits |= Features::ALPHA_TO_ONE;
+        }
+        if self.core.multi_viewport != 0 {
+            bits |= Features::MULTI_VIEWPORTS;
+        }
+        if self.core.sampler_anisotropy != 0 {
+            bits |= Features::SAMPLER_ANISOTROPY;
+        }
+        if self.core.texture_compression_etc2 != 0 {
+            bits |= Features::FORMAT_ETC2;
+        }
+        if self.core.texture_compression_astc_ldr != 0 {
+            bits |= Features::FORMAT_ASTC_LDR;
+        }
+        if self.core.texture_compression_bc != 0 {
+            bits |= Features::FORMAT_BC;
+        }
+        if self.core.occlusion_query_precise != 0 {
+            bits |= Features::PRECISE_OCCLUSION_QUERY;
+        }
+        if self.core.pipeline_statistics_query != 0 {
+            bits |= Features::PIPELINE_STATISTICS_QUERY;
+        }
+        if self.core.vertex_pipeline_stores_and_atomics != 0 {
+            bits |= Features::VERTEX_STORES_AND_ATOMICS;
+        }
+        if self.core.fragment_stores_and_atomics != 0 {
+            bits |= Features::FRAGMENT_STORES_AND_ATOMICS;
+        }
+        if self.core.shader_tessellation_and_geometry_point_size != 0 {
+            bits |= Features::SHADER_TESSELLATION_AND_GEOMETRY_POINT_SIZE;
+        }
+        if self.core.shader_image_gather_extended != 0 {
+            bits |= Features::SHADER_IMAGE_GATHER_EXTENDED;
+        }
+        if self.core.shader_storage_image_extended_formats != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_EXTENDED_FORMATS;
+        }
+        if self.core.shader_storage_image_multisample != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_MULTISAMPLE;
+        }
+        if self.core.shader_storage_image_read_without_format != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_READ_WITHOUT_FORMAT;
+        }
+        if self.core.shader_storage_image_write_without_format != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_WRITE_WITHOUT_FORMAT;
+        }
+        if self.core.shader_uniform_buffer_array_dynamic_indexing != 0 {
+            bits |= Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING;
+        }
+        if self.core.shader_sampled_image_array_dynamic_indexing != 0 {
+            bits |= Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING;
+        }
+        if self.core.shader_storage_buffer_array_dynamic_indexing != 0 {
+            bits |= Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING;
+        }
+        if self.core.shader_storage_image_array_dynamic_indexing != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING;
+        }
+        if self.core.shader_clip_distance != 0 {
+            bits |= Features::SHADER_CLIP_DISTANCE;
+        }
+        if self.core.shader_cull_distance != 0 {
+            bits |= Features::SHADER_CULL_DISTANCE;
+        }
+        if self.core.shader_float64 != 0 {
+            bits |= Features::SHADER_FLOAT64;
+        }
+        if self.core.shader_int64 != 0 {
+            bits |= Features::SHADER_INT64;
+        }
+        if self.core.shader_int16 != 0 {
+            bits |= Features::SHADER_INT16;
+        }
+        if self.core.shader_resource_residency != 0 {
+            bits |= Features::SHADER_RESOURCE_RESIDENCY;
+        }
+        if self.core.shader_resource_min_lod != 0 {
+            bits |= Features::SHADER_RESOURCE_MIN_LOD;
+        }
+        if self.core.sparse_binding != 0 {
+            bits |= Features::SPARSE_BINDING;
+        }
+        if self.core.sparse_residency_buffer != 0 {
+            bits |= Features::SPARSE_RESIDENCY_BUFFER;
+        }
+        if self.core.sparse_residency_image2_d != 0 {
+            bits |= Features::SPARSE_RESIDENCY_IMAGE_2D;
+        }
+        if self.core.sparse_residency_image3_d != 0 {
+            bits |= Features::SPARSE_RESIDENCY_IMAGE_3D;
+        }
+        if self.core.sparse_residency2_samples != 0 {
+            bits |= Features::SPARSE_RESIDENCY_2_SAMPLES;
+        }
+        if self.core.sparse_residency4_samples != 0 {
+            bits |= Features::SPARSE_RESIDENCY_4_SAMPLES;
+        }
+        if self.core.sparse_residency8_samples != 0 {
+            bits |= Features::SPARSE_RESIDENCY_8_SAMPLES;
+        }
+        if self.core.sparse_residency16_samples != 0 {
+            bits |= Features::SPARSE_RESIDENCY_16_SAMPLES;
+        }
+        if self.core.sparse_residency_aliased != 0 {
+            bits |= Features::SPARSE_RESIDENCY_ALIASED;
+        }
+        if self.core.variable_multisample_rate != 0 {
+            bits |= Features::VARIABLE_MULTISAMPLE_RATE;
+        }
+        if self.core.inherited_queries != 0 {
+            bits |= Features::INHERITED_QUERIES;
+        }
+
+        if info.supports_extension(vk::AmdNegativeViewportHeightFn::name())
+            || info.supports_extension(vk::KhrMaintenance1Fn::name())
+            || info.api_version() > Version::V1_1
+        {
+            bits |= Features::NDC_Y_UP;
+        }
+
+        if info.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name()) {
+            bits |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
+        }
+
+        if info.supports_extension(DrawIndirectCount::name()) {
+            bits |= Features::DRAW_INDIRECT_COUNT
+        }
+
+        if let Some(ref vulkan_1_2) = self.vulkan_1_2 {
+            if vulkan_1_2.shader_sampled_image_array_non_uniform_indexing != 0 {
+                bits |= Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING;
+            }
+            if vulkan_1_2.shader_storage_image_array_non_uniform_indexing != 0 {
+                bits |= Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING;
+            }
+            if vulkan_1_2.runtime_descriptor_array != 0 {
+                bits |= Features::UNSIZED_DESCRIPTOR_ARRAY;
+            }
+            if vulkan_1_2.sampler_mirror_clamp_to_edge != 0 {
+                bits |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
+            }
+            if vulkan_1_2.draw_indirect_count != 0 {
+                bits |= Features::DRAW_INDIRECT_COUNT
+            }
+        }
+
+        if let Some(ref descriptor_indexing) = self.descriptor_indexing {
+            if descriptor_indexing.shader_sampled_image_array_non_uniform_indexing != 0 {
+                bits |= Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING;
+            }
+            if descriptor_indexing.shader_storage_image_array_non_uniform_indexing != 0 {
+                bits |= Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING;
+            }
+            if descriptor_indexing.runtime_descriptor_array != 0 {
+                bits |= Features::UNSIZED_DESCRIPTOR_ARRAY;
+            }
+        }
+
+        if let Some(ref mesh_shader) = self.mesh_shader {
+            if mesh_shader.task_shader != 0 {
+                bits |= Features::TASK_SHADER;
+            }
+            if mesh_shader.mesh_shader != 0 {
+                bits |= Features::MESH_SHADER;
+            }
+        }
+
+        bits
+    }
+}
+
+/// Information gathered about a physical device. Used to
+pub struct PhysicalDeviceInfo {
+    supported_extensions: Vec<vk::ExtensionProperties>,
+    properties: vk::PhysicalDeviceProperties,
+}
+
+impl PhysicalDeviceInfo {
+    fn api_version(&self) -> Version {
+        self.properties.api_version.into()
+    }
+
+    fn supports_extension(&self, extension: &CStr) -> bool {
+        self.supported_extensions
+            .iter()
+            .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == extension)
+    }
+
+    /// Map `requested_features` to the list of Vulkan extension strings required to create the logical device.
+    fn get_required_extensions(&self, requested_features: Features) -> Vec<&'static CStr> {
+        let mut requested_extensions = Vec::new();
+
+        requested_extensions.push(extensions::khr::Swapchain::name());
+
+        if self.api_version() < Version::V1_1 {
+            requested_extensions.push(vk::KhrMaintenance1Fn::name());
+            requested_extensions.push(vk::KhrMaintenance2Fn::name());
+        }
+
+        if requested_features.contains(Features::NDC_Y_UP) {
+            // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside `VK_KHR_maintenance1` or a 1.1+ device.
+            if self.api_version() < Version::V1_1
+                && !self.supports_extension(vk::KhrMaintenance1Fn::name())
+            {
+                requested_extensions.push(vk::AmdNegativeViewportHeightFn::name());
+            }
+        }
+
+        if self.api_version() < Version::V1_2
+            && self.supports_extension(vk::KhrImagelessFramebufferFn::name())
+        {
+            requested_extensions.push(vk::KhrImagelessFramebufferFn::name());
+            requested_extensions.push(vk::KhrImageFormatListFn::name()); // Required for `KhrImagelessFramebufferFn`
+        }
+
+        if self.api_version() < Version::V1_2 {
+            requested_extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
+        }
+
+        if self.api_version() < Version::V1_2
+            && requested_features.intersects(Features::DESCRIPTOR_INDEXING_MASK)
+        {
+            requested_extensions.push(vk::ExtDescriptorIndexingFn::name());
+
+            if self.api_version() < Version::V1_1 {
+                requested_extensions.push(vk::KhrMaintenance3Fn::name());
+            }
+        }
+
+        if self.api_version() < Version::V1_2
+            && requested_features.intersects(Features::SAMPLER_MIRROR_CLAMP_EDGE)
+        {
+            requested_extensions.push(vk::KhrSamplerMirrorClampToEdgeFn::name());
+        }
+
+        if requested_features.intersects(Features::MESH_SHADER_MASK) {
+            requested_extensions.push(MeshShader::name());
+        }
+
+        if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
+            requested_extensions.push(DrawIndirectCount::name());
+        }
+
+        requested_extensions
+    }
+
+    fn load(
+        instance: &Arc<RawInstance>,
+        device: vk::PhysicalDevice,
+    ) -> (Self, PhysicalDeviceFeatures) {
+        let device_properties = unsafe {
+            PhysicalDeviceInfo {
+                supported_extensions: instance
+                    .inner
+                    .enumerate_device_extension_properties(device)
+                    .unwrap(),
+                properties: instance.inner.get_physical_device_properties(device),
+            }
+        };
+
+        let mut features = PhysicalDeviceFeatures::default();
+        features.core = if let Some(ref get_device_properties) =
+            instance.get_physical_device_properties
+        {
+            let core = vk::PhysicalDeviceFeatures::builder().build();
+            let mut features2 = vk::PhysicalDeviceFeatures2KHR::builder()
+                .features(core)
+                .build();
+
+            if device_properties.api_version() >= Version::V1_2 {
+                features.vulkan_1_2 = Some(vk::PhysicalDeviceVulkan12Features::builder().build());
+
+                let mut_ref = features.vulkan_1_2.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
+            if device_properties.supports_extension(vk::ExtDescriptorIndexingFn::name()) {
+                features.descriptor_indexing =
+                    Some(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
+
+                let mut_ref = features.descriptor_indexing.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
+            if device_properties.supports_extension(MeshShader::name()) {
+                features.mesh_shader =
+                    Some(vk::PhysicalDeviceMeshShaderFeaturesNV::builder().build());
+
+                let mut_ref = features.mesh_shader.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
+            // `VK_KHR_imageless_framebuffer` is promoted to 1.2, but has no changes, so we can keep using the extension unconditionally.
+            if device_properties.supports_extension(vk::KhrImagelessFramebufferFn::name()) {
+                features.imageless_framebuffer =
+                    Some(vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder().build());
+
+                let mut_ref = features.imageless_framebuffer.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
+            unsafe {
+                get_device_properties
+                    .get_physical_device_features2_khr(device, &mut features2 as *mut _);
+            }
+            features2.features
         } else {
-            None
-        },
-        mesh_shaders: if features.intersects(Features::MESH_SHADER_MASK) {
-            Some(
-                vk::PhysicalDeviceMeshShaderFeaturesNV::builder()
-                    .task_shader(features.contains(Features::TASK_SHADER))
-                    .mesh_shader(features.contains(Features::MESH_SHADER))
-                    .build(),
-            )
-        } else {
-            None
-        },
-        imageless_framebuffers: if imageless_framebuffers {
-            Some(
-                vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder()
-                    .imageless_framebuffer(imageless_framebuffers)
-                    .build(),
-            )
-        } else {
-            None
-        },
+            unsafe { instance.inner.get_physical_device_features(device) }
+        };
+
+        /// # Safety
+        /// `T` must be a struct bigger than `vk::BaseOutStructure`.
+        unsafe fn null_p_next<T>(features: &mut Option<T>) {
+            if let Some(features) = features {
+                // This is technically invalid since `vk::BaseOutStructure` and `T` will probably never have the same size.
+                mem::transmute::<_, &mut vk::BaseOutStructure>(features).p_next = ptr::null_mut();
+            }
+        }
+
+        unsafe {
+            null_p_next(&mut features.vulkan_1_2);
+            null_p_next(&mut features.descriptor_indexing);
+            null_p_next(&mut features.mesh_shader);
+            null_p_next(&mut features.imageless_framebuffer);
+        }
+
+        (device_properties, features)
     }
 }
 
 pub struct PhysicalDevice {
-    pub(crate) api_version: Version,
-    pub(crate) instance: Arc<RawInstance>,
-    pub(crate) handle: vk::PhysicalDevice,
-    pub(crate) extensions: Vec<vk::ExtensionProperties>,
-    pub(crate) properties: vk::PhysicalDeviceProperties,
-    pub(crate) known_memory_flags: vk::MemoryPropertyFlags,
+    instance: Arc<RawInstance>,
+    pub handle: vk::PhysicalDevice,
+    known_memory_flags: vk::MemoryPropertyFlags,
+    device_info: PhysicalDeviceInfo,
+    device_features: PhysicalDeviceFeatures,
 }
 
-impl PhysicalDevice {
-    fn supports_extension(&self, extension: &CStr) -> bool {
-        self.extensions
-            .iter()
-            .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == extension)
+pub(crate) fn load_adapter(
+    instance: &Arc<RawInstance>,
+    device: vk::PhysicalDevice,
+) -> adapter::Adapter<Backend> {
+    let (device_info, device_features) = PhysicalDeviceInfo::load(instance, device);
+
+    let info = adapter::AdapterInfo {
+        name: unsafe {
+            CStr::from_ptr(device_info.properties.device_name.as_ptr())
+                .to_str()
+                .unwrap_or("Unknown")
+                .to_owned()
+        },
+        vendor: device_info.properties.vendor_id as usize,
+        device: device_info.properties.device_id as usize,
+        device_type: match device_info.properties.device_type {
+            ash::vk::PhysicalDeviceType::OTHER => adapter::DeviceType::Other,
+            ash::vk::PhysicalDeviceType::INTEGRATED_GPU => adapter::DeviceType::IntegratedGpu,
+            ash::vk::PhysicalDeviceType::DISCRETE_GPU => adapter::DeviceType::DiscreteGpu,
+            ash::vk::PhysicalDeviceType::VIRTUAL_GPU => adapter::DeviceType::VirtualGpu,
+            ash::vk::PhysicalDeviceType::CPU => adapter::DeviceType::Cpu,
+            _ => adapter::DeviceType::Other,
+        },
+    };
+
+    let physical_device = PhysicalDevice {
+        instance: instance.clone(),
+        handle: device,
+        known_memory_flags: vk::MemoryPropertyFlags::DEVICE_LOCAL
+            | vk::MemoryPropertyFlags::HOST_VISIBLE
+            | vk::MemoryPropertyFlags::HOST_COHERENT
+            | vk::MemoryPropertyFlags::HOST_CACHED
+            | vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
+        device_info,
+        device_features,
+    };
+
+    let queue_families = unsafe {
+        instance
+            .inner
+            .get_physical_device_queue_family_properties(device)
+            .into_iter()
+            .enumerate()
+            .map(|(i, properties)| QueueFamily {
+                properties,
+                device,
+                index: i as u32,
+            })
+            .collect()
+    };
+
+    adapter::Adapter {
+        info,
+        physical_device,
+        queue_families,
     }
 }
 
 impl fmt::Debug for PhysicalDevice {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str("PhysicalDevice")
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("PhysicalDevice").finish()
     }
-}
-
-pub struct DeviceCreationFeatures {
-    core: vk::PhysicalDeviceFeatures,
-    descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
-    mesh_shaders: Option<vk::PhysicalDeviceMeshShaderFeaturesNV>,
-    imageless_framebuffers: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
 }
 
 impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
@@ -191,54 +702,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return Err(CreationError::MissingFeature);
         }
 
-        let imageless_framebuffers = self.api_version >= Version::V1_2
-            || self.supports_extension(vk::KhrImagelessFramebufferFn::name());
-
-        let mut enabled_features = map_device_features(requested_features, imageless_framebuffers);
         let enabled_extensions = {
-            let mut requested_extensions: Vec<&'static CStr> = Vec::new();
-
-            requested_extensions.push(extensions::khr::Swapchain::name());
-
-            if self.api_version < Version::V1_1 {
-                requested_extensions.push(vk::KhrMaintenance1Fn::name());
-                requested_extensions.push(vk::KhrMaintenance2Fn::name());
-            }
-
-            if imageless_framebuffers && self.api_version < Version::V1_2 {
-                requested_extensions.push(vk::KhrImagelessFramebufferFn::name());
-                requested_extensions.push(vk::KhrImageFormatListFn::name()); // Required for `KhrImagelessFramebufferFn`
-            }
-
-            requested_extensions.push(vk::ExtSamplerFilterMinmaxFn::name());
-
-            if requested_features.contains(Features::NDC_Y_UP) {
-                // `VK_AMD_negative_viewport_height` is obsoleted by `VK_KHR_maintenance1` and must not be enabled alongside `VK_KHR_maintenance1` or a 1.1+ device.
-                if self.api_version < Version::V1_1
-                    && !self.supports_extension(vk::KhrMaintenance1Fn::name())
-                {
-                    requested_extensions.push(vk::AmdNegativeViewportHeightFn::name());
-                }
-            }
-
-            if requested_features.intersects(Features::DESCRIPTOR_INDEXING_MASK)
-                && self.api_version < Version::V1_2
-            {
-                requested_extensions.push(vk::ExtDescriptorIndexingFn::name());
-                requested_extensions.push(vk::KhrMaintenance3Fn::name()); // Required for `ExtDescriptorIndexingFn`
-            }
-
-            if requested_features.intersects(Features::MESH_SHADER_MASK) {
-                requested_extensions.push(MeshShader::name());
-            }
-
-            if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
-                requested_extensions.push(DrawIndirectCount::name());
-            }
-
-            let (supported_extensions, unsupported_extensions) = requested_extensions
+            let (supported_extensions, unsupported_extensions) = self
+                .device_info
+                .get_required_extensions(requested_features)
                 .iter()
-                .partition::<Vec<&CStr>, _>(|&&extension| self.supports_extension(extension));
+                .partition::<Vec<&CStr>, _>(|&&extension| {
+                    self.device_info.supports_extension(extension)
+                });
 
             if !unsupported_extensions.is_empty() {
                 warn!("Missing extensions: {:?}", unsupported_extensions);
@@ -276,19 +747,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 })
                 .collect::<Vec<_>>();
 
-            let mut info = vk::DeviceCreateInfo::builder()
+            let mut enabled_features =
+                PhysicalDeviceFeatures::from_extensions_and_requested_features(
+                    self.device_info.api_version(),
+                    &enabled_extensions,
+                    requested_features,
+                );
+            let info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(&family_infos)
-                .enabled_extension_names(&str_pointers)
-                .enabled_features(&enabled_features.core);
-            if let Some(ref mut feature) = enabled_features.descriptor_indexing {
-                info = info.push_next(feature);
-            }
-            if let Some(ref mut feature) = enabled_features.mesh_shaders {
-                info = info.push_next(feature);
-            }
-            if let Some(ref mut feature) = enabled_features.imageless_framebuffers {
-                info = info.push_next(feature);
-            }
+                .enabled_extension_names(&str_pointers);
+            let info = enabled_features.add_to_device_create_builder(info);
 
             match self.instance.inner.create_device(self.handle, &info, None) {
                 Ok(device) => device,
@@ -363,12 +831,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
                 },
-                flip_y_requires_shift: self.api_version >= Version::V1_1
-                    || self.supports_extension(vk::KhrMaintenance1Fn::name()),
-                imageless_framebuffers,
-                timestamp_period: self.properties.limits.timestamp_period,
+                flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
+                    || self
+                        .device_info
+                        .supports_extension(vk::KhrMaintenance1Fn::name()),
+                imageless_framebuffers: self.device_info.api_version() >= Version::V1_2
+                    || self
+                        .device_info
+                        .supports_extension(vk::KhrImagelessFramebufferFn::name()),
+                timestamp_period: self.device_info.properties.limits.timestamp_period,
             }),
-            vendor_id: self.properties.vendor_id,
+            vendor_id: self.device_info.properties.vendor_id,
             valid_ash_memory_types,
             #[cfg(feature = "naga")]
             naga_options,
@@ -405,7 +878,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 format.map_or(vk::Format::UNDEFINED, conv::map_format),
             )
         };
-        let supports_transfer_bits = self.supports_extension(vk::KhrMaintenance1Fn::name());
+        let supports_transfer_bits = self
+            .device_info
+            .supports_extension(vk::KhrMaintenance1Fn::name());
 
         format::Properties {
             linear_tiling: conv::map_image_features(
@@ -504,259 +979,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn features(&self) -> Features {
+        let mut bits = self.device_features.to_hal_features(&self.device_info);
+
         // see https://github.com/gfx-rs/gfx/issues/1930
         let is_windows_intel_dual_src_bug = cfg!(windows)
-            && self.properties.vendor_id == info::intel::VENDOR
-            && (self.properties.device_id & info::intel::DEVICE_KABY_LAKE_MASK
+            && self.device_info.properties.vendor_id == info::intel::VENDOR
+            && (self.device_info.properties.device_id & info::intel::DEVICE_KABY_LAKE_MASK
                 == info::intel::DEVICE_KABY_LAKE_MASK
-                || self.properties.device_id & info::intel::DEVICE_SKY_LAKE_MASK
+                || self.device_info.properties.device_id & info::intel::DEVICE_SKY_LAKE_MASK
                     == info::intel::DEVICE_SKY_LAKE_MASK);
-
-        let mut descriptor_indexing_features = None;
-        let mut mesh_shader_features = None;
-        let features = if let Some(ref get_device_properties) =
-            self.instance.get_physical_device_properties
-        {
-            let features = vk::PhysicalDeviceFeatures::builder().build();
-            let mut features2 = vk::PhysicalDeviceFeatures2KHR::builder()
-                .features(features)
-                .build();
-
-            // Add extension infos to the p_next chain
-            if self.supports_extension(vk::ExtDescriptorIndexingFn::name()) {
-                descriptor_indexing_features =
-                    Some(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
-
-                let mut_ref = descriptor_indexing_features.as_mut().unwrap();
-                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
-            }
-
-            if self.supports_extension(MeshShader::name()) {
-                mesh_shader_features =
-                    Some(vk::PhysicalDeviceMeshShaderFeaturesNV::builder().build());
-
-                let mut_ref = mesh_shader_features.as_mut().unwrap();
-                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
-            }
-
-            unsafe {
-                get_device_properties
-                    .get_physical_device_features2_khr(self.handle, &mut features2 as *mut _);
-            }
-            features2.features
-        } else {
-            unsafe {
-                self.instance
-                    .inner
-                    .get_physical_device_features(self.handle)
-            }
-        };
-
-        let mut bits = Features::empty()
-            | Features::TRIANGLE_FAN
-            | Features::SEPARATE_STENCIL_REF_VALUES
-            | Features::SAMPLER_MIP_LOD_BIAS
-            | Features::SAMPLER_BORDER_COLOR
-            | Features::MUTABLE_COMPARISON_SAMPLER
-            | Features::MUTABLE_UNNORMALIZED_SAMPLER
-            | Features::TEXTURE_DESCRIPTOR_ARRAY;
-
-        if self.supports_extension(vk::AmdNegativeViewportHeightFn::name())
-            || self.supports_extension(vk::KhrMaintenance1Fn::name())
-        {
-            bits |= Features::NDC_Y_UP;
-        }
-        if self.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name()) {
-            bits |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
-        }
-        if self.supports_extension(DrawIndirectCount::name()) {
-            bits |= Features::DRAW_INDIRECT_COUNT
-        }
-        // This will only be some if the extension exists
-        if let Some(ref desc_indexing) = descriptor_indexing_features {
-            if desc_indexing.shader_sampled_image_array_non_uniform_indexing != 0 {
-                bits |= Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING;
-            }
-            if desc_indexing.shader_storage_image_array_non_uniform_indexing != 0 {
-                bits |= Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING;
-            }
-            if desc_indexing.runtime_descriptor_array != 0 {
-                bits |= Features::UNSIZED_DESCRIPTOR_ARRAY;
-            }
-        }
-        if let Some(ref mesh_shader) = mesh_shader_features {
-            if mesh_shader.task_shader != 0 {
-                bits |= Features::TASK_SHADER;
-            }
-            if mesh_shader.mesh_shader != 0 {
-                bits |= Features::MESH_SHADER;
-            }
-        }
-
-        if features.robust_buffer_access != 0 {
-            bits |= Features::ROBUST_BUFFER_ACCESS;
-        }
-        if features.full_draw_index_uint32 != 0 {
-            bits |= Features::FULL_DRAW_INDEX_U32;
-        }
-        if features.image_cube_array != 0 {
-            bits |= Features::IMAGE_CUBE_ARRAY;
-        }
-        if features.independent_blend != 0 {
-            bits |= Features::INDEPENDENT_BLENDING;
-        }
-        if features.geometry_shader != 0 {
-            bits |= Features::GEOMETRY_SHADER;
-        }
-        if features.tessellation_shader != 0 {
-            bits |= Features::TESSELLATION_SHADER;
-        }
-        if features.sample_rate_shading != 0 {
-            bits |= Features::SAMPLE_RATE_SHADING;
-        }
-        if features.dual_src_blend != 0 && !is_windows_intel_dual_src_bug {
-            bits |= Features::DUAL_SRC_BLENDING;
-        }
-        if features.logic_op != 0 {
-            bits |= Features::LOGIC_OP;
-        }
-        if features.multi_draw_indirect != 0 {
-            bits |= Features::MULTI_DRAW_INDIRECT;
-        }
-        if features.draw_indirect_first_instance != 0 {
-            bits |= Features::DRAW_INDIRECT_FIRST_INSTANCE;
-        }
-        if features.depth_clamp != 0 {
-            bits |= Features::DEPTH_CLAMP;
-        }
-        if features.depth_bias_clamp != 0 {
-            bits |= Features::DEPTH_BIAS_CLAMP;
-        }
-        if features.fill_mode_non_solid != 0 {
-            bits |= Features::NON_FILL_POLYGON_MODE;
-        }
-        if features.depth_bounds != 0 {
-            bits |= Features::DEPTH_BOUNDS;
-        }
-        if features.wide_lines != 0 {
-            bits |= Features::LINE_WIDTH;
-        }
-        if features.large_points != 0 {
-            bits |= Features::POINT_SIZE;
-        }
-        if features.alpha_to_one != 0 {
-            bits |= Features::ALPHA_TO_ONE;
-        }
-        if features.multi_viewport != 0 {
-            bits |= Features::MULTI_VIEWPORTS;
-        }
-        if features.sampler_anisotropy != 0 {
-            bits |= Features::SAMPLER_ANISOTROPY;
-        }
-        if features.texture_compression_etc2 != 0 {
-            bits |= Features::FORMAT_ETC2;
-        }
-        if features.texture_compression_astc_ldr != 0 {
-            bits |= Features::FORMAT_ASTC_LDR;
-        }
-        if features.texture_compression_bc != 0 {
-            bits |= Features::FORMAT_BC;
-        }
-        if features.occlusion_query_precise != 0 {
-            bits |= Features::PRECISE_OCCLUSION_QUERY;
-        }
-        if features.pipeline_statistics_query != 0 {
-            bits |= Features::PIPELINE_STATISTICS_QUERY;
-        }
-        if features.vertex_pipeline_stores_and_atomics != 0 {
-            bits |= Features::VERTEX_STORES_AND_ATOMICS;
-        }
-        if features.fragment_stores_and_atomics != 0 {
-            bits |= Features::FRAGMENT_STORES_AND_ATOMICS;
-        }
-        if features.shader_tessellation_and_geometry_point_size != 0 {
-            bits |= Features::SHADER_TESSELLATION_AND_GEOMETRY_POINT_SIZE;
-        }
-        if features.shader_image_gather_extended != 0 {
-            bits |= Features::SHADER_IMAGE_GATHER_EXTENDED;
-        }
-        if features.shader_storage_image_extended_formats != 0 {
-            bits |= Features::SHADER_STORAGE_IMAGE_EXTENDED_FORMATS;
-        }
-        if features.shader_storage_image_multisample != 0 {
-            bits |= Features::SHADER_STORAGE_IMAGE_MULTISAMPLE;
-        }
-        if features.shader_storage_image_read_without_format != 0 {
-            bits |= Features::SHADER_STORAGE_IMAGE_READ_WITHOUT_FORMAT;
-        }
-        if features.shader_storage_image_write_without_format != 0 {
-            bits |= Features::SHADER_STORAGE_IMAGE_WRITE_WITHOUT_FORMAT;
-        }
-        if features.shader_uniform_buffer_array_dynamic_indexing != 0 {
-            bits |= Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING;
-        }
-        if features.shader_sampled_image_array_dynamic_indexing != 0 {
-            bits |= Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING;
-        }
-        if features.shader_storage_buffer_array_dynamic_indexing != 0 {
-            bits |= Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING;
-        }
-        if features.shader_storage_image_array_dynamic_indexing != 0 {
-            bits |= Features::SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING;
-        }
-        if features.shader_clip_distance != 0 {
-            bits |= Features::SHADER_CLIP_DISTANCE;
-        }
-        if features.shader_cull_distance != 0 {
-            bits |= Features::SHADER_CULL_DISTANCE;
-        }
-        if features.shader_float64 != 0 {
-            bits |= Features::SHADER_FLOAT64;
-        }
-        if features.shader_int64 != 0 {
-            bits |= Features::SHADER_INT64;
-        }
-        if features.shader_int16 != 0 {
-            bits |= Features::SHADER_INT16;
-        }
-        if features.shader_resource_residency != 0 {
-            bits |= Features::SHADER_RESOURCE_RESIDENCY;
-        }
-        if features.shader_resource_min_lod != 0 {
-            bits |= Features::SHADER_RESOURCE_MIN_LOD;
-        }
-        if features.sparse_binding != 0 {
-            bits |= Features::SPARSE_BINDING;
-        }
-        if features.sparse_residency_buffer != 0 {
-            bits |= Features::SPARSE_RESIDENCY_BUFFER;
-        }
-        if features.sparse_residency_image2_d != 0 {
-            bits |= Features::SPARSE_RESIDENCY_IMAGE_2D;
-        }
-        if features.sparse_residency_image3_d != 0 {
-            bits |= Features::SPARSE_RESIDENCY_IMAGE_3D;
-        }
-        if features.sparse_residency2_samples != 0 {
-            bits |= Features::SPARSE_RESIDENCY_2_SAMPLES;
-        }
-        if features.sparse_residency4_samples != 0 {
-            bits |= Features::SPARSE_RESIDENCY_4_SAMPLES;
-        }
-        if features.sparse_residency8_samples != 0 {
-            bits |= Features::SPARSE_RESIDENCY_8_SAMPLES;
-        }
-        if features.sparse_residency16_samples != 0 {
-            bits |= Features::SPARSE_RESIDENCY_16_SAMPLES;
-        }
-        if features.sparse_residency_aliased != 0 {
-            bits |= Features::SPARSE_RESIDENCY_ALIASED;
-        }
-        if features.variable_multisample_rate != 0 {
-            bits |= Features::VARIABLE_MULTISAMPLE_RATE;
-        }
-        if features.inherited_queries != 0 {
-            bits |= Features::INHERITED_QUERIES;
+        if is_windows_intel_dual_src_bug {
+            bits = bits & !Features::DUAL_SRC_BLENDING;
         }
 
         bits
@@ -764,7 +997,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn properties(&self) -> PhysicalDeviceProperties {
         let limits = {
-            let limits = &self.properties.limits;
+            let limits = &self.device_info.properties.limits;
 
             let max_group_count = limits.max_compute_work_group_count;
             let max_group_size = limits.max_compute_work_group_size;
@@ -976,27 +1209,27 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         // vendor id
-        if vendor_id != self.properties.vendor_id {
+        if vendor_id != self.device_info.properties.vendor_id {
             warn!(
                 "Vendor ID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.vendor_id, vendor_id,
+                self.device_info.properties.vendor_id, vendor_id,
             );
             return false;
         }
 
         // device id
-        if device_id != self.properties.device_id {
+        if device_id != self.device_info.properties.device_id {
             warn!(
                 "Device ID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.device_id, device_id,
+                self.device_info.properties.device_id, device_id,
             );
             return false;
         }
 
-        if self.properties.pipeline_cache_uuid != cache[16..16 + vk::UUID_SIZE] {
+        if self.device_info.properties.pipeline_cache_uuid != cache[16..16 + vk::UUID_SIZE] {
             warn!(
                 "Pipeline cache UUID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.pipeline_cache_uuid,
+                self.device_info.properties.pipeline_cache_uuid,
                 &cache[16..16 + vk::UUID_SIZE],
             );
             return false;

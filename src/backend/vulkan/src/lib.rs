@@ -572,65 +572,7 @@ impl hal::Instance<Backend> for Instance {
 
         devices
             .into_iter()
-            .map(|device| {
-                let extensions =
-                    unsafe { self.raw.inner.enumerate_device_extension_properties(device) }
-                        .unwrap();
-                let properties = unsafe { self.raw.inner.get_physical_device_properties(device) };
-                let info = adapter::AdapterInfo {
-                    name: unsafe {
-                        CStr::from_ptr(properties.device_name.as_ptr())
-                            .to_str()
-                            .unwrap_or("Unknown")
-                            .to_owned()
-                    },
-                    vendor: properties.vendor_id as usize,
-                    device: properties.device_id as usize,
-                    device_type: match properties.device_type {
-                        ash::vk::PhysicalDeviceType::OTHER => adapter::DeviceType::Other,
-                        ash::vk::PhysicalDeviceType::INTEGRATED_GPU => {
-                            adapter::DeviceType::IntegratedGpu
-                        }
-                        ash::vk::PhysicalDeviceType::DISCRETE_GPU => {
-                            adapter::DeviceType::DiscreteGpu
-                        }
-                        ash::vk::PhysicalDeviceType::VIRTUAL_GPU => adapter::DeviceType::VirtualGpu,
-                        ash::vk::PhysicalDeviceType::CPU => adapter::DeviceType::Cpu,
-                        _ => adapter::DeviceType::Other,
-                    },
-                };
-                let physical_device = PhysicalDevice {
-                    api_version: properties.api_version.into(),
-                    instance: self.raw.clone(),
-                    handle: device,
-                    extensions,
-                    properties,
-                    known_memory_flags: vk::MemoryPropertyFlags::DEVICE_LOCAL
-                        | vk::MemoryPropertyFlags::HOST_VISIBLE
-                        | vk::MemoryPropertyFlags::HOST_COHERENT
-                        | vk::MemoryPropertyFlags::HOST_CACHED
-                        | vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
-                };
-                let queue_families = unsafe {
-                    self.raw
-                        .inner
-                        .get_physical_device_queue_family_properties(device)
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, properties)| QueueFamily {
-                            properties,
-                            device,
-                            index: i as u32,
-                        })
-                        .collect()
-                };
-
-                adapter::Adapter {
-                    info,
-                    physical_device,
-                    queue_families,
-                }
-            })
+            .map(|device| physical_device::load_adapter(&self.raw, device))
             .collect()
     }
 
