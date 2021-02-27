@@ -48,6 +48,7 @@ extern crate serde;
 
 use std::{any::Any, fmt, hash::Hash};
 
+pub mod acceleration_structure;
 pub mod adapter;
 pub mod buffer;
 pub mod command;
@@ -289,6 +290,29 @@ bitflags! {
         const MESH_SHADER_MASK = Features::TASK_SHADER.bits | Features::MESH_SHADER.bits;
         /// Support sampler min/max reduction mode.
         const SAMPLER_REDUCTION = 0x0004 << 96;
+
+        /// Supports acceleration structures.
+        ///
+        /// Requires `RAY_TRACING_PIPELINES` or `RAY_QUERY` to also be enabled.
+        const ACCELERATION_STRUCTURE = 0x0001 << 112;
+
+        // TODO the features below imply `ACCELERATION_STRUCTURE` and are really something that an app can query the backend if it supports. I'm unsure if these flags should actually go here. Maybe Limits? maybe it's own AccelerationStructureProperties?
+
+        // TODO "capture replay" is a vulkan term, which seems to be covered by PIX and AS (de)serialization on the DX side... should this just be an impl detail of gfx and not be exposed to end-users?
+        // TODO(capture-replay)
+        // const ACCELERATION_STRUCTURE_CAPTURE_REPLAY = 0x0002 << 112;
+
+        /// Supports a command to indirectly build an acceleration structure.
+        const ACCELERATION_STRUCTURE_INDIRECT_BUILD = 0x0004 << 112;
+        /// Mask for all the features associated with acceleration structures.
+        const ACCELERATION_STRUCTURE_MASK = Features::ACCELERATION_STRUCTURE.bits | Features::ACCELERATION_STRUCTURE_INDIRECT_BUILD.bits;
+
+        // TODO this could be a way to gate this feature
+        // TODO(host-commands) would deferred-host-operations?
+        // const ACCELERATION_STRUCTURE_HOST_COMMANDS = 0x0008 << 112;
+
+        /// Support ray query functionality in shaders.
+        const RAY_QUERY = 0x0020 << 112;
     }
 }
 
@@ -346,6 +370,8 @@ pub struct PhysicalDeviceProperties {
     pub sampler_reduction: SamplerReductionProperties,
     /// Downlevel properties.
     pub downlevel: DownlevelProperties,
+    /// Acceleration Structure properties,
+    pub acceleration_structure: AccelerationStructureProperties,
     /// Performance caveats.
     pub performance_caveats: PerformanceCaveats,
     /// Dynamic pipeline states.
@@ -575,6 +601,24 @@ pub struct MeshShaderProperties {
     pub mesh_output_per_primitive_granularity: u32,
 }
 
+/// Resource limits related to the Acceleration Structure.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AccelerationStructureProperties {
+    /// The maximum number of geometries in a bottom level acceleration structure.
+    pub max_acceleration_structure_bottom_level_geometry_count: u64,
+    /// The maximum number of instances in a top level acceleration structure.
+    pub max_acceleration_structure_top_level_instance_count: u64,
+    /// The maximum total number of triangles or AABBs in all geometries in a bottom level acceleration structure.
+    pub max_acceleration_structure_bottom_level_total_primitive_count: u64,
+    /// The maximum number of acceleration structure bindings that can be accessible to a single shader stage in a pipeline layout.
+    pub max_per_stage_descriptor_acceleration_structures: u32,
+    ///    
+    pub max_descriptor_set_acceleration_structures: u32,
+    /// The minimum alignment in bytes for scratch data passed in to an acceleration structure build command.
+    pub min_acceleration_structure_scratch_offset_alignment: u32,
+}
+
 /// Resource limits related to the reduction samplers.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -802,4 +846,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type Event: fmt::Debug + Any + Send + Sync;
     /// The corresponding query pool type for this backend.
     type QueryPool: fmt::Debug + Any + Send + Sync;
+
+    /// The corresponding acceleration structure type for this backend.
+    type AccelerationStructure: fmt::Debug + Any + Send + Sync;
 }

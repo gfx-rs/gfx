@@ -48,6 +48,8 @@ bitflags!(
     /// Some stages are queue type dependent.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct PipelineStage: u32 {
+        // NOTE: these values follow [VkPipelineStageFlagBits](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkPipelineStageFlagBits.html).
+
         /// Beginning of the command queue.
         const TOP_OF_PIPE = 0x1;
         /// Indirect data consumption.
@@ -79,6 +81,8 @@ bitflags!(
         /// Read/Write access from host.
         /// (Not a real pipeline stage)
         const HOST = 0x4000;
+        /// Acceleration structure building stage.
+        const ACCELERATION_STRUCTURE_BUILD = 0x02000000;
         /// Task shader stage.
         const TASK_SHADER = 0x80000;
         /// Mesh shader stage.

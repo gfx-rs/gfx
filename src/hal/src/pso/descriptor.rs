@@ -94,6 +94,8 @@ pub enum DescriptorType {
     },
     /// A descriptor associated with an input attachment.
     InputAttachment,
+    /// A descriptor associated with an acceleration structure.
+    AccelerationStructure,
 }
 
 /// Information about the contents of and in which stages descriptors may be bound to a descriptor
@@ -249,6 +251,7 @@ pub enum Descriptor<'a, B: Backend> {
     CombinedImageSampler(&'a B::ImageView, Layout, &'a B::Sampler),
     Buffer(&'a B::Buffer, SubRange),
     TexelBuffer(&'a B::BufferView),
+    AccelerationStructure(&'a B::AccelerationStructure),
 }
 
 /// Copies a range of descriptors to be bound from one descriptor set to another.
