@@ -667,8 +667,27 @@ impl queue::QueueFamily for QueueFamily {
 }
 
 struct DeviceExtensionFunctions {
-    mesh_shaders: Option<MeshShader>,
-    draw_indirect_count: Option<DrawIndirectCount>,
+    mesh_shaders: Option<ExtensionFn<MeshShader>>,
+    draw_indirect_count: Option<ExtensionFn<DrawIndirectCount>>,
+}
+
+// TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.
+enum ExtensionFn<T> {
+    /// The loaded function pointer struct for an extension.
+    Extension(T),
+    /// The extension was promoted to a core version of Vulkan and the functions on `ash`'s `DeviceV1_x` traits should be used.
+    Promoted,
+}
+
+impl<T> ExtensionFn<T> {
+    /// Expect `self` to be `ExtensionFn::Extension` and return the inner value.
+    fn unwrap_extension(&self) -> &T {
+        if let ExtensionFn::Extension(t) = self {
+            t
+        } else {
+            panic!()
+        }
+    }
 }
 
 #[doc(hidden)]
