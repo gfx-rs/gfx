@@ -15,8 +15,8 @@ use hal::{
 use std::{ffi::CStr, fmt, mem, ptr, sync::Arc, unreachable};
 
 use crate::{
-    conv, info, Backend, Device, DeviceExtensionFunctions, Queue, QueueFamily, RawDevice,
-    RawInstance, Version,
+    conv, info, Backend, Device, DeviceExtensionFunctions, ExtensionFn, Queue, QueueFamily,
+    RawDevice, RawInstance, Version,
 };
 
 /// Aggregate of the `vk::PhysicalDevice*Features` structs used by `gfx`.
@@ -394,16 +394,19 @@ impl PhysicalDeviceFeatures {
 
         if info.supports_extension(vk::AmdNegativeViewportHeightFn::name())
             || info.supports_extension(vk::KhrMaintenance1Fn::name())
-            || info.api_version() > Version::V1_1
+            || info.api_version() >= Version::V1_1
         {
             bits |= Features::NDC_Y_UP;
         }
 
-        if info.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name()) {
+        if info.supports_extension(vk::KhrSamplerMirrorClampToEdgeFn::name())
+            || info.api_version() >= Version::V1_2
+        {
             bits |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
         }
 
-        if info.supports_extension(DrawIndirectCount::name()) {
+        if info.supports_extension(DrawIndirectCount::name()) || info.api_version() >= Version::V1_2
+        {
             bits |= Features::DRAW_INDIRECT_COUNT
         }
 
@@ -518,7 +521,9 @@ impl PhysicalDeviceInfo {
             requested_extensions.push(MeshShader::name());
         }
 
-        if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
+        if self.api_version() < Version::V1_2
+            && requested_features.contains(Features::DRAW_INDIRECT_COUNT)
+        {
             requested_extensions.push(DrawIndirectCount::name());
         }
 
@@ -781,14 +786,22 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         let swapchain_fn = Swapchain::new(&self.instance.inner, &device_raw);
 
-        let mesh_fn = if requested_features.intersects(Features::MESH_SHADER_MASK) {
-            Some(MeshShader::new(&self.instance.inner, &device_raw))
+        let mesh_fn = if enabled_extensions.contains(&MeshShader::name()) {
+            Some(ExtensionFn::Extension(MeshShader::new(
+                &self.instance.inner,
+                &device_raw,
+            )))
         } else {
             None
         };
 
-        let indirect_count_fn = if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
-            Some(DrawIndirectCount::new(&self.instance.inner, &device_raw))
+        let indirect_count_fn = if enabled_extensions.contains(&DrawIndirectCount::name()) {
+            Some(ExtensionFn::Extension(DrawIndirectCount::new(
+                &self.instance.inner,
+                &device_raw,
+            )))
+        } else if self.device_info.api_version() >= Version::V1_2 {
+            Some(ExtensionFn::Promoted)
         } else {
             None
         };
