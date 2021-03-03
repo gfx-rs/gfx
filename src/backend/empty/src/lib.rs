@@ -296,6 +296,7 @@ impl device::Device<Backend> for Device {
         &self,
         size: u64,
         _: hal::buffer::Usage,
+        _: hal::memory::SparseFlags,
     ) -> Result<Buffer, hal::buffer::CreationError> {
         Ok(Buffer::new(size))
     }
@@ -334,6 +335,7 @@ impl device::Device<Backend> for Device {
         _: format::Format,
         _: hal::image::Tiling,
         _: hal::image::Usage,
+        _: hal::memory::SparseFlags,
         _: hal::image::ViewCapabilities,
     ) -> Result<Image, hal::image::CreationError> {
         Ok(Image::new(kind))

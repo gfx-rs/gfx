@@ -3,7 +3,7 @@ use crate::native as n;
 use ash::vk;
 
 use hal::{
-    buffer, command, format, image,
+    buffer, command, format, image, memory,
     memory::Segment,
     pass, pso, query,
     window::{CompositeAlphaMode, PresentMode},
@@ -154,6 +154,10 @@ pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
 
 pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
     vk::BufferUsageFlags::from_raw(usage.bits())
+}
+
+pub fn map_buffer_create_flags(sparse: memory::SparseFlags) -> vk::BufferCreateFlags {
+    vk::BufferCreateFlags::from_raw(sparse.bits())
 }
 
 pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
@@ -516,6 +520,13 @@ pub fn map_viewport(vp: &pso::Viewport, flip_y: bool, shift_y: bool) -> vk::View
 
 pub fn map_view_capabilities(caps: image::ViewCapabilities) -> vk::ImageCreateFlags {
     vk::ImageCreateFlags::from_raw(caps.bits())
+}
+
+pub fn map_view_capabilities_sparse(
+    sparse: memory::SparseFlags,
+    caps: image::ViewCapabilities,
+) -> vk::ImageCreateFlags {
+    vk::ImageCreateFlags::from_raw(sparse.bits() | caps.bits())
 }
 
 pub fn map_present_mode(mode: PresentMode) -> vk::PresentModeKHR {

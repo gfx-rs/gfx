@@ -12,7 +12,7 @@
 //! and is used to actually do things.
 
 use crate::{
-    buffer, format, image,
+    buffer, format, image, memory,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -376,6 +376,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         size: u64,
         usage: buffer::Usage,
+        sparse: memory::SparseFlags,
     ) -> Result<B::Buffer, buffer::CreationError>;
 
     /// Get memory requirements for the buffer
@@ -419,6 +420,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
+        sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
     ) -> Result<B::Image, image::CreationError>;
 

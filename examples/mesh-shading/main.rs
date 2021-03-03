@@ -280,7 +280,14 @@ where
             * non_coherent_alignment;
 
         let mut positions_buffer = ManuallyDrop::new(
-            unsafe { device.create_buffer(padded_buffer_len, buffer::Usage::STORAGE) }.unwrap(),
+            unsafe {
+                device.create_buffer(
+                    padded_buffer_len,
+                    buffer::Usage::STORAGE,
+                    hal::memory::SparseFlags::empty(),
+                )
+            }
+            .unwrap(),
         );
 
         let buffer_req = unsafe { device.get_buffer_requirements(&positions_buffer) };

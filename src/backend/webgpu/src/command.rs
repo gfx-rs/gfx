@@ -61,8 +61,8 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
     }
 
     unsafe fn free<I>(&mut self, _buffers: I)
-    where
-        I: Iterator<Item = CommandBuffer>,
+        where
+            I: Iterator<Item = CommandBuffer>,
     {
         todo!()
     }
@@ -134,11 +134,11 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn clear_attachments<T, U>(&mut self, _clears: T, _rects: U)
-    where
-        T: Iterator,
-        T::Item: Borrow<AttachmentClear>,
-        U: Iterator,
-        U::Item: Borrow<pso::ClearRect>,
+        where
+            T: Iterator,
+            T::Item: Borrow<AttachmentClear>,
+            U: Iterator,
+            U::Item: Borrow<pso::ClearRect>,
     {
         todo!()
     }
@@ -182,25 +182,25 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, _first_binding: pso::BufferIndex, _buffers: I)
-    where
-        I: Iterator<Item = (T, buffer::SubRange)>,
-        T: Borrow<<Backend as hal::Backend>::Buffer>,
+        where
+            I: Iterator<Item = (T, buffer::SubRange)>,
+            T: Borrow<<Backend as hal::Backend>::Buffer>,
     {
         todo!()
     }
 
     unsafe fn set_viewports<T>(&mut self, _first_viewport: u32, _viewports: T)
-    where
-        T: Iterator,
-        T::Item: Borrow<pso::Viewport>,
+        where
+            T: Iterator,
+            T::Item: Borrow<pso::Viewport>,
     {
         todo!()
     }
 
     unsafe fn set_scissors<T>(&mut self, _first_scissor: u32, _rects: T)
-    where
-        T: Iterator,
-        T::Item: Borrow<pso::Rect>,
+        where
+            T: Iterator,
+            T::Item: Borrow<pso::Rect>,
     {
         todo!()
     }
@@ -531,9 +531,9 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn execute_commands<'a, T, I>(&mut self, _cmd_buffers: I)
-    where
-        T: 'a + Borrow<<Backend as hal::Backend>::CommandBuffer>,
-        I: Iterator<Item = &'a T>,
+        where
+            T: 'a + Borrow<<Backend as hal::Backend>::CommandBuffer>,
+            I: Iterator<Item = &'a T>,
     {
         todo!()
     }

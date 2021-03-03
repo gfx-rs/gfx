@@ -283,7 +283,9 @@ unsafe fn create_buffer<B: hal::Backend>(
     stride: buffer::Stride,
     len: u64,
 ) -> (B::Memory, B::Buffer, u64) {
-    let mut buffer = device.create_buffer(stride as u64 * len, usage).unwrap();
+    let mut buffer = device
+        .create_buffer(stride as u64 * len, usage, hal::memory::SparseFlags::empty())
+        .unwrap();
     let requirements = device.get_buffer_requirements(&buffer);
 
     let ty = memory_types

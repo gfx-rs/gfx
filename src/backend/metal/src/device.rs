@@ -2453,6 +2453,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         size: u64,
         usage: buffer::Usage,
+        _sparse: memory::SparseFlags,
     ) -> Result<n::Buffer, buffer::CreationError> {
         debug!("create_buffer of size {} and usage {:?}", size, usage);
         Ok(n::Buffer::Unbound {
@@ -2650,6 +2651,7 @@ impl hal::device::Device<Backend> for Device {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
+        _sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
     ) -> Result<n::Image, image::CreationError> {
         debug!(

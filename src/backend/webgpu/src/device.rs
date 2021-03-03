@@ -8,7 +8,7 @@ use hal::{
     device::{
         AllocationError, BindError, DeviceLost, MapError, OutOfMemory, ShaderError, WaitError,
     },
-    format, image,
+    format, image, memory,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -167,6 +167,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         _size: u64,
         _usage: buffer::Usage,
+        _sparse: memory::SparseFlags,
     ) -> Result<<Backend as hal::Backend>::Buffer, buffer::CreationError> {
         todo!()
     }
@@ -211,6 +212,7 @@ impl hal::device::Device<Backend> for Device {
         _format: format::Format,
         _tiling: image::Tiling,
         _usage: image::Usage,
+        _sparse: memory::SparseFlags,
         _view_caps: image::ViewCapabilities,
     ) -> Result<<Backend as hal::Backend>::Image, image::CreationError> {
         todo!()

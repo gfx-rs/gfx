@@ -72,6 +72,7 @@ fn main() {
                 FORMAT,
                 i::Tiling::Optimal,
                 i::Usage::TRANSFER_SRC | i::Usage::TRANSFER_DST,
+                hal::memory::SparseFlags::empty(),
                 i::ViewCapabilities::empty(),
             )
             .unwrap();
@@ -101,7 +102,11 @@ fn main() {
         let buffer_size = (bytes_per_texel as u64).max(limits.non_coherent_atom_size as u64);
 
         let mut src_buffer = device
-            .create_buffer(buffer_size, hal::buffer::Usage::TRANSFER_SRC)
+            .create_buffer(
+                buffer_size,
+                hal::buffer::Usage::TRANSFER_SRC,
+                hal::memory::SparseFlags::empty(),
+            )
             .unwrap();
         let src_buffer_requirements = device.get_buffer_requirements(&src_buffer);
         let src_buffer_type = memory_properties
@@ -145,6 +150,7 @@ fn main() {
                 FORMAT,
                 i::Tiling::Optimal,
                 i::Usage::TRANSFER_DST,
+                hal::memory::SparseFlags::empty(),
                 i::ViewCapabilities::empty(),
             )
             .unwrap();

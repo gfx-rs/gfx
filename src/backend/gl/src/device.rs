@@ -1264,6 +1264,7 @@ impl d::Device<B> for Device {
         &self,
         size: u64,
         usage: buffer::Usage,
+        _sparse: memory::SparseFlags,
     ) -> Result<n::Buffer, buffer::CreationError> {
         if !self
             .share
@@ -1452,6 +1453,7 @@ impl d::Device<B> for Device {
         format: Format,
         _tiling: i::Tiling,
         usage: i::Usage,
+        _sparse: memory::SparseFlags,
         _view_caps: i::ViewCapabilities,
     ) -> Result<n::Image, i::CreationError> {
         let gl = &self.share.context;
