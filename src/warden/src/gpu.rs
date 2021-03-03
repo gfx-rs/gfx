@@ -291,7 +291,10 @@ impl<B: hal::Backend> Scene<B> {
                     ref data,
                 } => {
                     // allocate memory
-                    let mut buffer = unsafe { device.create_buffer(size as _, usage) }.unwrap();
+                    let mut buffer = unsafe {
+                        device.create_buffer(size as _, usage, hal::memory::SparseFlags::empty())
+                    }
+                    .unwrap();
                     let requirements = unsafe { device.get_buffer_requirements(&buffer) };
                     let memory_type = memory_types
                         .iter()
@@ -333,9 +336,14 @@ impl<B: hal::Backend> Scene<B> {
                         let upload_size =
                             align(size as _, limits.optimal_buffer_copy_pitch_alignment);
                         // create upload buffer
-                        let mut upload_buffer =
-                            unsafe { device.create_buffer(upload_size, b::Usage::TRANSFER_SRC) }
-                                .unwrap();
+                        let mut upload_buffer = unsafe {
+                            device.create_buffer(
+                                upload_size,
+                                b::Usage::TRANSFER_SRC,
+                                hal::memory::SparseFlags::empty(),
+                            )
+                        }
+                        .unwrap();
                         let upload_req = unsafe { device.get_buffer_requirements(&upload_buffer) };
                         let upload_type = *upload_types
                             .iter()
@@ -421,6 +429,7 @@ impl<B: hal::Backend> Scene<B> {
                             format,
                             i::Tiling::Optimal,
                             usage,
+                            hal::memory::SparseFlags::empty(),
                             view_caps,
                         )
                     }
@@ -492,9 +501,14 @@ impl<B: hal::Backend> Scene<B> {
                         let upload_size =
                             (row_pitch as u64 * h as u64 * d as u64) / block_height as u64;
                         // create upload buffer
-                        let mut upload_buffer =
-                            unsafe { device.create_buffer(upload_size, b::Usage::TRANSFER_SRC) }
-                                .unwrap();
+                        let mut upload_buffer = unsafe {
+                            device.create_buffer(
+                                upload_size,
+                                b::Usage::TRANSFER_SRC,
+                                hal::memory::SparseFlags::empty(),
+                            )
+                        }
+                        .unwrap();
                         let upload_req = unsafe { device.get_buffer_requirements(&upload_buffer) };
                         let upload_type = *upload_types
                             .iter()
@@ -1518,8 +1532,14 @@ impl<B: hal::Backend> Scene<B> {
             limits.optimal_buffer_copy_pitch_alignment,
         );
 
-        let mut down_buffer =
-            unsafe { self.device.create_buffer(down_size, b::Usage::TRANSFER_DST) }.unwrap();
+        let mut down_buffer = unsafe {
+            self.device.create_buffer(
+                down_size,
+                b::Usage::TRANSFER_DST,
+                hal::memory::SparseFlags::empty(),
+            )
+        }
+        .unwrap();
         let down_req = unsafe { self.device.get_buffer_requirements(&down_buffer) };
         let download_type = *self
             .download_types
@@ -1637,8 +1657,14 @@ impl<B: hal::Backend> Scene<B> {
         let row_pitch = align(width_bytes, limits.optimal_buffer_copy_pitch_alignment);
         let down_size = (row_pitch * height * depth as u64) / block_height as u64;
 
-        let mut down_buffer =
-            unsafe { self.device.create_buffer(down_size, b::Usage::TRANSFER_DST) }.unwrap();
+        let mut down_buffer = unsafe {
+            self.device.create_buffer(
+                down_size,
+                b::Usage::TRANSFER_DST,
+                hal::memory::SparseFlags::empty(),
+            )
+        }
+        .unwrap();
         let down_req = unsafe { self.device.get_buffer_requirements(&down_buffer) };
         let download_type = *self
             .download_types

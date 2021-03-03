@@ -4,6 +4,7 @@ use inplace_it::inplace_or_alloc_from_iter;
 use smallvec::SmallVec;
 
 use hal::{
+    memory,
     memory::{Requirements, Segment},
     pool::CommandPoolCreateFlags,
     pso::VertexInputRate,
@@ -1005,9 +1006,10 @@ impl d::Device<B> for super::Device {
         &self,
         size: u64,
         usage: buffer::Usage,
+        sparse: memory::SparseFlags,
     ) -> Result<n::Buffer, buffer::CreationError> {
         let info = vk::BufferCreateInfo::builder()
-            .flags(vk::BufferCreateFlags::empty()) // TODO:
+            .flags(conv::map_buffer_create_flags(sparse))
             .size(size)
             .usage(conv::map_buffer_usage(usage))
             .sharing_mode(vk::SharingMode::EXCLUSIVE); // TODO:
@@ -1081,9 +1083,10 @@ impl d::Device<B> for super::Device {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
+        sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
     ) -> Result<n::Image, image::CreationError> {
-        let flags = conv::map_view_capabilities(view_caps);
+        let flags = conv::map_view_capabilities_sparse(sparse, view_caps);
         let extent = conv::map_extent(kind.extent());
         let array_layers = kind.num_layers();
         let samples = kind.num_samples();

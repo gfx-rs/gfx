@@ -827,6 +827,143 @@ impl queue::Queue<Backend> for Queue {
         }
     }
 
+    unsafe fn bind_sparse<'a, Iw, Is, Ibi, Ib, Iii, Io, Ii>(
+        &mut self,
+        wait_semaphores: Iw,
+        signal_semaphores: Is,
+        buffer_memory_binds: Ib,
+        image_opaque_memory_binds: Io,
+        image_memory_binds: Ii,
+        device: &Device,
+        fence: Option<&native::Fence>,
+    ) where
+        Ibi: Iterator<Item = &'a memory::SparseBind<&'a native::Memory>>,
+        Ib: Iterator<Item = (&'a mut native::Buffer, Ibi)>,
+        Iii: Iterator<Item = &'a memory::SparseImageBind<&'a native::Memory>>,
+        Io: Iterator<Item = (&'a mut native::Image, Ibi)>,
+        Ii: Iterator<Item = (&'a mut native::Image, Iii)>,
+        Iw: Iterator<Item = &'a native::Semaphore>,
+        Is: Iterator<Item = &'a native::Semaphore>,
+    {
+        //TODO: avoid heap allocations
+        let mut waits = Vec::new();
+
+        for semaphore in wait_semaphores {
+            waits.push(semaphore.0);
+        }
+        let signals = signal_semaphores
+            .map(|semaphore| semaphore.0)
+            .collect::<Vec<_>>();
+
+        let mut buffer_memory_binds_vec = Vec::new();
+        let mut buffer_binds = buffer_memory_binds
+            .map(|(buffer, bind_iter)| {
+                let binds_before = buffer_memory_binds_vec.len();
+                buffer_memory_binds_vec.extend(bind_iter.into_iter().map(|bind| {
+                    let mut bind_builder = vk::SparseMemoryBind::builder()
+                        .resource_offset(bind.resource_offset as u64)
+                        .size(bind.size as u64);
+                    if let Some((memory, memory_offset)) = bind.memory {
+                        bind_builder = bind_builder.memory(memory.raw);
+                        bind_builder = bind_builder.memory_offset(memory_offset as u64);
+                    }
+
+                    bind_builder.build()
+                }));
+
+                vk::SparseBufferMemoryBindInfo {
+                    buffer: buffer.raw,
+                    bind_count: (buffer_memory_binds_vec.len() - binds_before) as u32,
+                    p_binds: std::ptr::null(),
+                }
+            })
+            .collect::<Vec<_>>();
+        // Set buffer bindings
+        buffer_binds.iter_mut().fold(0u32, |idx, bind| {
+            (*bind).p_binds = &buffer_memory_binds_vec[idx as usize];
+            idx + bind.bind_count
+        });
+
+        let mut image_opaque_memory_binds_vec = Vec::new();
+        let mut image_opaque_binds = image_opaque_memory_binds
+            .map(|(image, bind_iter)| {
+                let binds_before = image_opaque_memory_binds_vec.len();
+                image_opaque_memory_binds_vec.extend(bind_iter.into_iter().map(|bind| {
+                    let mut bind_builder = vk::SparseMemoryBind::builder()
+                        .resource_offset(bind.resource_offset as u64)
+                        .size(bind.size as u64);
+                    if let Some((memory, memory_offset)) = bind.memory {
+                        bind_builder = bind_builder.memory(memory.raw);
+                        bind_builder = bind_builder.memory_offset(memory_offset as u64);
+                    }
+
+                    bind_builder.build()
+                }));
+
+                vk::SparseImageOpaqueMemoryBindInfo {
+                    image: image.raw,
+                    bind_count: (image_opaque_memory_binds_vec.len() - binds_before) as u32,
+                    p_binds: std::ptr::null(),
+                }
+            })
+            .collect::<Vec<_>>();
+        // Set opaque image bindings
+        image_opaque_binds.iter_mut().fold(0u32, |idx, bind| {
+            (*bind).p_binds = &image_opaque_memory_binds_vec[idx as usize];
+            idx + bind.bind_count
+        });
+
+        let mut image_memory_binds_vec = Vec::new();
+        let mut image_binds = image_memory_binds
+            .map(|(image, bind_iter)| {
+                let binds_before = image_memory_binds_vec.len();
+                image_memory_binds_vec.extend(bind_iter.into_iter().map(|bind| {
+                    let mut bind_builder = vk::SparseImageMemoryBind::builder()
+                        .subresource(conv::map_subresource(&bind.subresource))
+                        .offset(conv::map_offset(bind.offset))
+                        .extent(conv::map_extent(bind.extent));
+                    if let Some((memory, memory_offset)) = bind.memory {
+                        bind_builder = bind_builder.memory(memory.raw);
+                        bind_builder = bind_builder.memory_offset(memory_offset as u64);
+                    }
+
+                    bind_builder.build()
+                }));
+
+                vk::SparseImageMemoryBindInfo {
+                    image: image.raw,
+                    bind_count: (image_memory_binds_vec.len() - binds_before) as u32,
+                    p_binds: std::ptr::null(),
+                }
+            })
+            .collect::<Vec<_>>();
+        // Set image bindings
+        image_binds.iter_mut().fold(0u32, |idx, bind| {
+            (*bind).p_binds = &image_memory_binds_vec[idx as usize];
+            idx + bind.bind_count
+        });
+
+        let info = vk::BindSparseInfo::builder()
+            .wait_semaphores(&waits)
+            .signal_semaphores(&signals)
+            .buffer_binds(&buffer_binds)
+            .image_opaque_binds(&image_opaque_binds)
+            .image_binds(&image_binds);
+
+        let info = info.build();
+        let fence_raw = fence.map(|fence| fence.0).unwrap_or(vk::Fence::null());
+
+        // TODO temporary hack as method is not yet exposed, https://github.com/MaikKlein/ash/issues/342
+        assert_eq!(
+            vk::Result::SUCCESS,
+            device
+                .shared
+                .raw
+                .fp_v1_0()
+                .queue_bind_sparse(*self.raw, 1, &info, fence_raw)
+        );
+    }
+
     unsafe fn present(
         &mut self,
         surface: &mut window::Surface,

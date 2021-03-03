@@ -223,10 +223,21 @@ where
                 surface.supports_queue_family(family) && family.queue_type().supports_graphics()
             })
             .expect("No queue family supports presentation");
+
+        let physical_device = &adapter.physical_device;
+        let sparsely_bound = physical_device
+            .features()
+            .contains(hal::Features::SPARSE_BINDING | hal::Features::SPARSE_RESIDENCY_IMAGE_2D);
         let mut gpu = unsafe {
-            adapter
-                .physical_device
-                .open(&[(family, &[1.0])], hal::Features::empty())
+            physical_device
+                .open(
+                    &[(family, &[1.0])],
+                    if sparsely_bound {
+                        hal::Features::SPARSE_BINDING | hal::Features::SPARSE_RESIDENCY_IMAGE_2D
+                    } else {
+                        hal::Features::empty()
+                    },
+                )
                 .unwrap()
         };
         let mut queue_group = gpu.queue_groups.pop().unwrap();
@@ -307,7 +318,14 @@ where
             * non_coherent_alignment;
 
         let mut vertex_buffer = ManuallyDrop::new(
-            unsafe { device.create_buffer(padded_buffer_len, buffer::Usage::VERTEX) }.unwrap(),
+            unsafe {
+                device.create_buffer(
+                    padded_buffer_len,
+                    buffer::Usage::VERTEX,
+                    m::SparseFlags::empty(),
+                )
+            }
+            .unwrap(),
         );
 
         let buffer_req = unsafe { device.get_buffer_requirements(&vertex_buffer) };
@@ -359,8 +377,14 @@ where
             * non_coherent_alignment;
 
         let mut image_upload_buffer = ManuallyDrop::new(
-            unsafe { device.create_buffer(padded_upload_size, buffer::Usage::TRANSFER_SRC) }
-                .unwrap(),
+            unsafe {
+                device.create_buffer(
+                    padded_upload_size,
+                    buffer::Usage::TRANSFER_SRC,
+                    m::SparseFlags::empty(),
+                )
+            }
+            .unwrap(),
         );
         let image_mem_reqs = unsafe { device.get_buffer_requirements(&image_upload_buffer) };
 
@@ -397,6 +421,11 @@ where
                     ColorFormat::SELF,
                     i::Tiling::Optimal,
                     i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+                    if sparsely_bound {
+                        m::SparseFlags::SPARSE_BINDING | m::SparseFlags::SPARSE_RESIDENCY
+                    } else {
+                        m::SparseFlags::empty()
+                    },
                     i::ViewCapabilities::empty(),
                 )
             }
@@ -417,7 +446,41 @@ where
             unsafe { device.allocate_memory(device_type, image_req.size) }.unwrap(),
         );
 
-        unsafe { device.bind_image_memory(&image_memory, 0, &mut image_logo) }.unwrap();
+        if sparsely_bound {
+            println!("Using sparse resource binding");
+            unsafe {
+                queue_group.queues[0].bind_sparse(
+                    std::iter::empty::<&B::Semaphore>(),
+                    std::iter::empty::<&B::Semaphore>(),
+                    std::iter::empty::<(
+                        &mut B::Buffer,
+                        std::iter::Empty<&hal::memory::SparseBind<&B::Memory>>,
+                    )>(),
+                    std::iter::empty(),
+                    std::iter::once((
+                        &mut *image_logo,
+                        std::iter::once(&hal::memory::SparseImageBind {
+                            subresource: hal::image::Subresource {
+                                aspects: hal::format::Aspects::COLOR,
+                                level: 0,
+                                layer: 0,
+                            },
+                            offset: hal::image::Offset::ZERO,
+                            extent: hal::image::Extent {
+                                width,
+                                height,
+                                depth: 1,
+                            },
+                            memory: Some((&*image_memory, 0)),
+                        }),
+                    )),
+                    &device,
+                    None,
+                );
+            }
+        } else {
+            unsafe { device.bind_image_memory(&image_memory, 0, &mut image_logo) }.unwrap();
+        }
         let image_srv = ManuallyDrop::new(
             unsafe {
                 device.create_image_view(

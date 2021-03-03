@@ -1107,6 +1107,7 @@ impl device::Device<Backend> for Device {
         &self,
         size: u64,
         usage: buffer::Usage,
+        _sparse: memory::SparseFlags,
     ) -> Result<Buffer, buffer::CreationError> {
         use buffer::Usage;
 
@@ -1388,6 +1389,7 @@ impl device::Device<Backend> for Device {
         format: format::Format,
         _tiling: image::Tiling,
         usage: image::Usage,
+        _sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
     ) -> Result<Image, image::CreationError> {
         let surface_desc = format.base_format().0.desc();
@@ -1521,10 +1523,12 @@ impl device::Device<Backend> for Device {
                     Usage: usage,
                     BindFlags: bind,
                     CPUAccessFlags: cpu,
-                    MiscFlags: if image.view_caps.contains(image::ViewCapabilities::KIND_CUBE) {
-                        d3d11::D3D11_RESOURCE_MISC_TEXTURECUBE
-                    } else {
-                        0
+                    MiscFlags: {
+                        let mut flags = 0;
+                        if image.view_caps.contains(image::ViewCapabilities::KIND_CUBE) {
+                            flags |= d3d11::D3D11_RESOURCE_MISC_TEXTURECUBE;
+                        }
+                        flags
                     },
                 };
 

@@ -726,7 +726,9 @@ impl<B: Backend> BufferState<B> {
         {
             let device = &device_ptr.borrow().device;
 
-            buffer = device.create_buffer(upload_size as u64, usage).unwrap();
+            buffer = device
+                .create_buffer(upload_size as u64, usage, hal::memory::SparseFlags::empty())
+                .unwrap();
             let mem_req = device.get_buffer_requirements(&buffer);
 
             // A note about performance: Using CPU_VISIBLE memory is convenient because it can be
@@ -805,7 +807,9 @@ impl<B: Backend> BufferState<B> {
         let size: u64;
 
         {
-            buffer = device.create_buffer(upload_size, usage).unwrap();
+            buffer = device
+                .create_buffer(upload_size, usage, hal::memory::SparseFlags::empty(),)
+                .unwrap();
             let mem_reqs = device.get_buffer_requirements(&buffer);
 
             let upload_type = adapter
@@ -1032,6 +1036,7 @@ impl<B: Backend> ImageState<B> {
                 ColorFormat::SELF,
                 i::Tiling::Optimal,
                 i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+                hal::memory::SparseFlags::empty(),
                 i::ViewCapabilities::empty(),
             )
             .unwrap(); // TODO: usage
