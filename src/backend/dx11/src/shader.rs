@@ -214,6 +214,9 @@ fn patch_spirv_resources(
     // we remap all `layout(binding = n, set = n)` to a flat space which we get from our
     // `PipelineLayout` which knows of all descriptor set layouts
 
+    // With multi-entry-point shaders, we will end up with resources in the SPIRV that aren't part of the provided
+    // pipeline layout. We need to be tolerant of getting out of bounds set and binding indices in the spirv which we can safely ignore.
+
     let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
     for image in &shader_resources.separate_images {
         let set = ast
@@ -222,7 +225,13 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(image.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+
+        let set_ref = match layout.sets.get(set) {
+            Some(set) => set,
+            None => continue,
+        };
+
+        if let Some((_content, res_index)) = set_ref.find_register(stage, binding) {
             ast.set_decoration(image.id, spirv::Decoration::Binding, res_index.t as u32)
                 .map_err(gen_unexpected_error)?;
         }
@@ -235,7 +244,13 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(uniform_buffer.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+
+        let set_ref = match layout.sets.get(set) {
+            Some(set) => set,
+            None => continue,
+        };
+
+        if let Some((_content, res_index)) = set_ref.find_register(stage, binding) {
             ast.set_decoration(
                 uniform_buffer.id,
                 spirv::Decoration::Binding,
@@ -253,7 +268,17 @@ fn patch_spirv_resources(
             .get_decoration(storage_buffer.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
 
-        let read_only = match layout.sets[set].bindings[binding as usize].ty {
+        let set_ref = match layout.sets.get(set) {
+            Some(set) => set,
+            None => continue,
+        };
+
+        let binding_ref = match set_ref.bindings.get(binding as usize) {
+            Some(binding) => binding,
+            None => continue,
+        };
+
+        let read_only = match binding_ref.ty {
             pso::DescriptorType::Buffer {
                 ty: pso::BufferDescriptorType::Storage { read_only },
                 ..
@@ -262,13 +287,13 @@ fn patch_spirv_resources(
         };
 
         let (_content, res_index) = if read_only {
-            if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+            if let Some((_content, res_index)) = set_ref.find_register(stage, binding) {
                 (_content, res_index)
             } else {
                 continue;
             }
         } else {
-            layout.sets[set].find_uav_register(stage, binding)
+            set_ref.find_uav_register(stage, binding)
         };
 
         // If the binding is read/write, we need to generate a UAV here.
@@ -296,7 +321,13 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(image.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        let (_content, res_index) = layout.sets[set].find_uav_register(stage, binding);
+
+        let set_ref = match layout.sets.get(set) {
+            Some(set) => set,
+            None => continue,
+        };
+
+        let (_content, res_index) = set_ref.find_uav_register(stage, binding);
 
         // Read only storage images are generated as UAVs by spirv-cross.
         //
@@ -318,7 +349,13 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(sampler.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+
+        let set_ref = match layout.sets.get(set) {
+            Some(set) => set,
+            None => continue,
+        };
+
+        if let Some((_content, res_index)) = set_ref.find_register(stage, binding) {
             ast.set_decoration(sampler.id, spirv::Decoration::Binding, res_index.s as u32)
                 .map_err(gen_unexpected_error)?;
         }
@@ -331,7 +368,13 @@ fn patch_spirv_resources(
         let binding = ast
             .get_decoration(image.id, spirv::Decoration::Binding)
             .map_err(gen_query_error)?;
-        if let Some((_content, res_index)) = layout.sets[set].find_register(stage, binding) {
+
+        let set_ref = match layout.sets.get(set) {
+            Some(set) => set,
+            None => continue,
+        };
+
+        if let Some((_content, res_index)) = set_ref.find_register(stage, binding) {
             ast.set_decoration(image.id, spirv::Decoration::Binding, res_index.t as u32)
                 .map_err(gen_unexpected_error)?;
         }
