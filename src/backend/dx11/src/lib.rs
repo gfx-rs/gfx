@@ -2710,8 +2710,42 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn fill_buffer(&mut self, _buffer: &Buffer, _sub: buffer::SubRange, _data: u32) {
-        unimplemented!()
+    unsafe fn fill_buffer(&mut self, buffer: &Buffer, sub: buffer::SubRange, data: u32) {
+        let mut device: *mut d3d11::ID3D11Device = mem::zeroed();
+        self.context.GetDevice(&mut device as *mut _);
+        let device = ComPtr::from_raw(device);
+
+        assert_eq!(
+            sub.offset % 4,
+            0,
+            "Buffer sub range offset must be multiple of 4"
+        );
+        if let Some(size) = sub.size {
+            assert_eq!(size % 4, 0, "Buffer sub range size must be multiple of 4");
+        }
+
+        let mut desc: d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC = mem::zeroed();
+        desc.Format = dxgiformat::DXGI_FORMAT_R32_TYPELESS;
+        desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_BUFFER;
+        *desc.u.Buffer_mut() = d3d11::D3D11_BUFFER_UAV {
+            FirstElement: sub.offset as u32 / 4,
+            NumElements: sub.size.unwrap_or(buffer.requirements.size) as u32 / 4,
+            Flags: d3d11::D3D11_BUFFER_UAV_FLAG_RAW,
+        };
+
+        let mut uav: *mut d3d11::ID3D11UnorderedAccessView = ptr::null_mut();
+        let hr = device.CreateUnorderedAccessView(
+            buffer.internal.raw as *mut _,
+            &desc,
+            &mut uav as *mut *mut _ as *mut *mut _,
+        );
+        let uav = ComPtr::from_raw(uav);
+
+        if !winerror::SUCCEEDED(hr) {
+            panic!("fill_buffer failed to make UAV failed: 0x{:x}", hr);
+        }
+
+        self.context.ClearUnorderedAccessViewUint(uav.as_raw(), &[data; 4]);
     }
 
     unsafe fn update_buffer(&mut self, _buffer: &Buffer, _offset: buffer::Offset, _data: &[u8]) {
