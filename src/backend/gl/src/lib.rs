@@ -553,7 +553,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .0
             .legacy_features
             .contains(info::LegacyFeatures::SRGB_COLOR)
+            && !self.0.info.version.is_embedded
         {
+            // `FRAMEBUFFER_SRGB` is enabled by default on embedded targets.
             // TODO: Find way to emulate this on older Opengl versions.
             gl.enable(glow::FRAMEBUFFER_SRGB);
         }
@@ -670,4 +672,8 @@ fn resolve_sub_range(
 ) -> Range<buffer::Offset> {
     let end = sub.size.map_or(whole.end, |s| whole.start + sub.offset + s);
     whole.start + sub.offset..end
+}
+
+const fn is_webgl() -> bool {
+    cfg!(target_arch = "wasm32")
 }

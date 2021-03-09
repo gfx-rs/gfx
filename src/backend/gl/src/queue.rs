@@ -987,7 +987,7 @@ impl Queue {
                     _ => unsafe { gl.disable(gl_offset) },
                 }
 
-                if !self.share.info.is_webgl() && !self.share.info.version.is_embedded {
+                if !self.share.info.version.is_embedded {
                     match false {
                         //TODO
                         true => unsafe { gl.enable(glow::MULTISAMPLE) },
