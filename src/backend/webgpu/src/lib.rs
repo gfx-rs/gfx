@@ -212,6 +212,10 @@ impl hal::queue::QueueFamily for QueueFamily {
     fn id(&self) -> QueueFamilyId {
         WEBGPU_QUEUE_FAMILY_ID
     }
+
+    fn supports_sparse_binding(&self) -> bool {
+        false
+    }
 }
 
 use hal::pso::AllocationError;
