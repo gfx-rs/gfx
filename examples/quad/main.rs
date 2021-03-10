@@ -860,7 +860,7 @@ where
         self.viewport.rect.h = extent.height as _;
 
         unsafe {
-            self.device.wait_idle();
+            self.device.wait_idle().unwrap();
             self.device
                 .destroy_framebuffer(ManuallyDrop::into_inner(ptr::read(&self.framebuffer)));
             self.framebuffer = ManuallyDrop::new(

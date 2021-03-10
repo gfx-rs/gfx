@@ -389,8 +389,9 @@ impl<B: Backend> RendererState<B> {
             self.device
                 .borrow()
                 .device
-                .wait_for_fence(&mut fence, u64::MAX);
-            self.device.borrow().device.reset_fence(&mut fence);
+                .wait_for_fence(&mut fence, u64::MAX)
+                .unwrap();
+            self.device.borrow().device.reset_fence(&mut fence).unwrap();
             // cmd_buffer.reset(true);
             command_pool.reset(false);
 
@@ -808,7 +809,7 @@ impl<B: Backend> BufferState<B> {
 
         {
             buffer = device
-                .create_buffer(upload_size, usage, hal::memory::SparseFlags::empty(),)
+                .create_buffer(upload_size, usage, hal::memory::SparseFlags::empty())
                 .unwrap();
             let mem_reqs = device.get_buffer_requirements(&buffer);
 
@@ -1470,8 +1471,10 @@ impl<B: Backend> Drop for FramebufferState<B> {
                 .into_iter()
                 .zip(self.command_buffer_lists.drain(..))
             {
-                
-                command_pool.free(comamnd_buffer_list.into_iter().map(|(c,f)| {device.destroy_fence(f); c}));
+                command_pool.free(comamnd_buffer_list.into_iter().map(|(c, f)| {
+                    device.destroy_fence(f);
+                    c
+                }));
                 device.destroy_command_pool(command_pool);
             }
 

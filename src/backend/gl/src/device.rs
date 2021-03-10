@@ -600,13 +600,19 @@ impl Device {
                 d::ShaderError::CompilationFailed(format!("{:?}", e))
             })?;
 
+        let entry_point_index = (&shader.module.entry_points)
+            .into_iter()
+            .position(|ep| ep.name == options.entry_point)
+            .ok_or(d::ShaderError::CompilationFailed(format!(
+                "Couldn't find entry point {}",
+                options.entry_point
+            )))?;
+
         match writer.write() {
             Ok(texture_mapping) => {
                 Self::reflect_shader(
                     &shader.module,
-                    shader
-                        .analysis
-                        .get_entry_point(options.shader_stage, &options.entry_point),
+                    shader.analysis.get_entry_point(entry_point_index),
                     texture_mapping,
                     context,
                 );

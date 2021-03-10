@@ -696,14 +696,14 @@ impl Device {
             };
 
         let mut entry_point_map = n::EntryPointMap::default();
-        for ((pair, ep), name) in shader
+        for (ep, name) in shader
             .module
             .entry_points
             .iter()
             .zip(info.entry_point_names)
         {
             entry_point_map.insert(
-                pair.clone(),
+                (ep.stage, ep.name.clone()),
                 n::EntryPoint {
                     internal_name: name,
                     work_group_size: ep.workgroup_size,
