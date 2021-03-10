@@ -4,7 +4,7 @@ use hal::{
     adapter::{Adapter, AdapterInfo, DeviceType, Gpu, MemoryProperties},
     device::CreationError,
     format, image,
-    queue::{QueueFamilyId, QueuePriority, QueueFlags},
+    queue::{QueueFamilyId, QueueFlags, QueuePriority},
     Features,
 };
 

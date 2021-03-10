@@ -34,7 +34,6 @@ bitflags! {
     }
 }
 
-
 impl QueueFlags {
     /// Returns true if the queue supports graphics operations.
     pub fn supports_graphics(&self) -> bool {

@@ -182,7 +182,7 @@ impl q::QueueFamily for QueueFamily {
                 } else {
                     unreachable!()
                 }
-            },
+            }
             _ => unreachable!(),
         })
     }
