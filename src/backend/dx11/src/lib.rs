@@ -1136,7 +1136,7 @@ pub struct QueueFamily;
 
 impl queue::QueueFamily for QueueFamily {
     fn queue_type(&self) -> queue::QueueType {
-        queue::QueueType::General
+        queue::QueueType::GRAPHICS | queue::QueueType::COMPUTE | queue::QueueType::TRANSFER
     }
     fn max_queues(&self) -> usize {
         1
