@@ -158,7 +158,7 @@ const MAX_QUEUES: usize = 16; // infinite, to be fair
 impl q::QueueFamily for QueueFamily {
     fn queue_type(&self) -> q::QueueType {
         match *self {
-            QueueFamily::Present => q::QueueType::General,
+            QueueFamily::Present => q::QueueType::GRAPHICS | q::QueueType::TRANSFER,
             QueueFamily::Normal(ty) => ty,
         }
     }
@@ -172,9 +172,17 @@ impl q::QueueFamily for QueueFamily {
         // This must match the order exposed by `QUEUE_FAMILIES`
         q::QueueFamilyId(match *self {
             QueueFamily::Present => 0,
-            QueueFamily::Normal(q::QueueType::General) => 1,
-            QueueFamily::Normal(q::QueueType::Compute) => 2,
-            QueueFamily::Normal(q::QueueType::Transfer) => 3,
+            QueueFamily::Normal(queue_type) => {
+                if queue_type.contains(q::QueueType::GRAPHICS) {
+                    1
+                } else if queue_type.contains(q::QueueType::COMPUTE) {
+                    2
+                } else if queue_type.contains(q::QueueType::TRANSFER) {
+                    3
+                } else {
+                    unreachable!()
+                }
+            },
             _ => unreachable!(),
         })
     }
@@ -186,19 +194,23 @@ impl QueueFamily {
         use native::CmdListType as Clt;
 
         let queue_type = self.queue_type();
-        match queue_type {
-            q::QueueType::General | q::QueueType::Graphics => Clt::Direct,
-            q::QueueType::Compute => Clt::Compute,
-            q::QueueType::Transfer => Clt::Copy,
+        if queue_type.contains(q::QueueType::GRAPHICS) {
+            Clt::Direct
+        } else if queue_type.contains(q::QueueType::COMPUTE) {
+            Clt::Compute
+        } else if queue_type.contains(q::QueueType::TRANSFER) {
+            Clt::Copy
+        } else {
+            unreachable!()
         }
     }
 }
 
 static QUEUE_FAMILIES: [QueueFamily; 4] = [
     QueueFamily::Present,
-    QueueFamily::Normal(q::QueueType::General),
-    QueueFamily::Normal(q::QueueType::Compute),
-    QueueFamily::Normal(q::QueueType::Transfer),
+    QueueFamily::Normal(q::QueueType::GRAPHICS_TRANSFER),
+    QueueFamily::Normal(q::QueueType::COMPUTE_TRANSFER),
+    QueueFamily::Normal(q::QueueType::TRANSFER),
 ];
 
 #[derive(Default)]

@@ -169,21 +169,20 @@ impl fmt::Debug for Instance {
 }
 
 fn map_queue_type(flags: vk::QueueFlags) -> queue::QueueType {
-    if flags.contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE) {
-        // TRANSFER_BIT optional
-        queue::QueueType::General
-    } else if flags.contains(vk::QueueFlags::GRAPHICS) {
-        // TRANSFER_BIT optional
-        queue::QueueType::Graphics
-    } else if flags.contains(vk::QueueFlags::COMPUTE) {
-        // TRANSFER_BIT optional
-        queue::QueueType::Compute
-    } else if flags.contains(vk::QueueFlags::TRANSFER) {
-        queue::QueueType::Transfer
-    } else {
-        // TODO: present only queues?
-        unimplemented!()
+    let mut ret = queue::QueueType::empty();
+    if flags.contains(vk::QueueFlags::GRAPHICS) {
+        ret |= queue::QueueType::GRAPHICS;
     }
+    if flags.contains(vk::QueueFlags::COMPUTE) {
+        ret |= queue::QueueType::COMPUTE;
+    }
+    if flags.contains(vk::QueueFlags::TRANSFER) {
+        ret |= queue::QueueType::TRANSFER;
+    }
+    if flags.contains(vk::QueueFlags::SPARSE_BINDING) {
+        ret |= queue::QueueType::SPARSE_BINDING;
+    }
+    ret
 }
 
 unsafe fn display_debug_utils_label_ext(

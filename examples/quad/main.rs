@@ -216,6 +216,9 @@ where
         let limits = adapter.physical_device.properties().limits;
 
         // Build a new device and associated command queues
+        for f in adapter.queue_families.iter() {
+            println!("{:?}", f.queue_type());
+        }
         let family = adapter
             .queue_families
             .iter()

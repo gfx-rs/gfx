@@ -19,38 +19,40 @@ use std::{any::Any, fmt};
 pub use self::family::{QueueFamily, QueueFamilyId, QueueGroup};
 use crate::memory::{SparseBind, SparseImageBind};
 
-/// The type of the queue, an enum encompassing `queue::Capability`
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum QueueType {
-    /// Supports all operations.
-    General,
-    /// Only supports graphics and transfer operations.
-    Graphics,
-    /// Only supports compute and transfer operations.
-    Compute,
-    /// Only supports transfer operations.
-    Transfer,
+bitflags! {
+    /// The type of the queue, an enum encompassing `queue::Capability`
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct QueueType: u32 {
+        /// Queue supports graphics operations
+        const GRAPHICS = 0b1;
+        /// Queue supports compute operations
+        const COMPUTE = 0b10;
+        /// Queue supports transfer operations
+        const TRANSFER = 0b100;
+        /// Queue supports sparse resource memory management operations
+        const SPARSE_BINDING = 0b1000;
+
+        /// Queue supports both graphics operations and transfer operations
+        const GRAPHICS_TRANSFER = Self::GRAPHICS.bits | Self::TRANSFER.bits;
+
+        /// Queue supports both compute operations and transfer operations
+        const COMPUTE_TRANSFER = Self::GRAPHICS.bits | Self::COMPUTE.bits;
+    }
 }
+
 
 impl QueueType {
     /// Returns true if the queue supports graphics operations.
     pub fn supports_graphics(&self) -> bool {
-        match *self {
-            QueueType::General | QueueType::Graphics => true,
-            QueueType::Compute | QueueType::Transfer => false,
-        }
+        self.contains(QueueType::GRAPHICS)
     }
     /// Returns true if the queue supports compute operations.
     pub fn supports_compute(&self) -> bool {
-        match *self {
-            QueueType::General | QueueType::Graphics | QueueType::Compute => true,
-            QueueType::Transfer => false,
-        }
+        self.contains(QueueType::COMPUTE)
     }
     /// Returns true if the queue supports transfer operations.
     pub fn supports_transfer(&self) -> bool {
-        true
+        self.contains(QueueType::TRANSFER)
     }
 }
 
