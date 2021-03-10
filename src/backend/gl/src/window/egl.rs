@@ -30,6 +30,8 @@ pub struct Inner {
     display: egl::Display,
     config: egl::Config,
     context: egl::Context,
+    /// Dummy pbuffer (1x1).
+    /// Required for `eglMakeCurrent` on platforms that doesn't supports `EGL_KHR_surfaceless_context`.
     pbuffer: egl::Surface,
     wl_display: Option<*mut raw::c_void>,
 }
