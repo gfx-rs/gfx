@@ -217,13 +217,13 @@ where
 
         // Build a new device and associated command queues
         for f in adapter.queue_families.iter() {
-            println!("{:?}", f.queue_type());
+            println!("{:?}", f.queue_flags());
         }
         let family = adapter
             .queue_families
             .iter()
             .find(|family| {
-                surface.supports_queue_family(family) && family.queue_type().supports_graphics()
+                surface.supports_queue_family(family) && family.queue_flags().supports_graphics()
             })
             .expect("No queue family supports presentation");
 

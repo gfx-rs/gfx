@@ -22,7 +22,7 @@ use crate::memory::{SparseBind, SparseImageBind};
 bitflags! {
     /// The type of the queue, an enum encompassing `queue::Capability`
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct QueueType: u32 {
+    pub struct QueueFlags: u32 {
         /// Queue supports graphics operations
         const GRAPHICS = 0b1;
         /// Queue supports compute operations
@@ -31,28 +31,22 @@ bitflags! {
         const TRANSFER = 0b100;
         /// Queue supports sparse resource memory management operations
         const SPARSE_BINDING = 0b1000;
-
-        /// Queue supports both graphics operations and transfer operations
-        const GRAPHICS_TRANSFER = Self::GRAPHICS.bits | Self::TRANSFER.bits;
-
-        /// Queue supports both compute operations and transfer operations
-        const COMPUTE_TRANSFER = Self::GRAPHICS.bits | Self::COMPUTE.bits;
     }
 }
 
 
-impl QueueType {
+impl QueueFlags {
     /// Returns true if the queue supports graphics operations.
     pub fn supports_graphics(&self) -> bool {
-        self.contains(QueueType::GRAPHICS)
+        self.contains(QueueFlags::GRAPHICS)
     }
     /// Returns true if the queue supports compute operations.
     pub fn supports_compute(&self) -> bool {
-        self.contains(QueueType::COMPUTE)
+        self.contains(QueueFlags::COMPUTE)
     }
     /// Returns true if the queue supports transfer operations.
     pub fn supports_transfer(&self) -> bool {
-        self.contains(QueueType::TRANSFER)
+        self.contains(QueueFlags::TRANSFER)
     }
 }
 

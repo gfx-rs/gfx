@@ -624,7 +624,7 @@ impl<B: Backend> DeviceState<B> {
             .queue_families
             .iter()
             .find(|family| {
-                surface.supports_queue_family(family) && family.queue_type().supports_graphics()
+                surface.supports_queue_family(family) && family.queue_flags().supports_graphics()
             })
             .unwrap();
         let mut gpu = unsafe {

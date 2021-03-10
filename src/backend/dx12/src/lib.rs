@@ -150,15 +150,15 @@ pub enum QueueFamily {
     // It's basically a normal 3D queue but D3D12 swapchain creation requires an
     // associated queue, which we don't know on `create_swapchain`.
     Present,
-    Normal(q::QueueType),
+    Normal(q::QueueFlags),
 }
 
 const MAX_QUEUES: usize = 16; // infinite, to be fair
 
 impl q::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> q::QueueType {
+    fn queue_flags(&self) -> q::QueueFlags {
         match *self {
-            QueueFamily::Present => q::QueueType::GRAPHICS | q::QueueType::TRANSFER,
+            QueueFamily::Present => q::QueueFlags::GRAPHICS | q::QueueFlags::TRANSFER,
             QueueFamily::Normal(ty) => ty,
         }
     }
@@ -172,12 +172,12 @@ impl q::QueueFamily for QueueFamily {
         // This must match the order exposed by `QUEUE_FAMILIES`
         q::QueueFamilyId(match *self {
             QueueFamily::Present => 0,
-            QueueFamily::Normal(queue_type) => {
-                if queue_type.contains(q::QueueType::GRAPHICS) {
+            QueueFamily::Normal(queue_flags) => {
+                if queue_flags.contains(q::QueueFlags::GRAPHICS) {
                     1
-                } else if queue_type.contains(q::QueueType::COMPUTE) {
+                } else if queue_flags.contains(q::QueueFlags::COMPUTE) {
                     2
-                } else if queue_type.contains(q::QueueType::TRANSFER) {
+                } else if queue_flags.contains(q::QueueFlags::TRANSFER) {
                     3
                 } else {
                     unreachable!()
@@ -193,12 +193,12 @@ impl QueueFamily {
         use hal::queue::QueueFamily as _;
         use native::CmdListType as Clt;
 
-        let queue_type = self.queue_type();
-        if queue_type.contains(q::QueueType::GRAPHICS) {
+        let queue_flags = self.queue_flags();
+        if queue_flags.contains(q::QueueFlags::GRAPHICS) {
             Clt::Direct
-        } else if queue_type.contains(q::QueueType::COMPUTE) {
+        } else if queue_flags.contains(q::QueueFlags::COMPUTE) {
             Clt::Compute
-        } else if queue_type.contains(q::QueueType::TRANSFER) {
+        } else if queue_flags.contains(q::QueueFlags::TRANSFER) {
             Clt::Copy
         } else {
             unreachable!()
@@ -208,9 +208,9 @@ impl QueueFamily {
 
 static QUEUE_FAMILIES: [QueueFamily; 4] = [
     QueueFamily::Present,
-    QueueFamily::Normal(q::QueueType::GRAPHICS_TRANSFER),
-    QueueFamily::Normal(q::QueueType::COMPUTE_TRANSFER),
-    QueueFamily::Normal(q::QueueType::TRANSFER),
+    QueueFamily::Normal(q::QueueFlags::GRAPHICS | q::QueueFlags::TRANSFER),
+    QueueFamily::Normal(q::QueueFlags::COMPUTE | q::QueueFlags::TRANSFER),
+    QueueFamily::Normal(q::QueueFlags::TRANSFER),
 ];
 
 #[derive(Default)]

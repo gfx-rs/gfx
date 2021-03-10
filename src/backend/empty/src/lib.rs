@@ -574,8 +574,8 @@ impl device::Device<Backend> for Device {
 #[derive(Debug)]
 pub struct QueueFamily;
 impl queue::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> queue::QueueType {
-        queue::QueueType::all()
+    fn queue_flags(&self) -> queue::QueueFlags {
+        queue::QueueFlags::all()
     }
     fn max_queues(&self) -> usize {
         1

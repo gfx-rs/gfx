@@ -4,7 +4,7 @@ use hal::{
     adapter::{Adapter, AdapterInfo, DeviceType, Gpu, MemoryProperties},
     device::CreationError,
     format, image,
-    queue::{QueueFamilyId, QueuePriority, QueueType},
+    queue::{QueueFamilyId, QueuePriority, QueueFlags},
     Features,
 };
 
@@ -201,8 +201,8 @@ pub struct QueueFamily;
 const WEBGPU_QUEUE_FAMILY_ID: QueueFamilyId = QueueFamilyId(1);
 
 impl hal::queue::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> QueueType {
-        QueueType::GRAPHICS | QueueType::TRANSFER | QueueType::COMPUTE
+    fn queue_flags(&self) -> QueueFlags {
+        QueueFlags::all()
     }
 
     fn max_queues(&self) -> usize {

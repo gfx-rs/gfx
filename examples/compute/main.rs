@@ -54,7 +54,7 @@ fn main() {
         .find(|a| {
             a.queue_families
                 .iter()
-                .any(|family| family.queue_type().supports_compute())
+                .any(|family| family.queue_flags().supports_compute())
         })
         .expect("Failed to find a GPU with compute support!");
 
@@ -62,7 +62,7 @@ fn main() {
     let family = adapter
         .queue_families
         .iter()
-        .find(|family| family.queue_type().supports_compute())
+        .find(|family| family.queue_flags().supports_compute())
         .unwrap();
     let mut gpu = unsafe {
         adapter

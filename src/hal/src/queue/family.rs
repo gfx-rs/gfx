@@ -1,6 +1,6 @@
 //! Queue family and groups.
 
-use crate::{queue::QueueType, Backend};
+use crate::{queue::QueueFlags, Backend};
 
 use std::{any::Any, fmt::Debug};
 
@@ -11,8 +11,8 @@ use std::{any::Any, fmt::Debug};
 /// Can be obtained from an [adapter][crate::adapter::Adapter] through its
 /// [`queue_families`][crate::adapter::Adapter::queue_families] field.
 pub trait QueueFamily: Debug + Any + Send + Sync {
-    /// Returns the type of queues.
-    fn queue_type(&self) -> QueueType;
+    /// Returns the queue flags.
+    fn queue_flags(&self) -> QueueFlags;
     /// Returns maximum number of queues created from this family.
     fn max_queues(&self) -> usize;
     /// Returns the queue family ID.

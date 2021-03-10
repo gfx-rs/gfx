@@ -52,7 +52,7 @@ fn main() {
     let family = adapter
         .queue_families
         .iter()
-        .find(|family| family.queue_type().supports_compute())
+        .find(|family| family.queue_flags().supports_compute())
         .unwrap();
 
     unsafe {

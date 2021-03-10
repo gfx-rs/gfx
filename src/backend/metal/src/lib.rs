@@ -60,7 +60,7 @@ extern crate log;
 
 use hal::{
     adapter::{Adapter, AdapterInfo, DeviceType},
-    queue::{QueueFamilyId, QueueType},
+    queue::{QueueFamilyId, QueueFlags},
 };
 use range_alloc::RangeAllocator;
 
@@ -160,8 +160,8 @@ const MAX_BOUND_DESCRIPTOR_SETS: usize = 8;
 pub struct QueueFamily {}
 
 impl hal::queue::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> QueueType {
-        QueueType::GRAPHICS | QueueType::COMPUTE | QueueType::TRANSFER
+    fn queue_flags(&self) -> QueueFlags {
+        QueueFlags::all()
     }
     fn max_queues(&self) -> usize {
         1

@@ -655,8 +655,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 pub struct QueueFamily;
 
 impl q::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> q::QueueType {
-        q::QueueType::GRAPHICS | q::QueueType::COMPUTE | q::QueueType::TRANSFER
+    fn queue_flags(&self) -> q::QueueFlags {
+        q::QueueFlags::all()
     }
     fn max_queues(&self) -> usize {
         1

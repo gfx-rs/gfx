@@ -1135,8 +1135,8 @@ impl window::PresentationSurface<Backend> for Surface {
 pub struct QueueFamily;
 
 impl queue::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> queue::QueueType {
-        queue::QueueType::GRAPHICS | queue::QueueType::COMPUTE | queue::QueueType::TRANSFER
+    fn queue_flags(&self) -> queue::QueueFlags {
+        queue::QueueFlags::all()
     }
     fn max_queues(&self) -> usize {
         1

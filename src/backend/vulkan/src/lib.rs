@@ -168,19 +168,19 @@ impl fmt::Debug for Instance {
     }
 }
 
-fn map_queue_type(flags: vk::QueueFlags) -> queue::QueueType {
-    let mut ret = queue::QueueType::empty();
+fn map_queue_flags(flags: vk::QueueFlags) -> queue::QueueFlags {
+    let mut ret = queue::QueueFlags::empty();
     if flags.contains(vk::QueueFlags::GRAPHICS) {
-        ret |= queue::QueueType::GRAPHICS;
+        ret |= queue::QueueFlags::GRAPHICS | queue::QueueFlags::TRANSFER;
     }
     if flags.contains(vk::QueueFlags::COMPUTE) {
-        ret |= queue::QueueType::COMPUTE;
+        ret |= queue::QueueFlags::COMPUTE | queue::QueueFlags::TRANSFER;
     }
     if flags.contains(vk::QueueFlags::TRANSFER) {
-        ret |= queue::QueueType::TRANSFER;
+        ret |= queue::QueueFlags::TRANSFER;
     }
     if flags.contains(vk::QueueFlags::SPARSE_BINDING) {
-        ret |= queue::QueueType::SPARSE_BINDING;
+        ret |= queue::QueueFlags::SPARSE_BINDING;
     }
     ret
 }
@@ -654,8 +654,8 @@ pub struct QueueFamily {
 }
 
 impl queue::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> queue::QueueType {
-        map_queue_type(self.properties.queue_flags)
+    fn queue_flags(&self) -> queue::QueueFlags {
+        map_queue_flags(self.properties.queue_flags)
     }
     fn max_queues(&self) -> usize {
         self.properties.queue_count as _
