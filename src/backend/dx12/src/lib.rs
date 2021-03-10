@@ -178,6 +178,9 @@ impl q::QueueFamily for QueueFamily {
             _ => unreachable!(),
         })
     }
+    fn supports_sparse_binding(&self) -> bool {
+        true
+    }
 }
 
 impl QueueFamily {

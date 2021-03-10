@@ -1144,6 +1144,9 @@ impl queue::QueueFamily for QueueFamily {
     fn id(&self) -> queue::QueueFamilyId {
         queue::QueueFamilyId(0)
     }
+    fn supports_sparse_binding(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Clone)]

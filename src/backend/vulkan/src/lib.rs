@@ -664,6 +664,9 @@ impl queue::QueueFamily for QueueFamily {
     fn id(&self) -> queue::QueueFamilyId {
         queue::QueueFamilyId(self.index as _)
     }
+    fn supports_sparse_binding(&self) -> bool {
+        self.properties.queue_flags.contains(vk::QueueFlags::SPARSE_BINDING)
+    }
 }
 
 struct DeviceExtensionFunctions {
