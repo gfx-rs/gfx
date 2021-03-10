@@ -2745,7 +2745,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             panic!("fill_buffer failed to make UAV failed: 0x{:x}", hr);
         }
 
-        self.context.ClearUnorderedAccessViewUint(uav.as_raw(), &[data; 4]);
+        self.context
+            .ClearUnorderedAccessViewUint(uav.as_raw(), &[data; 4]);
     }
 
     unsafe fn update_buffer(&mut self, _buffer: &Buffer, _offset: buffer::Offset, _data: &[u8]) {
