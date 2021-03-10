@@ -202,7 +202,7 @@ const WEBGPU_QUEUE_FAMILY_ID: QueueFamilyId = QueueFamilyId(1);
 
 impl hal::queue::QueueFamily for QueueFamily {
     fn queue_type(&self) -> QueueType {
-        QueueType::General
+        QueueType::GRAPHICS | QueueType::TRANSFER | QueueType::COMPUTE
     }
 
     fn max_queues(&self) -> usize {

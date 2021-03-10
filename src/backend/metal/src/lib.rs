@@ -161,7 +161,7 @@ pub struct QueueFamily {}
 
 impl hal::queue::QueueFamily for QueueFamily {
     fn queue_type(&self) -> QueueType {
-        QueueType::General
+        QueueType::GRAPHICS | QueueType::COMPUTE | QueueType::TRANSFER
     }
     fn max_queues(&self) -> usize {
         1
