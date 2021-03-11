@@ -583,6 +583,9 @@ impl queue::QueueFamily for QueueFamily {
     fn id(&self) -> queue::QueueFamilyId {
         QUEUE_FAMILY_ID
     }
+    fn supports_sparse_binding(&self) -> bool {
+        true
+    }
 }
 
 const QUEUE_FAMILY_ID: queue::QueueFamilyId = queue::QueueFamilyId(0);

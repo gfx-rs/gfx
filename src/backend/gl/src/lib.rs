@@ -664,6 +664,9 @@ impl q::QueueFamily for QueueFamily {
     fn id(&self) -> q::QueueFamilyId {
         q::QueueFamilyId(0)
     }
+    fn supports_sparse_binding(&self) -> bool {
+        false
+    }
 }
 
 fn resolve_sub_range(
