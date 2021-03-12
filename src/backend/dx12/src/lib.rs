@@ -1340,12 +1340,17 @@ impl hal::Instance<Backend> for Instance {
                     Features::MUTABLE_COMPARISON_SAMPLER |
                     Features::SAMPLER_ANISOTROPY |
                     Features::TEXTURE_DESCRIPTOR_ARRAY |
+                    Features::BUFFER_DESCRIPTOR_ARRAY |
                     Features::SAMPLER_MIRROR_CLAMP_EDGE |
                     Features::NDC_Y_UP |
                     Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING |
                     Features::SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING |
+                    Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING |
+                    Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING |
                     Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING |
                     Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING |
+                    Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING |
+                    Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING |
                     Features::UNSIZED_DESCRIPTOR_ARRAY |
                     Features::DRAW_INDIRECT_COUNT |
                     tiled_resource_features |
