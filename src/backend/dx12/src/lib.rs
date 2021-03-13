@@ -1310,6 +1310,14 @@ impl hal::Instance<Backend> for Instance {
                 tiled_resource_features |= Features::SPARSE_RESIDENCY_IMAGE_3D;
             }
 
+            let conservative_faster_features = if features.ConservativeRasterizationTier
+                == d3d12::D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED
+            {
+                Features::empty()
+            } else {
+                Features::CONSERVATIVE_RASTERIZATION
+            };
+
             let physical_device = PhysicalDevice {
                 library: Arc::clone(&self.library),
                 adapter,
@@ -1340,7 +1348,8 @@ impl hal::Instance<Backend> for Instance {
                     Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING |
                     Features::UNSIZED_DESCRIPTOR_ARRAY |
                     Features::DRAW_INDIRECT_COUNT |
-                    tiled_resource_features,
+                    tiled_resource_features |
+                    conservative_faster_features,
                 properties: PhysicalDeviceProperties {
                     limits: Limits {
                         //TODO: verify all of these not linked to constants
