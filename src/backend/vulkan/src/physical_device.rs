@@ -778,7 +778,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         }
                         vk::Result::ERROR_DEVICE_LOST => CreationError::DeviceLost,
                         vk::Result::ERROR_TOO_MANY_OBJECTS => CreationError::TooManyObjects,
-                        _ => unreachable!(),
+                        _ => {
+                            error!("Unknown device creation error: {:?}", e);
+                            CreationError::InitializationFailed
+                        }
                     })
                 }
             }
