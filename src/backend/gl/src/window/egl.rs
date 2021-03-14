@@ -32,7 +32,7 @@ pub struct Inner {
     context: egl::Context,
     /// Dummy pbuffer (1x1).
     /// Required for `eglMakeCurrent` on platforms that doesn't supports `EGL_KHR_surfaceless_context`.
-    pbuffer: egl::Surface,
+    pbuffer: Option<egl::Surface>,
     wl_display: Option<*mut raw::c_void>,
 }
 
@@ -196,13 +196,20 @@ impl Inner {
             }
         };
 
-        let pbuffer = {
+        // Testing if context can be binded without surface
+        // and creating dummy pbuffer surface if not.
+        let pbuffer = if egl.upcast::<egl::EGL1_5>().is_none()
+            && !display_extensions.contains("EGL_KHR_surfaceless_context")
+        {
             let attributes = [egl::WIDTH, 1, egl::HEIGHT, 1, egl::NONE];
             egl.create_pbuffer_surface(display, config, &attributes)
+                .map(Some)
                 .map_err(|e| {
                     log::warn!("Error in create_pbuffer_surface: {:?}", e);
                     hal::UnsupportedBackend
                 })?
+        } else {
+            None
         };
 
         Ok(Self {
@@ -300,8 +307,8 @@ impl hal::Instance<crate::Backend> for Instance {
             .egl
             .make_current(
                 inner.display,
-                Some(inner.pbuffer),
-                Some(inner.pbuffer),
+                inner.pbuffer,
+                inner.pbuffer,
                 Some(inner.context),
             )
             .unwrap();
@@ -472,7 +479,7 @@ pub struct Surface {
     raw: egl::Surface,
     display: egl::Display,
     context: egl::Context,
-    pbuffer: egl::Surface,
+    pbuffer: Option<egl::Surface>,
     presentable: bool,
     wl_window: Option<*mut raw::c_void>,
     pub(crate) swapchain: Option<Swapchain>,
@@ -625,8 +632,8 @@ impl Surface {
         self.egl
             .make_current(
                 self.display,
-                Some(self.pbuffer),
-                Some(self.pbuffer),
+                self.pbuffer,
+                self.pbuffer,
                 Some(self.context),
             )
             .unwrap();
