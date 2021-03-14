@@ -12,7 +12,7 @@ use hal::{
     queue, DescriptorLimits, DynamicStates, Features, Limits, PhysicalDeviceProperties,
 };
 
-use std::{ffi::CStr, fmt, mem, ptr, sync::Arc, unreachable};
+use std::{ffi::CStr, fmt, mem, ptr, sync::Arc};
 
 use crate::{
     conv, info, Backend, Device, DeviceExtensionFunctions, ExtensionFn, Queue, QueueFamily,
