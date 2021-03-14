@@ -37,6 +37,7 @@ struct GraphicsPipelineInfoBuf<'a> {
     tessellation_state: Option<vk::PipelineTessellationStateCreateInfo>,
     viewport_state: vk::PipelineViewportStateCreateInfo,
     rasterization_state: vk::PipelineRasterizationStateCreateInfo,
+    rasterization_conservative_state: vk::PipelineRasterizationConservativeStateCreateInfoEXT, // May be unused or may be pointed to by rasterization_state
     multisample_state: vk::PipelineMultisampleStateCreateInfo,
     depth_stencil_state: vk::PipelineDepthStencilStateCreateInfo,
     color_blend_state: vk::PipelineColorBlendStateCreateInfo,
@@ -189,32 +190,48 @@ impl<'a> GraphicsPipelineInfoBuf<'a> {
             }
         };
 
-        this.rasterization_state = vk::PipelineRasterizationStateCreateInfo::builder()
-            .flags(vk::PipelineRasterizationStateCreateFlags::empty())
-            .depth_clamp_enable(if desc.rasterizer.depth_clamping {
-                if device.features.contains(Features::DEPTH_CLAMP) {
-                    true
-                } else {
-                    warn!("Depth clamping was requested on a device with disabled feature");
-                    false
-                }
-            } else {
-                false
-            })
-            .rasterizer_discard_enable(
-                desc.fragment.is_none()
-                    && desc.depth_stencil.depth.is_none()
-                    && desc.depth_stencil.stencil.is_none(),
-            )
-            .polygon_mode(polygon_mode)
-            .cull_mode(conv::map_cull_face(desc.rasterizer.cull_face))
-            .front_face(conv::map_front_face(desc.rasterizer.front_face))
-            .depth_bias_enable(desc.rasterizer.depth_bias.is_some())
-            .depth_bias_constant_factor(depth_bias.const_factor)
-            .depth_bias_clamp(depth_bias.clamp)
-            .depth_bias_slope_factor(depth_bias.slope_factor)
-            .line_width(line_width)
-            .build();
+        this.rasterization_conservative_state =
+            vk::PipelineRasterizationConservativeStateCreateInfoEXT::builder()
+                .conservative_rasterization_mode(match desc.rasterizer.conservative {
+                    false => vk::ConservativeRasterizationModeEXT::DISABLED,
+                    true => vk::ConservativeRasterizationModeEXT::OVERESTIMATE,
+                })
+                .build();
+
+        this.rasterization_state = {
+            let mut rasterization_state_builder =
+                vk::PipelineRasterizationStateCreateInfo::builder()
+                    .flags(vk::PipelineRasterizationStateCreateFlags::empty())
+                    .depth_clamp_enable(if desc.rasterizer.depth_clamping {
+                        if device.features.contains(Features::DEPTH_CLAMP) {
+                            true
+                        } else {
+                            warn!("Depth clamping was requested on a device with disabled feature");
+                            false
+                        }
+                    } else {
+                        false
+                    })
+                    .rasterizer_discard_enable(
+                        desc.fragment.is_none()
+                            && desc.depth_stencil.depth.is_none()
+                            && desc.depth_stencil.stencil.is_none(),
+                    )
+                    .polygon_mode(polygon_mode)
+                    .cull_mode(conv::map_cull_face(desc.rasterizer.cull_face))
+                    .front_face(conv::map_front_face(desc.rasterizer.front_face))
+                    .depth_bias_enable(desc.rasterizer.depth_bias.is_some())
+                    .depth_bias_constant_factor(depth_bias.const_factor)
+                    .depth_bias_clamp(depth_bias.clamp)
+                    .depth_bias_slope_factor(depth_bias.slope_factor)
+                    .line_width(line_width);
+            if desc.rasterizer.conservative {
+                rasterization_state_builder = rasterization_state_builder
+                    .push_next(&mut this.rasterization_conservative_state);
+            }
+
+            rasterization_state_builder.build()
+        };
 
         this.tessellation_state = {
             if let pso::PrimitiveAssemblerDesc::Vertex {

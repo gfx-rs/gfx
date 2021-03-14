@@ -410,6 +410,10 @@ impl PhysicalDeviceFeatures {
             bits |= Features::DRAW_INDIRECT_COUNT
         }
 
+        if info.supports_extension(vk::ExtConservativeRasterizationFn::name()) {
+            bits |= Features::CONSERVATIVE_RASTERIZATION
+        }
+
         if let Some(ref vulkan_1_2) = self.vulkan_1_2 {
             if vulkan_1_2.shader_sampled_image_array_non_uniform_indexing != 0 {
                 bits |= Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING;
@@ -525,6 +529,11 @@ impl PhysicalDeviceInfo {
             && requested_features.contains(Features::DRAW_INDIRECT_COUNT)
         {
             requested_extensions.push(DrawIndirectCount::name());
+        }
+
+        if requested_features.contains(Features::CONSERVATIVE_RASTERIZATION) {
+            requested_extensions.push(vk::ExtConservativeRasterizationFn::name());
+            requested_extensions.push(vk::KhrGetDisplayProperties2Fn::name()); // TODO NOT NEEDED, RIGHT?
         }
 
         requested_extensions

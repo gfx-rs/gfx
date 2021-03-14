@@ -293,7 +293,6 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer, multisample: bool) -> D3D12_
         ForcedSampleCount: 0,         // TODO: currently not supported
         AntialiasedLineEnable: FALSE, // TODO: currently not supported
         ConservativeRaster: if rasterizer.conservative {
-            // TODO: check support
             D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
         } else {
             D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF

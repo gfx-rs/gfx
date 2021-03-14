@@ -246,6 +246,10 @@ bitflags! {
         /// Enable draw_indirect_count and draw_indexed_indirect_count
         const DRAW_INDIRECT_COUNT = 0x1000_0000_0000_0000;
 
+        /// Support for conservative rasterization. Presence of this flag only indicates basic overestimation rasterization for triangles only.
+        /// (no guarantee on underestimation, overestimation, handling of degenerate primitives, fragment shader coverage reporting and uncertainty ranges)
+        const CONSERVATIVE_RASTERIZATION = 0x2000_0000_0000_0000;
+
         // Bits for Vulkan Portability features
 
         /// Support triangle fan primitive topology.
