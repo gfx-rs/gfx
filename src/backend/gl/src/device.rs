@@ -537,8 +537,8 @@ impl Device {
             };
             //TODO: make Naga reflect all the names, not just textures
             let slot = match var.binding {
-                Some(naga::Binding::Resource { group, binding }) => {
-                    context.layout.sets[group as usize].bindings[binding as usize]
+                Some(ref br) => {
+                    context.layout.sets[br.group as usize].bindings[br.binding as usize]
                 }
                 ref other => panic!("Unexpected resource binding {:?}", other),
             };
@@ -549,8 +549,8 @@ impl Device {
 
         for (name, mapping) in texture_mapping {
             let texture_linear_index = match module.global_variables[mapping.texture].binding {
-                Some(naga::Binding::Resource { group, binding }) => {
-                    context.layout.sets[group as usize].bindings[binding as usize]
+                Some(ref br) => {
+                    context.layout.sets[br.group as usize].bindings[br.binding as usize]
                 }
                 ref other => panic!("Unexpected texture binding {:?}", other),
             };
@@ -559,8 +559,8 @@ impl Device {
                 .insert(name, (n::BindingRegister::Textures, texture_linear_index));
             if let Some(sampler_handle) = mapping.sampler {
                 let sampler_linear_index = match module.global_variables[sampler_handle].binding {
-                    Some(naga::Binding::Resource { group, binding }) => {
-                        context.layout.sets[group as usize].bindings[binding as usize]
+                    Some(ref br) => {
+                        context.layout.sets[br.group as usize].bindings[br.binding as usize]
                     }
                     ref other => panic!("Unexpected sampler binding {:?}", other),
                 };
@@ -609,11 +609,11 @@ impl Device {
             )))?;
 
         match writer.write() {
-            Ok(texture_mapping) => {
+            Ok(reflection_info) => {
                 Self::reflect_shader(
                     &shader.module,
                     shader.analysis.get_entry_point(entry_point_index),
-                    texture_mapping,
+                    reflection_info.texture_mapping,
                     context,
                 );
                 let source = String::from_utf8(output).unwrap();
