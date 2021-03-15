@@ -523,7 +523,7 @@ impl Device {
     fn reflect_shader(
         module: &naga::Module,
         ep_info: &naga::proc::analyzer::FunctionInfo,
-        texture_mapping: FastHashMap<String, naga::back::glsl::TextureMapping>,
+        reflection_info: naga::back::glsl::ReflectionInfo,
         context: CompilationContext,
     ) {
         for (handle, var) in module.global_variables.iter() {
@@ -542,12 +542,13 @@ impl Device {
                 }
                 ref other => panic!("Unexpected resource binding {:?}", other),
             };
-            context
-                .name_binding_map
-                .insert(var.name.clone().unwrap(), (register, slot));
+
+            let name = reflection_info.uniforms[&handle].clone();
+            log::debug!("Rebind buffer: {:?} -> {}", var.name.as_ref(), &name);
+            context.name_binding_map.insert(name, (register, slot));
         }
 
-        for (name, mapping) in texture_mapping {
+        for (name, mapping) in reflection_info.texture_mapping {
             let texture_linear_index = match module.global_variables[mapping.texture].binding {
                 Some(ref br) => {
                     context.layout.sets[br.group as usize].bindings[br.binding as usize]
@@ -613,7 +614,7 @@ impl Device {
                 Self::reflect_shader(
                     &shader.module,
                     shader.analysis.get_entry_point(entry_point_index),
-                    reflection_info.texture_mapping,
+                    reflection_info,
                     context,
                 );
                 let source = String::from_utf8(output).unwrap();
