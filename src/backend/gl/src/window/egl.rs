@@ -630,12 +630,7 @@ impl Surface {
         self.egl.swap_buffers(self.display, self.raw).unwrap();
 
         self.egl
-            .make_current(
-                self.display,
-                self.pbuffer,
-                self.pbuffer,
-                Some(self.context),
-            )
+            .make_current(self.display, self.pbuffer, self.pbuffer, Some(self.context))
             .unwrap();
 
         Ok(None)
