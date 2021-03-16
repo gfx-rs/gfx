@@ -183,6 +183,12 @@ impl PhysicalDeviceFeatures {
                         .shader_storage_image_array_non_uniform_indexing(
                             features.contains(Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING),
                         )
+                        .shader_storage_buffer_array_non_uniform_indexing(
+                            features.contains(Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING),
+                        )
+                        .shader_uniform_buffer_array_non_uniform_indexing(
+                            features.contains(Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING),
+                        )
                         .runtime_descriptor_array(
                             features.contains(Features::UNSIZED_DESCRIPTOR_ARRAY),
                         )
@@ -224,7 +230,8 @@ impl PhysicalDeviceFeatures {
             | Features::SAMPLER_BORDER_COLOR
             | Features::MUTABLE_COMPARISON_SAMPLER
             | Features::MUTABLE_UNNORMALIZED_SAMPLER
-            | Features::TEXTURE_DESCRIPTOR_ARRAY;
+            | Features::TEXTURE_DESCRIPTOR_ARRAY
+            | Features::BUFFER_DESCRIPTOR_ARRAY;
 
         if self.core.robust_buffer_access != 0 {
             bits |= Features::ROBUST_BUFFER_ACCESS;
@@ -421,6 +428,12 @@ impl PhysicalDeviceFeatures {
             if vulkan_1_2.shader_storage_image_array_non_uniform_indexing != 0 {
                 bits |= Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING;
             }
+            if vulkan_1_2.shader_storage_buffer_array_non_uniform_indexing != 0 {
+                bits |= Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING;
+            }
+            if vulkan_1_2.shader_uniform_buffer_array_non_uniform_indexing != 0 {
+                bits |= Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING;
+            }
             if vulkan_1_2.runtime_descriptor_array != 0 {
                 bits |= Features::UNSIZED_DESCRIPTOR_ARRAY;
             }
@@ -438,6 +451,12 @@ impl PhysicalDeviceFeatures {
             }
             if descriptor_indexing.shader_storage_image_array_non_uniform_indexing != 0 {
                 bits |= Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING;
+            }
+            if descriptor_indexing.shader_storage_buffer_array_non_uniform_indexing != 0 {
+                bits |= Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING;
+            }
+            if descriptor_indexing.shader_uniform_buffer_array_non_uniform_indexing != 0 {
+                bits |= Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING;
             }
             if descriptor_indexing.runtime_descriptor_array != 0 {
                 bits |= Features::UNSIZED_DESCRIPTOR_ARRAY;

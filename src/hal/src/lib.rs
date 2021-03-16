@@ -241,7 +241,7 @@ bitflags! {
         /// Allow descriptor arrays to be unsized in shaders
         const UNSIZED_DESCRIPTOR_ARRAY = 0x0800_0000_0000_0000;
         /// Mask for all the features associated with descriptor indexing.
-        const DESCRIPTOR_INDEXING_MASK = Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING.bits | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING.bits | Features::UNSIZED_DESCRIPTOR_ARRAY.bits;
+        const DESCRIPTOR_INDEXING_MASK = Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING.bits | Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING.bits | Features::UNSIZED_DESCRIPTOR_ARRAY.bits | Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING.bits | Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING.bits;
 
         /// Enable draw_indirect_count and draw_indexed_indirect_count
         const DRAW_INDIRECT_COUNT = 0x1000_0000_0000_0000;
@@ -249,6 +249,13 @@ bitflags! {
         /// Support for conservative rasterization. Presence of this flag only indicates basic overestimation rasterization for triangles only.
         /// (no guarantee on underestimation, overestimation, handling of degenerate primitives, fragment shader coverage reporting and uncertainty ranges)
         const CONSERVATIVE_RASTERIZATION = 0x2000_0000_0000_0000;
+
+        /// Support for arrays of buffer descriptors
+        const BUFFER_DESCRIPTOR_ARRAY = 0x4000_0000_0000_0000;
+        /// Allow indexing uniform buffer descriptor arrays with dynamically non-uniform data
+        const UNIFORM_BUFFER_DESCRIPTOR_INDEXING = 0x8000_0000_0000_0000;
+        /// Allow indexing storage buffer descriptor arrays with dynamically non-uniform data
+        const STORAGE_BUFFER_DESCRIPTOR_INDEXING = 0x0001_0000_0000_0000_0000;
 
         // Bits for Vulkan Portability features
 
