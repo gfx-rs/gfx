@@ -29,13 +29,7 @@ extern crate objc;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::Entry;
 use ash::{
-    extensions::{
-        self,
-        ext::{DebugReport, DebugUtils},
-        khr::DrawIndirectCount,
-        khr::Swapchain,
-        nv::MeshShader,
-    },
+    extensions::{ext, khr, nv::MeshShader},
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk,
 };
@@ -83,8 +77,9 @@ pub struct RawInstance {
 }
 
 pub enum DebugMessenger {
-    Utils(DebugUtils, vk::DebugUtilsMessengerEXT),
-    Report(DebugReport, vk::DebugReportCallbackEXT),
+    Utils(ext::DebugUtils, vk::DebugUtilsMessengerEXT),
+    #[allow(deprecated)] // `DebugReport`
+    Report(ext::DebugReport, vk::DebugReportCallbackEXT),
 }
 
 impl Drop for RawInstance {
@@ -94,6 +89,7 @@ impl Drop for RawInstance {
                 Some(DebugMessenger::Utils(ref ext, callback)) => {
                     ext.destroy_debug_utils_messenger(callback, None)
                 }
+                #[allow(deprecated)] // `DebugReport`
                 Some(DebugMessenger::Report(ref ext, callback)) => {
                     ext.destroy_debug_report_callback(callback, None)
                 }
@@ -348,7 +344,7 @@ unsafe extern "system" fn debug_report_callback(
 impl hal::Instance<Backend> for Instance {
     fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
         #[cfg(not(feature = "use-rtld-next"))]
-        let entry = match Entry::new() {
+        let entry = match unsafe { Entry::new() } {
             Ok(entry) => entry,
             Err(err) => {
                 info!("Missing Vulkan entry points: {:?}", err);
@@ -416,7 +412,7 @@ impl hal::Instance<Backend> for Instance {
         // Check our extensions against the available extensions
         let extensions = {
             let mut extensions: Vec<&'static CStr> = Vec::new();
-            extensions.push(extensions::khr::Surface::name());
+            extensions.push(khr::Surface::name());
 
             // Platform-specific WSI extensions
             if cfg!(all(
@@ -424,23 +420,24 @@ impl hal::Instance<Backend> for Instance {
                 not(target_os = "android"),
                 not(target_os = "macos")
             )) {
-                extensions.push(extensions::khr::XlibSurface::name());
-                extensions.push(extensions::khr::XcbSurface::name());
-                extensions.push(extensions::khr::WaylandSurface::name());
+                extensions.push(khr::XlibSurface::name());
+                extensions.push(khr::XcbSurface::name());
+                extensions.push(khr::WaylandSurface::name());
             }
             if cfg!(target_os = "android") {
-                extensions.push(extensions::khr::AndroidSurface::name());
+                extensions.push(khr::AndroidSurface::name());
             }
             if cfg!(target_os = "windows") {
-                extensions.push(extensions::khr::Win32Surface::name());
+                extensions.push(khr::Win32Surface::name());
             }
             if cfg!(target_os = "macos") {
-                extensions.push(extensions::mvk::MacOSSurface::name());
+                extensions.push(ash::extensions::mvk::MacOSSurface::name());
             }
 
-            extensions.push(DebugUtils::name());
+            extensions.push(ext::DebugUtils::name());
             if cfg!(debug_assertions) {
-                extensions.push(DebugReport::name());
+                #[allow(deprecated)]
+                extensions.push(ext::DebugReport::name());
             }
 
             extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
@@ -521,12 +518,13 @@ impl hal::Instance<Backend> for Instance {
                 })
             });
 
+        #[allow(deprecated)] // `DebugReport`
         let debug_messenger = {
             // make sure VK_EXT_debug_utils is available
             if instance_extensions.iter().any(|props| unsafe {
-                CStr::from_ptr(props.extension_name.as_ptr()) == DebugUtils::name()
+                CStr::from_ptr(props.extension_name.as_ptr()) == ext::DebugUtils::name()
             }) {
-                let ext = DebugUtils::new(&entry, &instance);
+                let ext = ext::DebugUtils::new(&entry, &instance);
                 let info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
                     .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
                     .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
@@ -536,10 +534,10 @@ impl hal::Instance<Backend> for Instance {
                 Some(DebugMessenger::Utils(ext, handle))
             } else if cfg!(debug_assertions)
                 && instance_extensions.iter().any(|props| unsafe {
-                    CStr::from_ptr(props.extension_name.as_ptr()) == DebugReport::name()
+                    CStr::from_ptr(props.extension_name.as_ptr()) == ext::DebugReport::name()
                 })
             {
-                let ext = DebugReport::new(&entry, &instance);
+                let ext = ext::DebugReport::new(&entry, &instance);
                 let info = vk::DebugReportCallbackCreateInfoEXT::builder()
                     .flags(vk::DebugReportFlagsEXT::all())
                     .pfn_callback(Some(debug_report_callback));
@@ -590,9 +588,7 @@ impl hal::Instance<Backend> for Instance {
                 not(target_os = "solaris")
             ))]
             RawWindowHandle::Wayland(handle)
-                if self
-                    .extensions
-                    .contains(&extensions::khr::WaylandSurface::name()) =>
+                if self.extensions.contains(&khr::WaylandSurface::name()) =>
             {
                 Ok(self.create_surface_from_wayland(handle.display, handle.surface))
             }
@@ -603,9 +599,7 @@ impl hal::Instance<Backend> for Instance {
                 not(target_os = "solaris")
             ))]
             RawWindowHandle::Xlib(handle)
-                if self
-                    .extensions
-                    .contains(&extensions::khr::XlibSurface::name()) =>
+                if self.extensions.contains(&khr::XlibSurface::name()) =>
             {
                 Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
             }
@@ -615,11 +609,7 @@ impl hal::Instance<Backend> for Instance {
                 not(target_os = "macos"),
                 not(target_os = "ios")
             ))]
-            RawWindowHandle::Xcb(handle)
-                if self
-                    .extensions
-                    .contains(&extensions::khr::XcbSurface::name()) =>
-            {
+            RawWindowHandle::Xcb(handle) if self.extensions.contains(&khr::XcbSurface::name()) => {
                 Ok(self.create_surface_from_xcb(handle.connection as *mut _, handle.window))
             }
             #[cfg(target_os = "android")]
@@ -673,7 +663,7 @@ impl queue::QueueFamily for QueueFamily {
 
 struct DeviceExtensionFunctions {
     mesh_shaders: Option<ExtensionFn<MeshShader>>,
-    draw_indirect_count: Option<ExtensionFn<DrawIndirectCount>>,
+    draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.
@@ -781,7 +771,7 @@ pub type RawCommandQueue = Arc<vk::Queue>;
 pub struct Queue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
-    swapchain_fn: Swapchain,
+    swapchain_fn: khr::Swapchain,
 }
 
 impl fmt::Debug for Queue {
