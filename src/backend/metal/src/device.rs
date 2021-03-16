@@ -705,7 +705,7 @@ impl Device {
             entry_point_map.insert(
                 (ep.stage, ep.name.clone()),
                 n::EntryPoint {
-                    internal_name: name,
+                    internal_name: name.map_err(|err| format!("{}", err))?,
                     work_group_size: ep.workgroup_size,
                 },
             );
