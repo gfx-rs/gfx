@@ -412,7 +412,7 @@ impl Queue {
                         if self.share.private_caps.depth_range_f64_precision {
                             gl.depth_range_f64(depth_range[0], depth_range[1]);
                         } else {
-                            debug!("Depth ranges with f64 precision are not supported, falling back to f32");
+                            trace!("Depth ranges with f64 precision are not supported, falling back to f32");
                             gl.depth_range_f32(depth_range[0] as f32, depth_range[1] as f32);
                         }
                     };
@@ -616,19 +616,50 @@ impl Queue {
             com::Command::UnbindAttribute(ref attribute) => unsafe {
                 self.share.context.DisableVertexAttribArray(attribute.location);
             }*/
-            com::Command::CopyBufferToBuffer(src, dst, ref r) => unsafe {
+            com::Command::CopyBufferToBuffer {
+                src_buffer,
+                dst_buffer,
+                src_target: _,
+                dst_target,
+                data,
+            } => unsafe {
+                let is_index_buffer_only_element_dst =
+                    !self.share.private_caps.index_buffer_role_change
+                        && dst_target == glow::ELEMENT_ARRAY_BUFFER;
+
+                let copy_src_target = glow::COPY_READ_BUFFER;
+                // WebGL not allowed to copy data from other targets to element buffer and can't copy element data to other buffers
+                let copy_dst_target = if is_index_buffer_only_element_dst {
+                    glow::ELEMENT_ARRAY_BUFFER
+                } else {
+                    glow::COPY_WRITE_BUFFER
+                };
                 let gl = &self.share.context;
-                gl.bind_buffer(glow::COPY_READ_BUFFER, Some(src));
-                gl.bind_buffer(glow::COPY_WRITE_BUFFER, Some(dst));
-                gl.copy_buffer_sub_data(
-                    glow::COPY_READ_BUFFER,
-                    glow::COPY_WRITE_BUFFER,
-                    r.src as _,
-                    r.dst as _,
-                    r.size as _,
-                );
-                gl.bind_buffer(glow::COPY_READ_BUFFER, None);
-                gl.bind_buffer(glow::COPY_WRITE_BUFFER, None);
+
+                gl.bind_buffer(copy_src_target, Some(src_buffer));
+                gl.bind_buffer(copy_dst_target, Some(dst_buffer));
+
+                if is_index_buffer_only_element_dst {
+                    let mut buffer_data = vec![0; data.size as usize];
+                    gl.get_buffer_sub_data(copy_src_target, data.src as i32, &mut buffer_data);
+                    gl.buffer_sub_data_u8_slice(copy_dst_target, data.dst as i32, &buffer_data);
+                } else {
+                    gl.copy_buffer_sub_data(
+                        copy_src_target,
+                        copy_dst_target,
+                        data.src as _,
+                        data.dst as _,
+                        data.size as _,
+                    );
+                }
+
+                gl.bind_buffer(copy_src_target, None);
+
+                if is_index_buffer_only_element_dst {
+                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, self.state.index_buffer);
+                } else {
+                    gl.bind_buffer(copy_dst_target, None);
+                }
             },
             com::Command::CopyBufferToTexture {
                 src_buffer,
@@ -973,7 +1004,10 @@ impl Queue {
                 };
 
                 if let hal::pso::State::Static(w) = rasterizer.line_width {
-                    unsafe { gl.line_width(w) };
+                    if w != 1.0 {
+                        // Default value already 1.0
+                        unsafe { gl.line_width(w) };
+                    }
                 }
 
                 //TODO: this is not available in GLES
@@ -1105,6 +1139,7 @@ impl hal::queue::Queue<Backend> for Queue {
                     [cb.buf.offset as usize..(cb.buf.offset + cb.buf.size) as usize];
                 self.reset_state();
                 for com in commands {
+                    log::trace!("Execute command:{:?}", com);
                     self.process(com, &buffer.data);
                 }
             }

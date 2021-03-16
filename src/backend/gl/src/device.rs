@@ -233,10 +233,11 @@ impl Device {
                 gl.use_program(Some(program));
             }
             for (name, &(register, slot)) in name_binding_map.iter() {
+                log::trace!("Get binding {:?} from program {:?}", name, program);
                 match register {
                     n::BindingRegister::Textures => unsafe {
-                        let loc = gl.get_uniform_location(program, name);
-                        gl.uniform_1_i32(loc.as_ref(), slot as _);
+                        let loc = gl.get_uniform_location(program, name).unwrap();
+                        gl.uniform_1_i32(Some(&loc), slot as _);
                     },
                     n::BindingRegister::UniformBuffers => unsafe {
                         let index = gl.get_uniform_block_index(program, name).unwrap();
@@ -303,7 +304,13 @@ impl Device {
                 ref sub,
                 is_3d: false,
             } => unsafe {
-                gl.framebuffer_texture(point, attachment, Some(raw), sub.level_start as _);
+                gl.framebuffer_texture_2d(
+                    point,
+                    attachment,
+                    glow::TEXTURE_2D,
+                    Some(raw),
+                    sub.level_start as _,
+                );
             },
             n::ImageView::Texture {
                 target: _,
@@ -1311,13 +1318,18 @@ impl d::Device<B> for Device {
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
         };
 
-        *buffer = n::Buffer::Bound {
-            buffer: memory
-                .buffer
-                .expect("Improper memory type used for buffer memory")
-                .0,
-            range: offset..offset + size,
-        };
+        match memory.buffer {
+            Some((raw, target)) => {
+                *buffer = n::Buffer::Bound {
+                    buffer: raw,
+                    range: offset..offset + size,
+                    target: target,
+                };
+            }
+            None => {
+                panic!("Improper memory type used for buffer memory");
+            }
+        }
 
         Ok(())
     }
@@ -1745,8 +1757,8 @@ impl d::Device<B> for Device {
             let binding_layout = &op.set.layout[layout_index];
             let binding = match descriptor {
                 pso::Descriptor::Buffer(buffer, ref sub) => {
-                    let (raw_buffer, buffer_range) = buffer.as_bound();
-                    let range = crate::resolve_sub_range(sub, buffer_range);
+                    let bounded_buffer = buffer.as_bound();
+                    let range = crate::resolve_sub_range(sub, bounded_buffer.range);
 
                     let register = match binding_layout.ty {
                         pso::DescriptorType::Buffer { ty, .. } => match ty {
@@ -1764,7 +1776,7 @@ impl d::Device<B> for Device {
 
                     n::DescSetBindings::Buffer {
                         register,
-                        buffer: raw_buffer,
+                        buffer: bounded_buffer.raw,
                         offset: range.start as i32,
                         size: (range.end - range.start) as i32,
                     }

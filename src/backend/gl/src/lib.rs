@@ -386,7 +386,10 @@ impl PhysicalDevice {
                 // If `index_buffer_role_change` is false, ELEMENT_ARRAY_BUFFER buffers may not be
                 // mixed with other targets, so we need to provide one type of memory for INDEX
                 // usage only and another type for all other uses.
-                memory_types.push((memory_type, MemoryUsage::Buffer(buffer::Usage::INDEX)));
+                memory_types.push((
+                    memory_type,
+                    MemoryUsage::Buffer(buffer::Usage::INDEX | buffer::Usage::TRANSFER_DST),
+                ));
                 memory_types.push((
                     memory_type,
                     MemoryUsage::Buffer(buffer::Usage::all() - buffer::Usage::INDEX),
