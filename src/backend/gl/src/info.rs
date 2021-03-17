@@ -368,8 +368,16 @@ impl Info {
 /// This structure is intended to condense all of the supported formats into a
 /// single queryable location, acquired once when the adapter is created.
 #[derive(Debug)]
-pub struct TextureFormatFilter {
-    whitelist: HashSet<(u32, u32, u32)>
+pub enum TextureFormatFilter {
+    /// This filter names a set of allowed combinations. All combinations not
+    /// explicitly whitelisted will be reported as not available by the check
+    /// function.
+    Whitelist {
+        whitelist: HashSet<(u32, u32, u32)>
+    },
+    /// This filter is permissive, i.e. it reports all combinations as
+    /// available. Currently intended for use in the core profile.
+    Permissive
 }
 impl TextureFormatFilter {
     /// This is the fixed, spec-defined list of all triplets in the form
@@ -494,7 +502,7 @@ impl TextureFormatFilter {
 
     /// Creates a new filter for OpenGL ES 3.
     fn new_es3() -> Self {
-        Self {
+        Self::Whitelist {
             whitelist: {
                 let mut whitelist = HashSet::<(u32, u32, u32)>::default();
                 whitelist.extend(Self::ES3_TABLE);
@@ -506,7 +514,7 @@ impl TextureFormatFilter {
 
     /// Creates a new filter for OpenGL ES 2 and OpenGL ES 1.
     fn new_es1_es2() -> Self {
-        Self {
+        Self::Whitelist {
             whitelist: {
                 let mut whitelist = HashSet::<(u32, u32, u32)>::default();
                 whitelist.extend(Self::ES1_ES2_TABLE);
@@ -516,11 +524,9 @@ impl TextureFormatFilter {
         }
     }
 
-    /// Creates a new, empty filter.
-    fn new() -> Self {
-        Self {
-            whitelist: Default::default()
-        }
+    /// Creates a new, permissive filter.
+    fn new_permissive() -> Self {
+        Self::Permissive
     }
 
     /// This function checks whether a given format description is allowed by
@@ -531,7 +537,12 @@ impl TextureFormatFilter {
         format: u32,
         type_: u32) -> bool {
 
-        self.whitelist.contains(&(internal_format, format, type_))
+        match self {
+            Self::Whitelist { whitelist } =>
+                whitelist.contains(&(internal_format, format, type_)),
+            Self::Permissive =>
+                true
+        }
     }
 }
 
@@ -754,7 +765,7 @@ pub(crate) fn query_all(
         /* We're using the core specification. We can assume all of the
          * combinations are valid, provided the OpenGL enums values are also
          * valid for textures. */
-        TextureFormatFilter::new()
+        TextureFormatFilter::new_permissive()
     };
 
     (info, features, legacy, properties, private, filter)
