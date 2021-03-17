@@ -1027,8 +1027,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         stride: buffer::Stride,
         flags: query::ResultFlags,
     ) {
-        //TODO: use safer wrapper
-        self.device.raw.fp_v1_0().cmd_copy_query_pool_results(
+        self.device.raw.cmd_copy_query_pool_results(
             self.raw,
             pool.0,
             queries.start,
