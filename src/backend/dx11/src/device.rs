@@ -292,7 +292,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(vs) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::VERTEX,
+                String::from("Failed to create a vertex shader"),
+            ))
         }
     }
 
@@ -314,7 +317,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(ps) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::FRAGMENT,
+                String::from("Failed to create a pixel shader"),
+            ))
         }
     }
 
@@ -336,7 +342,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(gs) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::GEOMETRY,
+                String::from("Failed to create a geometry shader"),
+            ))
         }
     }
 
@@ -358,7 +367,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(hs) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::HULL,
+                String::from("Failed to create a hull shader"),
+            ))
         }
     }
 
@@ -380,7 +392,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(ds) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::DOMAIN,
+                String::from("Failed to create a domain shader"),
+            ))
         }
     }
 
@@ -402,7 +417,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(cs) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::COMPUTE,
+                String::from("Failed to create a compute shader"),
+            ))
         }
     }
 
@@ -415,10 +433,10 @@ impl Device {
     ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, pso::CreationError> {
         // TODO: entrypoint stuff
         match *source.module {
-            ShaderModule::Dxbc(ref _shader) => {
-                error!("DXBC modules are not supported yet");
-                Err(pso::CreationError::Other)
-            }
+            ShaderModule::Dxbc(ref _shader) => Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::ALL,
+                String::from("DXBC modules are not supported yet"),
+            )),
             ShaderModule::Spirv(ref raw_data) => Ok(shader::compile_spirv_entrypoint(
                 raw_data, stage, source, layout, features,
             )?),
