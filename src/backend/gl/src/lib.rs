@@ -211,6 +211,7 @@ struct Share {
     // Indicates if there is an active logical device.
     open: Cell<bool>,
     memory_types: Vec<(adapter::MemoryType, MemoryUsage)>,
+    texture_format_filter: info::TextureFormatFilter,
 }
 
 impl Share {
@@ -356,7 +357,7 @@ impl PhysicalDevice {
     fn new_adapter(context: GlContext) -> adapter::Adapter<Backend> {
         let gl = GlContainer { context };
         // query information
-        let (info, supported_features, legacy_features, public_caps, private_caps) =
+        let (info, supported_features, legacy_features, public_caps, private_caps, texture_format_filter) =
             info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
         info!("Renderer: {:?}", info.platform_name.renderer);
@@ -366,6 +367,7 @@ impl PhysicalDevice {
         info!("Legacy Features: {:?}", legacy_features);
         debug!("Public capabilities: {:#?}", public_caps);
         debug!("Private capabilities: {:#?}", private_caps);
+        debug!("Texture format filter: {:#?}", texture_format_filter);
         debug!("Loaded Extensions:");
         for extension in info.extensions.iter() {
             debug!("- {}", *extension);
@@ -435,6 +437,7 @@ impl PhysicalDevice {
             supported_features,
             legacy_features,
             public_caps,
+            texture_format_filter,
             private_caps,
             open: Cell::new(false),
             memory_types,
@@ -607,7 +610,22 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _usage: image::Usage,
         _view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
-        conv::describe_format(format)?;
+        let conv::FormatDescription {
+            tex_external,
+            tex_internal,
+            data_type,
+            ..
+        } = conv::describe_format(format)?;
+
+        if !self.0.texture_format_filter.check(
+            tex_internal,
+            tex_external,
+            data_type) {
+
+            /* This format is not supported. */
+            return None
+        }
+
         Some(image::FormatProperties {
             max_extent: image::Extent {
                 width: !0,
