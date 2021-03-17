@@ -64,6 +64,7 @@ impl PhysicalDeviceFeatures {
         api_version: Version,
         enabled_extensions: &[&'static CStr],
         requested_features: Features,
+        supports_vulkan12_imageless_framebuffer: bool,
         supports_vulkan12_sampler_filter_minmax: bool,
     ) -> PhysicalDeviceFeatures {
         // This must follow the "Valid Usage" requirements of [`VkDeviceCreateInfo`](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkDeviceCreateInfo.html).
@@ -167,7 +168,7 @@ impl PhysicalDeviceFeatures {
                             features.intersects(Features::DESCRIPTOR_INDEXING_MASK),
                         )
                         .sampler_filter_minmax(supports_vulkan12_sampler_filter_minmax)
-                        .imageless_framebuffer(true)
+                        .imageless_framebuffer(supports_vulkan12_imageless_framebuffer)
                         .build(),
                 )
             } else {
@@ -771,6 +772,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 })
         };
 
+        let supports_vulkan12_imageless_framebuffer = self
+            .device_features
+            .vulkan_1_2
+            .map_or(false, |features| features.imageless_framebuffer == vk::TRUE);
+
         // Create device
         let device_raw = {
             let str_pointers = enabled_extensions
@@ -786,6 +792,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     self.device_info.api_version(),
                     &enabled_extensions,
                     requested_features,
+                    supports_vulkan12_imageless_framebuffer,
                     self.device_features
                         .vulkan_1_2
                         .map_or(false, |features| features.sampler_filter_minmax == vk::TRUE),
@@ -883,7 +890,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     || self
                         .device_info
                         .supports_extension(vk::KhrMaintenance1Fn::name()),
-                imageless_framebuffers: self.device_info.api_version() >= Version::V1_2
+                imageless_framebuffers: supports_vulkan12_imageless_framebuffer
                     || self
                         .device_info
                         .supports_extension(vk::KhrImagelessFramebufferFn::name()),
