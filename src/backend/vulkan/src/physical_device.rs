@@ -64,6 +64,7 @@ impl PhysicalDeviceFeatures {
         api_version: Version,
         enabled_extensions: &[&'static CStr],
         requested_features: Features,
+        supports_vulkan12_sampler_filter_minmax: bool,
     ) -> PhysicalDeviceFeatures {
         // This must follow the "Valid Usage" requirements of [`VkDeviceCreateInfo`](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkDeviceCreateInfo.html).
         let features = requested_features;
@@ -165,7 +166,7 @@ impl PhysicalDeviceFeatures {
                         .descriptor_indexing(
                             features.intersects(Features::DESCRIPTOR_INDEXING_MASK),
                         )
-                        .sampler_filter_minmax(true)
+                        .sampler_filter_minmax(supports_vulkan12_sampler_filter_minmax)
                         .imageless_framebuffer(true)
                         .build(),
                 )
@@ -785,6 +786,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     self.device_info.api_version(),
                     &enabled_extensions,
                     requested_features,
+                    self.device_features
+                        .vulkan_1_2
+                        .map_or(false, |features| features.sampler_filter_minmax == vk::TRUE),
                 );
             let info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(&family_infos)
