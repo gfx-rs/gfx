@@ -811,8 +811,8 @@ impl Device {
                     }
                 }
                 info_owned = result.map_err(|e| {
-                    error!("Error compiling the shader {:?}", e);
-                    pso::CreationError::Other
+                    let error = format!("Error compiling the shader {:?}", e);
+                    pso::CreationError::ShaderCreationError(stage.into(), error)
                 })?;
                 &info_owned
             }
@@ -847,8 +847,8 @@ impl Device {
             self.shared.private_caps.function_specialization,
         )
         .map_err(|e| {
-            error!("Invalid shader entry point '{}': {:?}", name, e);
-            pso::CreationError::Other
+            let error = format!("Invalid shader entry point '{}': {:?}", name, e);
+            pso::CreationError::ShaderCreationError(stage.into(), error)
         })?;
 
         Ok((lib, mtl_function, wg_size, info.rasterization_enabled))

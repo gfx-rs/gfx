@@ -170,8 +170,8 @@ impl Device {
                 let shader = self
                     .compile_shader(point, stage, context.reborrow())
                     .map_err(|err| {
-                        error!("Compilation failed: {:?}", err);
-                        pso::CreationError::Other
+                        let error = format!("{} shader compilation failed: {:?}", err, stage);
+                        pso::CreationError::ShaderCreationError(stage.into(), error)
                     })?;
                 unsafe {
                     gl.attach_shader(program, shader);
@@ -217,8 +217,8 @@ impl Device {
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let log = unsafe { gl.get_program_info_log(program) };
         if !linked_ok {
-            error!("\tLog: {}", log);
-            return Err(pso::CreationError::Other);
+            let error = format!("Program {:?} linking error:{}", program, log);
+            return Err(pso::CreationError::ShaderCreationError(pso::ShaderStageFlags::GRAPHICS, error));
         }
         if !log.is_empty() {
             warn!("\tLog: {}", log);
