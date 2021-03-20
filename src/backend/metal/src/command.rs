@@ -4773,11 +4773,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             let mut pre = inner.sink().pre_render();
             // Note: the whole range is re-uploaded, which may be inefficient
             if stages.contains(pso::ShaderStageFlags::VERTEX) {
-                let pc = layout.push_constants.vs.unwrap();
+                let pc = layout.push_constants.vs.expect("Vertex stage specified, but layout doesn't contain vertex stage push constants.");
                 pre.issue(self.state.push_vs_constants(pc));
             }
             if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                let pc = layout.push_constants.ps.unwrap();
+                let pc = layout.push_constants.ps.expect("Fragment stage specified, but layout doesn't contain fragment stage push constants.");
                 pre.issue(self.state.push_ps_constants(pc));
             }
         }
