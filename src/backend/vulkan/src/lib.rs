@@ -987,8 +987,8 @@ impl queue::Queue<Backend> for Queue {
             .image_indices(image_indices);
 
         match self.swapchain_fn.queue_present(*self.raw, &present_info) {
-            Ok(true) => Ok(None),
-            Ok(false) => Ok(Some(Suboptimal)),
+            Ok(false) => Ok(None),
+            Ok(true) => Ok(Some(Suboptimal)),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device.into()),
             Err(vk::Result::ERROR_DEVICE_LOST) => Err(DeviceLost.into()),
