@@ -382,6 +382,7 @@ pub fn map_query_result_flags(flags: query::ResultFlags) -> vk::QueryResultFlags
 pub fn map_image_features(
     features: vk::FormatFeatureFlags,
     supports_transfer_bits: bool,
+    supports_sampler_filter_minmax: bool,
 ) -> format::ImageFeature {
     let mut mapped_flags = format::ImageFeature::empty();
     if features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE) {
@@ -390,7 +391,9 @@ pub fn map_image_features(
     if features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR) {
         mapped_flags |= format::ImageFeature::SAMPLED_LINEAR;
     }
-    if features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX) {
+    if supports_sampler_filter_minmax
+        && features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_MINMAX)
+    {
         mapped_flags |= format::ImageFeature::SAMPLED_MINMAX;
     }
 
