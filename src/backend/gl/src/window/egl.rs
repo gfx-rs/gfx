@@ -67,6 +67,16 @@ type WlEglWindowResizeFun = unsafe extern "system" fn(
 
 type WlEglWindowDestroyFun = unsafe extern "system" fn(window: *const raw::c_void);
 
+#[cfg(target_os = "android")]
+extern "C" {
+    pub fn ANativeWindow_setBuffersGeometry(
+        window: *mut raw::c_void,
+        width: i32,
+        height: i32,
+        format: i32,
+    ) -> i32;
+}
+
 fn open_x_display() -> Option<(ptr::NonNull<raw::c_void>, libloading::Library)> {
     log::info!("Loading X11 library to get the current display");
     unsafe {
@@ -198,9 +208,7 @@ impl Inner {
 
         // Testing if context can be binded without surface
         // and creating dummy pbuffer surface if not.
-        let pbuffer = if egl.upcast::<egl::EGL1_5>().is_none()
-            && !display_extensions.contains("EGL_KHR_surfaceless_context")
-        {
+        let pbuffer = if version < (1, 5) || !display_extensions.contains("EGL_KHR_surfaceless_context") {
             let attributes = [egl::WIDTH, 1, egl::HEIGHT, 1, egl::NONE];
             egl.create_pbuffer_surface(display, config, &attributes)
                 .map(Some)
@@ -209,6 +217,7 @@ impl Inner {
                     hal::UnsupportedBackend
                 })?
         } else {
+            log::info!("EGL_KHR_surfaceless_context is present. No need to create a dummy pbuffer");
             None
         };
 
@@ -442,6 +451,21 @@ impl hal::Instance<crate::Backend> for Instance {
                     w::InitError::UnsupportedWindowHandle
                 })
         }?;
+
+        #[cfg(target_os = "android")]
+        {
+            let format = inner
+                .egl
+                .get_config_attrib(inner.display, inner.config, egl::NATIVE_VISUAL_ID)
+                .unwrap();
+
+            let ret = ANativeWindow_setBuffersGeometry(native_window_ptr, 0, 0, format);
+
+            if ret != 0 {
+                error!("Error returned from ANativeWindow_setBuffersGeometry");
+                return Err(w::InitError::UnsupportedWindowHandle);
+            }
+        }
 
         Ok(Surface {
             egl: inner.egl.clone(),
