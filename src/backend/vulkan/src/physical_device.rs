@@ -937,14 +937,24 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .device_info
             .supports_extension(vk::KhrMaintenance1Fn::name());
 
+        let supports_sampler_filter_minmax = self
+            .device_info
+            .supports_extension(vk::ExtSamplerFilterMinmaxFn::name())
+            || self
+                .device_features
+                .vulkan_1_2
+                .map_or(false, |features| features.sampler_filter_minmax == vk::TRUE);
+
         format::Properties {
             linear_tiling: conv::map_image_features(
                 properties.linear_tiling_features,
                 supports_transfer_bits,
+                supports_sampler_filter_minmax,
             ),
             optimal_tiling: conv::map_image_features(
                 properties.optimal_tiling_features,
                 supports_transfer_bits,
+                supports_sampler_filter_minmax,
             ),
             buffer_features: conv::map_buffer_features(properties.buffer_features),
         }
