@@ -740,8 +740,9 @@ pub(crate) fn query_all(
         framebuffer: info.is_supported(&[Core(3, 0), Es(2, 0), Ext("GL_ARB_framebuffer_object")]),
         // TODO && gl.GenFramebuffers.is_loaded(),
         framebuffer_texture: info.is_supported(&[Core(3, 0)]), //TODO: double check
-        index_buffer_role_change: info.is_supported(&[Core(2, 0), Es(2, 0)]),
-        image_storage: info.is_supported(&[Core(4, 2), Ext("GL_ARB_texture_storage")]),
+        // `WebGL` Note: buffers bound to non ELEMENT_ARRAY_BUFFER targets can not be bound to ELEMENT_ARRAY_BUFFER target
+        index_buffer_role_change: info.is_supported(&[Core(2, 0), Es(2, 0)]) && !crate::is_webgl(),
+        image_storage: info.is_supported(&[Core(4, 2), Es(3, 0), Ext("GL_ARB_texture_storage")]),
         buffer_storage,
         clear_buffer: info.is_supported(&[Core(3, 0), Es(3, 0)]),
         program_interface: info.is_supported(&[Core(4, 3), Ext("GL_ARB_program_interface_query")]),

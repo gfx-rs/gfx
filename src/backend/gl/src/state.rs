@@ -151,7 +151,7 @@ pub(crate) fn set_blend_slot(
     features: &hal::Features,
 ) {
     if !features.contains(hal::Features::INDEPENDENT_BLENDING) {
-        warn!("independent blending is not supported");
+        log::warn!("independent blending is not supported");
         return;
     }
 

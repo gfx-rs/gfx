@@ -40,15 +40,30 @@ pub enum Buffer {
     Bound {
         buffer: RawBuffer,
         range: Range<buffer::Offset>,
+        target: u32,
     },
+}
+
+pub(crate) struct BoundedBuffer {
+    pub raw: RawBuffer,
+    pub range: Range<buffer::Offset>,
+    pub target: u32,
 }
 
 impl Buffer {
     // Asserts that the buffer is bound and returns the raw gl buffer along with its sub-range.
-    pub(crate) fn as_bound(&self) -> (RawBuffer, Range<u64>) {
+    pub(crate) fn as_bound(&self) -> BoundedBuffer {
         match *self {
             Buffer::Unbound { .. } => panic!("Expected bound buffer!"),
-            Buffer::Bound { buffer, ref range } => (buffer, range.clone()),
+            Buffer::Bound {
+                buffer,
+                ref range,
+                target,
+            } => BoundedBuffer {
+                raw: buffer,
+                range: range.clone(),
+                target,
+            },
         }
     }
 }
