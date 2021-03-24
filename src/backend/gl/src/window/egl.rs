@@ -405,7 +405,7 @@ impl hal::Instance<crate::Backend> for Instance {
                 result
             }
             other => {
-                error!("Unsupported window: {:?}", other);
+                log::error!("Unsupported window: {:?}", other);
                 return Err(w::InitError::UnsupportedWindowHandle);
             }
         };
@@ -462,7 +462,7 @@ impl hal::Instance<crate::Backend> for Instance {
             let ret = ANativeWindow_setBuffersGeometry(native_window_ptr, 0, 0, format);
 
             if ret != 0 {
-                error!("Error returned from ANativeWindow_setBuffersGeometry");
+                log::error!("Error returned from ANativeWindow_setBuffersGeometry");
                 return Err(w::InitError::UnsupportedWindowHandle);
             }
         }

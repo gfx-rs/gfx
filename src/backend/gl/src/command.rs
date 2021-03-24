@@ -493,7 +493,7 @@ impl CommandBuffer {
             let binding = attribute.binding as usize;
 
             if vertex_buffers.len() <= binding {
-                error!("No vertex buffer bound at {}", binding);
+                log::error!("No vertex buffer bound at {}", binding);
             }
 
             let (handle, range) = vertex_buffers[binding].as_ref().unwrap();
@@ -514,7 +514,7 @@ impl CommandBuffer {
                         desc.rate.as_uint() as u32,
                     ));
                 }
-                _ => error!("No vertex buffer description bound at {}", binding),
+                _ => log::error!("No vertex buffer description bound at {}", binding),
             }
         }
     }
@@ -665,7 +665,7 @@ impl CommandBuffer {
         J: Iterator<Item = command::DescriptorSetOffset>,
     {
         if let Some(_) = offsets.next() {
-            warn!("Dynamic offsets are not supported yet");
+            log::warn!("Dynamic offsets are not supported yet");
         }
 
         let mut dirty_textures = 0u32;
@@ -743,7 +743,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn reset(&mut self, _release_resources: bool) {
         if !self.individual_reset {
-            error!("Associated pool must allow individual resets.");
+            log::error!("Associated pool must allow individual resets.");
             return;
         }
 
@@ -995,7 +995,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: Iterator<Item = command::ImageBlit>,
     {
-        error!("Blit is not implemented");
+        log::error!("Blit is not implemented");
     }
 
     unsafe fn bind_index_buffer(
@@ -1058,7 +1058,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         match len {
             0 => {
-                error!("Number of viewports can not be zero.");
+                log::error!("Number of viewports can not be zero.");
                 self.cache.error_state = true;
             }
             n if n + first_viewport as usize <= self.limits.max_viewports => {
@@ -1069,7 +1069,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 });
             }
             _ => {
-                error!("Number of viewports and first viewport index exceed the number of maximum viewports");
+                log::error!("Number of viewports and first viewport index exceed the number of maximum viewports");
                 self.cache.error_state = true;
             }
         }
@@ -1094,7 +1094,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         match len {
             0 => {
-                error!("Number of scissors can not be zero.");
+                log::error!("Number of scissors can not be zero.");
                 self.cache.error_state = true;
             }
             n if n + first_scissor as usize <= self.limits.max_viewports => {
@@ -1102,7 +1102,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     .push_cmd(Command::SetScissors(first_scissor, scissors_ptr));
             }
             _ => {
-                error!("Number of scissors and first scissor index exceed the maximum number of viewports");
+                log::error!("Number of scissors and first scissor index exceed the maximum number of viewports");
                 self.cache.error_state = true;
             }
         }
@@ -1150,7 +1150,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_depth_bounds(&mut self, _: Range<f32>) {
-        warn!("Depth bounds test is not supported");
+        log::warn!("Depth bounds test is not supported");
     }
 
     unsafe fn set_line_width(&mut self, _width: f32) {
@@ -1293,7 +1293,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         if self.data.buf.size == old_size {
-            error!("At least one region must be specified");
+            log::error!("At least one region must be specified");
         }
     }
 
@@ -1325,7 +1325,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         if self.data.buf.size == old_size {
-            error!("At least one region must be specified");
+            log::error!("At least one region must be specified");
         }
     }
 
@@ -1366,7 +1366,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         if self.data.buf.size == old_size {
-            error!("At least one region must be specified");
+            log::error!("At least one region must be specified");
         }
     }
 
@@ -1407,7 +1407,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         if self.data.buf.size == old_size {
-            error!("At least one region must be specified");
+            log::error!("At least one region must be specified");
         }
     }
 
@@ -1436,7 +1436,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 });
             }
             None => {
-                warn!("No primitive bound. An active pipeline needs to be bound before calling `draw`.");
+                log::warn!("No primitive bound. An active pipeline needs to be bound before calling `draw`.");
                 self.cache.error_state = true;
             }
         }
@@ -1462,7 +1462,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         let (index_type, buffer_range) = match &self.cache.index_type_range {
             Some((index_type, buffer_range)) => (index_type, buffer_range),
             None => {
-                warn!("No index type bound. An index buffer needs to be bound before calling `draw_indexed`.");
+                log::warn!("No index type bound. An index buffer needs to be bound before calling `draw_indexed`.");
                 self.cache.error_state = true;
                 return;
             }
@@ -1491,7 +1491,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 });
             }
             None => {
-                warn!("No primitive bound. An active pipeline needs to be bound before calling `draw_indexed`.");
+                log::warn!("No primitive bound. An active pipeline needs to be bound before calling `draw_indexed`.");
                 self.cache.error_state = true;
             }
         }

@@ -29,7 +29,7 @@ fn create_fbo_internal(
     if share.private_caps.framebuffer {
         let gl = &share.context;
         let name = unsafe { gl.create_framebuffer() }.unwrap();
-        info!("\tCreated frame buffer {:?}", name);
+        log::info!("\tCreated frame buffer {:?}", name);
         Some(name)
     } else {
         None
@@ -122,7 +122,7 @@ impl Device {
             gl.shader_source(name, shader);
             gl.compile_shader(name);
         }
-        info!("\tCompiled shader {:?}", name);
+        log::info!("\tCompiled shader {:?}", name);
         if cfg!(debug_assertions) {
             let err = super::Error::from_error_code(unsafe { gl.get_error() });
             assert_eq!(err, super::Error::NoError, "Error compiling shader");
@@ -132,7 +132,7 @@ impl Device {
         let log = unsafe { gl.get_shader_info_log(name) };
         if compiled_ok {
             if !log.is_empty() {
-                warn!("\tLog: {}", log);
+                log::warn!("\tLog: {}", log);
             }
             Ok(name)
         } else {
@@ -190,7 +190,7 @@ impl Device {
                 version = version,
                 shader_type = shader_type
             );
-            debug!(
+            log::debug!(
                 "Only vertex shader is present. Creating empty fragment shader:\n{}",
                 shader_src
             );
@@ -209,7 +209,7 @@ impl Device {
         unsafe {
             gl.link_program(program);
         }
-        info!("\tLinked program {:?}", program);
+        log::info!("\tLinked program {:?}", program);
         if let Err(err) = self.share.check() {
             panic!("Error linking program: {:?}", err);
         }
@@ -218,10 +218,13 @@ impl Device {
         let log = unsafe { gl.get_program_info_log(program) };
         if !linked_ok {
             let error = format!("Program {:?} linking error:{}", program, log);
-            return Err(pso::CreationError::ShaderCreationError(pso::ShaderStageFlags::GRAPHICS, error));
+            return Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::GRAPHICS,
+                error,
+            ));
         }
         if !log.is_empty() {
-            warn!("\tLog: {}", log);
+            log::warn!("\tLog: {}", log);
         }
 
         if !self
@@ -394,7 +397,7 @@ impl Device {
             entry_point.to_string(),
             conv::map_naga_stage_to_cross(stage),
         ));
-        debug!("SPIR-V options {:?}", compile_options);
+        log::debug!("SPIR-V options {:?}", compile_options);
 
         ast.set_compiler_options(&compile_options).map_err(|err| {
             d::ShaderError::CompilationFailed(match err {
@@ -604,7 +607,7 @@ impl Device {
         let mut writer =
             naga::back::glsl::Writer::new(&mut output, &shader.module, &shader.analysis, options)
                 .map_err(|e| {
-                warn!("Naga GLSL init: {}", e);
+                log::warn!("Naga GLSL init: {}", e);
                 d::ShaderError::CompilationFailed(format!("{:?}", e))
             })?;
 
@@ -625,11 +628,11 @@ impl Device {
                     context,
                 );
                 let source = String::from_utf8(output).unwrap();
-                debug!("Naga generated shader:\n{}", source);
+                log::debug!("Naga generated shader:\n{}", source);
                 Self::create_shader_module_raw(gl, &source, options.shader_stage)
             }
             Err(e) => {
-                warn!("Naga GLSL write: {}", e);
+                log::warn!("Naga GLSL write: {}", e);
                 Err(d::ShaderError::CompilationFailed(format!("{:?}", e)))
             }
         }
@@ -678,7 +681,7 @@ impl Device {
             let glsl = self
                 .translate_spirv_cross(&mut ast, stage, ep.entry)
                 .unwrap();
-            debug!("SPIRV-Cross generated shader:\n{}", glsl);
+            log::debug!("SPIRV-Cross generated shader:\n{}", glsl);
             result = Self::create_shader_module_raw(&self.share.context, &glsl, stage);
         }
         if result.is_err() && !ep.module.prefer_naga {
@@ -1123,7 +1126,7 @@ impl d::Device<B> for Device {
 
             .map(|at| at.borrow().clone())
             .collect();
-        debug!("create_framebuffer {:?}", attachments);
+        log::debug!("create_framebuffer {:?}", attachments);
 
         let target = glow::DRAW_FRAMEBUFFER;
 
@@ -1203,17 +1206,17 @@ impl d::Device<B> for Device {
                     naga::front::spv::Parser::new(raw_data.iter().cloned(), &Default::default());
                 match parser.parse() {
                     Ok(module) => {
-                        debug!("Naga module {:#?}", module);
+                        log::debug!("Naga module {:#?}", module);
                         match naga::proc::Validator::new().validate(&module) {
                             Ok(analysis) => Some(d::NagaShader { module, analysis }),
                             Err(e) => {
-                                warn!("Naga validation failed: {:?}", e);
+                                log::warn!("Naga validation failed: {:?}", e);
                                 None
                             }
                         }
                     }
                     Err(e) => {
-                        warn!("Naga parsing failed: {:?}", e);
+                        log::warn!("Naga parsing failed: {:?}", e);
                         None
                     }
                 }
@@ -1695,14 +1698,15 @@ impl d::Device<B> for Device {
                     Some(description) => {
                         let raw_view_format = description.tex_internal;
                         if format != raw_view_format {
-                            warn!(
+                            log::warn!(
                                 "View format {:?} is different from base {:?}",
-                                raw_view_format, format
+                                raw_view_format,
+                                format
                             );
                         }
                     }
                     None => {
-                        warn!("View format {:?} is not supported", view_format);
+                        log::warn!("View format {:?} is not supported", view_format);
                     }
                 }
                 Ok(n::ImageView::Texture {
@@ -1869,7 +1873,7 @@ impl d::Device<B> for Device {
         match *fence {
             n::Fence::Idle { signaled } => {
                 if !signaled {
-                    warn!("Fence ptr {:?} is not pending, waiting not possible", fence);
+                    log::warn!("Fence ptr {:?} is not pending, waiting not possible", fence);
                 }
                 Ok(signaled)
             }
@@ -1879,7 +1883,7 @@ impl d::Device<B> for Device {
                     glow::TIMEOUT_EXPIRED => Ok(false),
                     glow::WAIT_FAILED => {
                         if let Err(err) = self.share.check() {
-                            error!("Error when waiting on fence: {:?}", err);
+                            log::error!("Error when waiting on fence: {:?}", err);
                         }
                         Ok(false)
                     }

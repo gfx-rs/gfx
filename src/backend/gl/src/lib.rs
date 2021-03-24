@@ -22,9 +22,6 @@ will be minimal, if any.
 
 #![allow(missing_docs, missing_copy_implementations)]
 
-#[macro_use]
-extern crate log;
-
 use std::{
     cell::Cell,
     collections::HashMap,
@@ -179,7 +176,7 @@ fn debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, mess
         _ => unreachable!(),
     };
 
-    log!(
+    log::log!(
         log_severity,
         "[{}/{}] ID {} : {}",
         source_str,
@@ -240,7 +237,7 @@ impl Share {
             }
         }
         if type_mask == 0 {
-            error!(
+            log::error!(
                 "gl backend capability does not allow a buffer with usage {:?}",
                 usage
             );
@@ -359,18 +356,18 @@ impl PhysicalDevice {
         // query information
         let (info, supported_features, legacy_features, public_caps, private_caps, texture_format_filter) =
             info::query_all(&gl);
-        info!("Vendor: {:?}", info.platform_name.vendor);
-        info!("Renderer: {:?}", info.platform_name.renderer);
-        info!("Version: {:?}", info.version);
-        info!("Shading Language: {:?}", info.shading_language);
-        info!("Supported Features: {:?}", supported_features);
-        info!("Legacy Features: {:?}", legacy_features);
-        debug!("Public capabilities: {:#?}", public_caps);
-        debug!("Private capabilities: {:#?}", private_caps);
-        debug!("Texture format filter: {:#?}", texture_format_filter);
-        debug!("Loaded Extensions:");
+        log::info!("Vendor: {:?}", info.platform_name.vendor);
+        log::info!("Renderer: {:?}", info.platform_name.renderer);
+        log::info!("Version: {:?}", info.version);
+        log::info!("Shading Language: {:?}", info.shading_language);
+        log::info!("Supported Features: {:?}", supported_features);
+        log::info!("Legacy Features: {:?}", legacy_features);
+        log::debug!("Public capabilities: {:#?}", public_caps);
+        log::debug!("Private capabilities: {:#?}", private_caps);
+        log::debug!("Texture format filter: {:#?}", texture_format_filter);
+        log::debug!("Loaded Extensions:");
         for extension in info.extensions.iter() {
-            debug!("- {}", *extension);
+            log::debug!("- {}", *extension);
         }
         let name = info.platform_name.renderer.clone();
         let vendor: std::string::String = info.platform_name.vendor.clone();
@@ -550,7 +547,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let gl = &self.0.context;
 
         if cfg!(debug_assertions) && !cfg!(target_arch = "wasm32") && gl.supports_debug() {
-            info!("Debug output is enabled");
+            log::info!("Debug output is enabled");
             gl.enable(glow::DEBUG_OUTPUT);
             gl.debug_message_callback(debug_message_callback);
         }

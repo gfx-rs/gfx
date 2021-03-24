@@ -117,7 +117,7 @@ impl Queue {
                 (glow::UNSIGNED_BYTE, glow::UNSIGNED_SHORT, glow::UNSIGNED_INT),
             C::Float => (glow::ZERO, glow::HALF_FLOAT, glow::FLOAT),
             C::Srgb => {
-                error!("Unsupported Srgb channel type");
+                log::error!("Unsupported Srgb channel type");
                 return
             }
         };
@@ -134,7 +134,7 @@ impl Queue {
             S::R32_G32_B32     => (3, fm32),
             S::R32_G32_B32_A32 => (4, fm32),
             _ => {
-                error!("Unsupported element type: {:?}", bel.elem.format.0);
+                log::error!("Unsupported element type: {:?}", bel.elem.format.0);
                 return
             }
         };
@@ -166,7 +166,7 @@ impl Queue {
             unsafe { gl.VertexAttribDivisor(slot as glow::types::GLuint,
                 bel.desc.rate as glow::types::GLuint) };
         } else if bel.desc.rate != 0 {
-            error!("Instanced arrays are not supported");
+            log::error!("Instanced arrays are not supported");
         }
     }
     */
@@ -274,12 +274,12 @@ impl Queue {
                             );
                         }
                     } else {
-                        error!(
+                        log::error!(
                             "Instanced draw calls with non-zero base instance are not supported"
                         );
                     }
                 } else {
-                    error!("Instanced draw calls are not supported");
+                    log::error!("Instanced draw calls are not supported");
                 }
             }
             com::Command::DrawIndexed {
@@ -315,7 +315,7 @@ impl Queue {
                             );
                         }
                     } else {
-                        error!("Base vertex with indexed drawing not supported");
+                        log::error!("Base vertex with indexed drawing not supported");
                     }
                 } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED) {
                     if base_vertex == 0 && instances.start == 0 {
@@ -342,12 +342,12 @@ impl Queue {
                             );
                         }
                     } else if instances.start == 0 {
-                        error!("Base vertex with instanced indexed drawing is not supported");
+                        log::error!("Base vertex with instanced indexed drawing is not supported");
                     } else if caveats
                         .contains(hal::PerformanceCaveats::BASE_VERTEX_INSTANCE_DRAWING)
                     {
                         //TODO: this is supposed to be a workaround, not an error
-                        error!("Instance bases with instanced indexed drawing is not supported");
+                        log::error!("Instance bases with instanced indexed drawing is not supported");
                     } else {
                         unsafe {
                             gl.draw_elements_instanced_base_vertex_base_instance(
@@ -362,7 +362,7 @@ impl Queue {
                         }
                     }
                 } else {
-                    error!("Instanced indexed drawing is not supported");
+                    log::error!("Instanced indexed drawing is not supported");
                 }
             }
             com::Command::Dispatch(count) => {
@@ -412,7 +412,7 @@ impl Queue {
                         if self.share.private_caps.depth_range_f64_precision {
                             gl.depth_range_f64(depth_range[0], depth_range[1]);
                         } else {
-                            trace!("Depth ranges with f64 precision are not supported, falling back to f32");
+                            log::trace!("Depth ranges with f64 precision are not supported, falling back to f32");
                             gl.depth_range_f32(depth_range[0] as f32, depth_range[1] as f32);
                         }
                     };
@@ -564,7 +564,7 @@ impl Queue {
                 if self.share.private_caps.draw_buffers {
                     state::set_blend_slot(&self.share.context, slot, blend, &self.features);
                 } else {
-                    warn!("Draw buffers are not supported");
+                    log::warn!("Draw buffers are not supported");
                 }
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
@@ -606,7 +606,7 @@ impl Queue {
                 {
                     gl.vertex_attrib_divisor(location, rate);
                 } else if rate > 0 {
-                    error!("Binding attribute with instanced input rate is not supported");
+                    log::error!("Binding attribute with instanced input rate is not supported");
                 }
 
                 gl.enable_vertex_attrib_array(location);
@@ -715,7 +715,7 @@ impl Queue {
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
             },
             com::Command::CopyBufferToRenderbuffer(..) => {
-                error!("CopyBufferToRenderbuffer is not implemented");
+                log::error!("CopyBufferToRenderbuffer is not implemented");
             }
             com::Command::CopyTextureToBuffer {
                 src_texture,
@@ -750,16 +750,16 @@ impl Queue {
                     }
                 } else {
                     //TODO: use FBO
-                    error!("CopyTextureToBuffer is not implemented on GLES");
+                    log::error!("CopyTextureToBuffer is not implemented on GLES");
                 }
             }
             com::Command::CopyRenderbufferToBuffer(..) => {
                 //TODO: use FBO
-                error!("CopyRenderbufferToBuffer is not implemented");
+                log::error!("CopyRenderbufferToBuffer is not implemented");
             }
             com::Command::CopyImageToTexture(..) => {
                 //TODO: use FBO
-                error!("CopyImageToTexture is not implemented");
+                log::error!("CopyImageToTexture is not implemented");
             }
             com::Command::CopyImageToRenderbuffer {
                 src_image,
@@ -868,7 +868,7 @@ impl Queue {
             if let Some(bind) = bind_opt {
             tex::bind_sampler(gl, bind, &sampler.info, &self.share.private_caps);
             }else {
-            error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
+            log::error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
             }
             }
             },
@@ -1070,7 +1070,7 @@ impl Queue {
                     if slot.is_some() {
                         // TODO: the generator of these commands should coalesce identical masks to prevent this warning
                         //       as much as is possible.
-                        warn!("GLES and WebGL do not support per-target color masks. Falling back on global mask.");
+                        log::warn!("GLES and WebGL do not support per-target color masks. Falling back on global mask.");
                     }
                     self.share.context.color_mask(
                         mask.contains(Cm::RED) as _,
