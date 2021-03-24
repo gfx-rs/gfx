@@ -963,7 +963,7 @@ impl d::Device<B> for super::Device {
         &self,
         shader: d::NagaShader,
     ) -> Result<n::ShaderModule, (d::ShaderError, d::NagaShader)> {
-        match naga::back::spv::write_vec(&shader.module, &shader.analysis, &self.naga_options) {
+        match naga::back::spv::write_vec(&shader.module, &shader.info, &self.naga_options) {
             Ok(spv) => self.create_shader_module(&spv).map_err(|e| (e, shader)),
             Err(e) => return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader)),
         }

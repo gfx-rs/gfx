@@ -687,7 +687,7 @@ impl Device {
         naga_options: &naga::back::msl::Options,
     ) -> Result<n::ModuleInfo, String> {
         let (source, info) =
-            match naga::back::msl::write_string(&shader.module, &shader.analysis, naga_options) {
+            match naga::back::msl::write_string(&shader.module, &shader.info, naga_options) {
                 Ok(pair) => pair,
                 Err(e) => {
                     warn!("Naga: {:?}", e);
@@ -1876,8 +1876,10 @@ impl hal::device::Device<Backend> for Device {
                 match parser.parse() {
                     Ok(module) => {
                         debug!("Naga module {:#?}", module);
-                        match naga::proc::Validator::new().validate(&module) {
-                            Ok(analysis) => Ok(d::NagaShader { module, analysis }),
+                        match naga::valid::Validator::new(naga::valid::ValidationFlags::empty())
+                            .validate(&module)
+                        {
+                            Ok(info) => Ok(d::NagaShader { module, info }),
                             Err(e) => Err(format!("Naga validation: {:?}", e)),
                         }
                     }
@@ -1894,11 +1896,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(n::ShaderModule {
             prefer_naga: true,
             #[cfg(feature = "cross")]
-            spv: match naga::back::spv::write_vec(
-                &shader.module,
-                &shader.analysis,
-                &self.spv_options,
-            ) {
+            spv: match naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options) {
                 Ok(spv) => spv,
                 Err(e) => {
                     return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader))

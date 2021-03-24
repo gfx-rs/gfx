@@ -163,8 +163,8 @@ pub enum ShaderModuleDesc<'a> {
 pub struct NagaShader {
     /// Shader module IR.
     pub module: naga::Module,
-    /// Analysis of the module.
-    pub analysis: naga::proc::analyzer::Analysis,
+    /// Analysis information of the module.
+    pub info: naga::valid::ModuleInfo,
 }
 
 /// Logical device handle, responsible for creating and managing resources

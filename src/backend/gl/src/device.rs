@@ -532,7 +532,7 @@ impl Device {
 
     fn reflect_shader(
         module: &naga::Module,
-        ep_info: &naga::proc::analyzer::FunctionInfo,
+        ep_info: &naga::valid::FunctionInfo,
         reflection_info: naga::back::glsl::ReflectionInfo,
         context: CompilationContext,
     ) {
@@ -605,11 +605,11 @@ impl Device {
     ) -> Result<n::Shader, d::ShaderError> {
         let mut output = Vec::new();
         let mut writer =
-            naga::back::glsl::Writer::new(&mut output, &shader.module, &shader.analysis, options)
+            naga::back::glsl::Writer::new(&mut output, &shader.module, &shader.info, options)
                 .map_err(|e| {
-                log::warn!("Naga GLSL init: {}", e);
-                d::ShaderError::CompilationFailed(format!("{:?}", e))
-            })?;
+                    log::warn!("Naga GLSL init: {}", e);
+                    d::ShaderError::CompilationFailed(format!("{:?}", e))
+                })?;
 
         let entry_point_index = (&shader.module.entry_points)
             .into_iter()
@@ -623,7 +623,7 @@ impl Device {
             Ok(reflection_info) => {
                 Self::reflect_shader(
                     &shader.module,
-                    shader.analysis.get_entry_point(entry_point_index),
+                    shader.info.get_entry_point(entry_point_index),
                     reflection_info,
                     context,
                 );
@@ -1207,8 +1207,10 @@ impl d::Device<B> for Device {
                 match parser.parse() {
                     Ok(module) => {
                         log::debug!("Naga module {:#?}", module);
-                        match naga::proc::Validator::new().validate(&module) {
-                            Ok(analysis) => Some(d::NagaShader { module, analysis }),
+                        match naga::valid::Validator::new(naga::valid::ValidationFlags::empty())
+                            .validate(&module)
+                        {
+                            Ok(info) => Some(d::NagaShader { module, info }),
                             Err(e) => {
                                 log::warn!("Naga validation failed: {:?}", e);
                                 None
@@ -1231,11 +1233,7 @@ impl d::Device<B> for Device {
         Ok(n::ShaderModule {
             prefer_naga: true,
             #[cfg(feature = "cross")]
-            spv: match naga::back::spv::write_vec(
-                &shader.module,
-                &shader.analysis,
-                &self.spv_options,
-            ) {
+            spv: match naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options) {
                 Ok(spv) => spv,
                 Err(e) => {
                     return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader))
