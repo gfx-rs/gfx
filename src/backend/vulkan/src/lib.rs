@@ -442,6 +442,11 @@ impl hal::Instance<Backend> for Instance {
 
             extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
 
+            // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
+            if driver_api_version == Version::V1_0 {
+                extensions.push(vk::KhrStorageBufferStorageClassFn::name());
+            }
+
             // Only keep available extensions.
             extensions.retain(|&ext| {
                 if instance_extensions
@@ -459,6 +464,13 @@ impl hal::Instance<Backend> for Instance {
             });
             extensions
         };
+
+        if driver_api_version == Version::V1_0
+            && !extensions.contains(&vk::KhrStorageBufferStorageClassFn::name())
+        {
+            warn!("Unable to create Vulkan instance. Required VK_KHR_storage_buffer_storage_class extension is not supported");
+            return Err(hal::UnsupportedBackend);
+        }
 
         // Check requested layers against the available layers
         let layers = {
