@@ -1450,6 +1450,7 @@ impl hal::Instance<Backend> for Instance {
                         | hal::DynamicStates::SCISSOR
                         | hal::DynamicStates::BLEND_COLOR
                         | hal::DynamicStates::STENCIL_REFERENCE,
+                    downlevel: hal::DownlevelProperties::all_enabled(),
                     ..PhysicalDeviceProperties::default()
                 },
                 format_properties: Arc::new(FormatProperties::new(device)),
