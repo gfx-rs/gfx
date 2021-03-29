@@ -4,13 +4,7 @@ use ash::{
     vk,
 };
 
-use hal::{
-    adapter,
-    device::{CreationError, OutOfMemory},
-    format, image,
-    pso::PatchSize,
-    queue, DescriptorLimits, DynamicStates, Features, Limits, PhysicalDeviceProperties,
-};
+use hal::{DescriptorLimits, DownlevelProperties, DynamicStates, Features, Limits, PhysicalDeviceProperties, adapter, device::{CreationError, OutOfMemory}, format, image, pso::PatchSize, queue};
 
 use std::{ffi::CStr, fmt, mem, ptr, sync::Arc};
 
@@ -1245,6 +1239,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             mesh_shader: mesh_shader_capabilities,
             performance_caveats: Default::default(),
             dynamic_pipeline_states: DynamicStates::all(),
+            downlevel: DownlevelProperties::all_enabled(),
         }
     }
 

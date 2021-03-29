@@ -108,13 +108,14 @@ pub(crate) fn compile_spirv_entrypoint(
     source: &pso::EntryPoint<Backend>,
     layout: &PipelineLayout,
     features: &hal::Features,
+    device_feature_level: u32,
 ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, pso::CreationError> {
     let mut ast = parse_spirv(stage, raw_data)?;
     spirv_cross_specialize_ast(&mut ast, &source.specialization)
         .map_err(pso::CreationError::InvalidSpecialization)?;
 
     patch_spirv_resources(&mut ast, stage, layout)?;
-    let shader_model = hlsl::ShaderModel::V5_0;
+    let shader_model = conv::map_feature_level_to_shader_model(device_feature_level);
     let shader_code = translate_spirv(
         &mut ast,
         shader_model,
@@ -148,6 +149,10 @@ pub(crate) fn compile_hlsl_shader(
         };
 
         let model = match shader_model {
+            hlsl::ShaderModel::V4_0L9_1 => "4_0_level_9_1",
+            hlsl::ShaderModel::V4_0L9_3 => "4_0_level_9_3",
+            hlsl::ShaderModel::V4_0 => "4_0",
+            hlsl::ShaderModel::V4_1 => "4_1",
             hlsl::ShaderModel::V5_0 => "5_0",
             // TODO: >= 11.3
             hlsl::ShaderModel::V5_1 => "5_1",

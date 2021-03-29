@@ -568,6 +568,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
                 ..hal::Limits::default() // TODO!
             },
+            downlevel: hal::DownlevelProperties::all_enabled(),
             performance_caveats: caveats,
             dynamic_pipeline_states: hal::DynamicStates::all(),
 
