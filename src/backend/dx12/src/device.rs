@@ -785,7 +785,11 @@ impl Device {
                 }
             }
             image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => {
-                unimplemented!()
+                warn!(
+                    "3D and cube views are not supported for the image, kind: {:?}",
+                    info.kind
+                );
+                return Err(image::ViewCreationError::BadKind(info.view_kind));
             }
         };
 
@@ -913,7 +917,7 @@ impl Device {
                 }
             }
             image::ViewKind::Cube | image::ViewKind::CubeArray => {
-                error!(
+                warn!(
                     "Cube views are not supported for the image, kind: {:?}",
                     info.kind
                 );
