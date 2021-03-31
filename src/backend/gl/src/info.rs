@@ -372,12 +372,10 @@ pub enum TextureFormatFilter {
     /// This filter names a set of allowed combinations. All combinations not
     /// explicitly whitelisted will be reported as not available by the check
     /// function.
-    Whitelist {
-        whitelist: HashSet<(u32, u32, u32)>
-    },
+    Whitelist { whitelist: HashSet<(u32, u32, u32)> },
     /// This filter is permissive, i.e. it reports all combinations as
     /// available. Currently intended for use in the core profile.
-    Permissive
+    Permissive,
 }
 impl TextureFormatFilter {
     /// This is the fixed, spec-defined list of all triplets in the form
@@ -398,85 +396,123 @@ impl TextureFormatFilter {
     /// [the documentation of `glTexImage2D`]: https://www.khronos.org/registry/OpenGL-Refpages/es3/html/glTexImage2D.xhtml
     const ES3_TABLE: &'static [(u32, u32, u32)] = &[
         /* Taken from Table 1. Unsized Internal Formats. */
-        (glow::RGB,             glow::RGB,             glow::UNSIGNED_BYTE),
-        (glow::RGB,             glow::RGB,             glow::UNSIGNED_SHORT_5_6_5),
-        (glow::RGBA,            glow::RGBA,            glow::UNSIGNED_BYTE),
-        (glow::RGBA,            glow::RGBA,            glow::UNSIGNED_SHORT_4_4_4_4),
-        (glow::RGBA,            glow::RGBA,            glow::UNSIGNED_SHORT_5_5_5_1),
-        (glow::LUMINANCE_ALPHA, glow::LUMINANCE_ALPHA, glow::UNSIGNED_BYTE),
-        (glow::LUMINANCE,       glow::LUMINANCE,       glow::UNSIGNED_BYTE),
-        (glow::ALPHA,           glow::ALPHA,           glow::UNSIGNED_BYTE),
-
+        (glow::RGB, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::RGB, glow::RGB, glow::UNSIGNED_SHORT_5_6_5),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_SHORT_4_4_4_4),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_SHORT_5_5_5_1),
+        (
+            glow::LUMINANCE_ALPHA,
+            glow::LUMINANCE_ALPHA,
+            glow::UNSIGNED_BYTE,
+        ),
+        (glow::LUMINANCE, glow::LUMINANCE, glow::UNSIGNED_BYTE),
+        (glow::ALPHA, glow::ALPHA, glow::UNSIGNED_BYTE),
         /* Taken from Table 2. Sized Internal Formats. */
-        (glow::R8,             glow::RED,          glow::UNSIGNED_BYTE),
-        (glow::R8_SNORM,       glow::RED,          glow::BYTE),
-        (glow::R16F,           glow::RED,          glow::HALF_FLOAT),
-        (glow::R16F,           glow::RED,          glow::FLOAT),
-        (glow::R32F,           glow::RED,          glow::FLOAT),
-        (glow::R8UI,           glow::RED_INTEGER,  glow::UNSIGNED_BYTE),
-        (glow::R8I,            glow::RED_INTEGER,  glow::BYTE),
-        (glow::R16UI,          glow::RED_INTEGER,  glow::UNSIGNED_SHORT),
-        (glow::R16I,           glow::RED_INTEGER,  glow::SHORT),
-        (glow::R32UI,          glow::RED_INTEGER,  glow::UNSIGNED_INT),
-        (glow::R32I,           glow::RED_INTEGER,  glow::INT),
-        (glow::RG8,            glow::RG,           glow::UNSIGNED_BYTE),
-        (glow::RG8_SNORM,      glow::RG,           glow::BYTE),
-        (glow::RG16F,          glow::RG,           glow::HALF_FLOAT),
-        (glow::RG16F,          glow::RG,           glow::FLOAT),
-        (glow::RG32F,          glow::RG,           glow::FLOAT),
-        (glow::RG8UI,          glow::RG_INTEGER,   glow::UNSIGNED_BYTE),
-        (glow::RG8I,           glow::RG_INTEGER,   glow::BYTE),
-        (glow::RG16UI,         glow::RG_INTEGER,   glow::UNSIGNED_SHORT),
-        (glow::RG16I,          glow::RG_INTEGER,   glow::SHORT),
-        (glow::RG32UI,         glow::RG_INTEGER,   glow::UNSIGNED_INT),
-        (glow::RG32I,          glow::RG_INTEGER,   glow::INT),
-        (glow::RGB8,           glow::RGB,          glow::UNSIGNED_BYTE),
-        (glow::SRGB8,          glow::RGB,          glow::UNSIGNED_BYTE),
-        (glow::RGB565,         glow::RGB,          glow::UNSIGNED_BYTE),
-        (glow::RGB565,         glow::RGB,          glow::UNSIGNED_SHORT_5_6_5),
-        (glow::RGB8_SNORM,     glow::RGB,          glow::BYTE),
-        (glow::R11F_G11F_B10F, glow::RGB,          glow::UNSIGNED_INT_10F_11F_11F_REV),
-        (glow::R11F_G11F_B10F, glow::RGB,          glow::HALF_FLOAT),
-        (glow::R11F_G11F_B10F, glow::RGB,          glow::FLOAT),
-        (glow::RGB9_E5,        glow::RGB,          glow::UNSIGNED_INT_5_9_9_9_REV),
-        (glow::RGB9_E5,        glow::RGB,          glow::HALF_FLOAT),
-        (glow::RGB9_E5,        glow::RGB,          glow::FLOAT),
-        (glow::RGB16F,         glow::RGB,          glow::HALF_FLOAT),
-        (glow::RGB16F,         glow::RGB,          glow::FLOAT),
-        (glow::RGB32F,         glow::RGB,          glow::FLOAT),
-        (glow::RGB8UI,         glow::RGB_INTEGER,  glow::UNSIGNED_BYTE),
-        (glow::RGB8I,          glow::RGB_INTEGER,  glow::BYTE),
-        (glow::RGB16UI,        glow::RGB_INTEGER,  glow::UNSIGNED_SHORT),
-        (glow::RGB16I,         glow::RGB_INTEGER,  glow::SHORT),
-        (glow::RGB32UI,        glow::RGB_INTEGER,  glow::UNSIGNED_INT),
-        (glow::RGB32I,         glow::RGB_INTEGER,  glow::INT),
-        (glow::RGBA8,          glow::RGBA,         glow::UNSIGNED_BYTE),
-        (glow::SRGB8_ALPHA8,   glow::RGBA,         glow::UNSIGNED_BYTE),
-        (glow::RGBA8_SNORM,    glow::RGBA,         glow::BYTE),
-        (glow::RGB5_A1,        glow::RGBA,         glow::UNSIGNED_BYTE),
-        (glow::RGB5_A1,        glow::RGBA,         glow::UNSIGNED_SHORT_5_5_5_1),
-        (glow::RGB5_A1,        glow::RGBA,         glow::UNSIGNED_INT_2_10_10_10_REV),
-        (glow::RGBA4,          glow::RGBA,         glow::UNSIGNED_BYTE),
-        (glow::RGBA4,          glow::RGBA,         glow::UNSIGNED_SHORT_4_4_4_4),
-        (glow::RGB10_A2,       glow::RGBA,         glow::UNSIGNED_INT_2_10_10_10_REV),
-        (glow::RGBA16F,        glow::RGBA,         glow::HALF_FLOAT),
-        (glow::RGBA16F,        glow::RGBA,         glow::FLOAT),
-        (glow::RGBA32F,        glow::RGBA,         glow::FLOAT),
-        (glow::RGBA8UI,        glow::RGBA_INTEGER, glow::UNSIGNED_BYTE),
-        (glow::RGBA8I,         glow::RGBA_INTEGER, glow::BYTE),
-        (glow::RGB10_A2UI,     glow::RGBA_INTEGER, glow::UNSIGNED_INT_2_10_10_10_REV),
-        (glow::RGBA16UI,       glow::RGBA_INTEGER, glow::UNSIGNED_SHORT),
-        (glow::RGBA16I,        glow::RGBA_INTEGER, glow::SHORT),
-        (glow::RGBA32I,        glow::RGBA_INTEGER, glow::INT),
-        (glow::RGBA32UI,       glow::RGBA_INTEGER, glow::UNSIGNED_INT),
-
-        (glow::DEPTH_COMPONENT16,  glow::DEPTH_COMPONENT, glow::UNSIGNED_SHORT),
-        (glow::DEPTH_COMPONENT16,  glow::DEPTH_COMPONENT, glow::UNSIGNED_INT),
-        (glow::DEPTH_COMPONENT24,  glow::DEPTH_COMPONENT, glow::UNSIGNED_INT),
+        (glow::R8, glow::RED, glow::UNSIGNED_BYTE),
+        (glow::R8_SNORM, glow::RED, glow::BYTE),
+        (glow::R16F, glow::RED, glow::HALF_FLOAT),
+        (glow::R16F, glow::RED, glow::FLOAT),
+        (glow::R32F, glow::RED, glow::FLOAT),
+        (glow::R8UI, glow::RED_INTEGER, glow::UNSIGNED_BYTE),
+        (glow::R8I, glow::RED_INTEGER, glow::BYTE),
+        (glow::R16UI, glow::RED_INTEGER, glow::UNSIGNED_SHORT),
+        (glow::R16I, glow::RED_INTEGER, glow::SHORT),
+        (glow::R32UI, glow::RED_INTEGER, glow::UNSIGNED_INT),
+        (glow::R32I, glow::RED_INTEGER, glow::INT),
+        (glow::RG8, glow::RG, glow::UNSIGNED_BYTE),
+        (glow::RG8_SNORM, glow::RG, glow::BYTE),
+        (glow::RG16F, glow::RG, glow::HALF_FLOAT),
+        (glow::RG16F, glow::RG, glow::FLOAT),
+        (glow::RG32F, glow::RG, glow::FLOAT),
+        (glow::RG8UI, glow::RG_INTEGER, glow::UNSIGNED_BYTE),
+        (glow::RG8I, glow::RG_INTEGER, glow::BYTE),
+        (glow::RG16UI, glow::RG_INTEGER, glow::UNSIGNED_SHORT),
+        (glow::RG16I, glow::RG_INTEGER, glow::SHORT),
+        (glow::RG32UI, glow::RG_INTEGER, glow::UNSIGNED_INT),
+        (glow::RG32I, glow::RG_INTEGER, glow::INT),
+        (glow::RGB8, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::SRGB8, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::RGB565, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::RGB565, glow::RGB, glow::UNSIGNED_SHORT_5_6_5),
+        (glow::RGB8_SNORM, glow::RGB, glow::BYTE),
+        (
+            glow::R11F_G11F_B10F,
+            glow::RGB,
+            glow::UNSIGNED_INT_10F_11F_11F_REV,
+        ),
+        (glow::R11F_G11F_B10F, glow::RGB, glow::HALF_FLOAT),
+        (glow::R11F_G11F_B10F, glow::RGB, glow::FLOAT),
+        (glow::RGB9_E5, glow::RGB, glow::UNSIGNED_INT_5_9_9_9_REV),
+        (glow::RGB9_E5, glow::RGB, glow::HALF_FLOAT),
+        (glow::RGB9_E5, glow::RGB, glow::FLOAT),
+        (glow::RGB16F, glow::RGB, glow::HALF_FLOAT),
+        (glow::RGB16F, glow::RGB, glow::FLOAT),
+        (glow::RGB32F, glow::RGB, glow::FLOAT),
+        (glow::RGB8UI, glow::RGB_INTEGER, glow::UNSIGNED_BYTE),
+        (glow::RGB8I, glow::RGB_INTEGER, glow::BYTE),
+        (glow::RGB16UI, glow::RGB_INTEGER, glow::UNSIGNED_SHORT),
+        (glow::RGB16I, glow::RGB_INTEGER, glow::SHORT),
+        (glow::RGB32UI, glow::RGB_INTEGER, glow::UNSIGNED_INT),
+        (glow::RGB32I, glow::RGB_INTEGER, glow::INT),
+        (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGBA8_SNORM, glow::RGBA, glow::BYTE),
+        (glow::RGB5_A1, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGB5_A1, glow::RGBA, glow::UNSIGNED_SHORT_5_5_5_1),
+        (glow::RGB5_A1, glow::RGBA, glow::UNSIGNED_INT_2_10_10_10_REV),
+        (glow::RGBA4, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGBA4, glow::RGBA, glow::UNSIGNED_SHORT_4_4_4_4),
+        (
+            glow::RGB10_A2,
+            glow::RGBA,
+            glow::UNSIGNED_INT_2_10_10_10_REV,
+        ),
+        (glow::RGBA16F, glow::RGBA, glow::HALF_FLOAT),
+        (glow::RGBA16F, glow::RGBA, glow::FLOAT),
+        (glow::RGBA32F, glow::RGBA, glow::FLOAT),
+        (glow::RGBA8UI, glow::RGBA_INTEGER, glow::UNSIGNED_BYTE),
+        (glow::RGBA8I, glow::RGBA_INTEGER, glow::BYTE),
+        (
+            glow::RGB10_A2UI,
+            glow::RGBA_INTEGER,
+            glow::UNSIGNED_INT_2_10_10_10_REV,
+        ),
+        (glow::RGBA16UI, glow::RGBA_INTEGER, glow::UNSIGNED_SHORT),
+        (glow::RGBA16I, glow::RGBA_INTEGER, glow::SHORT),
+        (glow::RGBA32I, glow::RGBA_INTEGER, glow::INT),
+        (glow::RGBA32UI, glow::RGBA_INTEGER, glow::UNSIGNED_INT),
+        (
+            glow::DEPTH_COMPONENT16,
+            glow::DEPTH_COMPONENT,
+            glow::UNSIGNED_SHORT,
+        ),
+        (
+            glow::DEPTH_COMPONENT16,
+            glow::DEPTH_COMPONENT,
+            glow::UNSIGNED_INT,
+        ),
+        (
+            glow::DEPTH_COMPONENT24,
+            glow::DEPTH_COMPONENT,
+            glow::UNSIGNED_INT,
+        ),
         (glow::DEPTH_COMPONENT32F, glow::DEPTH_COMPONENT, glow::FLOAT),
-        (glow::DEPTH24_STENCIL8,   glow::DEPTH_STENCIL,   glow::UNSIGNED_INT_24_8),
-        (glow::DEPTH32F_STENCIL8,  glow::DEPTH_STENCIL,   glow::FLOAT_32_UNSIGNED_INT_24_8_REV),
-        (glow::STENCIL_INDEX8,     glow::STENCIL_INDEX,   glow::UNSIGNED_BYTE),
+        (
+            glow::DEPTH24_STENCIL8,
+            glow::DEPTH_STENCIL,
+            glow::UNSIGNED_INT_24_8,
+        ),
+        (
+            glow::DEPTH32F_STENCIL8,
+            glow::DEPTH_STENCIL,
+            glow::FLOAT_32_UNSIGNED_INT_24_8_REV,
+        ),
+        (
+            glow::STENCIL_INDEX8,
+            glow::STENCIL_INDEX,
+            glow::UNSIGNED_BYTE,
+        ),
     ];
 
     /// Fixed list of format and type combinations supported by both OpenGL ES 1
@@ -490,14 +526,18 @@ impl TextureFormatFilter {
     ///
     /// [the documentation of `glTexImage2D`]: https://khronos.org/registry/OpenGL-Refpages/es1.1/xhtml/
     const ES1_ES2_TABLE: &'static [(u32, u32, u32)] = &[
-        (glow::ALPHA,           glow::ALPHA,           glow::UNSIGNED_BYTE),
-        (glow::RGB,             glow::RGB,             glow::UNSIGNED_BYTE),
-        (glow::RGB,             glow::RGB,             glow::UNSIGNED_SHORT_5_6_5),
-        (glow::RGBA,            glow::RGBA,            glow::UNSIGNED_BYTE),
-        (glow::RGBA,            glow::RGBA,            glow::UNSIGNED_SHORT_4_4_4_4),
-        (glow::RGBA,            glow::RGBA,            glow::UNSIGNED_SHORT_5_5_5_1),
-        (glow::LUMINANCE,       glow::LUMINANCE,       glow::UNSIGNED_BYTE),
-        (glow::LUMINANCE_ALPHA, glow::LUMINANCE_ALPHA, glow::UNSIGNED_BYTE)
+        (glow::ALPHA, glow::ALPHA, glow::UNSIGNED_BYTE),
+        (glow::RGB, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::RGB, glow::RGB, glow::UNSIGNED_SHORT_5_6_5),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_SHORT_4_4_4_4),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_SHORT_5_5_5_1),
+        (glow::LUMINANCE, glow::LUMINANCE, glow::UNSIGNED_BYTE),
+        (
+            glow::LUMINANCE_ALPHA,
+            glow::LUMINANCE_ALPHA,
+            glow::UNSIGNED_BYTE,
+        ),
     ];
 
     /// Creates a new filter for OpenGL ES 3.
@@ -508,7 +548,7 @@ impl TextureFormatFilter {
                 whitelist.extend(Self::ES3_TABLE);
 
                 whitelist
-            }
+            },
         }
     }
 
@@ -520,7 +560,7 @@ impl TextureFormatFilter {
                 whitelist.extend(Self::ES1_ES2_TABLE);
 
                 whitelist
-            }
+            },
         }
     }
 
@@ -531,17 +571,10 @@ impl TextureFormatFilter {
 
     /// This function checks whether a given format description is allowed by
     /// this filter.
-    pub fn check(
-        &self,
-        internal_format: u32,
-        format: u32,
-        type_: u32) -> bool {
-
+    pub fn check(&self, internal_format: u32, format: u32, type_: u32) -> bool {
         match self {
-            Self::Whitelist { whitelist } =>
-                whitelist.contains(&(internal_format, format, type_)),
-            Self::Permissive =>
-                true
+            Self::Whitelist { whitelist } => whitelist.contains(&(internal_format, format, type_)),
+            Self::Permissive => true,
         }
     }
 }

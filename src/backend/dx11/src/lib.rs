@@ -2482,11 +2482,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         let _scope = debug_scope!(&self.context, "BindGraphicsDescriptorSets");
 
         // TODO: find a better solution to invalidating old bindings..
-        if self
-            .internal
-            .downlevel
-            .compute_shaders
-        {
+        if self.internal.downlevel.compute_shaders {
             let cs_uavs = if self.internal.device_feature_level <= d3dcommon::D3D_FEATURE_LEVEL_11_0
             {
                 1

@@ -142,7 +142,10 @@ pub(crate) fn compile_shader(
             error.destroy();
         }
         let error = format!("D3DCompile error {:x}: {}", hr, message);
-        Err(pso::CreationError::ShaderCreationError(stage.to_flag(), error))
+        Err(pso::CreationError::ShaderCreationError(
+            stage.to_flag(),
+            error,
+        ))
     } else {
         Ok(shader_data)
     }
@@ -240,7 +243,10 @@ impl GraphicsPipelineStateSubobjectStream {
 }
 
 impl Device {
-    fn parse_spirv(stage: ShaderStage, raw_data: &[u32]) -> Result<spirv::Ast<hlsl::Target>, pso::CreationError> {
+    fn parse_spirv(
+        stage: ShaderStage,
+        raw_data: &[u32],
+    ) -> Result<spirv::Ast<hlsl::Target>, pso::CreationError> {
         let module = spirv::Module::from_words(raw_data);
 
         spirv::Ast::parse(&module).map_err(|err| {
@@ -283,7 +289,9 @@ impl Device {
                 .get_decoration(input.id, spirv::Decoration::Location)
                 .map_err(|err| gen_query_error(SHADER_STAGE, err))?;
 
-            let ty = ast.get_type(input.type_id).map_err(|err| gen_query_error(SHADER_STAGE, err))?;
+            let ty = ast
+                .get_type(input.type_id)
+                .map_err(|err| gen_query_error(SHADER_STAGE, err))?;
 
             match ty {
                 spirv::Type::Boolean { columns, .. }
@@ -300,7 +308,10 @@ impl Device {
                                 "Shader has overlapping input attachments at location {}",
                                 idx
                             );
-                            return Err(pso::CreationError::ShaderCreationError(SHADER_STAGE.to_flag(), error));
+                            return Err(pso::CreationError::ShaderCreationError(
+                                SHADER_STAGE.to_flag(),
+                                error,
+                            ));
                         }
                     }
                 }
@@ -310,7 +321,10 @@ impl Device {
                             "Shader has overlapping input attachments at location {}",
                             idx
                         );
-                        return Err(pso::CreationError::ShaderCreationError(SHADER_STAGE.to_flag(), error));
+                        return Err(pso::CreationError::ShaderCreationError(
+                            SHADER_STAGE.to_flag(),
+                            error,
+                        ));
                     }
                 }
             }
@@ -330,7 +344,9 @@ impl Device {
         } else {
             1
         };
-        let shader_resources = ast.get_shader_resources().map_err(|err| gen_query_error(stage, err))?;
+        let shader_resources = ast
+            .get_shader_resources()
+            .map_err(|err| gen_query_error(stage, err))?;
 
         if space_offset != 0 {
             for image in &shader_resources.separate_images {
@@ -2272,7 +2288,10 @@ impl d::Device<B> for Device {
             })
         } else {
             let error = format!("Failed to build shader: {:x}", hr);
-            Err(pso::CreationError::ShaderCreationError(pso::ShaderStageFlags::GRAPHICS, error))
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::GRAPHICS,
+                error,
+            ))
         }
     }
 
@@ -2312,7 +2331,10 @@ impl d::Device<B> for Device {
             })
         } else {
             let error = format!("Failed to build shader: {:x}", hr);
-            Err(pso::CreationError::ShaderCreationError(pso::ShaderStageFlags::COMPUTE, error))
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::COMPUTE,
+                error,
+            ))
         }
     }
 

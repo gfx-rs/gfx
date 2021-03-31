@@ -831,7 +831,12 @@ impl Device {
             Some(p) => (
                 match p.internal_name {
                     Ok(ref name) => name.as_str(),
-                    Err(ref e) => return Err(pso::CreationError::ShaderCreationError(stage.into(), format!("{}", e))),
+                    Err(ref e) => {
+                        return Err(pso::CreationError::ShaderCreationError(
+                            stage.into(),
+                            format!("{}", e),
+                        ))
+                    }
                 },
                 metal::MTLSize {
                     width: p.work_group_size[0] as _,
