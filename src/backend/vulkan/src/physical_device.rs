@@ -4,7 +4,14 @@ use ash::{
     vk,
 };
 
-use hal::{DescriptorLimits, DownlevelProperties, DynamicStates, Features, Limits, PhysicalDeviceProperties, adapter, device::{CreationError, OutOfMemory}, format, image, pso::PatchSize, queue};
+use hal::{
+    adapter,
+    device::{CreationError, OutOfMemory},
+    format, image,
+    pso::PatchSize,
+    queue, DescriptorLimits, DownlevelProperties, DynamicStates, Features, Limits,
+    PhysicalDeviceProperties,
+};
 
 use std::{ffi::CStr, fmt, mem, ptr, sync::Arc};
 

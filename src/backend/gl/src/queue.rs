@@ -347,7 +347,9 @@ impl Queue {
                         .contains(hal::PerformanceCaveats::BASE_VERTEX_INSTANCE_DRAWING)
                     {
                         //TODO: this is supposed to be a workaround, not an error
-                        log::error!("Instance bases with instanced indexed drawing is not supported");
+                        log::error!(
+                            "Instance bases with instanced indexed drawing is not supported"
+                        );
                     } else {
                         unsafe {
                             gl.draw_elements_instanced_base_vertex_base_instance(

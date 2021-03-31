@@ -83,7 +83,10 @@ pub(crate) fn introspect_spirv_vertex_semantic_remapping(
                             "Shader has overlapping input attachments at location {}",
                             idx
                         );
-                        return Err(pso::CreationError::ShaderCreationError(SHADER_STAGE.to_flag(), error));
+                        return Err(pso::CreationError::ShaderCreationError(
+                            SHADER_STAGE.to_flag(),
+                            error,
+                        ));
                     }
                 }
             }
@@ -93,7 +96,10 @@ pub(crate) fn introspect_spirv_vertex_semantic_remapping(
                         "Shader has overlapping input attachments at location {}",
                         idx
                     );
-                    return Err(pso::CreationError::ShaderCreationError(SHADER_STAGE.to_flag(), error));
+                    return Err(pso::CreationError::ShaderCreationError(
+                        SHADER_STAGE.to_flag(),
+                        error,
+                    ));
                 }
             }
         }
@@ -192,13 +198,19 @@ pub(crate) fn compile_hlsl_shader(
             String::from_utf8_lossy(slice).into_owned()
         };
         error!("D3DCompile error {:x}: {}", hr, message);
-        Err(pso::CreationError::ShaderCreationError(stage.to_flag(), message))
+        Err(pso::CreationError::ShaderCreationError(
+            stage.to_flag(),
+            message,
+        ))
     } else {
         Ok(blob)
     }
 }
 
-fn parse_spirv(stage: ShaderStage, raw_data: &[u32]) -> Result<spirv::Ast<hlsl::Target>, pso::CreationError> {
+fn parse_spirv(
+    stage: ShaderStage,
+    raw_data: &[u32],
+) -> Result<spirv::Ast<hlsl::Target>, pso::CreationError> {
     let module = spirv::Module::from_words(raw_data);
 
     match spirv::Ast::parse(&module) {
@@ -209,7 +221,10 @@ fn parse_spirv(stage: ShaderStage, raw_data: &[u32]) -> Result<spirv::Ast<hlsl::
                 SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
             };
             let error = format!("SPIR-V parsing failed: {:?}", msg);
-            Err(pso::CreationError::ShaderCreationError(stage.to_flag(), error))
+            Err(pso::CreationError::ShaderCreationError(
+                stage.to_flag(),
+                error,
+            ))
         }
     }
 }
@@ -225,7 +240,9 @@ fn patch_spirv_resources(
     // With multi-entry-point shaders, we will end up with resources in the SPIRV that aren't part of the provided
     // pipeline layout. We need to be tolerant of getting out of bounds set and binding indices in the spirv which we can safely ignore.
 
-    let shader_resources = ast.get_shader_resources().map_err(|err| gen_query_error(stage, err))?;
+    let shader_resources = ast
+        .get_shader_resources()
+        .map_err(|err| gen_query_error(stage, err))?;
     for image in &shader_resources.separate_images {
         let set = ast
             .get_decoration(image.id, spirv::Decoration::DescriptorSet)

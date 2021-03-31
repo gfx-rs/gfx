@@ -208,7 +208,9 @@ impl Inner {
 
         // Testing if context can be binded without surface
         // and creating dummy pbuffer surface if not.
-        let pbuffer = if version < (1, 5) || !display_extensions.contains("EGL_KHR_surfaceless_context") {
+        let pbuffer = if version < (1, 5)
+            || !display_extensions.contains("EGL_KHR_surfaceless_context")
+        {
             let attributes = [egl::WIDTH, 1, egl::HEIGHT, 1, egl::NONE];
             egl.create_pbuffer_surface(display, config, &attributes)
                 .map(Some)

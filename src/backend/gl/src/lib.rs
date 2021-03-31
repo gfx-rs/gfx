@@ -354,8 +354,14 @@ impl PhysicalDevice {
     fn new_adapter(context: GlContext) -> adapter::Adapter<Backend> {
         let gl = GlContainer { context };
         // query information
-        let (info, supported_features, legacy_features, public_caps, private_caps, texture_format_filter) =
-            info::query_all(&gl);
+        let (
+            info,
+            supported_features,
+            legacy_features,
+            public_caps,
+            private_caps,
+            texture_format_filter,
+        ) = info::query_all(&gl);
         log::info!("Vendor: {:?}", info.platform_name.vendor);
         log::info!("Renderer: {:?}", info.platform_name.renderer);
         log::info!("Version: {:?}", info.version);
@@ -617,13 +623,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             ..
         } = conv::describe_format(format)?;
 
-        if !self.0.texture_format_filter.check(
-            tex_internal,
-            tex_external,
-            data_type) {
-
+        if !self
+            .0
+            .texture_format_filter
+            .check(tex_internal, tex_external, data_type)
+        {
             /* This format is not supported. */
-            return None
+            return None;
         }
 
         Some(image::FormatProperties {

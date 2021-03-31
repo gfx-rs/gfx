@@ -651,7 +651,8 @@ impl Device {
             entry_point_map.insert(
                 (stage, entry_point.name),
                 n::EntryPoint {
-                    internal_name: cleansed,
+                    //TODO: should we try to do better?
+                    internal_name: Ok(cleansed),
                     work_group_size: [
                         entry_point.work_group_size.x,
                         entry_point.work_group_size.y,
@@ -697,7 +698,7 @@ impl Device {
             };
 
         let mut entry_point_map = n::EntryPointMap::default();
-        for (ep, name) in shader
+        for (ep, internal_name) in shader
             .module
             .entry_points
             .iter()
@@ -706,7 +707,7 @@ impl Device {
             entry_point_map.insert(
                 (ep.stage, ep.name.clone()),
                 n::EntryPoint {
-                    internal_name: name.map_err(|err| format!("{}", err))?,
+                    internal_name,
                     work_group_size: ep.workgroup_size,
                 },
             );
@@ -730,7 +731,11 @@ impl Device {
         let library = device
             .lock()
             .new_library_with_source(source.as_ref(), &options)
-            .map_err(|err| format!("{:?}", err))?;
+            .map_err(|err| {
+                warn!("Naga generated shader:\n{}", source);
+                warn!("Failed to compile: {}", err);
+                format!("{:?}", err)
+            })?;
 
         Ok(n::ModuleInfo {
             library,
@@ -824,7 +829,15 @@ impl Device {
         //TODO: avoid heap-allocating the string?
         let (name, wg_size) = match info.entry_point_map.get(&entry_key) {
             Some(p) => (
-                p.internal_name.as_str(),
+                match p.internal_name {
+                    Ok(ref name) => name.as_str(),
+                    Err(ref e) => {
+                        return Err(pso::CreationError::ShaderCreationError(
+                            stage.into(),
+                            format!("{}", e),
+                        ))
+                    }
+                },
                 metal::MTLSize {
                     width: p.work_group_size[0] as _,
                     height: p.work_group_size[1] as _,

@@ -88,7 +88,12 @@ impl Device {
         feature_level: u32,
     ) -> Self {
         Device {
-            internal: Arc::new(internal::Internal::new(&device, features, feature_level, downlevel)),
+            internal: Arc::new(internal::Internal::new(
+                &device,
+                features,
+                feature_level,
+                downlevel,
+            )),
             raw: device,
             raw1: device1,
             context,
