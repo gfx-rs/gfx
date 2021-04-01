@@ -2134,7 +2134,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-   fn stop_capture(&self) {
+    fn stop_capture(&self) {
         unimplemented!()
     }
 }

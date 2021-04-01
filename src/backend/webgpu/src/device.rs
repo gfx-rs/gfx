@@ -521,7 +521,7 @@ impl hal::device::Device<Backend> for Device {
         unimplemented!()
     }
 
-   fn stop_capture(&self) {
+    fn stop_capture(&self) {
         unimplemented!()
     }
 }

@@ -1876,7 +1876,7 @@ impl d::Device<B> for super::Device {
         unimplemented!()
     }
 
-   fn stop_capture(&self) {
+    fn stop_capture(&self) {
         unimplemented!()
     }
 }

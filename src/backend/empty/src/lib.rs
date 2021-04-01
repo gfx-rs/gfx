@@ -574,7 +574,7 @@ impl device::Device<Backend> for Device {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-   fn stop_capture(&self) {
+    fn stop_capture(&self) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }

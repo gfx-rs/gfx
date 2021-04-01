@@ -146,16 +146,6 @@ pub struct Device {
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
 
-impl Drop for Device {
-    fn drop(&mut self) {
-        if cfg!(feature = "auto-capture") {
-            info!("Metal capture stop");
-            use hal::device::Device;
-            self.stop_capture();
-        }
-    }
-}
-
 bitflags! {
     /// Memory type bits.
     struct MemoryTypes: u32 {
@@ -308,12 +298,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             #[cfg(feature = "cross")]
             spv_options,
         };
-
-        if cfg!(feature = "auto-capture") {
-            info!("Metal capture start");
-            use hal::device::Device;
-            device.start_capture();
-        }
 
         Ok(adapter::Gpu {
             device,
@@ -3257,12 +3241,11 @@ impl hal::device::Device<Backend> for Device {
     fn start_capture(&self) {
         let device = self.shared.device.lock();
         let shared_capture_manager = CaptureManager::shared();
-        let default_capture_scope =
-            shared_capture_manager.new_capture_scope_with_device(&device);
+        let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device);
         shared_capture_manager.set_default_capture_scope(&default_capture_scope);
         shared_capture_manager.start_capture_with_scope(&default_capture_scope);
         default_capture_scope.begin_scope();
-     }
+    }
 
     fn stop_capture(&self) {
         let shared_capture_manager = CaptureManager::shared();
@@ -3270,7 +3253,7 @@ impl hal::device::Device<Backend> for Device {
             default_capture_scope.end_scope();
         }
         shared_capture_manager.stop_capture();
-     }
+    }
 }
 
 #[test]
