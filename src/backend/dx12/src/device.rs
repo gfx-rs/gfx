@@ -3774,6 +3774,14 @@ impl d::Device<B> for Device {
         let cwstr = wide_cstr(name);
         pipeline_layout.shared.signature.SetName(cwstr.as_ptr());
     }
+
+    fn start_capture(&self) {
+        unimplemented!()
+    }
+
+   fn stop_capture(&self) {
+        unimplemented!()
+    }
 }
 
 #[test]

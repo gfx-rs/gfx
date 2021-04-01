@@ -1871,6 +1871,14 @@ impl d::Device<B> for super::Device {
         self.shared
             .set_object_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.raw, name)
     }
+
+    fn start_capture(&self) {
+        unimplemented!()
+    }
+
+   fn stop_capture(&self) {
+        unimplemented!()
+    }
 }
 
 impl super::Device {

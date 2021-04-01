@@ -712,4 +712,10 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Associate a name with a pipeline layout, for easier debugging in external tools or with
     /// validation layers that can print a friendly name when referring to objects in error messages
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut B::PipelineLayout, name: &str);
+
+    /// Starts frame capture.
+    fn start_capture(&self);
+
+    /// Stops frame capture.
+    fn stop_capture(&self);
 }
