@@ -2129,4 +2129,12 @@ impl d::Device<B> for Device {
     ) {
         // TODO
     }
+
+    fn start_capture(&self) {
+        unimplemented!()
+    }
+
+    fn stop_capture(&self) {
+        unimplemented!()
+    }
 }

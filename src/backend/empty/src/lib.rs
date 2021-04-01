@@ -569,6 +569,14 @@ impl device::Device<Backend> for Device {
     unsafe fn wait_for_fence(&self, _: &(), _: u64) -> Result<bool, device::WaitError> {
         Ok(true)
     }
+
+    fn start_capture(&self) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
+
+    fn stop_capture(&self) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
 }
 
 #[derive(Debug)]

@@ -2441,4 +2441,12 @@ impl device::Device<Backend> for Device {
     unsafe fn set_pipeline_layout_name(&self, _pipeline_layout: &mut PipelineLayout, _name: &str) {
         // TODO
     }
+
+    fn start_capture(&self) {
+        unimplemented!()
+    }
+
+    fn stop_capture(&self) {
+        unimplemented!()
+    }
 }
