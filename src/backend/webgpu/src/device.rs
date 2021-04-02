@@ -517,11 +517,7 @@ impl hal::device::Device<Backend> for Device {
         // TODO
     }
 
-    fn start_capture(&self) {
-        unimplemented!()
-    }
+    fn start_capture(&self) {}
 
-    fn stop_capture(&self) {
-        unimplemented!()
-    }
+    fn stop_capture(&self) {}
 }
