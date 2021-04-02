@@ -3776,11 +3776,11 @@ impl d::Device<B> for Device {
     }
 
     fn start_capture(&self) {
-        unimplemented!()
+        //TODO
     }
 
     fn stop_capture(&self) {
-        unimplemented!()
+        //TODO
     }
 }
 

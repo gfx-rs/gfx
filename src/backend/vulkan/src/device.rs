@@ -1873,11 +1873,11 @@ impl d::Device<B> for super::Device {
     }
 
     fn start_capture(&self) {
-        unimplemented!()
+        //TODO: RenderDoc
     }
 
     fn stop_capture(&self) {
-        unimplemented!()
+        //TODO: RenderDoc
     }
 }
 
