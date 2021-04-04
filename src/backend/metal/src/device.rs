@@ -278,9 +278,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .cloned()
             .collect();
             let mut flags = spv::WriterFlags::empty();
-            if cfg!(debug_assertions) {
-                flags |= spv::WriterFlags::DEBUG;
-            }
+            flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
+            flags.set(
+                spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+                !requested_features.contains(hal::Features::NDC_Y_UP),
+            );
             spv::Options {
                 lang_version: (1, 0),
                 flags,
@@ -743,7 +745,17 @@ impl Device {
             compiler_options.enable_point_size_builtin =
                 primitive_class == MTLPrimitiveTopologyClass::Point;
         }
-        let _ = primitive_class;
+        let options_clone;
+        let naga_options = match primitive_class {
+            MTLPrimitiveTopologyClass::Point => {
+                options_clone = naga::back::msl::Options {
+                    allow_point_size: true,
+                    ..layout.naga_options.clone()
+                };
+                &options_clone
+            }
+            _ => &layout.naga_options,
+        };
 
         let info = match pipeline_cache {
             #[cfg(feature = "cross")]
@@ -769,7 +781,7 @@ impl Device {
                 if ep.module.prefer_naga {
                     result = match ep.module.naga {
                         Ok(ref shader) => {
-                            Self::compile_shader_library_naga(device, shader, &layout.naga_options)
+                            Self::compile_shader_library_naga(device, shader, naga_options)
                         }
                         Err(ref e) => Err(e.clone()),
                     }
@@ -788,7 +800,7 @@ impl Device {
                 if result.is_err() && !ep.module.prefer_naga {
                     result = match ep.module.naga {
                         Ok(ref shader) => {
-                            Self::compile_shader_library_naga(device, shader, &layout.naga_options)
+                            Self::compile_shader_library_naga(device, shader, naga_options)
                         }
                         Err(ref e) => Err(e.clone()),
                     }
@@ -1384,6 +1396,7 @@ impl hal::device::Device<Backend> for Device {
             binding_map,
             spirv_cross_compatibility: cfg!(feature = "cross"),
             fake_missing_bindings: false,
+            allow_point_size: false,
         };
 
         Ok(n::PipelineLayout {
@@ -1862,8 +1875,11 @@ impl hal::device::Device<Backend> for Device {
             #[cfg(feature = "cross")]
             spv: raw_data.to_vec(),
             naga: {
-                let parser =
-                    naga::front::spv::Parser::new(raw_data.iter().cloned(), &Default::default());
+                let options = naga::front::spv::Options {
+                    adjust_coordinate_space: !self.features.contains(hal::Features::NDC_Y_UP),
+                    flow_graph_dump_prefix: None,
+                };
+                let parser = naga::front::spv::Parser::new(raw_data.iter().cloned(), &options);
                 match parser.parse() {
                     Ok(module) => {
                         debug!("Naga module {:#?}", module);

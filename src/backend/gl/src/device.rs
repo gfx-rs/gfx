@@ -94,9 +94,11 @@ impl Device {
                 .cloned()
                 .collect();
                 let mut flags = spv::WriterFlags::empty();
-                if cfg!(debug_assertions) {
-                    flags |= spv::WriterFlags::DEBUG;
-                }
+                flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
+                flags.set(
+                    spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+                    !features.contains(hal::Features::NDC_Y_UP),
+                );
                 spv::Options {
                     lang_version: (1, 0),
                     flags,
