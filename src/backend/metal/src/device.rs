@@ -1479,16 +1479,15 @@ impl hal::device::Device<Backend> for Device {
         //drop
     }
 
-    #[cfg_attr(not(feature = "cross"), allow(unused_variables))]
     unsafe fn merge_pipeline_caches<'a, I>(
         &self,
-        target: &mut n::PipelineCache,
-        sources: I,
+        _target: &mut n::PipelineCache,
+        _sources: I,
     ) -> Result<(), d::OutOfMemory>
     where
         I: Iterator<Item = &'a n::PipelineCache>,
     {
-        // todo: not possible with the metal api, but we could store a vec of pipeline caches perhaps? That would make serializing harder.
+        warn!("`merge_pipeline_caches` is not currently implemented on the Metal backend.");
         Ok(())
     }
 
