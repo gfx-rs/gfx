@@ -1,5 +1,3 @@
-#[cfg(feature = "cross")]
-use crate::internal::FastStorageMap;
 use crate::{
     command, conversions as conv, internal::Channel, native as n, AsNative, Backend, FastHashMap,
     OnlineRecording, QueueFamily, ResourceIndex, Shared, VisibilityShared,
@@ -32,7 +30,7 @@ use objc::{
 use parking_lot::Mutex;
 
 #[cfg(feature = "cross")]
-use std::collections::{hash_map::Entry, BTreeMap};
+use std::collections::BTreeMap;
 use std::{
     cmp, iter, mem,
     ops::Range,
@@ -728,12 +726,9 @@ impl Device {
         ep: &pso::EntryPoint<Backend>,
         layout: &n::PipelineLayout,
         primitive_class: MTLPrimitiveTopologyClass,
-        pipeline_cache: Option<&n::PipelineCache>,
         stage: naga::ShaderStage,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
         let device = &self.shared.device;
-        #[cfg(feature = "cross")]
-        let (module_map, info_guard);
         let info_owned;
 
         #[cfg(feature = "cross")]
@@ -757,60 +752,40 @@ impl Device {
             _ => &layout.naga_options,
         };
 
-        let info = match pipeline_cache {
+        let info = {
+            let mut result = Err(String::new());
+            if ep.module.prefer_naga {
+                result = match ep.module.naga {
+                    Ok(ref shader) => {
+                        Self::compile_shader_library_naga(device, shader, naga_options)
+                    }
+                    Err(ref e) => Err(e.clone()),
+                }
+            }
             #[cfg(feature = "cross")]
-            Some(cache) => {
-                module_map = cache
-                    .modules
-                    .get_or_create_with(&compiler_options, FastStorageMap::default);
-                info_guard = module_map.get_or_create_with(&ep.module.spv, || {
-                    Self::compile_shader_library_cross(
-                        device,
-                        &ep.module.spv,
-                        &compiler_options,
-                        self.shared.private_caps.msl_version,
-                        &ep.specialization,
-                        stage,
-                    )
-                    .unwrap()
-                });
-                &*info_guard
+            if result.is_err() {
+                result = Self::compile_shader_library_cross(
+                    device,
+                    &ep.module.spv,
+                    &compiler_options,
+                    self.shared.private_caps.msl_version,
+                    &ep.specialization,
+                    stage,
+                );
             }
-            _ => {
-                let mut result = Err(String::new());
-                if ep.module.prefer_naga {
-                    result = match ep.module.naga {
-                        Ok(ref shader) => {
-                            Self::compile_shader_library_naga(device, shader, naga_options)
-                        }
-                        Err(ref e) => Err(e.clone()),
+            if result.is_err() && !ep.module.prefer_naga {
+                result = match ep.module.naga {
+                    Ok(ref shader) => {
+                        Self::compile_shader_library_naga(device, shader, naga_options)
                     }
+                    Err(ref e) => Err(e.clone()),
                 }
-                #[cfg(feature = "cross")]
-                if result.is_err() {
-                    result = Self::compile_shader_library_cross(
-                        device,
-                        &ep.module.spv,
-                        &compiler_options,
-                        self.shared.private_caps.msl_version,
-                        &ep.specialization,
-                        stage,
-                    );
-                }
-                if result.is_err() && !ep.module.prefer_naga {
-                    result = match ep.module.naga {
-                        Ok(ref shader) => {
-                            Self::compile_shader_library_naga(device, shader, naga_options)
-                        }
-                        Err(ref e) => Err(e.clone()),
-                    }
-                }
-                info_owned = result.map_err(|e| {
-                    let error = format!("Error compiling the shader {:?}", e);
-                    pso::CreationError::ShaderCreationError(stage.into(), error)
-                })?;
-                &info_owned
             }
+            info_owned = result.map_err(|e| {
+                let error = format!("Error compiling the shader {:?}", e);
+                pso::CreationError::ShaderCreationError(stage.into(), error)
+            })?;
+            &info_owned
         };
 
         let lib = info.library.clone();
@@ -1435,20 +1410,49 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn create_pipeline_cache(
         &self,
-        _data: Option<&[u8]>,
+        data: Option<&[u8]>,
     ) -> Result<n::PipelineCache, d::OutOfMemory> {
+        let device = self.shared.device.lock();
+
+        let descriptor = metal::BinaryArchiveDescriptor::new();
+        if let Some(data) = data {
+            // todo: do something here. Can we use a data:// url or do we have to use a file://?
+        }
+
         Ok(n::PipelineCache {
-            #[cfg(feature = "cross")]
-            modules: FastStorageMap::default(),
+            inner: Mutex::new(n::PipelineCacheInner {
+                binary_archive: device
+                    .new_binary_archive_with_descriptor(&descriptor)
+                    .map_err(|_| d::OutOfMemory::Device)?,
+                is_empty: true,
+            }),
         })
     }
 
     unsafe fn get_pipeline_cache_data(
         &self,
-        _cache: &n::PipelineCache,
+        cache: &n::PipelineCache,
     ) -> Result<Vec<u8>, d::OutOfMemory> {
-        //empty
-        Ok(Vec::new())
+        let cache = cache.inner.lock();
+
+        // Without this, we get an extremely vague "Serialization of binaries to file failed"
+        // error when serializing an empty binary archive.
+        if cache.is_empty {
+            return Ok(Vec::new());
+        }
+
+        let temp_path = tempfile::NamedTempFile::new().unwrap().into_temp_path();
+
+        let tmp_file_url = metal::URL::new_with_string(&format!("file://{}", temp_path.display()));
+
+        cache
+            .binary_archive
+            .serialize_to_url(&tmp_file_url)
+            .unwrap();
+
+        let bytes = std::fs::read(&temp_path).unwrap();
+
+        Ok(bytes)
     }
 
     unsafe fn destroy_pipeline_cache(&self, _cache: n::PipelineCache) {
@@ -1464,40 +1468,7 @@ impl hal::device::Device<Backend> for Device {
     where
         I: Iterator<Item = &'a n::PipelineCache>,
     {
-        #[cfg(feature = "cross")]
-        {
-            //TODO: reduce the locking here
-            let mut dst = target.modules.whole_write();
-            for source in sources {
-                let src = source.modules.whole_write();
-                for (key, value) in src.iter() {
-                    let storage = dst
-                        .entry(key.clone())
-                        .or_insert_with(FastStorageMap::default);
-                    let mut dst_module = storage.whole_write();
-                    let src_module = value.whole_write();
-                    for (key_module, value_module) in src_module.iter() {
-                        match dst_module.entry(key_module.clone()) {
-                            Entry::Vacant(em) => {
-                                em.insert(value_module.clone());
-                            }
-                            Entry::Occupied(em) => {
-                                if em.get().library.as_ptr() != value_module.library.as_ptr()
-                                    || em.get().entry_point_map != value_module.entry_point_map
-                                {
-                                    warn!(
-                                        "Merged module don't match, target: {:?}, source: {:?}",
-                                        em.get(),
-                                        value_module
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+        // todo: not possible with the metal api, but we could store a vec of pipeline caches perhaps? That would make serializing harder.
         Ok(())
     }
 
@@ -1573,7 +1544,6 @@ impl hal::device::Device<Backend> for Device {
             vs,
             pipeline_layout,
             primitive_class,
-            cache,
             naga::ShaderStage::Vertex,
         )?;
         pipeline.set_vertex_function(Some(&vs_function));
@@ -1586,7 +1556,6 @@ impl hal::device::Device<Backend> for Device {
                     ep,
                     pipeline_layout,
                     primitive_class,
-                    cache,
                     naga::ShaderStage::Fragment,
                 )?;
                 fs_function = fun;
@@ -1798,6 +1767,17 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
+        if let Some(pipeline_cache) = cache {
+            let mut pipeline_cache = pipeline_cache.inner.lock();
+
+            pipeline.set_binary_archives(&[&pipeline_cache.binary_archive]);
+            pipeline_cache
+                .binary_archive
+                .add_render_pipeline_functions_with_descriptor(&pipeline)
+                .unwrap();
+            pipeline_cache.is_empty = false;
+        }
+
         device
             .new_render_pipeline_state(&pipeline)
             .map(|raw| n::GraphicsPipeline {
@@ -1833,12 +1813,22 @@ impl hal::device::Device<Backend> for Device {
             &pipeline_desc.shader,
             &pipeline_desc.layout,
             MTLPrimitiveTopologyClass::Unspecified,
-            cache,
             naga::ShaderStage::Compute,
         )?;
         pipeline.set_compute_function(Some(&cs_function));
         if let Some(name) = pipeline_desc.label {
             pipeline.set_label(name);
+        }
+
+        if let Some(pipeline_cache) = cache {
+            let mut pipeline_cache = pipeline_cache.inner.lock();
+
+            pipeline.set_binary_archives(&[&pipeline_cache.binary_archive]);
+            pipeline_cache
+                .binary_archive
+                .add_compute_pipeline_functions_with_descriptor(&pipeline)
+                .unwrap();
+            pipeline_cache.is_empty = false;
         }
 
         self.shared

@@ -1,5 +1,3 @@
-#[cfg(feature = "cross")]
-use crate::internal::FastStorageMap;
 use crate::{
     internal::Channel, Backend, BufferPtr, FastHashMap, ResourceIndex, SamplerPtr, TexturePtr,
     MAX_COLOR_ATTACHMENTS,
@@ -17,7 +15,7 @@ use range_alloc::RangeAllocator;
 
 use arrayvec::ArrayVec;
 use metal;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 use std::{
     fmt,
@@ -204,10 +202,15 @@ pub struct ModuleInfo {
     pub rasterization_enabled: bool,
 }
 
+pub(crate) struct PipelineCacheInner {
+    pub(crate) binary_archive: metal::BinaryArchive,
+    pub(crate) is_empty: bool,
+}
+
+unsafe impl Send for PipelineCacheInner {}
+
 pub struct PipelineCache {
-    #[cfg(feature = "cross")] //TODO: Naga path
-    pub(crate) modules:
-        FastStorageMap<spirv_cross::msl::CompilerOptions, FastStorageMap<Vec<u32>, ModuleInfo>>,
+    pub(crate) inner: Mutex<PipelineCacheInner>,
 }
 
 impl fmt::Debug for PipelineCache {

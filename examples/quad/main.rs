@@ -180,6 +180,7 @@ struct Renderer<B: hal::Backend> {
     framebuffer: ManuallyDrop<B::Framebuffer>,
     pipeline: ManuallyDrop<B::GraphicsPipeline>,
     pipeline_layout: ManuallyDrop<B::PipelineLayout>,
+    pipeline_cache: ManuallyDrop<B::PipelineCache>,
     desc_set: Option<B::DescriptorSet>,
     set_layout: ManuallyDrop<B::DescriptorSetLayout>,
     submission_complete_semaphores: Vec<B::Semaphore>,
@@ -707,6 +708,12 @@ where
             cmd_buffers.push(unsafe { cmd_pools[i].allocate_one(command::Level::Primary) });
         }
 
+        let pipeline_cache = ManuallyDrop::new(unsafe {
+            device
+                .create_pipeline_cache(None)
+                .expect("Can't create pipeline cache")
+        });
+
         let pipeline_layout = ManuallyDrop::new(
             unsafe { device.create_pipeline_layout(iter::once(&*set_layout), iter::empty()) }
                 .expect("Can't create pipeline layout"),
@@ -793,8 +800,13 @@ where
                     blend: Some(pso::BlendState::ALPHA),
                 });
 
-                unsafe { device.create_graphics_pipeline(&pipeline_desc, None) }
+                unsafe { device.create_graphics_pipeline(&pipeline_desc, Some(&pipeline_cache)) }
             };
+
+            let data = unsafe { device.get_pipeline_cache_data(&pipeline_cache).unwrap() };
+
+            std::fs::write("quad_pipeline_cache", &data).unwrap();
+            println!("Wrote the pipeline cache to quad_pipeline_cache ({} bytes)", data.len());
 
             unsafe {
                 device.destroy_shader_module(vs_module);
@@ -831,6 +843,7 @@ where
             framebuffer,
             pipeline,
             pipeline_layout,
+            pipeline_cache,
             desc_set: Some(desc_set),
             set_layout,
             submission_complete_semaphores,
@@ -1029,6 +1042,8 @@ where
                 .destroy_pipeline_layout(ManuallyDrop::into_inner(ptr::read(
                     &self.pipeline_layout,
                 )));
+            self.device
+                .destroy_pipeline_cache(ManuallyDrop::into_inner(ptr::read(&self.pipeline_cache)));
             let surface = ManuallyDrop::into_inner(ptr::read(&self.surface));
             self.instance.destroy_surface(surface);
         }
