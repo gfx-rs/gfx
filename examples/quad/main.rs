@@ -708,7 +708,9 @@ where
             cmd_buffers.push(unsafe { cmd_pools[i].allocate_one(command::Level::Primary) });
         }
 
-        let previous_pipeline_cache_data = std::fs::read("quad_pipeline_cache");
+        let pipeline_cache_path = "quad_pipeline_cache";
+
+        let previous_pipeline_cache_data = std::fs::read(pipeline_cache_path);
 
         if let Err(error) = previous_pipeline_cache_data.as_ref() {
             println!("Error loading the previous pipeline cache data: {}", error);
@@ -814,14 +816,6 @@ where
                 unsafe { device.create_graphics_pipeline(&pipeline_desc, Some(&pipeline_cache)) }
             };
 
-            let data = unsafe { device.get_pipeline_cache_data(&pipeline_cache).unwrap() };
-
-            std::fs::write("quad_pipeline_cache", &data).unwrap();
-            println!(
-                "Wrote the pipeline cache to quad_pipeline_cache ({} bytes)",
-                data.len()
-            );
-
             unsafe {
                 device.destroy_shader_module(vs_module);
             }
@@ -831,6 +825,16 @@ where
 
             ManuallyDrop::new(pipeline.unwrap())
         };
+
+        let pipeline_cache_data =
+            unsafe { device.get_pipeline_cache_data(&pipeline_cache).unwrap() };
+
+        std::fs::write(pipeline_cache_path, &pipeline_cache_data).unwrap();
+        println!(
+            "Wrote the pipeline cache to {} ({} bytes)",
+            pipeline_cache_path,
+            pipeline_cache_data.len()
+        );
 
         // Rendering setup
         let viewport = pso::Viewport {
