@@ -32,7 +32,9 @@ use parking_lot::Mutex;
 #[cfg(feature = "cross")]
 use std::collections::BTreeMap;
 use std::{
-    cmp, iter, mem,
+    cmp,
+    io::Write,
+    iter, mem,
     ops::Range,
     ptr,
     sync::{
@@ -1415,16 +1417,34 @@ impl hal::device::Device<Backend> for Device {
         let device = self.shared.device.lock();
 
         let descriptor = metal::BinaryArchiveDescriptor::new();
-        if let Some(data) = data {
-            // todo: do something here. Can we use a data:// url or do we have to use a file://?
-        }
+
+        // We need to keep the temp file alive so that it doesn't get deleted until after a
+        // binary archive has been created.
+        let _temp_file = if let Some(data) = data {
+            // It would be nice to use a `data:text/plain;base64` url here and just pass in a
+            // base64-encoded version of the data, but metal validation doesn't like that:
+            // -[MTLDebugDevice newBinaryArchiveWithDescriptor:error:]:1046: failed assertion `url, if not nil, must be a file URL.'
+
+            let temp_file = tempfile::NamedTempFile::new().unwrap();
+
+            temp_file.as_file().write_all(&data).unwrap();
+
+            let url =
+                metal::URL::new_with_string(&format!("file://{}", temp_file.path().display()));
+
+            descriptor.set_url(&url);
+
+            Some(temp_file)
+        } else {
+            None
+        };
 
         Ok(n::PipelineCache {
             inner: Mutex::new(n::PipelineCacheInner {
                 binary_archive: device
                     .new_binary_archive_with_descriptor(&descriptor)
                     .map_err(|_| d::OutOfMemory::Device)?,
-                is_empty: true,
+                is_empty: data.is_none(),
             }),
         })
     }

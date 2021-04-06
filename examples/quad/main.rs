@@ -708,9 +708,20 @@ where
             cmd_buffers.push(unsafe { cmd_pools[i].allocate_one(command::Level::Primary) });
         }
 
+        let previous_pipeline_cache_data = std::fs::read("quad_pipeline_cache");
+
+        if let Err(error) = previous_pipeline_cache_data.as_ref() {
+            println!("Error loading the previous pipeline cache data: {}", error);
+        }
+
         let pipeline_cache = ManuallyDrop::new(unsafe {
             device
-                .create_pipeline_cache(None)
+                .create_pipeline_cache(
+                    previous_pipeline_cache_data
+                        .as_ref()
+                        .ok()
+                        .map(|vec| &vec[..]),
+                )
                 .expect("Can't create pipeline cache")
         });
 
@@ -806,7 +817,10 @@ where
             let data = unsafe { device.get_pipeline_cache_data(&pipeline_cache).unwrap() };
 
             std::fs::write("quad_pipeline_cache", &data).unwrap();
-            println!("Wrote the pipeline cache to quad_pipeline_cache ({} bytes)", data.len());
+            println!(
+                "Wrote the pipeline cache to quad_pipeline_cache ({} bytes)",
+                data.len()
+            );
 
             unsafe {
                 device.destroy_shader_module(vs_module);
