@@ -1420,7 +1420,7 @@ impl hal::device::Device<Backend> for Device {
 
         // We need to keep the temp file alive so that it doesn't get deleted until after a
         // binary archive has been created.
-        let _temp_file = if let Some(data) = data {
+        let _temp_file = if let Some(data) = data.filter(|data| !data.is_empty()) {
             // It would be nice to use a `data:text/plain;base64` url here and just pass in a
             // base64-encoded version of the data, but metal validation doesn't like that:
             // -[MTLDebugDevice newBinaryArchiveWithDescriptor:error:]:1046: failed assertion `url, if not nil, must be a file URL.'
