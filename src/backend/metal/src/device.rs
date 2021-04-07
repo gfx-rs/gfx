@@ -1851,17 +1851,13 @@ impl hal::device::Device<Backend> for Device {
         }
 
         if let Some(pipeline_cache) = cache {
-            let mut pipeline_cache = pipeline_cache.inner.lock();
+            let pipeline_cache = pipeline_cache.inner.lock();
 
             pipeline.set_binary_archives(&[&pipeline_cache.binary_archive]);
-            pipeline_cache
-                .binary_archive
-                .add_compute_pipeline_functions_with_descriptor(&pipeline)
-                .unwrap();
-            pipeline_cache.is_empty = false;
         }
 
-        self.shared
+        let pipeline_state = self
+            .shared
             .device
             .lock()
             .new_compute_pipeline_state(&pipeline)
@@ -1874,7 +1870,21 @@ impl hal::device::Device<Backend> for Device {
             .map_err(|err| {
                 error!("PSO creation failed: {}", err);
                 pso::CreationError::Other
-            })
+            })?;
+
+        // We need to add the pipline descriptor to the cache after creating the pipeline,
+        // see `create_graphics_pipeline`.
+        if let Some(pipeline_cache) = cache {
+            let mut pipeline_cache = pipeline_cache.inner.lock();
+
+            pipeline_cache
+                .binary_archive
+                .add_compute_pipeline_functions_with_descriptor(&pipeline)
+                .unwrap();
+            pipeline_cache.is_empty = false;
+        }
+
+        Ok(pipeline_state)
     }
 
     unsafe fn create_framebuffer<I>(
