@@ -61,6 +61,7 @@ pub mod pso;
 pub mod query;
 pub mod queue;
 pub mod window;
+pub mod display;
 
 /// Prelude module re-exports all the traits necessary to use `gfx-hal`.
 pub mod prelude {
@@ -698,6 +699,26 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     /// # Safety
     ///
     unsafe fn destroy_surface(&self, surface: B::Surface);
+
+    /// Enumerate active displays [surface][display::Display] from display.
+    unsafe fn enumerate_active_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Vec<display::Display<'a,B>>;
+
+    /// Create a new [surface][window::Surface] from display.
+    ///
+    /// Surfaces can be used to render to windows.
+    ///
+    /// # Safety
+    ///
+    /// This method can cause undefined behavior if `raw_window_handle` isn't
+    /// a handle to a valid window for the current platform.
+    unsafe fn create_display_surface(
+        &self,
+        display_mode: &display::DisplayMode<B>,
+        plane_index: u32,
+        plane_stack_index: u32,
+        transformation: display::SurfaceTransformation,
+        alpha: display::DisplayPlaneAlpha
+    ) -> Result<B::Surface, window::InitError>;
 }
 
 /// A strongly-typed index to a particular `MemoryType`.
@@ -788,4 +809,8 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type Event: fmt::Debug + Any + Send + Sync;
     /// The corresponding query pool type for this backend.
     type QueryPool: fmt::Debug + Any + Send + Sync;
+    /// The corresponding display type for this backend.
+    type Display: fmt::Debug + Any + Send + Sync;
+    /// The corresponding display mode type for this backend.
+    type DisplayMode: fmt::Debug + Any + Send + Sync;
 }

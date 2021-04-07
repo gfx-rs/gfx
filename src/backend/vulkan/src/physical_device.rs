@@ -168,6 +168,21 @@ impl PhysicalDeviceFeatures {
                         .descriptor_indexing(
                             features.intersects(Features::DESCRIPTOR_INDEXING_MASK),
                         )
+                        .shader_sampled_image_array_non_uniform_indexing(
+                            features.contains(Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
+                        )
+                        .shader_storage_image_array_non_uniform_indexing(
+                            features.contains(Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING),
+                        )
+                        .shader_storage_buffer_array_non_uniform_indexing(
+                            features.contains(Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING),
+                        )
+                        .shader_uniform_buffer_array_non_uniform_indexing(
+                            features.contains(Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING),
+                        )
+                        .runtime_descriptor_array(
+                            features.contains(Features::UNSIZED_DESCRIPTOR_ARRAY),
+                        )
                         .sampler_filter_minmax(supports_vulkan12_sampler_filter_minmax)
                         .imageless_framebuffer(supports_vulkan12_imageless_framebuffer)
                         .build(),

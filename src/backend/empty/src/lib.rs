@@ -10,7 +10,7 @@ use crate::{
     memory::Memory,
 };
 
-use hal::{adapter, command, device, format, pass, pool, pso, query, queue, window};
+use hal::{adapter, command, device, format, pass, pool, pso, query, queue, window, display};
 use log::debug;
 
 use std::{borrow::Borrow, ops::Range};
@@ -60,6 +60,9 @@ impl hal::Backend for Backend {
     type Semaphore = ();
     type Event = ();
     type QueryPool = ();
+
+    type Display = ();
+    type DisplayMode = ();
 }
 
 /// Dummy physical device.
@@ -1080,4 +1083,15 @@ impl hal::Instance<Backend> for Instance {
     }
 
     unsafe fn destroy_surface(&self, _surface: Surface) {}
+
+    unsafe fn enumerate_active_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Vec<display::Display<'a,Backend>> {unimplemented!();}
+
+    unsafe fn create_display_surface(
+        &self,
+        display_mode: &display::DisplayMode<Backend>,
+        plane_index: u32,
+        plane_stack_index: u32,
+        transformation: display::SurfaceTransformation,
+        alpha: display::DisplayPlaneAlpha
+    ) -> Result<Surface, window::InitError> {unimplemented!();}
 }

@@ -64,6 +64,7 @@ mod native;
 mod physical_device;
 mod pool;
 mod window;
+mod display;
 
 pub use physical_device::*;
 
@@ -447,6 +448,8 @@ impl hal::Instance<Backend> for Instance {
                 extensions.push(vk::KhrStorageBufferStorageClassFn::name());
             }
 
+            extensions.push(khr::Display::name());
+
             // Only keep available extensions.
             extensions.retain(|&ext| {
                 if instance_extensions
@@ -646,6 +649,95 @@ impl hal::Instance<Backend> for Instance {
             .raw
             .functor
             .destroy_surface(surface.raw.handle, None);
+    }
+    unsafe fn enumerate_active_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Vec<hal::display::Display<'a,Backend>>{
+        let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
+
+        let display_properties = display_extension.get_physical_device_display_properties(adapter.physical_device.handle).expect("Failed to get display properties");
+
+        let mut displays = Vec::new();
+        for display_property in display_properties
+        {
+
+            let supported_transforms = display::vk_transformations_to_hal(display_property.supported_transforms);
+
+            let display_info = hal::display::DisplayInfo {
+                name: std::ffi::CStr::from_ptr(display_property.display_name).to_str().unwrap().to_owned(),
+                physical_dimensions: (display_property.physical_dimensions.width,display_property.physical_dimensions.height),
+                physical_resolution: (display_property.physical_resolution.width,display_property.physical_resolution.height),
+                supported_transforms: supported_transforms,
+                plane_reorder_possible: display_property.plane_reorder_possible == 1,
+                persistent_content: display_property.persistent_content == 1
+            };
+
+            let display_modes = display_extension.get_display_mode_properties(adapter.physical_device.handle,display_property.display).expect("Failed to get display plane properties")
+                .iter()
+                .map(|display_mode_properties|{
+                    hal::display::DisplayMode {
+                        handle: native::DisplayMode(display_mode_properties.display_mode),
+                        resolution: (display_mode_properties.parameters.visible_region.width,display_mode_properties.parameters.visible_region.width),
+                        refresh_rate: display_mode_properties.parameters.refresh_rate
+                    }
+            }).collect();
+
+            let planes_count = display_extension.get_physical_device_display_plane_properties(adapter.physical_device.handle).unwrap().len() as u32;
+
+            let display = hal::display::Display
+            {
+                physical_device: &adapter.physical_device,
+                handle: native::Display(display_property.display),
+                info: display_info,
+                modes: display_modes,
+                planes_count: planes_count
+            };
+            displays.push(display);
+        }
+        return displays;
+    }
+
+    unsafe fn create_display_surface(
+        &self,
+        display_mode: &hal::display::DisplayMode<Backend>,
+        plane_index: u32,
+        plane_stack_index: u32,
+        transformation: hal::display::SurfaceTransformation,
+        alpha: hal::display::DisplayPlaneAlpha
+    ) -> Result<window::Surface, hal::window::InitError> {
+        let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
+
+        let display_surface_ci =
+        {
+            let builder = vk::DisplaySurfaceCreateInfoKHR::builder()
+            .display_mode(display_mode.handle.0)
+            .plane_index(plane_index)
+            .plane_stack_index(plane_stack_index);
+
+            let builder = match transformation
+            {
+                hal::display::SurfaceTransformation::Identity=>builder.transform(vk::SurfaceTransformFlagsKHR::IDENTITY),
+                hal::display::SurfaceTransformation::Rotate90=>builder.transform(vk::SurfaceTransformFlagsKHR::ROTATE_90),
+                hal::display::SurfaceTransformation::Rotate180=>builder.transform(vk::SurfaceTransformFlagsKHR::ROTATE_180),
+                hal::display::SurfaceTransformation::Rotate270=>builder.transform(vk::SurfaceTransformFlagsKHR::ROTATE_270),
+                hal::display::SurfaceTransformation::HorizontalMirror=>builder.transform(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR),
+                hal::display::SurfaceTransformation::HorizontalMirrorRotate90=>builder.transform(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_90),
+                hal::display::SurfaceTransformation::HorizontalMirrorRotate180=>builder.transform(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_180),
+                hal::display::SurfaceTransformation::HorizontalMirrorRotate270=>builder.transform(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_270),
+                hal::display::SurfaceTransformation::Inherit=>builder.transform(vk::SurfaceTransformFlagsKHR::INHERIT)
+            };
+
+            match alpha
+            {
+                hal::display::DisplayPlaneAlpha::Opaque=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE),
+                hal::display::DisplayPlaneAlpha::Global(value)=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::GLOBAL).global_alpha(value),
+                hal::display::DisplayPlaneAlpha::PerPixel=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL),
+                hal::display::DisplayPlaneAlpha::PerPixelPremultiplied=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED)
+            }
+            .build()
+        };
+
+        let surface = display_extension.create_display_plane_surface(&display_surface_ci,None).unwrap();
+
+        Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 }
 
@@ -1070,4 +1162,7 @@ impl hal::Backend for Backend {
     type Semaphore = native::Semaphore;
     type Event = native::Event;
     type QueryPool = native::QueryPool;
+
+    type Display = native::Display;
+    type DisplayMode = native::DisplayMode;
 }
