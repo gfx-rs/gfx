@@ -1787,17 +1787,13 @@ impl hal::device::Device<Backend> for Device {
         }
 
         if let Some(pipeline_cache) = cache {
-            let mut pipeline_cache = pipeline_cache.inner.lock();
-
+            let pipeline_cache = pipeline_cache.inner.lock();
             pipeline.set_binary_archives(&[&pipeline_cache.binary_archive]);
-            pipeline_cache
-                .binary_archive
-                .add_render_pipeline_functions_with_descriptor(&pipeline)
-                .unwrap();
-            pipeline_cache.is_empty = false;
         }
 
-        device
+        let pipeline_state = device
+            // Replace this with `new_render_pipeline_state_with_fail_on_binary_archive_miss`
+            // to debug that the cache is actually working.
             .new_render_pipeline_state(&pipeline)
             .map(|raw| n::GraphicsPipeline {
                 vs_lib,
@@ -1817,7 +1813,22 @@ impl hal::device::Device<Backend> for Device {
             .map_err(|err| {
                 error!("PSO creation failed: {}", err);
                 pso::CreationError::Other
-            })
+            })?;
+
+        // We need to add the pipline descriptor to the cache after creating the pipeline,
+        // otherwise `new_render_pipeline_state_with_fail_on_binary_archive_miss` succeeds
+        // when it shouldn't.
+        if let Some(pipeline_cache) = cache {
+            let mut pipeline_cache = pipeline_cache.inner.lock();
+
+            pipeline_cache
+                .binary_archive
+                .add_render_pipeline_functions_with_descriptor(&pipeline)
+                .unwrap();
+            pipeline_cache.is_empty = false;
+        }
+
+        Ok(pipeline_state)
     }
 
     unsafe fn create_compute_pipeline<'a>(
