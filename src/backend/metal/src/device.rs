@@ -1444,12 +1444,12 @@ impl hal::device::Device<Backend> for Device {
                 None
             };
 
-            Some(Mutex::new(n::BinaryArchive {
+            Some(n::BinaryArchive {
                 inner: device
                     .new_binary_archive_with_descriptor(&descriptor)
                     .map_err(|_| d::OutOfMemory::Device)?,
-                is_empty: data.is_none(),
-            }))
+                is_empty: AtomicBool::new(data.is_none()),
+            })
         } else {
             None
         };
@@ -1462,13 +1462,13 @@ impl hal::device::Device<Backend> for Device {
         cache: &n::PipelineCache,
     ) -> Result<Vec<u8>, d::OutOfMemory> {
         let binary_archive = match &cache.binary_archive {
-            Some(binary_archive) => binary_archive.lock(),
+            Some(binary_archive) => binary_archive,
             None => return Ok(Vec::new()),
         };
 
         // Without this, we get an extremely vague "Serialization of binaries to file failed"
         // error when serializing an empty binary archive.
-        if binary_archive.is_empty {
+        if binary_archive.is_empty.load(Ordering::Relaxed) {
             return Ok(Vec::new());
         }
 
@@ -1798,7 +1798,6 @@ impl hal::device::Device<Backend> for Device {
         }
 
         if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
-            let binary_archive = binary_archive.lock();
             pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
 
@@ -1830,13 +1829,11 @@ impl hal::device::Device<Backend> for Device {
         // pipeline, otherwise `new_render_pipeline_state_with_fail_on_binary_archive_miss`
         // succeeds when it shouldn't.
         if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
-            let mut binary_archive = binary_archive.lock();
-
             binary_archive
                 .inner
                 .add_render_pipeline_functions_with_descriptor(&pipeline)
                 .unwrap();
-            binary_archive.is_empty = false;
+            binary_archive.is_empty.store(false, Ordering::Relaxed);
         }
 
         Ok(pipeline_state)
@@ -1862,7 +1859,6 @@ impl hal::device::Device<Backend> for Device {
         }
 
         if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
-            let binary_archive = binary_archive.lock();
             pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
 
@@ -1885,13 +1881,11 @@ impl hal::device::Device<Backend> for Device {
         // We need to add the pipline descriptor to the binary archive after creating the
         // pipeline, see `create_graphics_pipeline`.
         if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
-            let mut binary_archive = binary_archive.lock();
-
             binary_archive
                 .inner
                 .add_compute_pipeline_functions_with_descriptor(&pipeline)
                 .unwrap();
-            binary_archive.is_empty = false;
+            binary_archive.is_empty.store(false, Ordering::Relaxed)
         }
 
         Ok(pipeline_state)

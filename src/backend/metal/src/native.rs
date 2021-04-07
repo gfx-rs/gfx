@@ -15,7 +15,7 @@ use range_alloc::RangeAllocator;
 
 use arrayvec::ArrayVec;
 use metal;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 
 use std::{
     fmt,
@@ -204,13 +204,14 @@ pub struct ModuleInfo {
 
 pub(crate) struct BinaryArchive {
     pub(crate) inner: metal::BinaryArchive,
-    pub(crate) is_empty: bool,
+    pub(crate) is_empty: AtomicBool,
 }
 
 unsafe impl Send for BinaryArchive {}
+unsafe impl Sync for BinaryArchive {}
 
 pub struct PipelineCache {
-    pub(crate) binary_archive: Option<Mutex<BinaryArchive>>,
+    pub(crate) binary_archive: Option<BinaryArchive>,
 }
 
 impl fmt::Debug for PipelineCache {
