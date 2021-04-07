@@ -650,19 +650,29 @@ impl hal::Instance<Backend> for Instance {
             .functor
             .destroy_surface(surface.raw.handle, None);
     }
-    unsafe fn enumerate_active_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Vec<hal::display::Display<'a,Backend>>{
+    fn enumerate_active_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Result<Vec<hal::display::Display<'a,Backend>>,hal::device::OutOfMemory>{
         let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
 
-        let display_properties = display_extension.get_physical_device_display_properties(adapter.physical_device.handle).expect("Failed to get display properties");
+        let display_properties = match unsafe{display_extension.get_physical_device_display_properties(adapter.physical_device.handle)}
+        {
+            Ok(display_properties)=>display_properties,
+            Err(error)=>{
+                match error
+                {
+                    ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
+                    ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
+                    _=>panic!("Unexpected error returned")
+                };
+            }
+        };
 
         let mut displays = Vec::new();
         for display_property in display_properties
         {
-
             let supported_transforms = display::vk_transformations_to_hal(display_property.supported_transforms);
 
             let display_info = hal::display::DisplayInfo {
-                name: std::ffi::CStr::from_ptr(display_property.display_name).to_str().unwrap().to_owned(),
+                name: unsafe{std::ffi::CStr::from_ptr(display_property.display_name)}.to_str().unwrap().to_owned(),
                 physical_dimensions: (display_property.physical_dimensions.width,display_property.physical_dimensions.height),
                 physical_resolution: (display_property.physical_resolution.width,display_property.physical_resolution.height),
                 supported_transforms: supported_transforms,
@@ -670,17 +680,38 @@ impl hal::Instance<Backend> for Instance {
                 persistent_content: display_property.persistent_content == 1
             };
 
-            let display_modes = display_extension.get_display_mode_properties(adapter.physical_device.handle,display_property.display).expect("Failed to get display plane properties")
-                .iter()
-                .map(|display_mode_properties|{
-                    hal::display::DisplayMode {
-                        handle: native::DisplayMode(display_mode_properties.display_mode),
-                        resolution: (display_mode_properties.parameters.visible_region.width,display_mode_properties.parameters.visible_region.width),
-                        refresh_rate: display_mode_properties.parameters.refresh_rate
-                    }
+            let display_modes = match unsafe{display_extension.get_display_mode_properties(adapter.physical_device.handle,display_property.display)}
+            {
+                Ok(display_modes)=>display_modes,
+                Err(error)=>{
+                    match error
+                    {
+                        ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
+                        ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
+                        _=>panic!("Unexpected error returned")
+                    };
+                }
+            }.iter().map(|display_mode_properties|
+            {
+                hal::display::DisplayMode {
+                    handle: native::DisplayMode(display_mode_properties.display_mode),
+                    resolution: (display_mode_properties.parameters.visible_region.width,display_mode_properties.parameters.visible_region.width),
+                    refresh_rate: display_mode_properties.parameters.refresh_rate
+                }
             }).collect();
 
-            let planes_count = display_extension.get_physical_device_display_plane_properties(adapter.physical_device.handle).unwrap().len() as u32;
+            let planes_count = match unsafe{display_extension.get_physical_device_display_plane_properties(adapter.physical_device.handle)}
+            {
+                Ok(planes)=>planes,
+                Err(error)=>{
+                    match error
+                    {
+                        ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
+                        ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
+                        _=>panic!("Unexpected error returned")
+                    };
+                }
+            }.len() as u32;
 
             let display = hal::display::Display
             {
@@ -692,25 +723,26 @@ impl hal::Instance<Backend> for Instance {
             };
             displays.push(display);
         }
-        return displays;
+        return Ok(displays);
     }
 
-    unsafe fn create_display_surface(
+    fn create_display_surface(
         &self,
         display_mode: &hal::display::DisplayMode<Backend>,
         plane_index: u32,
         plane_stack_index: u32,
         transformation: hal::display::SurfaceTransformation,
-        alpha: hal::display::DisplayPlaneAlpha
-    ) -> Result<window::Surface, hal::window::InitError> {
+        alpha: hal::display::DisplayPlaneAlpha,
+        image_extent: (u32,u32)
+    ) -> Result<window::Surface, hal::device::OutOfMemory> {
         let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
 
-        let display_surface_ci =
-        {
+        let display_surface_ci = {
             let builder = vk::DisplaySurfaceCreateInfoKHR::builder()
             .display_mode(display_mode.handle.0)
             .plane_index(plane_index)
-            .plane_stack_index(plane_stack_index);
+            .plane_stack_index(plane_stack_index)
+            .image_extent(vk::Extent2D{width: image_extent.0,height: image_extent.1});
 
             let builder = match transformation
             {
@@ -735,7 +767,7 @@ impl hal::Instance<Backend> for Instance {
             .build()
         };
 
-        let surface = display_extension.create_display_plane_surface(&display_surface_ci,None).unwrap();
+        let surface = unsafe{display_extension.create_display_plane_surface(&display_surface_ci,None)}.unwrap();
 
         Ok(self.create_surface_from_vk_surface_khr(surface))
     }

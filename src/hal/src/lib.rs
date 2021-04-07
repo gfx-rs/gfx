@@ -701,7 +701,7 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     unsafe fn destroy_surface(&self, surface: B::Surface);
 
     /// Enumerate active displays [surface][display::Display] from display.
-    unsafe fn enumerate_active_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Vec<display::Display<'a,B>>;
+    fn enumerate_active_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Result<Vec<display::Display<'a,B>>,device::OutOfMemory>;
 
     /// Create a new [surface][window::Surface] from display.
     ///
@@ -711,14 +711,15 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     ///
     /// This method can cause undefined behavior if `raw_window_handle` isn't
     /// a handle to a valid window for the current platform.
-    unsafe fn create_display_surface(
+     fn create_display_surface(
         &self,
         display_mode: &display::DisplayMode<B>,
         plane_index: u32,
         plane_stack_index: u32,
         transformation: display::SurfaceTransformation,
-        alpha: display::DisplayPlaneAlpha
-    ) -> Result<B::Surface, window::InitError>;
+        alpha: display::DisplayPlaneAlpha,
+        image_extent: (u32,u32)
+    ) -> Result<B::Surface, device::OutOfMemory>;
 }
 
 /// A strongly-typed index to a particular `MemoryType`.

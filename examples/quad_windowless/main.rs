@@ -100,19 +100,29 @@ fn main() {
         adapters.remove(0)
     };
 
-    let displays = unsafe{instance.enumerate_active_displays(&adapter)};
+    let displays = instance.enumerate_active_displays(&adapter).expect("Failed to enumerate displays");
+    if displays.len() == 0 {panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");}
+
+    //Get the first available display
     let display = &displays[0];
+
+    //Get the first available display mode (generally the preferred one)
     let display_mode = &display.modes[0];
 
-    let surface = unsafe {
-        instance
-            .create_display_surface(&display_mode,0,0,display::SurfaceTransformation::Identity,display::DisplayPlaneAlpha::Opaque)
-            .expect("Failed to create a surface!")
-    };
+    //Create a surface from the display
+    let surface = instance.create_display_surface(
+        &display_mode,                              //Display mode
+        0,                                          //Plane index
+        0,                                          //Plane Z index
+        display::SurfaceTransformation::Identity,   //Surface transformation
+        display::DisplayPlaneAlpha::Opaque,         //Opacity
+        (320,320)                                   //Image extent
+    ).expect("Failed to create a surface!");
 
     let mut renderer = Renderer::new(instance, surface, adapter);
 
     renderer.render();
+    std::thread::sleep(std::time::Duration::from_secs(5));
 
     // It is important that the closure move captures the Renderer,
     // otherwise it will not be dropped when the event loop exits.
@@ -150,8 +160,6 @@ fn main() {
         }
     });
     */
-    renderer.render();
-    std::thread::sleep(std::time::Duration::from_secs(5));
 }
 
 struct Renderer<B: hal::Backend> {

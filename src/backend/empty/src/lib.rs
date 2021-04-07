@@ -1084,14 +1084,15 @@ impl hal::Instance<Backend> for Instance {
 
     unsafe fn destroy_surface(&self, _surface: Surface) {}
 
-    unsafe fn enumerate_active_displays<'a>(&self,_adapter: &'a adapter::Adapter<Backend>)->Vec<display::Display<'a,Backend>> {unimplemented!();}
+    fn enumerate_active_displays<'a>(&self,_adapter: &'a adapter::Adapter<Backend>)->Result<Vec<display::Display<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
 
-    unsafe fn create_display_surface(
+    fn create_display_surface(
         &self,
         _display_mode: &display::DisplayMode<Backend>,
         _plane_index: u32,
         _plane_stack_index: u32,
         _transformation: display::SurfaceTransformation,
-        _alpha: display::DisplayPlaneAlpha
-    ) -> Result<Surface, window::InitError> {unimplemented!();}
+        _alpha: display::DisplayPlaneAlpha,
+        _image_extent: (u32,u32)
+    ) -> Result<Surface, device::OutOfMemory> {unimplemented!();}
 }
