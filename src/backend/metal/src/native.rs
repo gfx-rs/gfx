@@ -202,15 +202,15 @@ pub struct ModuleInfo {
     pub rasterization_enabled: bool,
 }
 
-pub(crate) struct PipelineCacheInner {
-    pub(crate) binary_archive: metal::BinaryArchive,
+pub(crate) struct BinaryArchive {
+    pub(crate) inner: metal::BinaryArchive,
     pub(crate) is_empty: bool,
 }
 
-unsafe impl Send for PipelineCacheInner {}
+unsafe impl Send for BinaryArchive {}
 
 pub struct PipelineCache {
-    pub(crate) inner: Mutex<PipelineCacheInner>,
+    pub(crate) binary_archive: Option<Mutex<BinaryArchive>>,
 }
 
 impl fmt::Debug for PipelineCache {

@@ -1416,48 +1416,59 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<n::PipelineCache, d::OutOfMemory> {
         let device = self.shared.device.lock();
 
-        let descriptor = metal::BinaryArchiveDescriptor::new();
+        // Todo: should this be an `&&`?
+        let supports_binary_archive = device.supports_family(metal::MTLGPUFamily::Apple3)
+            || device.supports_family(metal::MTLGPUFamily::Mac1);
 
-        // We need to keep the temp file alive so that it doesn't get deleted until after a
-        // binary archive has been created.
-        let _temp_file = if let Some(data) = data.filter(|data| !data.is_empty()) {
-            // It would be nice to use a `data:text/plain;base64` url here and just pass in a
-            // base64-encoded version of the data, but metal validation doesn't like that:
-            // -[MTLDebugDevice newBinaryArchiveWithDescriptor:error:]:1046: failed assertion `url, if not nil, must be a file URL.'
+        let binary_archive = if supports_binary_archive {
+            let descriptor = metal::BinaryArchiveDescriptor::new();
 
-            let temp_file = tempfile::NamedTempFile::new().unwrap();
+            // We need to keep the temp file alive so that it doesn't get deleted until after a
+            // binary archive has been created.
+            let _temp_file = if let Some(data) = data.filter(|data| !data.is_empty()) {
+                // It would be nice to use a `data:text/plain;base64` url here and just pass in a
+                // base64-encoded version of the data, but metal validation doesn't like that:
+                // -[MTLDebugDevice newBinaryArchiveWithDescriptor:error:]:1046: failed assertion `url, if not nil, must be a file URL.'
 
-            temp_file.as_file().write_all(&data).unwrap();
+                let temp_file = tempfile::NamedTempFile::new().unwrap();
 
-            let url =
-                metal::URL::new_with_string(&format!("file://{}", temp_file.path().display()));
+                temp_file.as_file().write_all(&data).unwrap();
 
-            descriptor.set_url(&url);
+                let url =
+                    metal::URL::new_with_string(&format!("file://{}", temp_file.path().display()));
 
-            Some(temp_file)
+                descriptor.set_url(&url);
+
+                Some(temp_file)
+            } else {
+                None
+            };
+
+            Some(Mutex::new(n::BinaryArchive {
+                inner: device
+                    .new_binary_archive_with_descriptor(&descriptor)
+                    .map_err(|_| d::OutOfMemory::Device)?,
+                is_empty: data.is_none(),
+            }))
         } else {
             None
         };
 
-        Ok(n::PipelineCache {
-            inner: Mutex::new(n::PipelineCacheInner {
-                binary_archive: device
-                    .new_binary_archive_with_descriptor(&descriptor)
-                    .map_err(|_| d::OutOfMemory::Device)?,
-                is_empty: data.is_none(),
-            }),
-        })
+        Ok(n::PipelineCache { binary_archive })
     }
 
     unsafe fn get_pipeline_cache_data(
         &self,
         cache: &n::PipelineCache,
     ) -> Result<Vec<u8>, d::OutOfMemory> {
-        let cache = cache.inner.lock();
+        let binary_archive = match &cache.binary_archive {
+            Some(binary_archive) => binary_archive.lock(),
+            None => return Ok(Vec::new()),
+        };
 
         // Without this, we get an extremely vague "Serialization of binaries to file failed"
         // error when serializing an empty binary archive.
-        if cache.is_empty {
+        if binary_archive.is_empty {
             return Ok(Vec::new());
         }
 
@@ -1465,8 +1476,8 @@ impl hal::device::Device<Backend> for Device {
 
         let tmp_file_url = metal::URL::new_with_string(&format!("file://{}", temp_path.display()));
 
-        cache
-            .binary_archive
+        binary_archive
+            .inner
             .serialize_to_url(&tmp_file_url)
             .unwrap();
 
@@ -1786,9 +1797,9 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
-        if let Some(pipeline_cache) = cache {
-            let pipeline_cache = pipeline_cache.inner.lock();
-            pipeline.set_binary_archives(&[&pipeline_cache.binary_archive]);
+        if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
+            let binary_archive = binary_archive.lock();
+            pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
 
         let pipeline_state = device
@@ -1815,17 +1826,17 @@ impl hal::device::Device<Backend> for Device {
                 pso::CreationError::Other
             })?;
 
-        // We need to add the pipline descriptor to the cache after creating the pipeline,
-        // otherwise `new_render_pipeline_state_with_fail_on_binary_archive_miss` succeeds
-        // when it shouldn't.
-        if let Some(pipeline_cache) = cache {
-            let mut pipeline_cache = pipeline_cache.inner.lock();
+        // We need to add the pipline descriptor to the binary archive after creating the
+        // pipeline, otherwise `new_render_pipeline_state_with_fail_on_binary_archive_miss`
+        // succeeds when it shouldn't.
+        if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
+            let mut binary_archive = binary_archive.lock();
 
-            pipeline_cache
-                .binary_archive
+            binary_archive
+                .inner
                 .add_render_pipeline_functions_with_descriptor(&pipeline)
                 .unwrap();
-            pipeline_cache.is_empty = false;
+            binary_archive.is_empty = false;
         }
 
         Ok(pipeline_state)
@@ -1850,10 +1861,9 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
-        if let Some(pipeline_cache) = cache {
-            let pipeline_cache = pipeline_cache.inner.lock();
-
-            pipeline.set_binary_archives(&[&pipeline_cache.binary_archive]);
+        if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
+            let binary_archive = binary_archive.lock();
+            pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
 
         let pipeline_state = self
@@ -1872,16 +1882,16 @@ impl hal::device::Device<Backend> for Device {
                 pso::CreationError::Other
             })?;
 
-        // We need to add the pipline descriptor to the cache after creating the pipeline,
-        // see `create_graphics_pipeline`.
-        if let Some(pipeline_cache) = cache {
-            let mut pipeline_cache = pipeline_cache.inner.lock();
+        // We need to add the pipline descriptor to the binary archive after creating the
+        // pipeline, see `create_graphics_pipeline`.
+        if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
+            let mut binary_archive = binary_archive.lock();
 
-            pipeline_cache
-                .binary_archive
+            binary_archive
+                .inner
                 .add_compute_pipeline_functions_with_descriptor(&pipeline)
                 .unwrap();
-            pipeline_cache.is_empty = false;
+            binary_archive.is_empty = false;
         }
 
         Ok(pipeline_state)
