@@ -55,7 +55,7 @@ pub enum SurfaceTransformation
     /// Specify that the presentation transform is not specified, and is instead determined by platform-specific considerations and mechanisms outside Vulkan.
     Inherit
 }
-impl std::default::Default for SurfaceTransformation
+impl Default for SurfaceTransformation
 {
     fn default() -> Self { Self::Identity }
 }
@@ -110,7 +110,7 @@ pub enum DisplayPlaneAlpha
     PerPixelPremultiplied
 }
 
-impl std::default::Default for DisplayPlaneAlpha
+impl Default for DisplayPlaneAlpha
 {
     fn default() -> Self { Self::Opaque }
 }

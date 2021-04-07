@@ -1,16 +1,5 @@
 use ash::vk;
-use hal::{
-    adapter,
-    display,
-};
-
-use crate::{Instance,Backend,native,window};
-
-impl Instance
-{
-
-}
-
+use hal::display;
 
 pub fn vk_transformations_to_hal(vk_transformations: vk::SurfaceTransformFlagsKHR)->Vec<display::SurfaceTransformation>
 {
