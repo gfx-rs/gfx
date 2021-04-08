@@ -203,14 +203,17 @@ impl RenderPassDescriptorCache {
             let desc = rp_desc.color_attachments().object_at(i as _).unwrap();
             desc.set_texture(None);
             desc.set_resolve_texture(None);
+            desc.set_level(0);
             desc.set_slice(0);
         }
         if let Some(desc) = rp_desc.depth_attachment() {
             desc.set_texture(None);
+            desc.set_level(0);
             desc.set_slice(0);
         }
         if let Some(desc) = rp_desc.stencil_attachment() {
             desc.set_texture(None);
+            desc.set_level(0);
             desc.set_slice(0);
         }
         self.spare_descriptors.push(rp_desc);
