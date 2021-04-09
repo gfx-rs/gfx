@@ -15,7 +15,8 @@ edition = "2018"
 [features]
 default = []
 signpost = []
-cross = ["spirv_cross", "auxil", "naga/spv-out"]
+cross = ["spirv_cross", "auxil", "naga/spv-out", "serde-cache"]
+serde-cache = ["serde", "naga/serialize", "naga/deserialize", "bincode"]
 
 [lib]
 name = "gfx_backend_metal"
@@ -38,6 +39,8 @@ parking_lot = "0.11"
 storage-map = "0.3"
 raw-window-handle = "0.3"
 tempfile = "3.2"
+serde = { version = "1", features = ["serde_derive"], optional = true }
+bincode = { version = "1", optional = true }
 
 [dependencies.auxil]
 package = "gfx-auxil"

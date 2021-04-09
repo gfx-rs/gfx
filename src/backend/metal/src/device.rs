@@ -586,80 +586,108 @@ impl Device {
         msl_version: MTLLanguageVersion,
         specialization: &pso::Specialization,
         stage: naga::ShaderStage,
+        spv_to_msl_cache: Option<&n::SpvToMsl>,
     ) -> Result<n::ModuleInfo, String> {
         use spirv_cross::ErrorCode as Ec;
 
-        let module = spirv_cross::spirv::Module::from_words(raw_data);
+        let create_module = || -> Result<_, String> {
+            let module = spirv_cross::spirv::Module::from_words(raw_data);
 
-        // now parse again using the new overrides
-        let mut ast =
-            spirv_cross::spirv::Ast::<spirv_cross::msl::Target>::parse(&module).map_err(|err| {
-                match err {
-                    Ec::CompilationError(msg) => msg,
-                    Ec::Unhandled => "Unexpected parse error".into(),
-                }
-            })?;
-
-        auxil::spirv_cross_specialize_ast(&mut ast, specialization)?;
-
-        ast.set_compiler_options(compiler_options)
-            .map_err(|err| match err {
-                Ec::CompilationError(msg) => msg,
-                Ec::Unhandled => "Unexpected error".into(),
-            })?;
-
-        let entry_points = ast.get_entry_points().map_err(|err| match err {
-            Ec::CompilationError(msg) => msg,
-            Ec::Unhandled => "Unexpected entry point error".into(),
-        })?;
-
-        let shader_code = ast.compile().map_err(|err| match err {
-            Ec::CompilationError(msg) => msg,
-            Ec::Unhandled => "Unknown compile error".into(),
-        })?;
-
-        let mut entry_point_map = n::EntryPointMap::default();
-        for entry_point in entry_points {
-            info!("Entry point {:?}", entry_point);
-            let cleansed = ast
-                .get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
+            // now parse again using the new overrides
+            let mut ast = spirv_cross::spirv::Ast::<spirv_cross::msl::Target>::parse(&module)
                 .map_err(|err| match err {
                     Ec::CompilationError(msg) => msg,
-                    Ec::Unhandled => "Unknown compile error".into(),
+                    Ec::Unhandled => "Unexpected parse error".into(),
                 })?;
-            entry_point_map.insert(
-                (stage, entry_point.name),
-                n::EntryPoint {
-                    //TODO: should we try to do better?
-                    internal_name: Ok(cleansed),
-                    work_group_size: [
-                        entry_point.work_group_size.x,
-                        entry_point.work_group_size.y,
-                        entry_point.work_group_size.z,
-                    ],
-                },
-            );
-        }
 
-        let rasterization_enabled = ast
-            .is_rasterization_enabled()
-            .map_err(|_| "Unknown compile error".to_string())?;
+            auxil::spirv_cross_specialize_ast(&mut ast, specialization)?;
 
-        // done
-        debug!("SPIRV-Cross generated shader:\n{}", shader_code);
+            ast.set_compiler_options(compiler_options)
+                .map_err(|err| match err {
+                    Ec::CompilationError(msg) => msg,
+                    Ec::Unhandled => "Unexpected error".into(),
+                })?;
+
+            let entry_points = ast.get_entry_points().map_err(|err| match err {
+                Ec::CompilationError(msg) => msg,
+                Ec::Unhandled => "Unexpected entry point error".into(),
+            })?;
+
+            let shader_code = ast.compile().map_err(|err| match err {
+                Ec::CompilationError(msg) => msg,
+                Ec::Unhandled => "Unknown compile error".into(),
+            })?;
+
+            let mut entry_point_map = n::EntryPointMap::default();
+            for entry_point in entry_points {
+                info!("Entry point {:?}", entry_point);
+                let cleansed = ast
+                    .get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
+                    .map_err(|err| match err {
+                        Ec::CompilationError(msg) => msg,
+                        Ec::Unhandled => "Unknown compile error".into(),
+                    })?;
+                entry_point_map.insert(
+                    (stage, entry_point.name),
+                    n::EntryPoint {
+                        //TODO: should we try to do better?
+                        internal_name: Ok(cleansed),
+                        work_group_size: [
+                            entry_point.work_group_size.x,
+                            entry_point.work_group_size.y,
+                            entry_point.work_group_size.z,
+                        ],
+                    },
+                );
+            }
+
+            let rasterization_enabled = ast
+                .is_rasterization_enabled()
+                .map_err(|_| "Unknown compile error".to_string())?;
+
+            // done
+            debug!("SPIRV-Cross generated shader:\n{}", shader_code);
+
+            Ok(n::SerializableModuleInfo {
+                shader_code,
+                rasterization_enabled,
+                entry_point_map,
+            })
+        };
+
         let options = metal::CompileOptions::new();
         options.set_language_version(msl_version);
 
-        let library = device
-            .lock()
-            .new_library_with_source(shader_code.as_ref(), &options)
-            .map_err(|err| err.to_string())?;
+        if let Some(spv_to_msl_cache) = spv_to_msl_cache {
+            let spv_to_msl =
+                spv_to_msl_cache.get_or_create_with(compiler_options, || Default::default());
+            let module =
+                spv_to_msl.get_or_create_with(&raw_data.to_vec(), || create_module().unwrap());
 
-        Ok(n::ModuleInfo {
-            library,
-            entry_point_map,
-            rasterization_enabled,
-        })
+            let library = device
+                .lock()
+                .new_library_with_source(module.shader_code.as_ref(), &options)
+                .map_err(|err| err.to_string())?;
+
+            Ok(n::ModuleInfo {
+                library,
+                entry_point_map: module.entry_point_map.clone(),
+                rasterization_enabled: module.rasterization_enabled,
+            })
+        } else {
+            let module = create_module()?;
+
+            let library = device
+                .lock()
+                .new_library_with_source(module.shader_code.as_ref(), &options)
+                .map_err(|err| err.to_string())?;
+
+            Ok(n::ModuleInfo {
+                library,
+                entry_point_map: module.entry_point_map,
+                rasterization_enabled: module.rasterization_enabled,
+            })
+        }
     }
 
     fn compile_shader_library_naga(
@@ -728,6 +756,7 @@ impl Device {
         ep: &pso::EntryPoint<Backend>,
         layout: &n::PipelineLayout,
         primitive_class: MTLPrimitiveTopologyClass,
+        pipeline_cache: Option<&n::PipelineCache>,
         stage: naga::ShaderStage,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
         let device = &self.shared.device;
@@ -773,6 +802,7 @@ impl Device {
                     self.shared.private_caps.msl_version,
                     &ep.specialization,
                     stage,
+                    pipeline_cache.map(|cache| &cache.spirv_cross_spv_to_msl),
                 );
             }
             if result.is_err() && !ep.module.prefer_naga {
@@ -1454,13 +1484,29 @@ impl hal::device::Device<Backend> for Device {
             None
         };
 
-        Ok(n::PipelineCache { binary_archive })
+        Ok(n::PipelineCache {
+            binary_archive: None,
+            #[cfg(feature = "cross")]
+            spirv_cross_spv_to_msl: if let Some(data) = data.filter(|data| !data.is_empty()) {
+                let serializable = bincode::deserialize(data).unwrap();
+                n::load_spv_to_msl_cache(serializable)
+            } else {
+                Default::default()
+            },
+        })
     }
 
     unsafe fn get_pipeline_cache_data(
         &self,
         cache: &n::PipelineCache,
     ) -> Result<Vec<u8>, d::OutOfMemory> {
+        #[cfg(feature = "cross")]
+        {
+            let serializable = n::serialize_spv_to_msl_cache(&cache.spirv_cross_spv_to_msl);
+            let msl = bincode::serialize(&serializable).unwrap();
+            return Ok(msl);
+        }
+
         let binary_archive = match &cache.binary_archive {
             Some(binary_archive) => binary_archive,
             None => return Ok(Vec::new()),
@@ -1574,6 +1620,7 @@ impl hal::device::Device<Backend> for Device {
             vs,
             pipeline_layout,
             primitive_class,
+            cache,
             naga::ShaderStage::Vertex,
         )?;
         pipeline.set_vertex_function(Some(&vs_function));
@@ -1586,6 +1633,7 @@ impl hal::device::Device<Backend> for Device {
                     ep,
                     pipeline_layout,
                     primitive_class,
+                    cache,
                     naga::ShaderStage::Fragment,
                 )?;
                 fs_function = fun;
@@ -1851,6 +1899,7 @@ impl hal::device::Device<Backend> for Device {
             &pipeline_desc.shader,
             &pipeline_desc.layout,
             MTLPrimitiveTopologyClass::Unspecified,
+            cache,
             naga::ShaderStage::Compute,
         )?;
         pipeline.set_compute_function(Some(&cs_function));

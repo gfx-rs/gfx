@@ -16,4 +16,7 @@ members = [
 ]
 
 [patch."https://github.com/gfx-rs/naga"]
-#naga = { path = "../naga" }
+naga = { path = "../naga" }
+
+[patch."crates-io"]
+spirv_cross = { path = "../spirv_cross/spirv_cross" }
