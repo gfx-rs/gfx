@@ -16,7 +16,7 @@ edition = "2018"
 default = []
 signpost = []
 cross = ["spirv_cross", "auxil", "naga/spv-out", "serde-cache"]
-serde-cache = ["serde", "naga/serialize", "naga/deserialize", "bincode"]
+serde-cache = ["serde", "naga/serialize", "naga/deserialize", "bincode", "spirv_cross/serialize"]
 
 [lib]
 name = "gfx_backend_metal"
