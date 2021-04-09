@@ -267,6 +267,13 @@ pub(crate) fn serialize_spv_to_msl_cache(cache: &SpvToMsl) -> SerializableSpvToM
         .collect()
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct SerializablePipelineCache<'a> {
+    pub(crate) binary_archive: &'a [u8],
+    #[cfg(feature = "cross")]
+    pub(crate) spirv_cross_spv_to_msl: SerializableSpvToMsl,
+}
+
 pub struct PipelineCache {
     pub(crate) binary_archive: Option<BinaryArchive>,
     #[cfg(feature = "cross")]

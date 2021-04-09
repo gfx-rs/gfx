@@ -1446,90 +1446,103 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<n::PipelineCache, d::OutOfMemory> {
         let device = self.shared.device.lock();
 
-        // Todo: should this be an `&&`?
-        let supports_binary_archive = device.supports_family(metal::MTLGPUFamily::Apple3)
-            || device.supports_family(metal::MTLGPUFamily::Mac1);
+        let create_binary_archive = |data: &[u8]| {
+            let supports_binary_archive = device.supports_family(metal::MTLGPUFamily::Apple3)
+                || device.supports_family(metal::MTLGPUFamily::Mac1);
 
-        let binary_archive = if supports_binary_archive {
-            let descriptor = metal::BinaryArchiveDescriptor::new();
+            if supports_binary_archive {
+                let descriptor = metal::BinaryArchiveDescriptor::new();
 
-            // We need to keep the temp file alive so that it doesn't get deleted until after a
-            // binary archive has been created.
-            let _temp_file = if let Some(data) = data.filter(|data| !data.is_empty()) {
-                // It would be nice to use a `data:text/plain;base64` url here and just pass in a
-                // base64-encoded version of the data, but metal validation doesn't like that:
-                // -[MTLDebugDevice newBinaryArchiveWithDescriptor:error:]:1046: failed assertion `url, if not nil, must be a file URL.'
+                // We need to keep the temp file alive so that it doesn't get deleted until after a
+                // binary archive has been created.
+                let _temp_file = if !data.is_empty() {
+                    // It would be nice to use a `data:text/plain;base64` url here and just pass in a
+                    // base64-encoded version of the data, but metal validation doesn't like that:
+                    // -[MTLDebugDevice newBinaryArchiveWithDescriptor:error:]:1046: failed assertion `url, if not nil, must be a file URL.'
 
-                let temp_file = tempfile::NamedTempFile::new().unwrap();
+                    let temp_file = tempfile::NamedTempFile::new().unwrap();
 
-                temp_file.as_file().write_all(&data).unwrap();
+                    temp_file.as_file().write_all(&data).unwrap();
 
-                let url =
-                    metal::URL::new_with_string(&format!("file://{}", temp_file.path().display()));
+                    let url = metal::URL::new_with_string(&format!(
+                        "file://{}",
+                        temp_file.path().display()
+                    ));
 
-                descriptor.set_url(&url);
+                    descriptor.set_url(&url);
 
-                Some(temp_file)
+                    Some(temp_file)
+                } else {
+                    None
+                };
+
+                Ok(Some(n::BinaryArchive {
+                    inner: device
+                        .new_binary_archive_with_descriptor(&descriptor)
+                        .map_err(|_| d::OutOfMemory::Device)?,
+                    is_empty: AtomicBool::new(data.is_empty()),
+                }))
             } else {
-                None
-            };
-
-            Some(n::BinaryArchive {
-                inner: device
-                    .new_binary_archive_with_descriptor(&descriptor)
-                    .map_err(|_| d::OutOfMemory::Device)?,
-                is_empty: AtomicBool::new(data.is_none()),
-            })
-        } else {
-            None
+                Ok(None)
+            }
         };
 
-        Ok(n::PipelineCache {
-            binary_archive: None,
-            #[cfg(feature = "cross")]
-            spirv_cross_spv_to_msl: if let Some(data) = data.filter(|data| !data.is_empty()) {
-                let serializable = bincode::deserialize(data).unwrap();
-                n::load_spv_to_msl_cache(serializable)
-            } else {
-                Default::default()
-            },
-        })
+        if let Some(data) = data.filter(|data| !data.is_empty()) {
+            let pipeline_cache: n::SerializablePipelineCache = bincode::deserialize(data).unwrap();
+
+            Ok(n::PipelineCache {
+                binary_archive: create_binary_archive(&pipeline_cache.binary_archive)?,
+                #[cfg(feature = "cross")]
+                spirv_cross_spv_to_msl: n::load_spv_to_msl_cache(
+                    pipeline_cache.spirv_cross_spv_to_msl,
+                ),
+            })
+        } else {
+            Ok(n::PipelineCache {
+                binary_archive: create_binary_archive(&[])?,
+                #[cfg(feature = "cross")]
+                spirv_cross_spv_to_msl: Default::default(),
+            })
+        }
     }
 
     unsafe fn get_pipeline_cache_data(
         &self,
         cache: &n::PipelineCache,
     ) -> Result<Vec<u8>, d::OutOfMemory> {
-        #[cfg(feature = "cross")]
-        {
-            let serializable = n::serialize_spv_to_msl_cache(&cache.spirv_cross_spv_to_msl);
-            let msl = bincode::serialize(&serializable).unwrap();
-            return Ok(msl);
-        }
+        let binary_archive = || {
+            let binary_archive = match &cache.binary_archive {
+                Some(binary_archive) => binary_archive,
+                None => return Ok(Vec::new()),
+            };
 
-        let binary_archive = match &cache.binary_archive {
-            Some(binary_archive) => binary_archive,
-            None => return Ok(Vec::new()),
+            // Without this, we get an extremely vague "Serialization of binaries to file failed"
+            // error when serializing an empty binary archive.
+            if binary_archive.is_empty.load(Ordering::Relaxed) {
+                return Ok(Vec::new());
+            }
+
+            let temp_path = tempfile::NamedTempFile::new().unwrap().into_temp_path();
+
+            let tmp_file_url =
+                metal::URL::new_with_string(&format!("file://{}", temp_path.display()));
+
+            binary_archive
+                .inner
+                .serialize_to_url(&tmp_file_url)
+                .unwrap();
+
+            let bytes = std::fs::read(&temp_path).unwrap();
+
+            Ok(bytes)
         };
 
-        // Without this, we get an extremely vague "Serialization of binaries to file failed"
-        // error when serializing an empty binary archive.
-        if binary_archive.is_empty.load(Ordering::Relaxed) {
-            return Ok(Vec::new());
-        }
-
-        let temp_path = tempfile::NamedTempFile::new().unwrap().into_temp_path();
-
-        let tmp_file_url = metal::URL::new_with_string(&format!("file://{}", temp_path.display()));
-
-        binary_archive
-            .inner
-            .serialize_to_url(&tmp_file_url)
-            .unwrap();
-
-        let bytes = std::fs::read(&temp_path).unwrap();
-
-        Ok(bytes)
+        Ok(bincode::serialize(&n::SerializablePipelineCache {
+            binary_archive: &binary_archive()?,
+            #[cfg(feature = "cross")]
+            spirv_cross_spv_to_msl: n::serialize_spv_to_msl_cache(&cache.spirv_cross_spv_to_msl),
+        })
+        .unwrap())
     }
 
     unsafe fn destroy_pipeline_cache(&self, _cache: n::PipelineCache) {

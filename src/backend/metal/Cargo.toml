@@ -16,7 +16,7 @@ edition = "2018"
 default = []
 signpost = []
 cross = ["spirv_cross", "auxil", "naga/spv-out", "serde-cache"]
-serde-cache = ["serde", "naga/serialize", "naga/deserialize", "bincode", "spirv_cross/serialize"]
+serde-cache = ["naga/serialize", "naga/deserialize", "spirv_cross/serialize"]
 
 [lib]
 name = "gfx_backend_metal"
@@ -30,7 +30,7 @@ copyless = "0.1.4"
 fxhash = "0.2.1"
 log = { version = "0.4" }
 dispatch = { version = "0.2", optional = true }
-metal = { git = "https://github.com/expenses/metal-rs", branch="binary-archive", features = ["private"] }
+metal = { git = "https://github.com/gfx-rs/metal-rs", rev="78f632d194c7c16d18b71d7373c4080847d110b0", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
@@ -39,8 +39,8 @@ parking_lot = "0.11"
 storage-map = "0.3"
 raw-window-handle = "0.3"
 tempfile = "3.2"
-serde = { version = "1", features = ["serde_derive"], optional = true }
-bincode = { version = "1", optional = true }
+serde = { version = "1", features = ["serde_derive"] }
+bincode = "1"
 
 [dependencies.auxil]
 package = "gfx-auxil"
