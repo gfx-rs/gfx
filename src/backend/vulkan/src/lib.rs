@@ -650,7 +650,8 @@ impl hal::Instance<Backend> for Instance {
             .functor
             .destroy_surface(surface.raw.handle, None);
     }
-    fn enumerate_active_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Result<Vec<hal::display::Display<'a,Backend>>,hal::device::OutOfMemory>{
+
+    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Result<Vec<hal::display::Display<'a,Backend>>,hal::device::OutOfMemory>{
         let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
 
         let display_properties = match unsafe{display_extension.get_physical_device_display_properties(adapter.physical_device.handle)}
@@ -669,10 +670,14 @@ impl hal::Instance<Backend> for Instance {
         let mut displays = Vec::new();
         for display_property in display_properties
         {
+            let display_handle = native::Display(display_property.display);
+
             let supported_transforms = display::vk_transformations_to_hal(display_property.supported_transforms);
 
+            let display_name = if display_property.display_name == std::ptr::null(){None}else{Some(unsafe{std::ffi::CStr::from_ptr(display_property.display_name)}.to_str().unwrap().to_owned())};
+
             let display_info = hal::display::DisplayInfo {
-                name: unsafe{std::ffi::CStr::from_ptr(display_property.display_name)}.to_str().unwrap().to_owned(),
+                name: display_name,
                 physical_dimensions: (display_property.physical_dimensions.width,display_property.physical_dimensions.height),
                 physical_resolution: (display_property.physical_resolution.width,display_property.physical_resolution.height),
                 supported_transforms: supported_transforms,
@@ -680,67 +685,195 @@ impl hal::Instance<Backend> for Instance {
                 persistent_content: display_property.persistent_content == 1
             };
 
-            let display_modes = match unsafe{display_extension.get_display_mode_properties(adapter.physical_device.handle,display_property.display)}
-            {
-                Ok(display_modes)=>display_modes,
-                Err(error)=>{
-                    match error
-                    {
-                        ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
-                        ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
-                        _=>panic!("Unexpected error returned")
-                    };
-                }
-            }.iter().map(|display_mode_properties|
-            {
-                hal::display::DisplayMode {
-                    handle: native::DisplayMode(display_mode_properties.display_mode),
-                    resolution: (display_mode_properties.parameters.visible_region.width,display_mode_properties.parameters.visible_region.width),
-                    refresh_rate: display_mode_properties.parameters.refresh_rate
-                }
-            }).collect();
-
-            let planes_count = match unsafe{display_extension.get_physical_device_display_plane_properties(adapter.physical_device.handle)}
-            {
-                Ok(planes)=>planes,
-                Err(error)=>{
-                    match error
-                    {
-                        ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
-                        ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
-                        _=>panic!("Unexpected error returned")
-                    };
-                }
-            }.len() as u32;
-
             let display = hal::display::Display
             {
                 physical_device: &adapter.physical_device,
-                handle: native::Display(display_property.display),
-                info: display_info,
-                modes: display_modes,
-                planes_count: planes_count
+                handle: display_handle,
+                info: display_info
             };
+
             displays.push(display);
         }
         return Ok(displays);
     }
 
-    fn create_display_surface(
+    fn enumerate_compatible_planes<'a>(&self,display: &hal::display::Display<'a,Backend>)->Result<Vec<hal::display::Plane<'a,Backend>>,hal::device::OutOfMemory>
+    {
+        let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
+
+        match unsafe{display_extension.get_physical_device_display_plane_properties(display.physical_device.handle)}
+        {
+            Ok(planes_properties)=>{
+                let mut planes = Vec::new();
+                for index in 0..planes_properties.len()
+                {
+                    let compatible_displays = match unsafe{display_extension.get_display_plane_supported_displays(display.physical_device.handle,index as u32)}
+                    {
+                        Ok(compatible_displays)=>compatible_displays,
+                        Err(error)=>{
+                            match error
+                            {
+                                ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
+                                ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
+                                _=>panic!("Unexpected error returned")
+                            };
+                        }
+                    };
+                    if compatible_displays.contains(&display.handle.0)
+                    {
+                        planes.push(hal::display::Plane{
+                            physical_device: display.physical_device,
+                            handle: index as u32,
+                            z_index: planes_properties[index].current_stack_index
+                        });
+                    }
+                }
+                return Ok(planes);
+            }
+            Err(error)=>{
+                match error
+                {
+                    ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
+                    ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
+                    _=>panic!("Unexpected error returned")
+                };
+            }
+        }
+    }
+
+    fn enumerate_builtin_display_modes<'a>(&self,display: &'a hal::display::Display<'a,Backend>,)->Result<Vec<hal::display::DisplayMode<'a,Backend>>,hal::device::OutOfMemory>
+    {
+        let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
+
+        Ok(match unsafe{display_extension.get_display_mode_properties(display.physical_device.handle,display.handle.0)}
+        {
+            Ok(display_modes)=>display_modes,
+            Err(error)=>{
+                match error
+                {
+                    ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
+                    ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
+                    _=>panic!("Unexpected error returned")
+                };
+            }
+        }.iter().map(|display_mode_properties|
+        {
+            hal::display::DisplayMode {
+                physical_device: display.physical_device,
+                display: &display.handle,
+                handle: native::DisplayMode(display_mode_properties.display_mode),
+                resolution: (display_mode_properties.parameters.visible_region.width,display_mode_properties.parameters.visible_region.width),
+                refresh_rate: display_mode_properties.parameters.refresh_rate
+            }
+
+        }).collect())
+    }
+
+    fn create_display_mode<'a>(
         &self,
-        display_mode: &hal::display::DisplayMode<Backend>,
-        plane_index: u32,
+        display: &'a hal::display::Display<'a,Backend>,
+        resolution: (u32,u32),
+        refresh_rate: u32
+    )->Result<hal::display::DisplayMode<'a,Backend>,hal::display::DisplayModeError>
+    {
+        let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
+        let display_mode_ci = ash::vk::DisplayModeCreateInfoKHR::builder()
+            .parameters(
+                ash::vk::DisplayModeParametersKHR{
+                    visible_region: ash::vk::Extent2D{
+                        width: resolution.0,
+                        height: resolution.1
+                    },
+                    refresh_rate: refresh_rate
+                }
+            ).build();
+
+        match unsafe{display_extension.create_display_mode(display.physical_device.handle,display.handle.0,&display_mode_ci,None)}
+        {
+            Ok(display_mode_handle)=>{
+                Ok(hal::display::DisplayMode{
+                    physical_device: &display.physical_device,
+                    display: &display.handle,
+                    handle: native::DisplayMode(display_mode_handle),
+                    resolution: resolution,
+                    refresh_rate: refresh_rate
+                })
+            },
+            Err(error)=>{
+                match error
+                {
+                    ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host.into()),
+                    ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device.into()),
+                    ash::vk::Result::ERROR_INITIALIZATION_FAILED=>return Err(hal::display::DisplayModeError::UnsupportedDisplayMode),
+                    _=>panic!("Unexpected error returned")
+                }
+            }
+        }
+    }
+
+
+    fn create_display_plane<'a>(
+        &self,
+        display_mode: &'a hal::display::DisplayMode<'a,Backend>,
+        plane: &'a hal::display::Plane<'a,Backend>
+    )->Result<hal::display::DisplayPlane<'a,Backend>,hal::device::OutOfMemory>
+    {
+        let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
+
+        let display_plane_capabilities = match unsafe{display_extension.get_display_plane_capabilities(display_mode.physical_device.handle,display_mode.handle.0,plane.handle)}
+        {
+            Ok(display_plane_capabilities)=>display_plane_capabilities,
+            Err(error)=>{
+                match error
+                {
+                    ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host.into()),
+                    ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device.into()),
+                    _=>panic!("Unexpected error returned")
+                }
+            }
+        };
+
+        Ok(hal::display::DisplayPlane
+        {
+            /// Display
+            display: &display_mode.display,
+            /// Plane index
+            plane: &plane.handle,
+            /// Display mode
+            display_mode: &display_mode.handle,
+            /// The minimum source rectangle offset supported by this plane using the specified mode.
+            min_src_position: (display_plane_capabilities.min_src_position.x,display_plane_capabilities.min_src_position.x),
+            /// The maximum source rectangle offset supported by this plane using the specified mode. The x and y components of max_src_position must each be greater than or equal to the x and y components of min_src_position, respectively.
+            max_src_position: (display_plane_capabilities.max_src_position.x,display_plane_capabilities.max_src_position.x),
+            /// The minimum source rectangle size supported by this plane using the specified mode.
+            min_src_extent: (display_plane_capabilities.min_src_extent.width,display_plane_capabilities.min_src_extent.height),
+            /// The maximum source rectangle size supported by this plane using the specified mode.
+            max_src_extent: (display_plane_capabilities.max_src_extent.width,display_plane_capabilities.max_src_extent.height),
+            /// Same as min_src_position. but applied to destination.
+            min_dst_position: (display_plane_capabilities.min_dst_position.x,display_plane_capabilities.min_dst_position.x),
+            /// Same as max_src_position. but applied to destination.
+            max_dst_position: (display_plane_capabilities.max_dst_position.x,display_plane_capabilities.max_dst_position.x),
+            /// Same as min_src_extent. but applied to destination.
+            min_dst_extent: (display_plane_capabilities.min_dst_extent.width,display_plane_capabilities.min_dst_extent.height),
+            /// Same as max_src_extent. but applied to destination.
+            max_dst_extent: (display_plane_capabilities.max_dst_extent.width,display_plane_capabilities.max_dst_extent.height)
+        })
+    }
+
+    fn create_display_plane_surface(
+        &self,
+        display_plane: &hal::display::DisplayPlane<Backend>,
         plane_stack_index: u32,
         transformation: hal::display::SurfaceTransformation,
         alpha: hal::display::DisplayPlaneAlpha,
         image_extent: (u32,u32)
-    ) -> Result<window::Surface, hal::device::OutOfMemory> {
+    ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {
         let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
 
         let display_surface_ci = {
             let builder = vk::DisplaySurfaceCreateInfoKHR::builder()
-            .display_mode(display_mode.handle.0)
-            .plane_index(plane_index)
+            .display_mode(display_plane.display_mode.0)
+            .plane_index(*display_plane.plane)
             .plane_stack_index(plane_stack_index)
             .image_extent(vk::Extent2D{width: image_extent.0,height: image_extent.1});
 
@@ -1196,5 +1329,6 @@ impl hal::Backend for Backend {
     type QueryPool = native::QueryPool;
 
     type Display = native::Display;
+    type Plane = u32;
     type DisplayMode = native::DisplayMode;
 }

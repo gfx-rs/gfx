@@ -63,6 +63,7 @@ impl hal::Backend for Backend {
 
     type Display = ();
     type DisplayMode = ();
+    type Plane = ();
 }
 
 /// Dummy physical device.
@@ -1084,15 +1085,31 @@ impl hal::Instance<Backend> for Instance {
 
     unsafe fn destroy_surface(&self, _surface: Surface) {}
 
-    fn enumerate_active_displays<'a>(&self,_adapter: &'a adapter::Adapter<Backend>)->Result<Vec<display::Display<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
+    fn enumerate_available_displays<'a>(&self,_adapter: &'a adapter::Adapter<Backend>)->Result<Vec<display::Display<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
 
-    fn create_display_surface(
+    fn enumerate_compatible_planes<'a>(&self,_display: &display::Display<'a,Backend>)->Result<Vec<display::Plane<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
+
+    fn enumerate_builtin_display_modes<'a>(&self,_display: &'a display::Display<'a,Backend>,)->Result<Vec<display::DisplayMode<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
+
+    fn create_display_mode<'a>(
         &self,
-        _display_mode: &display::DisplayMode<Backend>,
-        _plane_index: u32,
+        _display: &'a display::Display<'a,Backend>,
+        _resolution: (u32,u32),
+        _refresh_rate: u32
+    )->Result<display::DisplayMode<'a,Backend>,display::DisplayModeError> {unimplemented!();}
+
+    fn create_display_plane<'a>(
+        &self,
+        _display: &'a display::DisplayMode<'a,Backend>,
+        _plane: &'a display::Plane<'a,Backend>,
+    )->Result<display::DisplayPlane<'a,Backend>,device::OutOfMemory> {unimplemented!();}
+
+     fn create_display_plane_surface(
+        &self,
+        _display_plane: &display::DisplayPlane<Backend>,
         _plane_stack_index: u32,
         _transformation: display::SurfaceTransformation,
         _alpha: display::DisplayPlaneAlpha,
         _image_extent: (u32,u32)
-    ) -> Result<Surface, device::OutOfMemory> {unimplemented!();}
+    ) -> Result<Surface, display::DisplayPlaneSurfaceError> {unimplemented!();}
 }

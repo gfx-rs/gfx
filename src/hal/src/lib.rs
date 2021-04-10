@@ -701,7 +701,52 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     unsafe fn destroy_surface(&self, surface: B::Surface);
 
     /// Enumerate active displays [surface][display::Display] from display.
-    fn enumerate_active_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Result<Vec<display::Display<'a,B>>,device::OutOfMemory>;
+    /// # Arguments
+    ///
+    /// * `adapter` - the [adapter][adapter::Adapter] from which the [displays][hal::display:Display] will be enumerated.
+    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Result<Vec<display::Display<'a,B>>,device::OutOfMemory>;
+
+
+    /// Enumerate compatibles planes with the provided [display][display::Display].
+    /// # Arguments
+    ///
+    /// * `display` - display on which the the compatible [planes][display::Plane] will be listed.
+    fn enumerate_compatible_planes<'a>(&self,display: &display::Display<'a,B>)->Result<Vec<display::Plane<'a,B>>,device::OutOfMemory>;
+
+
+    /// Enumerate the builtin [display modes][display::DisplayMode] from a [display][display::Display].
+    /// # Arguments
+    ///
+    /// * `display` - display on which the display mode will be enumerated.
+    fn enumerate_builtin_display_modes<'a>(&self,display: &'a display::Display<'a,B>,)->Result<Vec<display::DisplayMode<'a,B>>,device::OutOfMemory>;
+
+    /// Create a new [display mode][display::DisplayMode] from a [display][display::Display], a resolution, a refresh_rate and the plane index.
+    /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
+    /// # Arguments
+    ///
+    /// * `display` - display on which the display mode will be created.
+    /// * `resolution` - the desired resolution.
+    /// * `refresh_rate` - the desired refresh_rate.
+    fn create_display_mode<'a>(
+        &self,
+        display: &'a display::Display<'a,B>,
+        resolution: (u32,u32),
+        refresh_rate: u32
+    )->Result<display::DisplayMode<'a,B>,display::DisplayModeError>;
+
+    /// Create a new [display mode][display::DisplayMode] from a [display][display::Display], a resolution, a refresh_rate and the plane index.
+    /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
+    /// # Arguments
+    ///
+    /// * `display` - display on which the display plane will be created.
+    /// * `plane` - the plane on which the surface will be rendered on.
+    /// * `resolution` - the desired resolution.
+    /// * `refresh_rate` - the desired refresh_rate.
+    fn create_display_plane<'a>(
+        &self,
+        display: &'a display::DisplayMode<'a,B>,
+        plane: &'a display::Plane<'a,B>,
+    )->Result<display::DisplayPlane<'a,B>,device::OutOfMemory>;
 
     /// Create a new [surface][window::Surface] from display.
     ///
@@ -711,15 +756,14 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     ///
     /// This method can cause undefined behavior if `raw_window_handle` isn't
     /// a handle to a valid window for the current platform.
-     fn create_display_surface(
+     fn create_display_plane_surface(
         &self,
-        display_mode: &display::DisplayMode<B>,
-        plane_index: u32,
+        display_plane: &display::DisplayPlane<B>,
         plane_stack_index: u32,
         transformation: display::SurfaceTransformation,
         alpha: display::DisplayPlaneAlpha,
         image_extent: (u32,u32)
-    ) -> Result<B::Surface, device::OutOfMemory>;
+    ) -> Result<B::Surface, display::DisplayPlaneSurfaceError>;
 }
 
 /// A strongly-typed index to a particular `MemoryType`.
@@ -812,6 +856,8 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type QueryPool: fmt::Debug + Any + Send + Sync;
     /// The corresponding display type for this backend.
     type Display: fmt::Debug + Any + Send + Sync;
-    /// The corresponding display mode type for this backend.
+    /// The corresponding plane type for this backend
+    type Plane: fmt::Debug + Any + Send + Sync;
+    /// The corresponding display mode type for this backend
     type DisplayMode: fmt::Debug + Any + Send + Sync;
 }

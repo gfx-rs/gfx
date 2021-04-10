@@ -67,7 +67,7 @@ General information about the a [display][Display].
 pub struct DisplayInfo
 {
     /// Name of the display. Generally, this will be the name provided by the display’s EDID.
-    pub name: String,
+    pub name: Option<String>,
     /// Physical width and height of the visible portion of the display, in millimeters.
     pub physical_dimensions: (u32,u32),
     /// Physical, native, or preferred resolution of the display.
@@ -84,9 +84,13 @@ pub struct DisplayInfo
 General information about the a [DisplayMode][DisplayMode].
 */
 #[derive(Debug)]
-pub struct DisplayMode<B: Backend>
+pub struct DisplayMode<'a,B: Backend>
 {
-    /// Actual [display mode][DisplayMode].
+    /// The [physical device][PhysicalDevice].
+    pub physical_device: &'a B::PhysicalDevice,
+    /// Display
+    pub display: &'a B::Display,
+    /// Handle
     pub handle: B::DisplayMode,
     /// Resolution
     pub resolution: (u32,u32),
@@ -122,17 +126,79 @@ Representation of a display
 #[derive(Debug)]
 pub struct Display<'a,B: Backend>
 {
-    /// General information about this display.
-    pub info: DisplayInfo,
-    /// Actual [physical device][PhysicalDevice].
+    /// The [physical device][PhysicalDevice].
     pub physical_device: &'a B::PhysicalDevice,
     /// Actual [display][Display].
     pub handle: B::Display,
-    /// Actual [modes][DisplayMode].
-    pub modes: Vec<DisplayMode<B>>,
-    /// Actual planes count.
-    pub planes_count: u32
+    /// General information about this display.
+    pub info: DisplayInfo
 }
 
 
+/**
+Representation of a plane
+*/
+#[derive(Debug)]
+pub struct Plane<'a,B: Backend>
+{
+    /// The [physical device][PhysicalDevice].
+    pub physical_device: &'a B::PhysicalDevice,
+    /// The [plane][Plane] handle.
+    pub handle: B::Plane,
+    /// The current index on the z stack.
+    pub z_index: u32
+}
+
+
+/**
+Represent a combination of [display mode][DisplayMode] (so [display][Display] and resolution) and a plane
+*/
+#[derive(Debug)]
+pub struct DisplayPlane<'a,B: Backend>
+{
+    /// Display
+    pub display: &'a B::Display,
+    /// Plane index
+    pub plane: &'a B::Plane,
+    /// Display mode
+    pub display_mode: &'a B::DisplayMode,
+    /// The minimum source rectangle offset supported by this plane using the specified mode.
+    pub min_src_position: (i32,i32),
+    /// The maximum source rectangle offset supported by this plane using the specified mode. The x and y components of max_src_position must each be greater than or equal to the x and y components of min_src_position, respectively.
+    pub max_src_position: (i32,i32),
+    /// The minimum source rectangle size supported by this plane using the specified mode.
+    pub min_src_extent: (u32,u32),
+    /// The maximum source rectangle size supported by this plane using the specified mode.
+    pub max_src_extent: (u32,u32),
+    /// Same as min_src_position. but applied to destination.
+    pub min_dst_position: (i32,i32),
+    /// Same as max_src_position. but applied to destination.
+    pub max_dst_position: (i32,i32),
+    /// Same as min_src_extent. but applied to destination.
+    pub min_dst_extent: (u32,u32),
+    /// Same as max_src_extent. but applied to destination.
+    pub max_dst_extent: (u32,u32)
+}
+
+/// Error occurring while creating a display plane.
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum DisplayModeError {
+    /// Out of either host or device memory.
+    #[error(transparent)]
+    OutOfMemory(#[from] crate::device::OutOfMemory),
+    /// Unsupported resolution and refresh rate combination
+    #[error("Unsupported resolution and refresh rate combination")]
+    UnsupportedDisplayMode,
+}
+
+/// Error occurring while creating a display plane surface.
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum DisplayPlaneSurfaceError {
+    /// Out of either host or device memory.
+    #[error(transparent)]
+    OutOfMemory(#[from] crate::device::OutOfMemory),
+    /// Unsupported resolution and refresh rate combination
+    #[error("Used display does not support plane reordering, but a different z index than the default one has been provided")]
+    UnsupportedPlaneReordering,
+}
 
