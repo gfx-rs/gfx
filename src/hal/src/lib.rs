@@ -704,7 +704,7 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     /// # Arguments
     ///
     /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
-    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Result<Vec<display::Display<'a,B>>,device::OutOfMemory>;
+    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Result<Vec<display::Display<'a,B>>,display::EnumerateDisplayError>;
 
 
     /// Enumerate compatibles planes with the provided display.

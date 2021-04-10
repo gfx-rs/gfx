@@ -91,12 +91,21 @@ impl PartialEq for DisplayPlaneAlpha {
     }
 }
 
-
+/// Error occurring while enumerating displays.
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum EnumerateDisplayError {
+    /// Out of either host or device memory.
+    #[error(transparent)]
+    OutOfMemory(#[from] crate::device::OutOfMemory),
+    /// The system does not support this feature
+    #[error("The system does not support this feature")]
+    UnsupportedSystem,
+}
 
 /// Error occurring while creating a display plane.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum DisplayModeError {
-    /// Out of either host or device memory.
+    /// Display error.
     #[error(transparent)]
     OutOfMemory(#[from] crate::device::OutOfMemory),
     /// Unsupported resolution and refresh rate combination
@@ -107,7 +116,7 @@ pub enum DisplayModeError {
 /// Error occurring while creating a display plane surface.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum DisplayPlaneSurfaceError {
-    /// Out of either host or device memory.
+    /// Display error.
     #[error(transparent)]
     OutOfMemory(#[from] crate::device::OutOfMemory),
     /// Unsupported resolution and refresh rate combination

@@ -448,7 +448,9 @@ impl hal::Instance<Backend> for Instance {
                 extensions.push(vk::KhrStorageBufferStorageClassFn::name());
             }
 
-            extensions.push(khr::Display::name());
+            if driver_api_version == Version::V1_2 {
+                extensions.push(khr::Display::name());
+            }
 
             // Only keep available extensions.
             extensions.retain(|&ext| {
@@ -651,8 +653,9 @@ impl hal::Instance<Backend> for Instance {
             .destroy_surface(surface.raw.handle, None);
     }
 
-    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Result<Vec<hal::display::Display<'a,Backend>>,hal::device::OutOfMemory>{
-        let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
+    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Result<Vec<hal::display::Display<'a,Backend>>,hal::display::EnumerateDisplayError>{
+        let display_extension = if self.extensions.contains(&khr::Display::name()){ash::extensions::khr::Display::new(&self.entry,&self.raw.inner)}
+        else {return Err(hal::display::EnumerateDisplayError::UnsupportedSystem);};
 
         let display_properties = match unsafe{display_extension.get_physical_device_display_properties(adapter.physical_device.handle)}
         {
@@ -660,8 +663,8 @@ impl hal::Instance<Backend> for Instance {
             Err(error)=>{
                 match error
                 {
-                    ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
-                    ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
+                    ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host.into()),
+                    ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device.into()),
                     _=>panic!("Unexpected error returned")
                 };
             }
@@ -802,7 +805,7 @@ impl hal::Instance<Backend> for Instance {
                 {
                     ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host.into()),
                     ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device.into()),
-                    ash::vk::Result::ERROR_INITIALIZATION_FAILED=>return Err(hal::display::DisplayModeError::UnsupportedDisplayMode),
+                    ash::vk::Result::ERROR_INITIALIZATION_FAILED=>return Err(hal::display::DisplayModeError::UnsupportedDisplayMode.into()),
                     _=>panic!("Unexpected error returned")
                 }
             }
