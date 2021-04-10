@@ -56,6 +56,10 @@ impl hal::Backend for Backend {
     type Semaphore = ();
     type Event = ();
     type QueryPool = ();
+
+    type Display = ();
+    type Plane = ();
+    type DisplayMode = ();
 }
 
 #[derive(Debug)]
@@ -84,6 +88,34 @@ impl hal::Instance<Backend> for Instance {
     unsafe fn destroy_surface(&self, _surface: Surface) {
         todo!()
     }
+
+    fn enumerate_available_displays<'a>(&self,_adapter: &'a hal::adapter::Adapter<crate::Backend>)->Result<Vec<hal::display::Display<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
+
+    fn enumerate_compatible_planes<'a>(&self,_display: &hal::display::Display<'a,crate::Backend>)->Result<Vec<hal::display::Plane<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
+
+    fn enumerate_builtin_display_modes<'a>(&self,_display: &'a hal::display::Display<'a,crate::Backend>,)->Result<Vec<hal::display::DisplayMode<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
+
+    fn create_display_mode<'a>(
+        &self,
+        _display: &'a hal::display::Display<'a,crate::Backend>,
+        _resolution: (u32,u32),
+        _refresh_rate: u32
+    )->Result<hal::display::DisplayMode<'a,crate::Backend>,hal::display::DisplayModeError> {unimplemented!();}
+
+    fn create_display_plane<'a>(
+        &self,
+        _display: &'a hal::display::DisplayMode<'a,crate::Backend>,
+        _plane: &'a hal::display::Plane<'a,crate::Backend>,
+    )->Result<hal::display::DisplayPlane<'a,crate::Backend>,hal::device::OutOfMemory> {unimplemented!();}
+
+     fn create_display_plane_surface(
+        &self,
+        _display_plane: &hal::display::DisplayPlane<crate::Backend>,
+        _plane_stack_index: u32,
+        _transformation: hal::display::SurfaceTransformation,
+        _alpha: hal::display::DisplayPlaneAlpha,
+        _image_extent: (u32,u32)
+    ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
 }
 
 impl Instance {

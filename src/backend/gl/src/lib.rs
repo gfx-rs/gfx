@@ -117,6 +117,10 @@ impl hal::Backend for Backend {
     type Semaphore = native::Semaphore;
     type Event = ();
     type QueryPool = ();
+
+    type Display = ();
+    type Plane = ();
+    type DisplayMode = ();
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
