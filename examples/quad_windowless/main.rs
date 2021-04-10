@@ -127,11 +127,11 @@ fn main() {
 
     //Create a surface from the display
     let surface = instance.create_display_plane_surface(
-        &display_plane,
-        plane.z_index,
-        display::SurfaceTransformation::Rotate90,   //Surface transformation
+        &display_plane,                             //Display plane
+        plane.z_index,                              //Z plane index
+        display::SurfaceTransformation::Identity,   //Surface transformation
         display::DisplayPlaneAlpha::Opaque,         //Opacity
-        (320,320)                                   //Image extent
+        display_plane.max_dst_extent,               //Image extent (u32, u32)
     ).expect("Failed to create a surface!");
 
     let mut renderer = Renderer::new(instance, surface, adapter);
