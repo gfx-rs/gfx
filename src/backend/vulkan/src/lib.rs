@@ -687,7 +687,7 @@ impl hal::Instance<Backend> for Instance {
 
             let display = hal::display::Display
             {
-                physical_device: &adapter.physical_device,
+                adapter: &adapter,
                 handle: display_handle,
                 info: display_info
             };
@@ -701,13 +701,13 @@ impl hal::Instance<Backend> for Instance {
     {
         let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
 
-        match unsafe{display_extension.get_physical_device_display_plane_properties(display.physical_device.handle)}
+        match unsafe{display_extension.get_physical_device_display_plane_properties(display.adapter.physical_device.handle)}
         {
             Ok(planes_properties)=>{
                 let mut planes = Vec::new();
                 for index in 0..planes_properties.len()
                 {
-                    let compatible_displays = match unsafe{display_extension.get_display_plane_supported_displays(display.physical_device.handle,index as u32)}
+                    let compatible_displays = match unsafe{display_extension.get_display_plane_supported_displays(display.adapter.physical_device.handle,index as u32)}
                     {
                         Ok(compatible_displays)=>compatible_displays,
                         Err(error)=>{
@@ -722,7 +722,7 @@ impl hal::Instance<Backend> for Instance {
                     if compatible_displays.contains(&display.handle.0)
                     {
                         planes.push(hal::display::Plane{
-                            physical_device: display.physical_device,
+                            adapter: &display.adapter,
                             handle: index as u32,
                             z_index: planes_properties[index].current_stack_index
                         });
@@ -745,7 +745,7 @@ impl hal::Instance<Backend> for Instance {
     {
         let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
 
-        Ok(match unsafe{display_extension.get_display_mode_properties(display.physical_device.handle,display.handle.0)}
+        Ok(match unsafe{display_extension.get_display_mode_properties(display.adapter.physical_device.handle,display.handle.0)}
         {
             Ok(display_modes)=>display_modes,
             Err(error)=>{
@@ -759,8 +759,7 @@ impl hal::Instance<Backend> for Instance {
         }.iter().map(|display_mode_properties|
         {
             hal::display::DisplayMode {
-                physical_device: display.physical_device,
-                display: &display.handle,
+                display: &display,
                 handle: native::DisplayMode(display_mode_properties.display_mode),
                 resolution: (display_mode_properties.parameters.visible_region.width,display_mode_properties.parameters.visible_region.width),
                 refresh_rate: display_mode_properties.parameters.refresh_rate
@@ -788,12 +787,11 @@ impl hal::Instance<Backend> for Instance {
                 }
             ).build();
 
-        match unsafe{display_extension.create_display_mode(display.physical_device.handle,display.handle.0,&display_mode_ci,None)}
+        match unsafe{display_extension.create_display_mode(display.adapter.physical_device.handle,display.handle.0,&display_mode_ci,None)}
         {
             Ok(display_mode_handle)=>{
                 Ok(hal::display::DisplayMode{
-                    physical_device: &display.physical_device,
-                    display: &display.handle,
+                    display: &display,
                     handle: native::DisplayMode(display_mode_handle),
                     resolution: resolution,
                     refresh_rate: refresh_rate
@@ -820,7 +818,7 @@ impl hal::Instance<Backend> for Instance {
     {
         let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
 
-        let display_plane_capabilities = match unsafe{display_extension.get_display_plane_capabilities(display_mode.physical_device.handle,display_mode.handle.0,plane.handle)}
+        let display_plane_capabilities = match unsafe{display_extension.get_display_plane_capabilities(display_mode.display.adapter.physical_device.handle,display_mode.handle.0,plane.handle)}
         {
             Ok(display_plane_capabilities)=>display_plane_capabilities,
             Err(error)=>{
@@ -833,29 +831,24 @@ impl hal::Instance<Backend> for Instance {
             }
         };
 
+        let mut supported_alpha_capabilities = Vec::new();
+        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::OPAQUE) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::Opaque);}
+        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::GLOBAL) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::Global(1.0));}
+        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::PerPixel);}
+        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::PerPixelPremultiplied);}
+
         Ok(hal::display::DisplayPlane
         {
-            /// Display
-            display: &display_mode.display,
-            /// Plane index
-            plane: &plane.handle,
-            /// Display mode
-            display_mode: &display_mode.handle,
-            /// The minimum source rectangle offset supported by this plane using the specified mode.
+            plane: &plane,
+            display_mode: &display_mode,
+            supported_alpha: supported_alpha_capabilities,
             min_src_position: (display_plane_capabilities.min_src_position.x,display_plane_capabilities.min_src_position.x),
-            /// The maximum source rectangle offset supported by this plane using the specified mode. The x and y components of max_src_position must each be greater than or equal to the x and y components of min_src_position, respectively.
             max_src_position: (display_plane_capabilities.max_src_position.x,display_plane_capabilities.max_src_position.x),
-            /// The minimum source rectangle size supported by this plane using the specified mode.
             min_src_extent: (display_plane_capabilities.min_src_extent.width,display_plane_capabilities.min_src_extent.height),
-            /// The maximum source rectangle size supported by this plane using the specified mode.
             max_src_extent: (display_plane_capabilities.max_src_extent.width,display_plane_capabilities.max_src_extent.height),
-            /// Same as min_src_position. but applied to destination.
             min_dst_position: (display_plane_capabilities.min_dst_position.x,display_plane_capabilities.min_dst_position.x),
-            /// Same as max_src_position. but applied to destination.
             max_dst_position: (display_plane_capabilities.max_dst_position.x,display_plane_capabilities.max_dst_position.x),
-            /// Same as min_src_extent. but applied to destination.
             min_dst_extent: (display_plane_capabilities.min_dst_extent.width,display_plane_capabilities.min_dst_extent.height),
-            /// Same as max_src_extent. but applied to destination.
             max_dst_extent: (display_plane_capabilities.max_dst_extent.width,display_plane_capabilities.max_dst_extent.height)
         })
     }
@@ -870,10 +863,30 @@ impl hal::Instance<Backend> for Instance {
     ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {
         let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
 
+
+        if !display_plane.display_mode.display.info.plane_reorder_possible && display_plane.plane.z_index != plane_stack_index
+        {
+            error!("Requested plane on a different z index while plane reordering is unsupported on the selected Display");
+            return Err(hal::display::DisplayPlaneSurfaceError::UnsupportedParameters);
+        }
+
+        if !display_plane.display_mode.display.info.supported_transforms.contains(&transformation)
+        {
+            error!("Requested an unsupported transformation on the selected Display");
+            return Err(hal::display::DisplayPlaneSurfaceError::UnsupportedParameters);
+        }
+
+        if !display_plane.supported_alpha.contains(&alpha)
+        {
+            error!("Requested an unsupported alpha on the selected Display");
+            return Err(hal::display::DisplayPlaneSurfaceError::UnsupportedParameters);
+        }
+
+
         let display_surface_ci = {
             let builder = vk::DisplaySurfaceCreateInfoKHR::builder()
-            .display_mode(display_plane.display_mode.0)
-            .plane_index(*display_plane.plane)
+            .display_mode(display_plane.display_mode.handle.0)
+            .plane_index(display_plane.plane.handle)
             .plane_stack_index(plane_stack_index)
             .image_extent(vk::Extent2D{width: image_extent.0,height: image_extent.1});
 

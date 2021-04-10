@@ -703,24 +703,24 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     /// Enumerate active displays [surface][display::Display] from display.
     /// # Arguments
     ///
-    /// * `adapter` - the [adapter][adapter::Adapter] from which the [displays][hal::display:Display] will be enumerated.
+    /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
     fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Result<Vec<display::Display<'a,B>>,device::OutOfMemory>;
 
 
-    /// Enumerate compatibles planes with the provided [display][display::Display].
+    /// Enumerate compatibles planes with the provided display.
     /// # Arguments
     ///
-    /// * `display` - display on which the the compatible [planes][display::Plane] will be listed.
+    /// * `display` - display on which the the compatible planes will be listed.
     fn enumerate_compatible_planes<'a>(&self,display: &display::Display<'a,B>)->Result<Vec<display::Plane<'a,B>>,device::OutOfMemory>;
 
 
-    /// Enumerate the builtin [display modes][display::DisplayMode] from a [display][display::Display].
+    /// Enumerate the builtin display modes from a display.
     /// # Arguments
     ///
     /// * `display` - display on which the display mode will be enumerated.
     fn enumerate_builtin_display_modes<'a>(&self,display: &'a display::Display<'a,B>,)->Result<Vec<display::DisplayMode<'a,B>>,device::OutOfMemory>;
 
-    /// Create a new [display mode][display::DisplayMode] from a [display][display::Display], a resolution, a refresh_rate and the plane index.
+    /// Create a new display mode from a display, a resolution, a refresh_rate and the plane index.
     /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
     /// # Arguments
     ///
@@ -734,7 +734,7 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
         refresh_rate: u32
     )->Result<display::DisplayMode<'a,B>,display::DisplayModeError>;
 
-    /// Create a new [display mode][display::DisplayMode] from a [display][display::Display], a resolution, a refresh_rate and the plane index.
+    /// Create a display plane from a display, a resolution, a refresh_rate and a plane.
     /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
     /// # Arguments
     ///

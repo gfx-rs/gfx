@@ -3,37 +3,13 @@
 //! A display represent a physical display collected from an Adapter
 
 use crate::Backend;
+use crate::adapter;
+
 
 /**
-List of the supported hardware display transformations
+List of the hardware display transformations
 */
-#[derive(Debug,Default)]
-pub struct SurfaceTransformations
-{
-    /// Specify that image content is presented without being transformed
-    pub identity: bool,
-    /// Specify that image content is rotated 90 degrees clockwise
-    pub rotate_90: bool,
-    /// Specify that image content is rotated 180 degrees clockwise
-    pub rotate_180: bool,
-    /// Specify that image content is rotated 270 degrees clockwise.
-    pub rotate_270: bool,
-    /// Specify that image content is mirrored horizontally.
-    pub horizontal_mirror: bool,
-    /// Specify that image content is mirrored horizontally, then rotated 90 degrees clockwise.
-    pub horizontal_mirror_rotate_90: bool,
-    /// Specify that image content is mirrored horizontally, then rotated 180 degrees clockwise.
-    pub horizontal_mirror_rotate_180: bool,
-    /// Specify that image content is mirrored horizontally, then rotated 270 degrees clockwise.
-    pub horizontal_mirror_rotate_270: bool,
-    /// Specify that the presentation transform is not specified, and is instead determined by platform-specific considerations and mechanisms outside Vulkan.
-    pub inherit: bool
-}
-
-/**
-List of the supported hardware display transformations
-*/
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 pub enum SurfaceTransformation
 {
     /// Specify that image content is presented without being transformed
@@ -81,24 +57,6 @@ pub struct DisplayInfo
 }
 
 /**
-General information about the a [DisplayMode][DisplayMode].
-*/
-#[derive(Debug)]
-pub struct DisplayMode<'a,B: Backend>
-{
-    /// The [physical device][PhysicalDevice].
-    pub physical_device: &'a B::PhysicalDevice,
-    /// Display
-    pub display: &'a B::Display,
-    /// Handle
-    pub handle: B::DisplayMode,
-    /// Resolution
-    pub resolution: (u32,u32),
-    /// Refresh rate
-    pub refresh_rate: u32
-}
-
-/**
 Alpha mode used in display surface creation
 */
 #[derive(Debug)]
@@ -119,66 +77,21 @@ impl Default for DisplayPlaneAlpha
     fn default() -> Self { Self::Opaque }
 }
 
-
-/**
-Representation of a display
-*/
-#[derive(Debug)]
-pub struct Display<'a,B: Backend>
-{
-    /// The [physical device][PhysicalDevice].
-    pub physical_device: &'a B::PhysicalDevice,
-    /// Actual [display][Display].
-    pub handle: B::Display,
-    /// General information about this display.
-    pub info: DisplayInfo
+// This implementation is done to ignore differences on the value in DisplayPlaneAlpha::Global
+impl PartialEq for DisplayPlaneAlpha {
+    fn eq(&self, other: &Self) -> bool {
+        match (self,other)
+        {
+            (DisplayPlaneAlpha::Opaque,DisplayPlaneAlpha::Opaque)=>true,
+            (DisplayPlaneAlpha::Global(_),DisplayPlaneAlpha::Global(_))=>true,
+            (DisplayPlaneAlpha::PerPixel,DisplayPlaneAlpha::PerPixel)=>true,
+            (DisplayPlaneAlpha::PerPixelPremultiplied,DisplayPlaneAlpha::PerPixelPremultiplied)=>true,
+            _=>false
+        }
+    }
 }
 
 
-/**
-Representation of a plane
-*/
-#[derive(Debug)]
-pub struct Plane<'a,B: Backend>
-{
-    /// The [physical device][PhysicalDevice].
-    pub physical_device: &'a B::PhysicalDevice,
-    /// The [plane][Plane] handle.
-    pub handle: B::Plane,
-    /// The current index on the z stack.
-    pub z_index: u32
-}
-
-
-/**
-Represent a combination of [display mode][DisplayMode] (so [display][Display] and resolution) and a plane
-*/
-#[derive(Debug)]
-pub struct DisplayPlane<'a,B: Backend>
-{
-    /// Display
-    pub display: &'a B::Display,
-    /// Plane index
-    pub plane: &'a B::Plane,
-    /// Display mode
-    pub display_mode: &'a B::DisplayMode,
-    /// The minimum source rectangle offset supported by this plane using the specified mode.
-    pub min_src_position: (i32,i32),
-    /// The maximum source rectangle offset supported by this plane using the specified mode. The x and y components of max_src_position must each be greater than or equal to the x and y components of min_src_position, respectively.
-    pub max_src_position: (i32,i32),
-    /// The minimum source rectangle size supported by this plane using the specified mode.
-    pub min_src_extent: (u32,u32),
-    /// The maximum source rectangle size supported by this plane using the specified mode.
-    pub max_src_extent: (u32,u32),
-    /// Same as min_src_position. but applied to destination.
-    pub min_dst_position: (i32,i32),
-    /// Same as max_src_position. but applied to destination.
-    pub max_dst_position: (i32,i32),
-    /// Same as min_src_extent. but applied to destination.
-    pub min_dst_extent: (u32,u32),
-    /// Same as max_src_extent. but applied to destination.
-    pub max_dst_extent: (u32,u32)
-}
 
 /// Error occurring while creating a display plane.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -198,7 +111,82 @@ pub enum DisplayPlaneSurfaceError {
     #[error(transparent)]
     OutOfMemory(#[from] crate::device::OutOfMemory),
     /// Unsupported resolution and refresh rate combination
-    #[error("Used display does not support plane reordering, but a different z index than the default one has been provided")]
-    UnsupportedPlaneReordering,
+    #[error("Unsupported parameters used")]
+    UnsupportedParameters,
+}
+
+/**
+Representation of a display
+*/
+#[derive(Debug)]
+pub struct Display<'a,B: Backend>
+{
+    /// The adapter.
+    pub adapter: &'a adapter::Adapter<B>,
+    /// The display handle.
+    pub handle: B::Display,
+    /// General information about this display.
+    pub info: DisplayInfo
+}
+
+/**
+General information about the a [DisplayMode][DisplayMode].
+*/
+#[derive(Debug)]
+pub struct DisplayMode<'a,B: Backend>
+{
+    /// The display
+    pub display: &'a Display<'a,B>,
+    /// The display mode handle
+    pub handle: B::DisplayMode,
+    /// Resolution
+    pub resolution: (u32,u32),
+    /// Refresh rate
+    pub refresh_rate: u32
+}
+
+/**
+Representation of a plane
+*/
+#[derive(Debug)]
+pub struct Plane<'a,B: Backend>
+{
+    /// The adapter.
+    pub adapter: &'a adapter::Adapter<B>,
+    /// The plane handle.
+    pub handle: B::Plane,
+    /// The current index on the z stack.
+    pub z_index: u32
+}
+
+
+/**
+Represent a combination of [display mode][DisplayMode] (so [display][Display] and resolution) and a plane
+*/
+#[derive(Debug)]
+pub struct DisplayPlane<'a,B: Backend>
+{
+    /// Display mode
+    pub display_mode: &'a DisplayMode<'a,B>,
+    /// Plane index
+    pub plane: &'a Plane<'a,B>,
+    /// Supported alpha capabilities
+    pub supported_alpha: Vec<DisplayPlaneAlpha>,
+    /// The minimum source rectangle offset supported by this plane using the specified mode.
+    pub min_src_position: (i32,i32),
+    /// The maximum source rectangle offset supported by this plane using the specified mode. The x and y components of max_src_position must each be greater than or equal to the x and y components of min_src_position, respectively.
+    pub max_src_position: (i32,i32),
+    /// The minimum source rectangle size supported by this plane using the specified mode.
+    pub min_src_extent: (u32,u32),
+    /// The maximum source rectangle size supported by this plane using the specified mode.
+    pub max_src_extent: (u32,u32),
+    /// Same as min_src_position. but applied to destination.
+    pub min_dst_position: (i32,i32),
+    /// Same as max_src_position. but applied to destination.
+    pub max_dst_position: (i32,i32),
+    /// Same as min_src_extent. but applied to destination.
+    pub min_dst_extent: (u32,u32),
+    /// Same as max_src_extent. but applied to destination.
+    pub max_dst_extent: (u32,u32)
 }
 
