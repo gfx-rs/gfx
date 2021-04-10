@@ -701,10 +701,13 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     unsafe fn destroy_surface(&self, surface: B::Surface);
 
     /// Enumerate active displays [surface][display::Display] from display.
+    /// Please notice that, even if a systes has displays attached, they can be not returned because they are managed by some other components.
+    /// This function only return the display that are available to be managed by the current application.
+    /// Since, generally, while compositor are running they take the control of every display connected, it could be better to run the application directly from the tty to avoid the return of an empty list.
     /// # Arguments
     ///
     /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
-    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Result<Vec<display::Display<'a,B>>,display::EnumerateDisplayError>;
+    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Result<Vec<display::Display<'a,B>>,device::OutOfMemory>;
 
 
     /// Enumerate compatibles planes with the provided display.

@@ -448,9 +448,7 @@ impl hal::Instance<Backend> for Instance {
                 extensions.push(vk::KhrStorageBufferStorageClassFn::name());
             }
 
-            if driver_api_version == Version::V1_2 {
-                extensions.push(khr::Display::name());
-            }
+            extensions.push(khr::Display::name());
 
             // Only keep available extensions.
             extensions.retain(|&ext| {
@@ -653,9 +651,8 @@ impl hal::Instance<Backend> for Instance {
             .destroy_surface(surface.raw.handle, None);
     }
 
-    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Result<Vec<hal::display::Display<'a,Backend>>,hal::display::EnumerateDisplayError>{
-        let display_extension = if self.extensions.contains(&khr::Display::name()){ash::extensions::khr::Display::new(&self.entry,&self.raw.inner)}
-        else {return Err(hal::display::EnumerateDisplayError::UnsupportedSystem);};
+    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<Backend>)->Result<Vec<hal::display::Display<'a,Backend>>,hal::device::OutOfMemory>{
+        let display_extension = ash::extensions::khr::Display::new(&self.entry,&self.raw.inner);
 
         let display_properties = match unsafe{display_extension.get_physical_device_display_properties(adapter.physical_device.handle)}
         {
