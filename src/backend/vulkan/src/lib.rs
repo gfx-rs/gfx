@@ -64,7 +64,6 @@ mod native;
 mod physical_device;
 mod pool;
 mod window;
-mod display;
 
 pub use physical_device::*;
 
@@ -672,7 +671,19 @@ impl hal::Instance<Backend> for Instance {
         {
             let display_handle = native::Display(display_property.display);
 
-            let supported_transforms = display::vk_transformations_to_hal(display_property.supported_transforms);
+            let supported_transforms = {
+                let mut transformations = Vec::new();
+                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::IDENTITY) {transformations.push(hal::display::SurfaceTransformation::Identity);}
+                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::ROTATE_90) {transformations.push(hal::display::SurfaceTransformation::Rotate90);}
+                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::ROTATE_180) {transformations.push(hal::display::SurfaceTransformation::Rotate180);}
+                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::ROTATE_270) {transformations.push(hal::display::SurfaceTransformation::Rotate270);}
+                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR) {transformations.push(hal::display::SurfaceTransformation::HorizontalMirror);}
+                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_90) {transformations.push(hal::display::SurfaceTransformation::HorizontalMirrorRotate90);}
+                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_180) {transformations.push(hal::display::SurfaceTransformation::HorizontalMirrorRotate180);}
+                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_270) {transformations.push(hal::display::SurfaceTransformation::HorizontalMirrorRotate270);}
+                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::INHERIT) {transformations.push(hal::display::SurfaceTransformation::Inherit);}
+                transformations
+            };
 
             let display_name = if display_property.display_name == std::ptr::null(){None}else{Some(unsafe{std::ffi::CStr::from_ptr(display_property.display_name)}.to_str().unwrap().to_owned())};
 

@@ -1520,7 +1520,7 @@ impl hal::Instance<Backend> for Instance {
         _transformation: hal::display::SurfaceTransformation,
         _alpha: hal::display::DisplayPlaneAlpha,
         _image_extent: (u32,u32)
-    ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
+    ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
