@@ -100,7 +100,7 @@ fn main() {
         adapters.remove(0)
     };
 
-    let displays = instance.enumerate_available_displays(&adapter).expect("Failed to enumerate displays");
+    let displays = adapter.physical_device.enumerate_available_displays().expect("Failed to enumerate displays");
     if displays.len() == 0 {panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");}
 
     //Get the first available display
@@ -108,21 +108,21 @@ fn main() {
     println!("Display: {:#?}",&display);
 
     //Enumerate compatible planes
-    let compatible_planes = instance.enumerate_compatible_planes(&display).expect("Failed to enumerate compatible planes");
+    let compatible_planes = adapter.physical_device.enumerate_compatible_planes(&display).expect("Failed to enumerate compatible planes");
 
     //Get the first available plane (it is granted to have at least 1 plane compatible)
     let plane = &compatible_planes[0];
     println!("Plane: {:#?}",&plane);
 
     //Enumerate display modes
-    let display_modes = instance.enumerate_builtin_display_modes(&display).expect("Failed to display modes");
+    let display_modes = adapter.physical_device.enumerate_builtin_display_modes(&display).expect("Failed to display modes");
 
     //Get the first available display mode (generally the preferred one)
     let display_mode = &display_modes[0];
     println!("Display mode: {:#?}",&display_mode);
 
     //Create display plane
-    let display_plane = instance.create_display_plane(&display_mode,&plane).expect("Failed to create display plane");
+    let display_plane = adapter.physical_device.create_display_plane(&display_mode,&plane).expect("Failed to create display plane");
     println!("Display plane: {:#?}",&display_plane);
 
     //Create a surface from the display

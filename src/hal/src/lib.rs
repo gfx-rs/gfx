@@ -62,6 +62,7 @@ pub mod query;
 pub mod queue;
 pub mod window;
 pub mod display;
+//pub mod common;
 
 /// Prelude module re-exports all the traits necessary to use `gfx-hal`.
 pub mod prelude {
@@ -700,57 +701,6 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     ///
     unsafe fn destroy_surface(&self, surface: B::Surface);
 
-    /// Enumerate active displays [surface][display::Display] from display.
-    /// Please notice that, even if a systes has displays attached, they can be not returned because they are managed by some other components.
-    /// This function only return the display that are available to be managed by the current application.
-    /// Since, generally, while compositor are running they take the control of every display connected, it could be better to run the application directly from the tty to avoid the return of an empty list.
-    /// # Arguments
-    ///
-    /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
-    fn enumerate_available_displays<'a>(&self,adapter: &'a adapter::Adapter<B>)->Result<Vec<display::Display<'a,B>>,device::OutOfMemory>;
-
-
-    /// Enumerate compatibles planes with the provided display.
-    /// # Arguments
-    ///
-    /// * `display` - display on which the the compatible planes will be listed.
-    fn enumerate_compatible_planes<'a>(&self,display: &display::Display<'a,B>)->Result<Vec<display::Plane<'a,B>>,device::OutOfMemory>;
-
-
-    /// Enumerate the builtin display modes from a display.
-    /// # Arguments
-    ///
-    /// * `display` - display on which the display mode will be enumerated.
-    fn enumerate_builtin_display_modes<'a>(&self,display: &'a display::Display<'a,B>,)->Result<Vec<display::DisplayMode<'a,B>>,device::OutOfMemory>;
-
-    /// Create a new display mode from a display, a resolution, a refresh_rate and the plane index.
-    /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
-    /// # Arguments
-    ///
-    /// * `display` - display on which the display mode will be created.
-    /// * `resolution` - the desired resolution.
-    /// * `refresh_rate` - the desired refresh_rate.
-    fn create_display_mode<'a>(
-        &self,
-        display: &'a display::Display<'a,B>,
-        resolution: (u32,u32),
-        refresh_rate: u32
-    )->Result<display::DisplayMode<'a,B>,display::DisplayModeError>;
-
-    /// Create a display plane from a display, a resolution, a refresh_rate and a plane.
-    /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
-    /// # Arguments
-    ///
-    /// * `display` - display on which the display plane will be created.
-    /// * `plane` - the plane on which the surface will be rendered on.
-    /// * `resolution` - the desired resolution.
-    /// * `refresh_rate` - the desired refresh_rate.
-    fn create_display_plane<'a>(
-        &self,
-        display: &'a display::DisplayMode<'a,B>,
-        plane: &'a display::Plane<'a,B>,
-    )->Result<display::DisplayPlane<'a,B>,device::OutOfMemory>;
-
     /// Create a new [surface][window::Surface] from display.
     ///
     /// Surfaces can be used to render to windows.
@@ -759,9 +709,9 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     ///
     /// This method can cause undefined behavior if `raw_window_handle` isn't
     /// a handle to a valid window for the current platform.
-     fn create_display_plane_surface(
+     fn create_display_plane_surface<'a>(
         &self,
-        display_plane: &display::DisplayPlane<B>,
+        display_plane: &display::DisplayPlane<'a,B>,
         plane_stack_index: u32,
         transformation: display::SurfaceTransformation,
         alpha: display::DisplayPlaneAlpha,

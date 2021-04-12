@@ -3,8 +3,6 @@
 //! A display represent a physical display collected from an Adapter
 
 use crate::Backend;
-use crate::adapter;
-
 
 /**
 List of the hardware display transformations
@@ -119,8 +117,8 @@ Representation of a display
 #[derive(Debug)]
 pub struct Display<'a,B: Backend>
 {
-    /// The adapter.
-    pub adapter: &'a adapter::Adapter<B>,
+    /// The physical device.
+    pub physical_device: &'a B::PhysicalDevice,
     /// The display handle.
     pub handle: B::Display,
     /// General information about this display.
@@ -149,8 +147,8 @@ Representation of a plane
 #[derive(Debug)]
 pub struct Plane<'a,B: Backend>
 {
-    /// The adapter.
-    pub adapter: &'a adapter::Adapter<B>,
+    /// The physical device.
+    pub physical_device: &'a B::PhysicalDevice,
     /// The plane handle.
     pub handle: B::Plane,
     /// The current index on the z stack.
