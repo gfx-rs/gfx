@@ -15,8 +15,7 @@ edition = "2018"
 [features]
 default = []
 signpost = []
-cross = ["spirv_cross", "auxil", "naga/spv-out", "serde-cache"]
-serde-cache = ["naga/serialize", "naga/deserialize"]
+cross = ["spirv_cross", "auxil"]
 
 [lib]
 name = "gfx_backend_metal"
@@ -56,7 +55,7 @@ optional = true
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-features = ["spv-in", "msl-out"]
+features = ["spv-in", "msl-out", "spv-out", "serialize", "deserialize"]
 
 # This forces docs.rs to build the crate on mac, otherwise the build fails
 # and we get no docs at all.

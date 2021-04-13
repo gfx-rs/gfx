@@ -1,4 +1,3 @@
-#[cfg(feature = "cross")]
 use crate::internal::FastStorageMap;
 use crate::{
     internal::Channel, Backend, BufferPtr, FastHashMap, ResourceIndex, SamplerPtr, TexturePtr,
@@ -27,8 +26,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde-cache", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EntryPoint {
     pub internal_name: Result<String, naga::back::msl::EntryPointError>,
     pub work_group_size: [u32; 3],
@@ -42,6 +40,7 @@ pub struct ShaderModule {
     pub(crate) prefer_naga: bool,
     #[cfg(feature = "cross")]
     pub(crate) spv: Vec<u32>,
+    pub(crate) spv_hash: u64,
     pub(crate) naga: Result<hal::device::NagaShader, String>,
 }
 
@@ -213,71 +212,57 @@ pub(crate) struct BinaryArchive {
 unsafe impl Send for BinaryArchive {}
 unsafe impl Sync for BinaryArchive {}
 
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde-cache", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SerializableModuleInfo {
-    pub shader_code: String,
+    pub source: String,
     pub entry_point_map: EntryPointMap,
     pub rasterization_enabled: bool,
 }
 
-#[cfg(feature = "cross")]
 pub(crate) type SpvToMsl = FastStorageMap<
-    spirv_cross::msl::CompilerOptions,
-    FastStorageMap<Vec<u32>, SerializableModuleInfo>,
+    (
+        naga::back::msl::Options,
+        naga::back::msl::PipelineOptions,
+        u64,
+    ),
+    SerializableModuleInfo,
 >;
 
-#[cfg(feature = "cross")]
 pub(crate) type SerializableSpvToMsl = Vec<(
-    spirv_cross::msl::CompilerOptions,
-    Vec<(Vec<u32>, SerializableModuleInfo)>,
+    (
+        naga::back::msl::Options,
+        naga::back::msl::PipelineOptions,
+        u64,
+    ),
+    SerializableModuleInfo,
 )>;
 
-#[cfg(feature = "cross")]
 pub(crate) fn load_spv_to_msl_cache(serializable: SerializableSpvToMsl) -> SpvToMsl {
     let cache = FastStorageMap::default();
     for (options, values) in serializable.into_iter() {
-        cache.get_or_create_with(&options, || {
-            let inner_cache = FastStorageMap::default();
-            for (spv, msl) in values {
-                inner_cache.get_or_create_with(&spv, || msl);
-            }
-            inner_cache
-        });
+        cache.get_or_create_with(&options, || values);
     }
 
     cache
 }
 
-#[cfg(feature = "cross")]
 pub(crate) fn serialize_spv_to_msl_cache(cache: &SpvToMsl) -> SerializableSpvToMsl {
     cache
         .whole_write()
         .iter()
-        .map(|(options, values)| {
-            (
-                options.clone(),
-                values
-                    .whole_write()
-                    .iter()
-                    .map(|(spv, msl)| (spv.clone(), msl.clone()))
-                    .collect::<Vec<_>>(),
-            )
-        })
+        .map(|(options, values)| (options.clone(), values.clone()))
         .collect()
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct SerializablePipelineCache<'a> {
     pub(crate) binary_archive: &'a [u8],
-    #[cfg(feature = "cross")]
-    pub(crate) spirv_cross_spv_to_msl: SerializableSpvToMsl,
+    pub(crate) spv_to_msl: SerializableSpvToMsl,
 }
 
 pub struct PipelineCache {
     pub(crate) binary_archive: Option<BinaryArchive>,
-    #[cfg(feature = "cross")]
-    pub(crate) spirv_cross_spv_to_msl: SpvToMsl,
+    pub(crate) spv_to_msl: SpvToMsl,
 }
 
 impl fmt::Debug for PipelineCache {

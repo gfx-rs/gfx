@@ -29,7 +29,6 @@ use objc::{
 };
 use parking_lot::Mutex;
 
-#[cfg(feature = "cross")]
 use std::collections::BTreeMap;
 use std::{
     cmp,
@@ -140,7 +139,6 @@ pub struct Device {
     features: hal::Features,
     pub online_recording: OnlineRecording,
     pub always_prefer_naga: bool,
-    #[cfg(feature = "cross")]
     spv_options: naga::back::spv::Options,
 }
 unsafe impl Send for Device {}
@@ -259,7 +257,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             queue_group.add_queue(command::Queue::new(self.shared.clone()));
         }
 
-        #[cfg(feature = "cross")]
         let spv_options = {
             use naga::back::spv;
             let capabilities = [
@@ -297,7 +294,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             features: requested_features,
             online_recording: OnlineRecording::default(),
             always_prefer_naga: false,
-            #[cfg(feature = "cross")]
             spv_options,
         };
 
@@ -586,146 +582,138 @@ impl Device {
         msl_version: MTLLanguageVersion,
         specialization: &pso::Specialization,
         stage: naga::ShaderStage,
-        spv_to_msl_cache: Option<&n::SpvToMsl>,
     ) -> Result<n::ModuleInfo, String> {
         use spirv_cross::ErrorCode as Ec;
 
-        let create_module = || -> Result<_, String> {
-            let module = spirv_cross::spirv::Module::from_words(raw_data);
+        let module = spirv_cross::spirv::Module::from_words(raw_data);
 
-            // now parse again using the new overrides
-            let mut ast = spirv_cross::spirv::Ast::<spirv_cross::msl::Target>::parse(&module)
-                .map_err(|err| match err {
+        // now parse again using the new overrides
+        let mut ast =
+            spirv_cross::spirv::Ast::<spirv_cross::msl::Target>::parse(&module).map_err(|err| {
+                match err {
                     Ec::CompilationError(msg) => msg,
                     Ec::Unhandled => "Unexpected parse error".into(),
-                })?;
+                }
+            })?;
 
-            auxil::spirv_cross_specialize_ast(&mut ast, specialization)?;
+        auxil::spirv_cross_specialize_ast(&mut ast, specialization)?;
 
-            ast.set_compiler_options(compiler_options)
+        ast.set_compiler_options(compiler_options)
+            .map_err(|err| match err {
+                Ec::CompilationError(msg) => msg,
+                Ec::Unhandled => "Unexpected error".into(),
+            })?;
+
+        let entry_points = ast.get_entry_points().map_err(|err| match err {
+            Ec::CompilationError(msg) => msg,
+            Ec::Unhandled => "Unexpected entry point error".into(),
+        })?;
+
+        let shader_code = ast.compile().map_err(|err| match err {
+            Ec::CompilationError(msg) => msg,
+            Ec::Unhandled => "Unknown compile error".into(),
+        })?;
+
+        let mut entry_point_map = n::EntryPointMap::default();
+        for entry_point in entry_points {
+            info!("Entry point {:?}", entry_point);
+            let cleansed = ast
+                .get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
                 .map_err(|err| match err {
                     Ec::CompilationError(msg) => msg,
-                    Ec::Unhandled => "Unexpected error".into(),
+                    Ec::Unhandled => "Unknown compile error".into(),
                 })?;
+            entry_point_map.insert(
+                (stage, entry_point.name),
+                n::EntryPoint {
+                    //TODO: should we try to do better?
+                    internal_name: Ok(cleansed),
+                    work_group_size: [
+                        entry_point.work_group_size.x,
+                        entry_point.work_group_size.y,
+                        entry_point.work_group_size.z,
+                    ],
+                },
+            );
+        }
 
-            let entry_points = ast.get_entry_points().map_err(|err| match err {
-                Ec::CompilationError(msg) => msg,
-                Ec::Unhandled => "Unexpected entry point error".into(),
-            })?;
+        let rasterization_enabled = ast
+            .is_rasterization_enabled()
+            .map_err(|_| "Unknown compile error".to_string())?;
 
-            let shader_code = ast.compile().map_err(|err| match err {
-                Ec::CompilationError(msg) => msg,
-                Ec::Unhandled => "Unknown compile error".into(),
-            })?;
-
-            let mut entry_point_map = n::EntryPointMap::default();
-            for entry_point in entry_points {
-                info!("Entry point {:?}", entry_point);
-                let cleansed = ast
-                    .get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
-                    .map_err(|err| match err {
-                        Ec::CompilationError(msg) => msg,
-                        Ec::Unhandled => "Unknown compile error".into(),
-                    })?;
-                entry_point_map.insert(
-                    (stage, entry_point.name),
-                    n::EntryPoint {
-                        //TODO: should we try to do better?
-                        internal_name: Ok(cleansed),
-                        work_group_size: [
-                            entry_point.work_group_size.x,
-                            entry_point.work_group_size.y,
-                            entry_point.work_group_size.z,
-                        ],
-                    },
-                );
-            }
-
-            let rasterization_enabled = ast
-                .is_rasterization_enabled()
-                .map_err(|_| "Unknown compile error".to_string())?;
-
-            // done
-            debug!("SPIRV-Cross generated shader:\n{}", shader_code);
-
-            Ok(n::SerializableModuleInfo {
-                shader_code,
-                rasterization_enabled,
-                entry_point_map,
-            })
-        };
-
+        // done
+        debug!("SPIRV-Cross generated shader:\n{}", shader_code);
         let options = metal::CompileOptions::new();
         options.set_language_version(msl_version);
 
-        if let Some(spv_to_msl_cache) = spv_to_msl_cache {
-            let spv_to_msl =
-                spv_to_msl_cache.get_or_create_with(compiler_options, || Default::default());
-            let module =
-                spv_to_msl.get_or_create_with(&raw_data.to_vec(), || create_module().unwrap());
+        let library = device
+            .lock()
+            .new_library_with_source(shader_code.as_ref(), &options)
+            .map_err(|err| err.to_string())?;
 
-            let library = device
-                .lock()
-                .new_library_with_source(module.shader_code.as_ref(), &options)
-                .map_err(|err| err.to_string())?;
-
-            Ok(n::ModuleInfo {
-                library,
-                entry_point_map: module.entry_point_map.clone(),
-                rasterization_enabled: module.rasterization_enabled,
-            })
-        } else {
-            let module = create_module()?;
-
-            let library = device
-                .lock()
-                .new_library_with_source(module.shader_code.as_ref(), &options)
-                .map_err(|err| err.to_string())?;
-
-            Ok(n::ModuleInfo {
-                library,
-                entry_point_map: module.entry_point_map,
-                rasterization_enabled: module.rasterization_enabled,
-            })
-        }
+        Ok(n::ModuleInfo {
+            library,
+            entry_point_map,
+            rasterization_enabled,
+        })
     }
 
     fn compile_shader_library_naga(
         device: &Mutex<metal::Device>,
         shader: &d::NagaShader,
+        spv_hash: u64,
         naga_options: &naga::back::msl::Options,
         pipeline_options: &naga::back::msl::PipelineOptions,
+        spv_to_msl_cache: Option<&n::SpvToMsl>,
     ) -> Result<n::ModuleInfo, String> {
-        let (source, info) = match naga::back::msl::write_string(
-            &shader.module,
-            &shader.info,
-            naga_options,
-            pipeline_options,
-        ) {
-            Ok(pair) => pair,
-            Err(e) => {
-                warn!("Naga: {:?}", e);
-                return Err(format!("MSL: {:?}", e));
+        let get_module_info = || {
+            let (source, info) = match naga::back::msl::write_string(
+                &shader.module,
+                &shader.info,
+                naga_options,
+                pipeline_options,
+            ) {
+                Ok(pair) => pair,
+                Err(e) => {
+                    warn!("Naga: {:?}", e);
+                    return Err(format!("MSL: {:?}", e));
+                }
+            };
+
+            let mut entry_point_map = n::EntryPointMap::default();
+            for (ep, internal_name) in shader
+                .module
+                .entry_points
+                .iter()
+                .zip(info.entry_point_names)
+            {
+                entry_point_map.insert(
+                    (ep.stage, ep.name.clone()),
+                    n::EntryPoint {
+                        internal_name,
+                        work_group_size: ep.workgroup_size,
+                    },
+                );
             }
+
+            debug!("Naga generated shader:\n{}", source);
+
+            Ok(n::SerializableModuleInfo {
+                source,
+                entry_point_map,
+                rasterization_enabled: true, //TODO
+            })
         };
 
-        let mut entry_point_map = n::EntryPointMap::default();
-        for (ep, internal_name) in shader
-            .module
-            .entry_points
-            .iter()
-            .zip(info.entry_point_names)
-        {
-            entry_point_map.insert(
-                (ep.stage, ep.name.clone()),
-                n::EntryPoint {
-                    internal_name,
-                    work_group_size: ep.workgroup_size,
-                },
-            );
-        }
+        let module_info = if let Some(spv_to_msl_cache) = spv_to_msl_cache {
+            let key = (naga_options.clone(), pipeline_options.clone(), spv_hash);
 
-        debug!("Naga generated shader:\n{}", source);
+            spv_to_msl_cache
+                .get_or_create_with(&key, || get_module_info().unwrap())
+                .clone()
+        } else {
+            get_module_info()?
+        };
 
         let options = metal::CompileOptions::new();
         let msl_version = match naga_options.lang_version {
@@ -742,17 +730,17 @@ impl Device {
 
         let library = device
             .lock()
-            .new_library_with_source(source.as_ref(), &options)
+            .new_library_with_source(module_info.source.as_ref(), &options)
             .map_err(|err| {
-                warn!("Naga generated shader:\n{}", source);
+                warn!("Naga generated shader:\n{}", module_info.source);
                 warn!("Failed to compile: {}", err);
                 format!("{:?}", err)
             })?;
 
         Ok(n::ModuleInfo {
             library,
-            entry_point_map,
-            rasterization_enabled: true, //TODO
+            entry_point_map: module_info.entry_point_map,
+            rasterization_enabled: module_info.rasterization_enabled,
         })
     }
 
@@ -765,9 +753,6 @@ impl Device {
         stage: naga::ShaderStage,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
         let device = &self.shared.device;
-        #[cfg(feature = "cross")]
-        let (module_map, info_guard);
-        let info_owned;
 
         #[cfg(feature = "cross")]
         let mut compiler_options = layout.spirv_cross_options.clone();
@@ -785,66 +770,49 @@ impl Device {
             },
         };
 
-        let info = match pipeline_cache {
+        let info = {
+            let mut result = Err(String::new());
+            if ep.module.prefer_naga {
+                result = match ep.module.naga {
+                    Ok(ref shader) => Self::compile_shader_library_naga(
+                        device,
+                        shader,
+                        ep.module.spv_hash,
+                        &layout.naga_options,
+                        &pipeline_options,
+                        pipeline_cache.as_ref().map(|cache| &cache.spv_to_msl),
+                    ),
+                    Err(ref e) => Err(e.clone()),
+                }
+            }
             #[cfg(feature = "cross")]
-            Some(cache) => {
-                module_map = cache
-                    .modules
-                    .get_or_create_with(&compiler_options, FastStorageMap::default);
-                info_guard = module_map.get_or_create_with(&ep.module.spv, || {
-                    Self::compile_shader_library_cross(
-                        device,
-                        &ep.module.spv,
-                        &compiler_options,
-                        self.shared.private_caps.msl_version,
-                        &ep.specialization,
-                        stage,
-                    )
-                    .unwrap()
-                });
-                &*info_guard
+            if result.is_err() {
+                result = Self::compile_shader_library_cross(
+                    device,
+                    &ep.module.spv,
+                    &compiler_options,
+                    self.shared.private_caps.msl_version,
+                    &ep.specialization,
+                    stage,
+                );
             }
-            _ => {
-                let mut result = Err(String::new());
-                if ep.module.prefer_naga {
-                    result = match ep.module.naga {
-                        Ok(ref shader) => Self::compile_shader_library_naga(
-                            device,
-                            shader,
-                            &layout.naga_options,
-                            &pipeline_options,
-                        ),
-                        Err(ref e) => Err(e.clone()),
-                    }
-                }
-                #[cfg(feature = "cross")]
-                if result.is_err() {
-                    result = Self::compile_shader_library_cross(
+            if result.is_err() && !ep.module.prefer_naga {
+                result = match ep.module.naga {
+                    Ok(ref shader) => Self::compile_shader_library_naga(
                         device,
-                        &ep.module.spv,
-                        &compiler_options,
-                        self.shared.private_caps.msl_version,
-                        &ep.specialization,
-                        stage,
-                    );
+                        shader,
+                        ep.module.spv_hash,
+                        &layout.naga_options,
+                        &pipeline_options,
+                        pipeline_cache.as_ref().map(|cache| &cache.spv_to_msl),
+                    ),
+                    Err(ref e) => Err(e.clone()),
                 }
-                if result.is_err() && !ep.module.prefer_naga {
-                    result = match ep.module.naga {
-                        Ok(ref shader) => Self::compile_shader_library_naga(
-                            device,
-                            shader,
-                            &layout.naga_options,
-                            &pipeline_options,
-                        ),
-                        Err(ref e) => Err(e.clone()),
-                    }
             }
-            info_owned = result.map_err(|e| {
+            result.map_err(|e| {
                 let error = format!("Error compiling the shader {:?}", e);
                 pso::CreationError::ShaderCreationError(stage.into(), error)
-            })?;
-            &info_owned
-            }
+            })?
         };
 
         let lib = info.library.clone();
@@ -1118,7 +1086,7 @@ impl hal::device::Device<Backend> for Device {
                 push_constant_buffer: None,
             },
         ];
-        let mut binding_map = FastHashMap::default();
+        let mut binding_map = BTreeMap::default();
         let mut argument_buffer_bindings = FastHashMap::default();
         let mut inline_samplers = naga::Arena::new();
         #[cfg(feature = "cross")]
@@ -1376,7 +1344,7 @@ impl hal::device::Device<Backend> for Device {
             inline_samplers,
             spirv_cross_compatibility: cfg!(feature = "cross"),
             fake_missing_bindings: false,
-            push_constants_map: Default::default()
+            push_constants_map: Default::default(),
         };
 
         Ok(n::PipelineLayout {
@@ -1465,16 +1433,12 @@ impl hal::device::Device<Backend> for Device {
 
             Ok(n::PipelineCache {
                 binary_archive: create_binary_archive(&pipeline_cache.binary_archive)?,
-                #[cfg(feature = "cross")]
-                spirv_cross_spv_to_msl: n::load_spv_to_msl_cache(
-                    pipeline_cache.spirv_cross_spv_to_msl,
-                ),
+                spv_to_msl: n::load_spv_to_msl_cache(pipeline_cache.spv_to_msl),
             })
         } else {
             Ok(n::PipelineCache {
                 binary_archive: create_binary_archive(&[])?,
-                #[cfg(feature = "cross")]
-                spirv_cross_spv_to_msl: Default::default(),
+                spv_to_msl: Default::default(),
             })
         }
     }
@@ -1512,8 +1476,7 @@ impl hal::device::Device<Backend> for Device {
 
         Ok(bincode::serialize(&n::SerializablePipelineCache {
             binary_archive: &binary_archive()?,
-            #[cfg(feature = "cross")]
-            spirv_cross_spv_to_msl: n::serialize_spv_to_msl_cache(&cache.spirv_cross_spv_to_msl),
+            spv_to_msl: n::serialize_spv_to_msl_cache(&cache.spv_to_msl),
         })
         .unwrap())
     }
@@ -1943,6 +1906,7 @@ impl hal::device::Device<Backend> for Device {
             prefer_naga: self.always_prefer_naga,
             #[cfg(feature = "cross")]
             spv: raw_data.to_vec(),
+            spv_hash: fxhash::hash64(raw_data),
             naga: {
                 let options = naga::front::spv::Options {
                     adjust_coordinate_space: !self.features.contains(hal::Features::NDC_Y_UP),
@@ -1969,15 +1933,17 @@ impl hal::device::Device<Backend> for Device {
         &self,
         shader: d::NagaShader,
     ) -> Result<n::ShaderModule, (d::ShaderError, d::NagaShader)> {
+        let spv = match naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options)
+        {
+            Ok(spv) => spv,
+            Err(e) => return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader)),
+        };
+
         Ok(n::ShaderModule {
             prefer_naga: true,
+            spv_hash: fxhash::hash64(&spv),
             #[cfg(feature = "cross")]
-            spv: match naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options) {
-                Ok(spv) => spv,
-                Err(e) => {
-                    return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader))
-                }
-            },
+            spv,
             naga: Ok(shader),
         })
     }
