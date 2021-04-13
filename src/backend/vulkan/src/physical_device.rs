@@ -1410,7 +1410,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         });
                     }
                 }
-                return Ok(planes);
+                Ok(planes)
             }
             Err(error)=>{
                 match error
