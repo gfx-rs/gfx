@@ -16,7 +16,4 @@ members = [
 ]
 
 [patch."https://github.com/gfx-rs/naga"]
-naga = { git = "https://github.com/expenses/naga", branch = "metal-serialize-entry-point-error-gfx-20" }
-
-[patch."crates-io"]
-spirv_cross = { git = "https://github.com/expenses/spirv_cross", branch = "serialize-feature" }
+#naga = { path = "../naga" }

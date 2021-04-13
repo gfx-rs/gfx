@@ -465,7 +465,8 @@ unsafe impl Sync for ImageView {}
 pub struct Sampler {
     pub(crate) raw: Option<metal::SamplerState>,
     #[cfg(feature = "cross")]
-    pub(crate) data: spirv_cross::msl::SamplerData,
+    pub(crate) cross_data: spirv_cross::msl::SamplerData,
+    pub(crate) data: naga::back::msl::sampler::InlineSampler,
 }
 
 unsafe impl Send for Sampler {}
@@ -945,6 +946,7 @@ pub struct ArgumentLayout {
 
 #[derive(Debug)]
 pub struct ImmutableSampler {
+    pub(crate) data: naga::back::msl::sampler::InlineSampler,
     #[cfg(feature = "cross")]
     pub(crate) cross_data: spirv_cross::msl::SamplerData,
 }

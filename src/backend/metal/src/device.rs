@@ -694,15 +694,20 @@ impl Device {
         device: &Mutex<metal::Device>,
         shader: &d::NagaShader,
         naga_options: &naga::back::msl::Options,
+        pipeline_options: &naga::back::msl::PipelineOptions,
     ) -> Result<n::ModuleInfo, String> {
-        let (source, info) =
-            match naga::back::msl::write_string(&shader.module, &shader.info, naga_options) {
-                Ok(pair) => pair,
-                Err(e) => {
-                    warn!("Naga: {:?}", e);
-                    return Err(format!("MSL: {:?}", e));
-                }
-            };
+        let (source, info) = match naga::back::msl::write_string(
+            &shader.module,
+            &shader.info,
+            naga_options,
+            pipeline_options,
+        ) {
+            Ok(pair) => pair,
+            Err(e) => {
+                warn!("Naga: {:?}", e);
+                return Err(format!("MSL: {:?}", e));
+            }
+        };
 
         let mut entry_point_map = n::EntryPointMap::default();
         for (ep, internal_name) in shader
@@ -760,6 +765,8 @@ impl Device {
         stage: naga::ShaderStage,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
         let device = &self.shared.device;
+        #[cfg(feature = "cross")]
+        let (module_map, info_guard);
         let info_owned;
 
         #[cfg(feature = "cross")]
@@ -771,53 +778,73 @@ impl Device {
             compiler_options.enable_point_size_builtin =
                 primitive_class == MTLPrimitiveTopologyClass::Point;
         }
-        let options_clone;
-        let naga_options = match primitive_class {
-            MTLPrimitiveTopologyClass::Point => {
-                options_clone = naga::back::msl::Options {
-                    allow_point_size: true,
-                    ..layout.naga_options.clone()
-                };
-                &options_clone
-            }
-            _ => &layout.naga_options,
+        let pipeline_options = naga::back::msl::PipelineOptions {
+            allow_point_size: match primitive_class {
+                MTLPrimitiveTopologyClass::Point => true,
+                _ => false,
+            },
         };
 
-        let info = {
-            let mut result = Err(String::new());
-            if ep.module.prefer_naga {
-                result = match ep.module.naga {
-                    Ok(ref shader) => {
-                        Self::compile_shader_library_naga(device, shader, naga_options)
-                    }
-                    Err(ref e) => Err(e.clone()),
-                }
-            }
+        let info = match pipeline_cache {
             #[cfg(feature = "cross")]
-            if result.is_err() {
-                result = Self::compile_shader_library_cross(
-                    device,
-                    &ep.module.spv,
-                    &compiler_options,
-                    self.shared.private_caps.msl_version,
-                    &ep.specialization,
-                    stage,
-                    pipeline_cache.map(|cache| &cache.spirv_cross_spv_to_msl),
-                );
+            Some(cache) => {
+                module_map = cache
+                    .modules
+                    .get_or_create_with(&compiler_options, FastStorageMap::default);
+                info_guard = module_map.get_or_create_with(&ep.module.spv, || {
+                    Self::compile_shader_library_cross(
+                        device,
+                        &ep.module.spv,
+                        &compiler_options,
+                        self.shared.private_caps.msl_version,
+                        &ep.specialization,
+                        stage,
+                    )
+                    .unwrap()
+                });
+                &*info_guard
             }
-            if result.is_err() && !ep.module.prefer_naga {
-                result = match ep.module.naga {
-                    Ok(ref shader) => {
-                        Self::compile_shader_library_naga(device, shader, naga_options)
+            _ => {
+                let mut result = Err(String::new());
+                if ep.module.prefer_naga {
+                    result = match ep.module.naga {
+                        Ok(ref shader) => Self::compile_shader_library_naga(
+                            device,
+                            shader,
+                            &layout.naga_options,
+                            &pipeline_options,
+                        ),
+                        Err(ref e) => Err(e.clone()),
                     }
-                    Err(ref e) => Err(e.clone()),
                 }
+                #[cfg(feature = "cross")]
+                if result.is_err() {
+                    result = Self::compile_shader_library_cross(
+                        device,
+                        &ep.module.spv,
+                        &compiler_options,
+                        self.shared.private_caps.msl_version,
+                        &ep.specialization,
+                        stage,
+                    );
+                }
+                if result.is_err() && !ep.module.prefer_naga {
+                    result = match ep.module.naga {
+                        Ok(ref shader) => Self::compile_shader_library_naga(
+                            device,
+                            shader,
+                            &layout.naga_options,
+                            &pipeline_options,
+                        ),
+                        Err(ref e) => Err(e.clone()),
+                    }
             }
             info_owned = result.map_err(|e| {
                 let error = format!("Error compiling the shader {:?}", e);
                 pso::CreationError::ShaderCreationError(stage.into(), error)
             })?;
             &info_owned
+            }
         };
 
         let lib = info.library.clone();
@@ -929,74 +956,6 @@ impl Device {
         }
 
         Some(descriptor)
-    }
-
-    #[cfg(feature = "cross")]
-    fn make_sampler_data(info: &image::SamplerDesc) -> spirv_cross::msl::SamplerData {
-        use spirv_cross::msl;
-        fn map_address(wrap: image::WrapMode) -> msl::SamplerAddress {
-            match wrap {
-                image::WrapMode::Tile => msl::SamplerAddress::Repeat,
-                image::WrapMode::Mirror => msl::SamplerAddress::MirroredRepeat,
-                image::WrapMode::Clamp => msl::SamplerAddress::ClampToEdge,
-                image::WrapMode::Border => msl::SamplerAddress::ClampToBorder,
-                image::WrapMode::MirrorClamp => {
-                    unimplemented!("https://github.com/grovesNL/spirv_cross/issues/138")
-                }
-            }
-        }
-
-        let lods = info.lod_range.start.0..info.lod_range.end.0;
-        msl::SamplerData {
-            coord: if info.normalized {
-                msl::SamplerCoord::Normalized
-            } else {
-                msl::SamplerCoord::Pixel
-            },
-            min_filter: match info.min_filter {
-                image::Filter::Nearest => msl::SamplerFilter::Nearest,
-                image::Filter::Linear => msl::SamplerFilter::Linear,
-            },
-            mag_filter: match info.mag_filter {
-                image::Filter::Nearest => msl::SamplerFilter::Nearest,
-                image::Filter::Linear => msl::SamplerFilter::Linear,
-            },
-            mip_filter: match info.min_filter {
-                image::Filter::Nearest if info.lod_range.end.0 < 0.5 => msl::SamplerMipFilter::None,
-                image::Filter::Nearest => msl::SamplerMipFilter::Nearest,
-                image::Filter::Linear => msl::SamplerMipFilter::Linear,
-            },
-            s_address: map_address(info.wrap_mode.0),
-            t_address: map_address(info.wrap_mode.1),
-            r_address: map_address(info.wrap_mode.2),
-            compare_func: match info.comparison {
-                Some(func) => unsafe { mem::transmute(conv::map_compare_function(func) as u32) },
-                None => msl::SamplerCompareFunc::Always,
-            },
-            border_color: match info.border {
-                image::BorderColor::TransparentBlack => msl::SamplerBorderColor::TransparentBlack,
-                image::BorderColor::OpaqueBlack => msl::SamplerBorderColor::OpaqueBlack,
-                image::BorderColor::OpaqueWhite => msl::SamplerBorderColor::OpaqueWhite,
-            },
-            lod_clamp_min: lods.start.into(),
-            lod_clamp_max: lods.end.into(),
-            max_anisotropy: info.anisotropy_clamp.map_or(0, |aniso| aniso as i32),
-            planes: 0,
-            resolution: msl::FormatResolution::_444,
-            chroma_filter: msl::SamplerFilter::Nearest,
-            x_chroma_offset: msl::ChromaLocation::CositedEven,
-            y_chroma_offset: msl::ChromaLocation::CositedEven,
-            swizzle: [
-                msl::ComponentSwizzle::Identity,
-                msl::ComponentSwizzle::Identity,
-                msl::ComponentSwizzle::Identity,
-                msl::ComponentSwizzle::Identity,
-            ],
-            ycbcr_conversion_enable: false,
-            ycbcr_model: msl::SamplerYCbCrModelConversion::RgbIdentity,
-            ycbcr_range: msl::SamplerYCbCrRange::ItuFull,
-            bpc: 8,
-        }
     }
 }
 
@@ -1161,8 +1120,9 @@ impl hal::device::Device<Backend> for Device {
         ];
         let mut binding_map = FastHashMap::default();
         let mut argument_buffer_bindings = FastHashMap::default();
+        let mut inline_samplers = naga::Arena::new();
         #[cfg(feature = "cross")]
-        let mut const_samplers = BTreeMap::new();
+        let mut cross_const_samplers = BTreeMap::new();
         let mut infos = Vec::new();
 
         // First, place the push constants
@@ -1206,14 +1166,13 @@ impl hal::device::Device<Backend> for Device {
             match *set_layout {
                 n::DescriptorSetLayout::Emulated {
                     layouts: ref desc_layouts,
-                    #[cfg(feature = "cross")]
                     ref immutable_samplers,
                     ..
                 } => {
                     #[cfg(feature = "cross")]
                     for (&binding, immutable_sampler) in immutable_samplers.iter() {
                         //TODO: array support?
-                        const_samplers.insert(
+                        cross_const_samplers.insert(
                             spirv_cross::msl::SamplerLocation {
                                 desc_set: set_index as u32,
                                 binding,
@@ -1259,8 +1218,18 @@ impl hal::device::Device<Backend> for Device {
                                 } else {
                                     None
                                 },
-                                sampler: if layout.content.contains(n::DescriptorContent::SAMPLER) {
-                                    Some(info.counters.samplers as _)
+                                sampler: if layout
+                                    .content
+                                    .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
+                                {
+                                    let immutable_sampler = &immutable_samplers[&layout.binding];
+                                    let handle =
+                                        inline_samplers.append(immutable_sampler.data.clone());
+                                    Some(naga::back::msl::BindSamplerTarget::Inline(handle))
+                                } else if layout.content.contains(n::DescriptorContent::SAMPLER) {
+                                    Some(naga::back::msl::BindSamplerTarget::Resource(
+                                        info.counters.samplers as _,
+                                    ))
                                 } else {
                                     None
                                 },
@@ -1337,7 +1306,10 @@ impl hal::device::Device<Backend> for Device {
                     msl::ResourceBinding {
                         buffer_id: target.buffer.map_or(!0, |id| id as u32),
                         texture_id: target.texture.map_or(!0, |id| id as u32),
-                        sampler_id: target.sampler.map_or(!0, |id| id as u32),
+                        sampler_id: match target.sampler {
+                            Some(naga::back::msl::BindSamplerTarget::Resource(id)) => id as u32,
+                            _ => !0,
+                        },
                         count: 0,
                     },
                 );
@@ -1380,7 +1352,7 @@ impl hal::device::Device<Backend> for Device {
                 );
             }
             // other properties
-            compiler_options.const_samplers = const_samplers;
+            compiler_options.const_samplers = cross_const_samplers;
             compiler_options.enable_argument_buffers = self.shared.private_caps.argument_buffers;
             compiler_options.force_zero_initialized_variables = true;
             compiler_options.force_native_arrays = true;
@@ -1401,9 +1373,10 @@ impl hal::device::Device<Backend> for Device {
                 MTLLanguageVersion::V2_3 => (2, 3),
             },
             binding_map,
+            inline_samplers,
             spirv_cross_compatibility: cfg!(feature = "cross"),
             fake_missing_bindings: false,
-            allow_point_size: false,
+            push_constants_map: Default::default()
         };
 
         Ok(n::PipelineLayout {
@@ -2014,12 +1987,13 @@ impl hal::device::Device<Backend> for Device {
         info: &image::SamplerDesc,
     ) -> Result<n::Sampler, d::AllocationError> {
         Ok(n::Sampler {
-            raw: match self.make_sampler_descriptor(&info) {
+            raw: match self.make_sampler_descriptor(info) {
                 Some(ref descriptor) => Some(self.shared.device.lock().new_sampler(descriptor)),
                 None => None,
             },
+            data: conv::map_sampler_data_to_naga(info),
             #[cfg(feature = "cross")]
-            data: Self::make_sampler_data(&info),
+            cross_data: conv::map_sampler_data_to_cross(info),
         })
     }
 
@@ -2232,7 +2206,8 @@ impl hal::device::Device<Backend> for Device {
                         None
                     },
                     sampler: if content.contains(n::DescriptorContent::SAMPLER) {
-                        Some(arguments.push(metal::MTLDataType::Sampler, desc.count, usage) as u8)
+                        let slot = arguments.push(metal::MTLDataType::Sampler, desc.count, usage);
+                        Some(naga::back::msl::BindSamplerTarget::Resource(slot as u8))
                     } else {
                         None
                     },
@@ -2241,7 +2216,10 @@ impl hal::device::Device<Backend> for Device {
                 let res_offset = bind_target
                     .buffer
                     .or(bind_target.texture)
-                    .or(bind_target.sampler)
+                    .or(bind_target.sampler.as_ref().and_then(|bst| match *bst {
+                        naga::back::msl::BindSamplerTarget::Resource(slot) => Some(slot),
+                        naga::back::msl::BindSamplerTarget::Inline(_) => None,
+                    }))
                     .unwrap() as u32;
                 bindings.insert(
                     desc.binding,
@@ -2288,8 +2266,9 @@ impl hal::device::Device<Backend> for Device {
                             .enumerate()
                             .map(|(array_index, sm)| TempSampler {
                                 data: n::ImmutableSampler {
+                                    data: sm.data.clone(),
                                     #[cfg(feature = "cross")]
-                                    cross_data: sm.data.clone(),
+                                    cross_data: sm.cross_data.clone(),
                                 },
                                 binding: slb.binding,
                                 array_index,
