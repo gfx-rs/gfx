@@ -1360,8 +1360,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
             let display_info = hal::display::DisplayInfo {
                 name: display_name,
-                physical_dimensions: (display_property.physical_dimensions.width,display_property.physical_dimensions.height),
-                physical_resolution: (display_property.physical_resolution.width,display_property.physical_resolution.height),
+                physical_dimensions: (display_property.physical_dimensions.width,display_property.physical_dimensions.height).into(),
+                physical_resolution: (display_property.physical_resolution.width,display_property.physical_resolution.height).into(),
                 supported_transforms: supported_transforms,
                 plane_reorder_possible: display_property.plane_reorder_possible == 1,
                 persistent_content: display_property.persistent_content == 1
@@ -1525,14 +1525,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             plane: &plane,
             display_mode: &display_mode,
             supported_alpha: supported_alpha_capabilities,
-            min_src_position: (display_plane_capabilities.min_src_position.x,display_plane_capabilities.min_src_position.x),
-            max_src_position: (display_plane_capabilities.max_src_position.x,display_plane_capabilities.max_src_position.x),
-            min_src_extent: (display_plane_capabilities.min_src_extent.width,display_plane_capabilities.min_src_extent.height),
-            max_src_extent: (display_plane_capabilities.max_src_extent.width,display_plane_capabilities.max_src_extent.height),
-            min_dst_position: (display_plane_capabilities.min_dst_position.x,display_plane_capabilities.min_dst_position.x),
-            max_dst_position: (display_plane_capabilities.max_dst_position.x,display_plane_capabilities.max_dst_position.x),
-            min_dst_extent: (display_plane_capabilities.min_dst_extent.width,display_plane_capabilities.min_dst_extent.height),
-            max_dst_extent: (display_plane_capabilities.max_dst_extent.width,display_plane_capabilities.max_dst_extent.height)
+            min_src_position: (display_plane_capabilities.min_src_position.x,display_plane_capabilities.min_src_position.x).into(),
+            max_src_position: (display_plane_capabilities.max_src_position.x,display_plane_capabilities.max_src_position.x).into(),
+            min_src_extent: (display_plane_capabilities.min_src_extent.width,display_plane_capabilities.min_src_extent.height).into(),
+            max_src_extent: (display_plane_capabilities.max_src_extent.width,display_plane_capabilities.max_src_extent.height).into(),
+            min_dst_position: (display_plane_capabilities.min_dst_position.x,display_plane_capabilities.min_dst_position.x).into(),
+            max_dst_position: (display_plane_capabilities.max_dst_position.x,display_plane_capabilities.max_dst_position.x).into(),
+            min_dst_extent: (display_plane_capabilities.min_dst_extent.width,display_plane_capabilities.min_dst_extent.height).into(),
+            max_dst_extent: (display_plane_capabilities.max_dst_extent.width,display_plane_capabilities.max_dst_extent.height).into()
         })
     }
 }

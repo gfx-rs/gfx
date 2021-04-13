@@ -2,7 +2,7 @@
 //!
 //! A display represent a physical display collected from an Adapter
 
-use crate::Backend;
+use crate::{Backend,window::{Offset2D,Extent2D}};
 
 /**
 List of the hardware display transformations
@@ -43,9 +43,9 @@ pub struct DisplayInfo
     /// Name of the display. Generally, this will be the name provided by the display’s EDID.
     pub name: Option<String>,
     /// Physical width and height of the visible portion of the display, in millimeters.
-    pub physical_dimensions: (u32,u32),
+    pub physical_dimensions: Extent2D,
     /// Physical, native, or preferred resolution of the display.
-    pub physical_resolution: (u32,u32),
+    pub physical_resolution: Extent2D,
     /// Description of the supported transforms by the display.
     pub supported_transforms: Vec<SurfaceTransformation>,
     /// Tells whether the planes on the display can have their z order changed. If true, the application can re-arrange the planes on this display in any order relative to each other.
@@ -169,20 +169,20 @@ pub struct DisplayPlane<'a,B: Backend>
     /// Supported alpha capabilities
     pub supported_alpha: Vec<DisplayPlaneAlpha>,
     /// The minimum source rectangle offset supported by this plane using the specified mode.
-    pub min_src_position: (i32,i32),
+    pub min_src_position: Offset2D,
     /// The maximum source rectangle offset supported by this plane using the specified mode. The x and y components of max_src_position must each be greater than or equal to the x and y components of min_src_position, respectively.
-    pub max_src_position: (i32,i32),
+    pub max_src_position: Offset2D,
     /// The minimum source rectangle size supported by this plane using the specified mode.
-    pub min_src_extent: (u32,u32),
+    pub min_src_extent: Extent2D,
     /// The maximum source rectangle size supported by this plane using the specified mode.
-    pub max_src_extent: (u32,u32),
+    pub max_src_extent: Extent2D,
     /// Same as min_src_position. but applied to destination.
-    pub min_dst_position: (i32,i32),
+    pub min_dst_position: Offset2D,
     /// Same as max_src_position. but applied to destination.
-    pub max_dst_position: (i32,i32),
+    pub max_dst_position: Offset2D,
     /// Same as min_src_extent. but applied to destination.
-    pub min_dst_extent: (u32,u32),
+    pub min_dst_extent: Extent2D,
     /// Same as max_src_extent. but applied to destination.
-    pub max_dst_extent: (u32,u32)
+    pub max_dst_extent: Extent2D
 }
 
