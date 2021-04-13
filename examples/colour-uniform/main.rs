@@ -1578,6 +1578,7 @@ fn main() {
 )))]
 fn main() {
     println!(
-        "You need to enable the native API feature (vulkan/metal) in order to run the example"
+        "You need to enable the native API feature (vulkan/metal/dx11/dx12/gl) in order to run \
+        the example"
     );
 }
