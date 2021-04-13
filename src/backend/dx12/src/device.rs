@@ -2191,7 +2191,7 @@ impl d::Device<B> for Device {
             },
             SampleMask: match desc.multisampling {
                 Some(ref ms) => ms.sample_mask as u32,
-                None => UINT::max_value(),
+                None => UINT::MAX,
             },
             RasterizerState: conv::map_rasterizer(&desc.rasterizer, desc.multisampling.is_some()),
             DepthStencilState: conv::map_depth_stencil(&desc.depth_stencil),
@@ -3374,8 +3374,8 @@ impl d::Device<B> for Device {
             // This block handles overflow when converting to u32 and always rounds up
             // The Vulkan specification allows to wait more than specified
             let timeout_ms = {
-                if timeout_ns > (<u32>::max_value() as u64) * 1_000_000 {
-                    <u32>::max_value()
+                if timeout_ns > (<u32>::MAX as u64) * 1_000_000 {
+                    <u32>::MAX
                 } else {
                     ((timeout_ns + 999_999) / 1_000_000) as u32
                 }
