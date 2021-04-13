@@ -715,7 +715,7 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
         plane_stack_index: u32,
         transformation: display::SurfaceTransformation,
         alpha: display::DisplayPlaneAlpha,
-        image_extent: (u32,u32)
+        image_extent: window::Extent2D
     ) -> Result<B::Surface, display::DisplayPlaneSurfaceError>;
 }
 

@@ -663,7 +663,7 @@ impl hal::Instance<Backend> for Instance {
         plane_stack_index: u32,
         transformation: hal::display::SurfaceTransformation,
         alpha: hal::display::DisplayPlaneAlpha,
-        image_extent: (u32,u32)
+        image_extent: hal::window::Extent2D
     ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {
         let display_extension = self.raw.display.as_ref().unwrap();
 
@@ -691,7 +691,7 @@ impl hal::Instance<Backend> for Instance {
             .display_mode(display_plane.display_mode.handle.0)
             .plane_index(display_plane.plane.handle)
             .plane_stack_index(plane_stack_index)
-            .image_extent(vk::Extent2D{width: image_extent.0,height: image_extent.1});
+            .image_extent(vk::Extent2D{width: image_extent.width,height: image_extent.height});
 
             let builder = match transformation
             {
