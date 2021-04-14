@@ -32,7 +32,6 @@ use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::{
     cmp,
-    io::Write,
     iter, mem,
     ops::Range,
     ptr,
@@ -42,6 +41,8 @@ use std::{
     },
     thread, time,
 };
+#[cfg(feature = "pipeline-cache")]
+use std::io::Write;
 
 const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
 const SHADER_STAGE_COUNT: u32 = 3;
@@ -139,6 +140,7 @@ pub struct Device {
     features: hal::Features,
     pub online_recording: OnlineRecording,
     pub always_prefer_naga: bool,
+    #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
     spv_options: naga::back::spv::Options,
 }
 unsafe impl Send for Device {}
@@ -257,6 +259,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             queue_group.add_queue(command::Queue::new(self.shared.clone()));
         }
 
+        #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
         let spv_options = {
             use naga::back::spv;
             let capabilities = [
@@ -294,6 +297,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             features: requested_features,
             online_recording: OnlineRecording::default(),
             always_prefer_naga: false,
+            #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
             spv_options,
         };
 
@@ -661,9 +665,11 @@ impl Device {
     fn compile_shader_library_naga(
         device: &Mutex<metal::Device>,
         shader: &d::NagaShader,
-        spv_hash: u64,
         naga_options: &naga::back::msl::Options,
         pipeline_options: &naga::back::msl::PipelineOptions,
+        #[cfg(feature = "pipeline-cache")]
+        spv_hash: u64,
+        #[cfg(feature = "pipeline-cache")]
         spv_to_msl_cache: Option<&n::SpvToMsl>,
     ) -> Result<n::ModuleInfo, String> {
         let get_module_info = || {
@@ -705,6 +711,7 @@ impl Device {
             })
         };
 
+        #[cfg(feature = "pipeline-cache")]
         let module_info = if let Some(spv_to_msl_cache) = spv_to_msl_cache {
             let key = n::SpvToMslKey {
                 options: naga_options.clone(),
@@ -718,6 +725,9 @@ impl Device {
         } else {
             get_module_info()?
         };
+
+        #[cfg(not(feature = "pipeline-cache"))]
+        let module_info = get_module_info()?;
 
         let options = metal::CompileOptions::new();
         let msl_version = match naga_options.lang_version {
@@ -748,6 +758,7 @@ impl Device {
         })
     }
 
+    #[cfg_attr(not(feature = "pipeline-cache"), allow(unused_variables))]
     fn load_shader(
         &self,
         ep: &pso::EntryPoint<Backend>,
@@ -781,9 +792,11 @@ impl Device {
                     Ok(ref shader) => Self::compile_shader_library_naga(
                         device,
                         shader,
-                        ep.module.spv_hash,
                         &layout.naga_options,
                         &pipeline_options,
+                        #[cfg(feature = "pipeline-cache")]
+                        ep.module.spv_hash,
+                        #[cfg(feature = "pipeline-cache")]
                         pipeline_cache.as_ref().map(|cache| &cache.spv_to_msl),
                     ),
                     Err(ref e) => Err(e.clone()),
@@ -805,9 +818,11 @@ impl Device {
                     Ok(ref shader) => Self::compile_shader_library_naga(
                         device,
                         shader,
-                        ep.module.spv_hash,
                         &layout.naga_options,
                         &pipeline_options,
+                        #[cfg(feature = "pipeline-cache")]
+                        ep.module.spv_hash,
+                        #[cfg(feature = "pipeline-cache")]
                         pipeline_cache.as_ref().map(|cache| &cache.spv_to_msl),
                     ),
                     Err(ref e) => Err(e.clone()),
@@ -1385,6 +1400,12 @@ impl hal::device::Device<Backend> for Device {
         })
     }
 
+    #[cfg(not(feature = "pipeline-cache"))]
+    unsafe fn create_pipeline_cache(&self, _data: Option<&[u8]>) -> Result<n::PipelineCache, d::OutOfMemory> {
+        Ok(())
+    }
+
+    #[cfg(feature = "pipeline-cache")]
     unsafe fn create_pipeline_cache(
         &self,
         data: Option<&[u8]>,
@@ -1444,6 +1465,12 @@ impl hal::device::Device<Backend> for Device {
         }
     }
 
+    #[cfg(not(feature = "pipeline-cache"))]
+    unsafe fn get_pipeline_cache_data(&self, _cache: &n::PipelineCache,) -> Result<Vec<u8>, d::OutOfMemory> {
+        Ok(Vec::new())
+    }
+
+    #[cfg(feature = "pipeline-cache")]
     unsafe fn get_pipeline_cache_data(
         &self,
         cache: &n::PipelineCache,
@@ -1795,6 +1822,7 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
+        #[cfg(feature = "pipeline-cache")]
         if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
             pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
@@ -1826,6 +1854,7 @@ impl hal::device::Device<Backend> for Device {
         // We need to add the pipline descriptor to the binary archive after creating the
         // pipeline, otherwise `new_render_pipeline_state_with_fail_on_binary_archive_miss`
         // succeeds when it shouldn't.
+        #[cfg(feature = "pipeline-cache")]
         if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
             binary_archive
                 .inner
@@ -1857,6 +1886,7 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
+        #[cfg(feature = "pipeline-cache")]
         if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
             pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
@@ -1879,6 +1909,7 @@ impl hal::device::Device<Backend> for Device {
 
         // We need to add the pipline descriptor to the binary archive after creating the
         // pipeline, see `create_graphics_pipeline`.
+        #[cfg(feature = "pipeline-cache")]
         if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
             binary_archive
                 .inner
@@ -1907,6 +1938,7 @@ impl hal::device::Device<Backend> for Device {
             prefer_naga: self.always_prefer_naga,
             #[cfg(feature = "cross")]
             spv: raw_data.to_vec(),
+            #[cfg(feature = "pipeline-cache")]
             spv_hash: fxhash::hash64(raw_data),
             naga: {
                 let options = naga::front::spv::Options {
@@ -1934,6 +1966,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         shader: d::NagaShader,
     ) -> Result<n::ShaderModule, (d::ShaderError, d::NagaShader)> {
+        #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
         let spv = match naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options)
         {
             Ok(spv) => spv,
@@ -1942,6 +1975,7 @@ impl hal::device::Device<Backend> for Device {
 
         Ok(n::ShaderModule {
             prefer_naga: true,
+            #[cfg(feature = "pipeline-cache")]
             spv_hash: fxhash::hash64(&spv),
             #[cfg(feature = "cross")]
             spv,

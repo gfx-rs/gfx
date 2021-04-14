@@ -830,7 +830,7 @@ where
             unsafe { device.get_pipeline_cache_data(&pipeline_cache).unwrap() };
 
         std::fs::write(pipeline_cache_path, &pipeline_cache_data).unwrap();
-        println!(
+        log::info!(
             "Wrote the pipeline cache to {} ({} bytes)",
             pipeline_cache_path,
             pipeline_cache_data.len()
