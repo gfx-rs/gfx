@@ -1928,10 +1928,10 @@ where
             );
         }
         Cmd::InsertDebugMarker { ref name } => {
-            encoder.insert_debug_signpost(name);
+            encoder.insert_debug_signpost(name.as_ref());
         }
         Cmd::PushDebugMarker { ref name } => {
-            encoder.push_debug_group(name);
+            encoder.push_debug_group(name.as_ref());
         }
         Cmd::PopDebugGroup => {
             encoder.pop_debug_group();
@@ -4885,12 +4885,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn insert_debug_marker(&mut self, name: &str, _color: u32) {
         self.inner
-        .borrow_mut()
-        .sink()
-        .pre_render()
-        .issue(soft::RenderCommand::InsertDebugMarker {
-            name: name.to_owned(),
-        })
+            .borrow_mut()
+            .sink()
+            .pre_render()
+            .issue(soft::RenderCommand::InsertDebugMarker { name })
     }
 
     unsafe fn begin_debug_marker(&mut self, name: &str, _color: u32) {
@@ -4898,9 +4896,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .borrow_mut()
             .sink()
             .pre_render()
-            .issue(soft::RenderCommand::PushDebugMarker {
-                name: name.to_owned(),
-            })
+            .issue(soft::RenderCommand::PushDebugMarker { name })
     }
 
     unsafe fn end_debug_marker(&mut self) {
