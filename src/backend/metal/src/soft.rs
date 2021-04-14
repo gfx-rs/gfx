@@ -116,6 +116,10 @@ pub enum RenderCommand<R: Resources> {
         buffer: BufferPtr,
         offset: hal::buffer::Offset,
     },
+    PushDebugMarker {
+        label: String,
+    },
+    PopDebugGroup,
 }
 
 #[derive(Clone, Debug)]
@@ -318,6 +322,8 @@ impl Own {
                 buffer,
                 offset,
             },
+            PushDebugMarker { label } => PushDebugMarker { label },
+            PopDebugGroup => PopDebugGroup,
         }
     }
 
@@ -416,7 +422,9 @@ impl Own {
             | Draw { .. }
             | DrawIndexed { .. }
             | DrawIndirect { .. }
-            | DrawIndexedIndirect { .. } => {}
+            | DrawIndexedIndirect { .. }
+            | PushDebugMarker { .. }
+            | PopDebugGroup => {}
         }
     }
 

@@ -768,13 +768,17 @@ impl Device {
                     }
                 }
             }
-            image::ViewKind::D1 | image::ViewKind::D1Array | image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => {
+            image::ViewKind::D1
+            | image::ViewKind::D1Array
+            | image::ViewKind::D3
+            | image::ViewKind::Cube
+            | image::ViewKind::CubeArray => {
                 warn!(
                     "3D and cube views are not supported for the image, kind: {:?}",
                     info.kind
                 );
                 return Err(image::ViewCreationError::BadKind(info.view_kind));
-            },
+            }
         }
 
         let mut dsv = ptr::null_mut();
@@ -1876,8 +1880,10 @@ impl device::Device<Backend> for Device {
             rodsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT)
                 && self.internal.downlevel.read_only_depth_stencil
             {
-                if let Some(rodsv) =
-                    self.view_image_as_depth_stencil(&info, Some(image.format.is_stencil())).ok() {
+                if let Some(rodsv) = self
+                    .view_image_as_depth_stencil(&info, Some(image.format.is_stencil()))
+                    .ok()
+                {
                     if let Some(ref mut name) = debug_name {
                         set_debug_name_with_suffix(&rodsv, name, " -- DSV");
                     }
