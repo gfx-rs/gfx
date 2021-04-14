@@ -69,6 +69,7 @@ use cocoa_foundation::foundation::NSInteger;
 use dispatch;
 use foreign_types::ForeignTypeRef;
 use metal::MTLFeatureSet;
+use metal::MTLGPUFamily;
 use metal::MTLLanguageVersion;
 use metal::{CGFloat, CGSize, MetalLayer, MetalLayerRef};
 use objc::{
@@ -746,6 +747,7 @@ struct PrivateCapabilities {
     max_total_threadgroup_memory: u32,
     sample_count_mask: u8,
     supports_debug_markers: bool,
+    supports_binary_archives: bool,
 }
 
 impl PrivateCapabilities {
@@ -1042,6 +1044,8 @@ impl PrivateCapabilities {
                     MTLFeatureSet::tvOS_GPUFamily2_v1,
                 ],
             ),
+            supports_binary_archives: device.supports_family(MTLGPUFamily::Apple3)
+                || device.supports_family(MTLGPUFamily::Mac1),
         }
     }
 

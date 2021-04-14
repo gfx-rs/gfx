@@ -706,7 +706,11 @@ impl Device {
         };
 
         let module_info = if let Some(spv_to_msl_cache) = spv_to_msl_cache {
-            let key = (naga_options.clone(), pipeline_options.clone(), spv_hash);
+            let key = n::SpvToMslKey {
+                options: naga_options.clone(),
+                pipeline_options: pipeline_options.clone(),
+                spv_hash,
+            };
 
             spv_to_msl_cache
                 .get_or_create_with(&key, || get_module_info().unwrap())
@@ -1388,10 +1392,7 @@ impl hal::device::Device<Backend> for Device {
         let device = self.shared.device.lock();
 
         let create_binary_archive = |data: &[u8]| {
-            let supports_binary_archive = device.supports_family(metal::MTLGPUFamily::Apple3)
-                || device.supports_family(metal::MTLGPUFamily::Mac1);
-
-            if supports_binary_archive {
+            if self.shared.private_caps.supports_binary_archives {
                 let descriptor = metal::BinaryArchiveDescriptor::new();
 
                 // We need to keep the temp file alive so that it doesn't get deleted until after a
@@ -1448,8 +1449,8 @@ impl hal::device::Device<Backend> for Device {
         cache: &n::PipelineCache,
     ) -> Result<Vec<u8>, d::OutOfMemory> {
         let binary_archive = || {
-            let binary_archive = match &cache.binary_archive {
-                Some(binary_archive) => binary_archive,
+            let binary_archive = match cache.binary_archive {
+                Some(ref binary_archive) => binary_archive,
                 None => return Ok(Vec::new()),
             };
 
@@ -1794,7 +1795,7 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
-        if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
+        if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
             pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
 
@@ -1825,7 +1826,7 @@ impl hal::device::Device<Backend> for Device {
         // We need to add the pipline descriptor to the binary archive after creating the
         // pipeline, otherwise `new_render_pipeline_state_with_fail_on_binary_archive_miss`
         // succeeds when it shouldn't.
-        if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
+        if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
             binary_archive
                 .inner
                 .add_render_pipeline_functions_with_descriptor(&pipeline)
@@ -1856,7 +1857,7 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
-        if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
+        if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
             pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
 
@@ -1878,7 +1879,7 @@ impl hal::device::Device<Backend> for Device {
 
         // We need to add the pipline descriptor to the binary archive after creating the
         // pipeline, see `create_graphics_pipeline`.
-        if let Some(binary_archive) = cache.and_then(|cache| cache.binary_archive.as_ref()) {
+        if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
             binary_archive
                 .inner
                 .add_compute_pipeline_functions_with_descriptor(&pipeline)

@@ -219,23 +219,16 @@ pub struct SerializableModuleInfo {
     pub rasterization_enabled: bool,
 }
 
-pub(crate) type SpvToMsl = FastStorageMap<
-    (
-        naga::back::msl::Options,
-        naga::back::msl::PipelineOptions,
-        u64,
-    ),
-    SerializableModuleInfo,
->;
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct SpvToMslKey {
+    pub(crate) options: naga::back::msl::Options,
+    pub(crate) pipeline_options: naga::back::msl::PipelineOptions,
+    pub(crate) spv_hash: u64,
+}
 
-pub(crate) type SerializableSpvToMsl = Vec<(
-    (
-        naga::back::msl::Options,
-        naga::back::msl::PipelineOptions,
-        u64,
-    ),
-    SerializableModuleInfo,
-)>;
+pub(crate) type SpvToMsl = FastStorageMap<SpvToMslKey, SerializableModuleInfo>;
+
+pub(crate) type SerializableSpvToMsl = Vec<(SpvToMslKey, SerializableModuleInfo)>;
 
 pub(crate) fn load_spv_to_msl_cache(serializable: SerializableSpvToMsl) -> SpvToMsl {
     let cache = FastStorageMap::default();
@@ -269,6 +262,12 @@ impl fmt::Debug for PipelineCache {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "PipelineCache")
     }
+}
+
+pub(crate) fn pipeline_cache_to_binary_archive(
+    pipeline_cache: Option<&PipelineCache>,
+) -> Option<&BinaryArchive> {
+    pipeline_cache.and_then(|cache| cache.binary_archive.as_ref())
 }
 
 #[derive(Clone, Debug, PartialEq)]
