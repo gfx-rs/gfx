@@ -488,6 +488,7 @@ where
                     i::ViewKind::D2,
                     ColorFormat::SELF,
                     Swizzle::NO,
+                    i::Usage::SAMPLED,
                     i::SubresourceRange {
                         aspects: f::Aspects::COLOR,
                         ..Default::default()

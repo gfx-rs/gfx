@@ -912,6 +912,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     || self
                         .device_info
                         .supports_extension(vk::KhrImagelessFramebufferFn::name()),
+                image_view_usage: self.device_info.api_version() >= Version::V1_1
+                    || self
+                        .device_info
+                        .supports_extension(vk::KhrMaintenance2Fn::name()),
                 timestamp_period: self.device_info.properties.limits.timestamp_period,
             }),
             vendor_id: self.device_info.properties.vendor_id,

@@ -1794,6 +1794,7 @@ impl device::Device<Backend> for Device {
         view_kind: image::ViewKind,
         format: format::Format,
         _swizzle: format::Swizzle,
+        usage: image::Usage,
         range: image::SubresourceRange,
     ) -> Result<ImageView, image::ViewCreationError> {
         let is_array = image.kind.num_layers() > 1;
@@ -1831,7 +1832,7 @@ impl device::Device<Backend> for Device {
                 range.level_start as _,
             ),
             format,
-            srv_handle: if image.usage.intersects(image::Usage::SAMPLED) {
+            srv_handle: if usage.intersects(image::Usage::SAMPLED) {
                 let srv = self.view_image_as_shader_resource(&srv_info)?;
 
                 if let Some(ref mut name) = debug_name {
@@ -1842,7 +1843,7 @@ impl device::Device<Backend> for Device {
             } else {
                 None
             },
-            rtv_handle: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
+            rtv_handle: if usage.contains(image::Usage::COLOR_ATTACHMENT) {
                 let rtv = self.view_image_as_render_target(&info)?;
 
                 if let Some(ref mut name) = debug_name {
@@ -1853,7 +1854,7 @@ impl device::Device<Backend> for Device {
             } else {
                 None
             },
-            uav_handle: if image.usage.contains(image::Usage::STORAGE) {
+            uav_handle: if usage.contains(image::Usage::STORAGE) {
                 let uav = self.view_image_as_unordered_access(&info)?;
 
                 if let Some(ref mut name) = debug_name {
@@ -1864,7 +1865,7 @@ impl device::Device<Backend> for Device {
             } else {
                 None
             },
-            dsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
+            dsv_handle: if usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
                 if let Some(dsv) = self.view_image_as_depth_stencil(&info, None).ok() {
                     if let Some(ref mut name) = debug_name {
                         set_debug_name_with_suffix(&dsv, name, " -- DSV");
@@ -1877,7 +1878,7 @@ impl device::Device<Backend> for Device {
             } else {
                 None
             },
-            rodsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT)
+            rodsv_handle: if usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT)
                 && self.internal.downlevel.read_only_depth_stencil
             {
                 if let Some(rodsv) = self

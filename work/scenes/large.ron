@@ -88,6 +88,7 @@
 			image: "image.src",
 			kind: D2,
 			format: Rgba8Unorm,
+			usage: (bits: 0x15),
 			range: (
 				aspects: (bits: 1),
 				levels: (start: 0, end: 1),
@@ -98,6 +99,7 @@
 			image: "image.dst",
 			kind: D2,
 			format: Rg8Unorm,
+			usage: (bits: 0x12),
 			range: (
 				aspects: (bits: 1),
 				levels: (start: 0, end: 1),

@@ -745,11 +745,12 @@ impl<B: hal::Backend> Scene<B> {
                     kind,
                     format,
                     swizzle,
+                    usage,
                     ref range,
                 } => {
                     let img = &resources.images[image].handle;
                     let view = unsafe {
-                        device.create_image_view(img, kind, format, swizzle, range.clone())
+                        device.create_image_view(img, kind, format, swizzle, usage, range.clone())
                     }
                     .unwrap();
                     resources.image_views.insert(

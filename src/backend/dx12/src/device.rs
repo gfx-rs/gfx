@@ -1217,7 +1217,6 @@ impl Device {
             surface_type: image_unbound.format.base_format().0,
             kind: image_unbound.kind,
             mip_levels: image_unbound.mip_levels,
-            usage: image_unbound.usage,
             default_view_format: image_unbound.view_format,
             view_caps: image_unbound.view_caps,
             descriptor: image_unbound.desc,
@@ -2781,6 +2780,7 @@ impl d::Device<B> for Device {
         view_kind: image::ViewKind,
         format: format::Format,
         swizzle: format::Swizzle,
+        usage: image::Usage,
         range: image::SubresourceRange,
     ) -> Result<r::ImageView, image::ViewCreationError> {
         let image = image.expect_bound();
@@ -2815,12 +2815,12 @@ impl d::Device<B> for Device {
 
         //Note: we allow RTV/DSV/SRV/UAV views to fail to be created here,
         // because we don't know if the user will even need to use them.
+        //Update: now we have `usage`, but some of the users (like `wgpu`)
+        // still don't know ahead of time what it needs to be.
 
         Ok(r::ImageView {
             resource: image.resource,
-            handle_srv: if image
-                .usage
-                .intersects(image::Usage::SAMPLED | image::Usage::INPUT_ATTACHMENT)
+            handle_srv: if usage.intersects(image::Usage::SAMPLED | image::Usage::INPUT_ATTACHMENT)
             {
                 let info = if range.aspects.contains(format::Aspects::DEPTH) {
                     conv::map_format_shader_depth(surface_format).map(|format| ViewInfo {
@@ -2847,7 +2847,7 @@ impl d::Device<B> for Device {
             } else {
                 None
             },
-            handle_rtv: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
+            handle_rtv: if usage.contains(image::Usage::COLOR_ATTACHMENT) {
                 // This view is not necessarily going to be rendered to, even
                 // if the image supports that in general.
                 match self.view_image_as_render_target(&info) {
@@ -2857,12 +2857,12 @@ impl d::Device<B> for Device {
             } else {
                 r::RenderTargetHandle::None
             },
-            handle_uav: if image.usage.contains(image::Usage::STORAGE) {
+            handle_uav: if usage.contains(image::Usage::STORAGE) {
                 self.view_image_as_storage(&info).ok()
             } else {
                 None
             },
-            handle_dsv: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
+            handle_dsv: if usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
                 match conv::map_format_dsv(surface_format) {
                     Some(dsv_format) => self
                         .view_image_as_depth_stencil(&ViewInfo {
