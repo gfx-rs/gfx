@@ -28,7 +28,10 @@ use std::{
 };
 
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "pipeline-cache", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "pipeline-cache",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct EntryPoint {
     pub internal_name: Result<String, naga::back::msl::EntryPointError>,
     pub work_group_size: [u32; 3],
@@ -220,7 +223,10 @@ unsafe impl Send for BinaryArchive {}
 unsafe impl Sync for BinaryArchive {}
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "pipeline-cache", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "pipeline-cache",
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct SerializableModuleInfo {
     pub source: String,
     pub entry_point_map: EntryPointMap,

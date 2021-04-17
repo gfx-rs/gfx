@@ -30,9 +30,10 @@ use objc::{
 use parking_lot::Mutex;
 
 use std::collections::BTreeMap;
+#[cfg(feature = "pipeline-cache")]
+use std::io::Write;
 use std::{
-    cmp,
-    iter, mem,
+    cmp, iter, mem,
     ops::Range,
     ptr,
     sync::{
@@ -41,8 +42,6 @@ use std::{
     },
     thread, time,
 };
-#[cfg(feature = "pipeline-cache")]
-use std::io::Write;
 
 const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
 const SHADER_STAGE_COUNT: u32 = 3;
@@ -667,10 +666,8 @@ impl Device {
         shader: &d::NagaShader,
         naga_options: &naga::back::msl::Options,
         pipeline_options: &naga::back::msl::PipelineOptions,
-        #[cfg(feature = "pipeline-cache")]
-        spv_hash: u64,
-        #[cfg(feature = "pipeline-cache")]
-        spv_to_msl_cache: Option<&n::SpvToMsl>,
+        #[cfg(feature = "pipeline-cache")] spv_hash: u64,
+        #[cfg(feature = "pipeline-cache")] spv_to_msl_cache: Option<&n::SpvToMsl>,
     ) -> Result<n::ModuleInfo, String> {
         let get_module_info = || {
             let (source, info) = match naga::back::msl::write_string(
@@ -1107,7 +1104,7 @@ impl hal::device::Device<Backend> for Device {
         ];
         let mut binding_map = BTreeMap::default();
         let mut argument_buffer_bindings = FastHashMap::default();
-        let mut inline_samplers = naga::Arena::new();
+        let mut inline_samplers = Vec::new();
         #[cfg(feature = "cross")]
         let mut cross_const_samplers = BTreeMap::new();
         let mut infos = Vec::new();
@@ -1210,8 +1207,8 @@ impl hal::device::Device<Backend> for Device {
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
                                 {
                                     let immutable_sampler = &immutable_samplers[&layout.binding];
-                                    let handle =
-                                        inline_samplers.append(immutable_sampler.data.clone());
+                                    let handle = inline_samplers.len() as u8;
+                                    inline_samplers.push(immutable_sampler.data.clone());
                                     Some(naga::back::msl::BindSamplerTarget::Inline(handle))
                                 } else if layout.content.contains(n::DescriptorContent::SAMPLER) {
                                     Some(naga::back::msl::BindSamplerTarget::Resource(
@@ -1363,7 +1360,17 @@ impl hal::device::Device<Backend> for Device {
             inline_samplers,
             spirv_cross_compatibility: cfg!(feature = "cross"),
             fake_missing_bindings: false,
-            push_constants_map: Default::default(),
+            push_constants_map: naga::back::msl::PushConstantsMap {
+                vs_buffer: stage_infos[0]
+                    .push_constant_buffer
+                    .map(|buffer_index| buffer_index as u8),
+                fs_buffer: stage_infos[1]
+                    .push_constant_buffer
+                    .map(|buffer_index| buffer_index as u8),
+                cs_buffer: stage_infos[2]
+                    .push_constant_buffer
+                    .map(|buffer_index| buffer_index as u8),
+            },
         };
 
         Ok(n::PipelineLayout {
@@ -1401,7 +1408,10 @@ impl hal::device::Device<Backend> for Device {
     }
 
     #[cfg(not(feature = "pipeline-cache"))]
-    unsafe fn create_pipeline_cache(&self, _data: Option<&[u8]>) -> Result<n::PipelineCache, d::OutOfMemory> {
+    unsafe fn create_pipeline_cache(
+        &self,
+        _data: Option<&[u8]>,
+    ) -> Result<n::PipelineCache, d::OutOfMemory> {
         Ok(())
     }
 
@@ -1466,7 +1476,10 @@ impl hal::device::Device<Backend> for Device {
     }
 
     #[cfg(not(feature = "pipeline-cache"))]
-    unsafe fn get_pipeline_cache_data(&self, _cache: &n::PipelineCache,) -> Result<Vec<u8>, d::OutOfMemory> {
+    unsafe fn get_pipeline_cache_data(
+        &self,
+        _cache: &n::PipelineCache,
+    ) -> Result<Vec<u8>, d::OutOfMemory> {
         Ok(Vec::new())
     }
 
