@@ -3787,7 +3787,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 pre.issue(com);
             }
         }
-        if let Some(ref color) = pipeline.baked_states.blend_color {
+        if let Some(ref color) = pipeline.baked_states.blend_constants {
             pre.issue(self.state.set_blend_color(color));
         }
     }

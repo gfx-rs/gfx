@@ -403,7 +403,7 @@ impl<'a> GraphicsPipelineInfoBuf<'a> {
             .logic_op_enable(false) // TODO
             .logic_op(vk::LogicOp::CLEAR)
             .attachments(&this.blend_states) // TODO:
-            .blend_constants(match desc.baked_states.blend_color {
+            .blend_constants(match desc.baked_states.blend_constants {
                 Some(value) => value,
                 None => {
                     this.dynamic_states.push(vk::DynamicState::BLEND_CONSTANTS);
