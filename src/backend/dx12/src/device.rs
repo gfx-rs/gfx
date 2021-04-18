@@ -1113,6 +1113,7 @@ impl Device {
 
             if !winerror::SUCCEEDED(hr) {
                 error!("error on swapchain creation 0x{:x}", hr);
+                return Err(w::SwapchainError::Unknown);
             }
 
             let (swap_chain3, hr3) = swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>();

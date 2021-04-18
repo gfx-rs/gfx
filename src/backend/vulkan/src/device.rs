@@ -1962,7 +1962,10 @@ impl super::Device {
             Err(vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR) => {
                 return Err(hal::window::SwapchainError::WindowInUse)
             }
-            _ => unreachable!("Unexpected result - driver bug? {:?}", result),
+            Err(other) => {
+                error!("Unexpected result - driver bug? {:?}", other);
+                return Err(hal::window::SwapchainError::Unknown);
+            }
         };
 
         let result = functor.get_swapchain_images(swapchain_raw);
