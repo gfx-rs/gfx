@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.7.1 (17-04-2021)
+  - reduce memory usage by resetting command allocators periodically
+
 ### backend-gl-0.7.1 (24-02-2021)
   - Fix WebGL adapter creation
 
