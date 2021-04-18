@@ -312,8 +312,8 @@ bitflags! {
         const SCISSOR = 0x0002;
         /// Supports `Rasterizer::line_width == State::Dynamic(_)`
         const LINE_WIDTH = 0x0004;
-        /// Supports `BakedStates::blend_color == None`
-        const BLEND_COLOR = 0x0008;
+        /// Supports `BakedStates::blend_constants == None`
+        const BLEND_CONSTANTS = 0x0008;
         /// Supports `Rasterizer::depth_bias == Some(State::Dynamic(_))`
         const DEPTH_BIAS = 0x0010;
         /// Supports `BakedStates::depth_bounds == None`
