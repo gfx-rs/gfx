@@ -319,7 +319,7 @@ impl hal::Instance<Backend> for Instance {
 }
 
 extern "C" fn layer_should_inherit_contents_scale_from_window(
-    _: &Object,
+    _: &Class,
     _: Sel,
     _layer: *mut Object,
     _new_scale: CGFloat,
@@ -337,10 +337,10 @@ struct GfxManagedMetalLayerDelegate(&'static Class);
 impl GfxManagedMetalLayerDelegate {
     pub fn new() -> Self {
         CAML_DELEGATE_REGISTER.call_once(|| {
-            type Fun = extern "C" fn(&Object, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
+            type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
             let mut decl = ClassDecl::new(CAML_DELEGATE_CLASS, class!(NSObject)).unwrap();
             unsafe {
-                decl.add_method(
+                decl.add_class_method(
                     sel!(layer:shouldInheritContentsScale:fromWindow:),
                     layer_should_inherit_contents_scale_from_window as Fun,
                 );
