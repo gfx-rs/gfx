@@ -37,6 +37,7 @@ cocoa-foundation = "0.1"
 parking_lot = "0.11"
 storage-map = "0.3"
 raw-window-handle = "0.3"
+profiling = { version = "0.1.10", default-features = false }
 
 [dependencies.auxil]
 package = "gfx-auxil"
