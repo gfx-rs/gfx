@@ -1,5 +1,3 @@
-#[cfg(feature = "pipeline-cache")]
-use crate::internal::FastStorageMap;
 use crate::{
     internal::Channel, Backend, BufferPtr, FastHashMap, ResourceIndex, SamplerPtr, TexturePtr,
     MAX_COLOR_ATTACHMENTS,
@@ -210,18 +208,6 @@ pub struct ModuleInfo {
     pub rasterization_enabled: bool,
 }
 
-#[cfg(feature = "pipeline-cache")]
-pub(crate) struct BinaryArchive {
-    pub(crate) inner: metal::BinaryArchive,
-    pub(crate) is_empty: AtomicBool,
-}
-
-#[cfg(feature = "pipeline-cache")]
-unsafe impl Send for BinaryArchive {}
-
-#[cfg(feature = "pipeline-cache")]
-unsafe impl Sync for BinaryArchive {}
-
 #[derive(Clone, Debug)]
 #[cfg_attr(
     feature = "pipeline-cache",
@@ -233,68 +219,11 @@ pub struct SerializableModuleInfo {
     pub rasterization_enabled: bool,
 }
 
-#[cfg(feature = "pipeline-cache")]
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct SpvToMslKey {
-    pub(crate) options: naga::back::msl::Options,
-    pub(crate) pipeline_options: naga::back::msl::PipelineOptions,
-    pub(crate) spv_hash: u64,
-}
-
-#[cfg(feature = "pipeline-cache")]
-pub(crate) type SpvToMsl = FastStorageMap<SpvToMslKey, SerializableModuleInfo>;
-
-#[cfg(feature = "pipeline-cache")]
-pub(crate) type SerializableSpvToMsl = Vec<(SpvToMslKey, SerializableModuleInfo)>;
-
-#[cfg(feature = "pipeline-cache")]
-pub(crate) fn load_spv_to_msl_cache(serializable: SerializableSpvToMsl) -> SpvToMsl {
-    let cache = FastStorageMap::default();
-    for (options, values) in serializable.into_iter() {
-        cache.get_or_create_with(&options, || values);
-    }
-
-    cache
-}
-
-#[cfg(feature = "pipeline-cache")]
-pub(crate) fn serialize_spv_to_msl_cache(cache: &SpvToMsl) -> SerializableSpvToMsl {
-    cache
-        .whole_write()
-        .iter()
-        .map(|(options, values)| (options.clone(), values.clone()))
-        .collect()
-}
-
-#[cfg(feature = "pipeline-cache")]
-#[derive(serde::Serialize, serde::Deserialize)]
-pub(crate) struct SerializablePipelineCache<'a> {
-    pub(crate) binary_archive: &'a [u8],
-    pub(crate) spv_to_msl: SerializableSpvToMsl,
-}
-
-#[cfg(feature = "pipeline-cache")]
-pub struct PipelineCache {
-    pub(crate) binary_archive: Option<BinaryArchive>,
-    pub(crate) spv_to_msl: SpvToMsl,
-}
-
-#[cfg(feature = "pipeline-cache")]
-impl fmt::Debug for PipelineCache {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "PipelineCache")
-    }
-}
-
 #[cfg(not(feature = "pipeline-cache"))]
 pub type PipelineCache = ();
 
 #[cfg(feature = "pipeline-cache")]
-pub(crate) fn pipeline_cache_to_binary_archive(
-    pipeline_cache: Option<&PipelineCache>,
-) -> Option<&BinaryArchive> {
-    pipeline_cache.and_then(|cache| cache.binary_archive.as_ref())
-}
+pub use crate::pipeline_cache::PipelineCache;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RasterizerState {

@@ -1,3 +1,5 @@
+#[cfg(feature = "pipeline-cache")]
+use crate::pipeline_cache;
 use crate::{
     command, conversions as conv, internal::Channel, native as n, AsNative, Backend, FastHashMap,
     OnlineRecording, QueueFamily, ResourceIndex, Shared, VisibilityShared,
@@ -676,7 +678,7 @@ impl Device {
         naga_options: &naga::back::msl::Options,
         pipeline_options: &naga::back::msl::PipelineOptions,
         #[cfg(feature = "pipeline-cache")] spv_hash: u64,
-        #[cfg(feature = "pipeline-cache")] spv_to_msl_cache: Option<&n::SpvToMsl>,
+        #[cfg(feature = "pipeline-cache")] spv_to_msl_cache: Option<&pipeline_cache::SpvToMsl>,
     ) -> Result<n::ModuleInfo, String> {
         profiling::scope!("compile_shader_library_naga");
 
@@ -723,7 +725,7 @@ impl Device {
 
         #[cfg(feature = "pipeline-cache")]
         let module_info = if let Some(spv_to_msl_cache) = spv_to_msl_cache {
-            let key = n::SpvToMslKey {
+            let key = pipeline_cache::SpvToMslKey {
                 options: naga_options.clone(),
                 pipeline_options: pipeline_options.clone(),
                 spv_hash,
@@ -1230,7 +1232,8 @@ impl hal::device::Device<Backend> for Device {
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
                                 {
                                     let immutable_sampler = &immutable_samplers[&layout.binding];
-                                    let handle = inline_samplers.len() as naga::back::msl::InlineSamplerIndex;
+                                    let handle = inline_samplers.len()
+                                        as naga::back::msl::InlineSamplerIndex;
                                     inline_samplers.push(immutable_sampler.data.clone());
                                     Some(naga::back::msl::BindSamplerTarget::Inline(handle))
                                 } else if layout.content.contains(n::DescriptorContent::SAMPLER) {
@@ -1470,7 +1473,7 @@ impl hal::device::Device<Backend> for Device {
                     None
                 };
 
-                Ok(Some(n::BinaryArchive {
+                Ok(Some(pipeline_cache::BinaryArchive {
                     inner: device
                         .new_binary_archive_with_descriptor(&descriptor)
                         .map_err(|_| d::OutOfMemory::Device)?,
@@ -1482,11 +1485,12 @@ impl hal::device::Device<Backend> for Device {
         };
 
         if let Some(data) = data.filter(|data| !data.is_empty()) {
-            let pipeline_cache: n::SerializablePipelineCache = bincode::deserialize(data).unwrap();
+            let pipeline_cache: pipeline_cache::SerializablePipelineCache =
+                bincode::deserialize(data).unwrap();
 
             Ok(n::PipelineCache {
                 binary_archive: create_binary_archive(&pipeline_cache.binary_archive)?,
-                spv_to_msl: n::load_spv_to_msl_cache(pipeline_cache.spv_to_msl),
+                spv_to_msl: pipeline_cache::load_spv_to_msl_cache(pipeline_cache.spv_to_msl),
             })
         } else {
             Ok(n::PipelineCache {
@@ -1534,11 +1538,13 @@ impl hal::device::Device<Backend> for Device {
             Ok(bytes)
         };
 
-        Ok(bincode::serialize(&n::SerializablePipelineCache {
-            binary_archive: &binary_archive()?,
-            spv_to_msl: n::serialize_spv_to_msl_cache(&cache.spv_to_msl),
-        })
-        .unwrap())
+        Ok(
+            bincode::serialize(&pipeline_cache::SerializablePipelineCache {
+                binary_archive: &binary_archive()?,
+                spv_to_msl: pipeline_cache::serialize_spv_to_msl_cache(&cache.spv_to_msl),
+            })
+            .unwrap(),
+        )
     }
 
     unsafe fn destroy_pipeline_cache(&self, _cache: n::PipelineCache) {
@@ -1859,7 +1865,7 @@ impl hal::device::Device<Backend> for Device {
         profiling::scope!("Metal::new_render_pipeline_state");
 
         #[cfg(feature = "pipeline-cache")]
-        if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
+        if let Some(binary_archive) = pipeline_cache::pipeline_cache_to_binary_archive(cache) {
             pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
 
@@ -1891,7 +1897,7 @@ impl hal::device::Device<Backend> for Device {
         // pipeline, otherwise `new_render_pipeline_state_with_fail_on_binary_archive_miss`
         // succeeds when it shouldn't.
         #[cfg(feature = "pipeline-cache")]
-        if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
+        if let Some(binary_archive) = pipeline_cache::pipeline_cache_to_binary_archive(cache) {
             binary_archive
                 .inner
                 .add_render_pipeline_functions_with_descriptor(&pipeline)
@@ -1926,7 +1932,7 @@ impl hal::device::Device<Backend> for Device {
         profiling::scope!("Metal::new_compute_pipeline_state");
 
         #[cfg(feature = "pipeline-cache")]
-        if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
+        if let Some(binary_archive) = pipeline_cache::pipeline_cache_to_binary_archive(cache) {
             pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
 
@@ -1949,7 +1955,7 @@ impl hal::device::Device<Backend> for Device {
         // We need to add the pipline descriptor to the binary archive after creating the
         // pipeline, see `create_graphics_pipeline`.
         #[cfg(feature = "pipeline-cache")]
-        if let Some(binary_archive) = n::pipeline_cache_to_binary_archive(cache) {
+        if let Some(binary_archive) = pipeline_cache::pipeline_cache_to_binary_archive(cache) {
             binary_archive
                 .inner
                 .add_compute_pipeline_functions_with_descriptor(&pipeline)
@@ -2239,18 +2245,26 @@ impl hal::device::Device<Backend> for Device {
                 let usage = n::ArgumentArray::describe_usage(desc.ty);
                 let bind_target = naga::back::msl::BindTarget {
                     buffer: if content.contains(n::DescriptorContent::BUFFER) {
-                        Some(arguments.push(metal::MTLDataType::Pointer, desc.count, usage) as naga::back::msl::Slot)
+                        Some(
+                            arguments.push(metal::MTLDataType::Pointer, desc.count, usage)
+                                as naga::back::msl::Slot,
+                        )
                     } else {
                         None
                     },
                     texture: if content.contains(n::DescriptorContent::TEXTURE) {
-                        Some(arguments.push(metal::MTLDataType::Texture, desc.count, usage) as naga::back::msl::Slot)
+                        Some(
+                            arguments.push(metal::MTLDataType::Texture, desc.count, usage)
+                                as naga::back::msl::Slot,
+                        )
                     } else {
                         None
                     },
                     sampler: if content.contains(n::DescriptorContent::SAMPLER) {
                         let slot = arguments.push(metal::MTLDataType::Sampler, desc.count, usage);
-                        Some(naga::back::msl::BindSamplerTarget::Resource(slot as naga::back::msl::Slot))
+                        Some(naga::back::msl::BindSamplerTarget::Resource(
+                            slot as naga::back::msl::Slot,
+                        ))
                     } else {
                         None
                     },

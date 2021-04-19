@@ -92,6 +92,8 @@ mod conversions;
 mod device;
 mod internal;
 mod native;
+#[cfg(feature = "pipeline-cache")]
+mod pipeline_cache;
 mod soft;
 mod window;
 
