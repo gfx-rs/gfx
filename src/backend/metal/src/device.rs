@@ -34,7 +34,8 @@ use parking_lot::Mutex;
 #[cfg(feature = "cross")]
 use std::collections::{hash_map::Entry, BTreeMap};
 use std::{
-    cmp, iter, mem,
+    cmp,
+    iter, mem,
     ops::Range,
     ptr,
     sync::{
@@ -61,6 +62,7 @@ fn get_final_function(
     function_specialization: bool,
 ) -> Result<metal::Function, FunctionError> {
     type MTLFunctionConstant = Object;
+    profiling::scope!("get_final_function");
 
     let mut mtl_function = library.get_function(entry, None).map_err(|e| {
         error!(
@@ -588,17 +590,19 @@ impl Device {
         stage: naga::ShaderStage,
     ) -> Result<n::ModuleInfo, String> {
         use spirv_cross::ErrorCode as Ec;
-
-        let module = spirv_cross::spirv::Module::from_words(raw_data);
+        profiling::scope!("compile_shader_library_cross");
 
         // now parse again using the new overrides
-        let mut ast =
+        let mut ast = {
+            profiling::scope!("spvc::parse");
+            let module = spirv_cross::spirv::Module::from_words(raw_data);
             spirv_cross::spirv::Ast::<spirv_cross::msl::Target>::parse(&module).map_err(|err| {
                 match err {
                     Ec::CompilationError(msg) => msg,
                     Ec::Unhandled => "Unexpected parse error".into(),
                 }
-            })?;
+            })?
+        };
 
         auxil::spirv_cross_specialize_ast(&mut ast, specialization)?;
 
@@ -613,10 +617,13 @@ impl Device {
             Ec::Unhandled => "Unexpected entry point error".into(),
         })?;
 
-        let shader_code = ast.compile().map_err(|err| match err {
-            Ec::CompilationError(msg) => msg,
-            Ec::Unhandled => "Unknown compile error".into(),
-        })?;
+        let shader_code = {
+            profiling::scope!("spvc::compile");
+            ast.compile().map_err(|err| match err {
+                Ec::CompilationError(msg) => msg,
+                Ec::Unhandled => "Unknown compile error".into(),
+            })?
+        };
 
         let mut entry_point_map = n::EntryPointMap::default();
         for entry_point in entry_points {
@@ -650,10 +657,13 @@ impl Device {
         let options = metal::CompileOptions::new();
         options.set_language_version(msl_version);
 
-        let library = device
-            .lock()
-            .new_library_with_source(shader_code.as_ref(), &options)
-            .map_err(|err| err.to_string())?;
+        let library = {
+            profiling::scope!("Metal::new_library_with_source");
+            device
+                .lock()
+                .new_library_with_source(shader_code.as_ref(), &options)
+                .map_err(|err| err.to_string())?
+        };
 
         Ok(n::ModuleInfo {
             library,
@@ -668,16 +678,21 @@ impl Device {
         naga_options: &naga::back::msl::Options,
         pipeline_options: &naga::back::msl::PipelineOptions,
     ) -> Result<n::ModuleInfo, String> {
-        let (source, info) = match naga::back::msl::write_string(
-            &shader.module,
-            &shader.info,
-            naga_options,
-            pipeline_options,
-        ) {
-            Ok(pair) => pair,
-            Err(e) => {
-                warn!("Naga: {:?}", e);
-                return Err(format!("MSL: {:?}", e));
+        profiling::scope!("compile_shader_library_naga");
+
+        let (source, info) = {
+            profiling::scope!("naga::write_string");
+            match naga::back::msl::write_string(
+                &shader.module,
+                &shader.info,
+                naga_options,
+                pipeline_options,
+            ) {
+                Ok(pair) => pair,
+                Err(e) => {
+                    warn!("Naga: {:?}", e);
+                    return Err(format!("MSL: {:?}", e));
+                }
             }
         };
 
@@ -712,14 +727,17 @@ impl Device {
         };
         options.set_language_version(msl_version);
 
-        let library = device
-            .lock()
-            .new_library_with_source(source.as_ref(), &options)
-            .map_err(|err| {
-                warn!("Naga generated shader:\n{}", source);
-                warn!("Failed to compile: {}", err);
-                format!("{:?}", err)
-            })?;
+        let library = {
+            profiling::scope!("Metal::new_library_with_source");
+            device
+                .lock()
+                .new_library_with_source(source.as_ref(), &options)
+                .map_err(|err| {
+                    warn!("Naga generated shader:\n{}", source);
+                    warn!("Failed to compile: {}", err);
+                    format!("{:?}", err)
+                })?
+        };
 
         Ok(n::ModuleInfo {
             library,
@@ -736,6 +754,13 @@ impl Device {
         pipeline_cache: Option<&n::PipelineCache>,
         stage: naga::ShaderStage,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
+        let _profiling_tag = match stage {
+            naga::ShaderStage::Vertex => "vertex",
+            naga::ShaderStage::Fragment => "fragment",
+            naga::ShaderStage::Compute => "compute",
+        };
+        profiling::scope!("load_shader", [_profiling_tag]);
+
         let device = &self.shared.device;
         #[cfg(feature = "cross")]
         let (module_map, info_guard);
@@ -1457,7 +1482,9 @@ impl hal::device::Device<Backend> for Device {
         pipeline_desc: &pso::GraphicsPipelineDesc<'a, Backend>,
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        debug!("create_graphics_pipeline {:#?}", pipeline_desc);
+        profiling::scope!("create_graphics_pipeline");
+        trace!("create_graphics_pipeline {:#?}", pipeline_desc);
+
         let pipeline = metal::RenderPipelineDescriptor::new();
         let pipeline_layout = &pipeline_desc.layout;
         let (rp_attachments, subpass) = {
@@ -1749,6 +1776,7 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
+        profiling::scope!("Metal::new_render_pipeline_state");
         device
             .new_render_pipeline_state(&pipeline)
             .map(|raw| n::GraphicsPipeline {
@@ -1777,7 +1805,8 @@ impl hal::device::Device<Backend> for Device {
         pipeline_desc: &pso::ComputePipelineDesc<'a, Backend>,
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
-        debug!("create_compute_pipeline {:?}", pipeline_desc);
+        profiling::scope!("create_compute_pipeline");
+        trace!("create_compute_pipeline {:?}", pipeline_desc);
         let pipeline = metal::ComputePipelineDescriptor::new();
 
         let (cs_lib, cs_function, work_group_size, _) = self.load_shader(
@@ -1792,6 +1821,7 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
+        profiling::scope!("Metal::new_compute_pipeline_state");
         self.shared
             .device
             .lock()
@@ -1821,6 +1851,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         raw_data: &[u32],
     ) -> Result<n::ShaderModule, d::ShaderError> {
+        profiling::scope!("create_shader_module");
         Ok(n::ShaderModule {
             prefer_naga: self.always_prefer_naga,
             #[cfg(feature = "cross")]
@@ -1851,6 +1882,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         shader: d::NagaShader,
     ) -> Result<n::ShaderModule, (d::ShaderError, d::NagaShader)> {
+        profiling::scope!("create_shader_module_from_naga");
         Ok(n::ShaderModule {
             prefer_naga: true,
             #[cfg(feature = "cross")]
