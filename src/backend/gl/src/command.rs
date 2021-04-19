@@ -1201,7 +1201,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         if let Some(ref rect) = pipeline.baked_states.scissor {
             self.set_scissors(0, iter::once(rect.clone()));
         }
-        if let Some(color) = pipeline.baked_states.blend_color {
+        if let Some(color) = pipeline.baked_states.blend_constants {
             self.set_blend_constants(color);
         }
         if let Some(ref bounds) = pipeline.baked_states.depth_bounds {
