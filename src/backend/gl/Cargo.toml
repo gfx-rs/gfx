@@ -47,7 +47,7 @@ optional = true
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-21"
+tag = "gfx-22"
 features = ["spv-in", "glsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
