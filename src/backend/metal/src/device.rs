@@ -1230,7 +1230,7 @@ impl hal::device::Device<Backend> for Device {
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
                                 {
                                     let immutable_sampler = &immutable_samplers[&layout.binding];
-                                    let handle = inline_samplers.len() as u8;
+                                    let handle = inline_samplers.len() as naga::back::msl::InlineSamplerIndex;
                                     inline_samplers.push(immutable_sampler.data.clone());
                                     Some(naga::back::msl::BindSamplerTarget::Inline(handle))
                                 } else if layout.content.contains(n::DescriptorContent::SAMPLER) {
@@ -1386,13 +1386,13 @@ impl hal::device::Device<Backend> for Device {
             push_constants_map: naga::back::msl::PushConstantsMap {
                 vs_buffer: stage_infos[0]
                     .push_constant_buffer
-                    .map(|buffer_index| buffer_index as u8),
+                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
                 fs_buffer: stage_infos[1]
                     .push_constant_buffer
-                    .map(|buffer_index| buffer_index as u8),
+                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
                 cs_buffer: stage_infos[2]
                     .push_constant_buffer
-                    .map(|buffer_index| buffer_index as u8),
+                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
             },
         };
 
@@ -1457,14 +1457,12 @@ impl hal::device::Device<Backend> for Device {
                     // -[MTLDebugDevice newBinaryArchiveWithDescriptor:error:]:1046: failed assertion `url, if not nil, must be a file URL.'
 
                     let temp_file = tempfile::NamedTempFile::new().unwrap();
-
                     temp_file.as_file().write_all(&data).unwrap();
 
                     let url = metal::URL::new_with_string(&format!(
                         "file://{}",
                         temp_file.path().display()
                     ));
-
                     descriptor.set_url(&url);
 
                     Some(temp_file)
@@ -1524,7 +1522,6 @@ impl hal::device::Device<Backend> for Device {
             }
 
             let temp_path = tempfile::NamedTempFile::new().unwrap().into_temp_path();
-
             let tmp_file_url =
                 metal::URL::new_with_string(&format!("file://{}", temp_path.display()));
 
@@ -1534,7 +1531,6 @@ impl hal::device::Device<Backend> for Device {
                 .unwrap();
 
             let bytes = std::fs::read(&temp_path).unwrap();
-
             Ok(bytes)
         };
 
@@ -2243,18 +2239,18 @@ impl hal::device::Device<Backend> for Device {
                 let usage = n::ArgumentArray::describe_usage(desc.ty);
                 let bind_target = naga::back::msl::BindTarget {
                     buffer: if content.contains(n::DescriptorContent::BUFFER) {
-                        Some(arguments.push(metal::MTLDataType::Pointer, desc.count, usage) as u8)
+                        Some(arguments.push(metal::MTLDataType::Pointer, desc.count, usage) as naga::back::msl::Slot)
                     } else {
                         None
                     },
                     texture: if content.contains(n::DescriptorContent::TEXTURE) {
-                        Some(arguments.push(metal::MTLDataType::Texture, desc.count, usage) as u8)
+                        Some(arguments.push(metal::MTLDataType::Texture, desc.count, usage) as naga::back::msl::Slot)
                     } else {
                         None
                     },
                     sampler: if content.contains(n::DescriptorContent::SAMPLER) {
                         let slot = arguments.push(metal::MTLDataType::Sampler, desc.count, usage);
-                        Some(naga::back::msl::BindSamplerTarget::Resource(slot as u8))
+                        Some(naga::back::msl::BindSamplerTarget::Resource(slot as naga::back::msl::Slot))
                     } else {
                         None
                     },
