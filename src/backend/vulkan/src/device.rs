@@ -1209,12 +1209,14 @@ impl d::Device<B> for super::Device {
         kind: image::ViewKind,
         format: format::Format,
         swizzle: format::Swizzle,
+        usage: image::Usage,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewCreationError> {
         let is_cube = image
             .flags
             .intersects(vk::ImageCreateFlags::CUBE_COMPATIBLE);
-        let info = vk::ImageViewCreateInfo::builder()
+        let mut image_view_info;
+        let mut info = vk::ImageViewCreateInfo::builder()
             .flags(vk::ImageViewCreateFlags::empty())
             .image(image.raw)
             .view_type(match conv::map_view_kind(kind, image.ty, is_cube) {
@@ -1224,6 +1226,13 @@ impl d::Device<B> for super::Device {
             .format(conv::map_format(format))
             .components(conv::map_swizzle(swizzle))
             .subresource_range(conv::map_subresource_range(&range));
+
+        if self.shared.image_view_usage {
+            image_view_info = vk::ImageViewUsageCreateInfo::builder()
+                .usage(conv::map_image_usage(usage))
+                .build();
+            info = info.push_next(&mut image_view_info);
+        }
 
         let result = self.shared.raw.create_image_view(&info, None);
 

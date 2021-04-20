@@ -1667,6 +1667,7 @@ impl d::Device<B> for Device {
         kind: i::ViewKind,
         view_format: Format,
         swizzle: Swizzle,
+        _usage: i::Usage,
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewCreationError> {
         assert_eq!(swizzle, Swizzle::NO);

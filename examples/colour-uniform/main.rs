@@ -1063,6 +1063,7 @@ impl<B: Backend> ImageState<B> {
                 i::ViewKind::D2,
                 ColorFormat::SELF,
                 f::Swizzle::NO,
+                i::Usage::SAMPLED,
                 i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
                     ..Default::default()

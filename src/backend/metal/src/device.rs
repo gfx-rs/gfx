@@ -3047,6 +3047,7 @@ impl hal::device::Device<Backend> for Device {
         kind: image::ViewKind,
         format: format::Format,
         swizzle: format::Swizzle,
+        _usage: image::Usage,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewCreationError> {
         let mtl_format = match self

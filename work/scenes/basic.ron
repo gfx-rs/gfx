@@ -28,6 +28,7 @@
 			image: "image.color",
 			kind: D2,
 			format: Rgba8Unorm,
+			usage: (bits: 0x15),
 			range: (
 				aspects: (bits: 1),
 				level_start: 0,
