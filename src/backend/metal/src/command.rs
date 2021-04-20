@@ -2433,7 +2433,6 @@ impl hal::queue::Queue<Backend> for Queue {
         }
 
         let queue = self.shared.queue.lock();
-        let drawable = image.into_drawable();
         autoreleasepool(|| {
             let command_buffer = queue.raw.new_command_buffer();
             if INTERNAL_LABELS {
@@ -2441,9 +2440,19 @@ impl hal::queue::Queue<Backend> for Queue {
             }
             self.record_empty(command_buffer);
 
-            command_buffer.present_drawable(&drawable);
+            // https://developer.apple.com/documentation/quartzcore/cametallayer/1478157-presentswithtransaction?language=objc
+            if !image.present_with_transaction {
+                command_buffer.present_drawable(&image.drawable);
+            }
+
             command_buffer.commit();
+
+            if image.present_with_transaction {
+                let () = msg_send![command_buffer, waitUntilScheduled];
+                image.drawable.present();
+            }
         });
+
         Ok(None)
     }
 
