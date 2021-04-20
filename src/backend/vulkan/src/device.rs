@@ -987,7 +987,9 @@ impl d::Device<B> for super::Device {
                     (false, 1.0)
                 }
             });
-        let info = vk::SamplerCreateInfo::builder()
+
+        let mut reduction_info;
+        let mut info = vk::SamplerCreateInfo::builder()
             .flags(vk::SamplerCreateFlags::empty())
             .mag_filter(conv::map_filter(desc.mag_filter))
             .min_filter(conv::map_filter(desc.min_filter))
@@ -1006,6 +1008,13 @@ impl d::Device<B> for super::Device {
             .max_lod(desc.lod_range.end.0)
             .border_color(conv::map_border_color(desc.border))
             .unnormalized_coordinates(!desc.normalized);
+
+        if self.shared.features.contains(Features::SAMPLER_REDUCTION) {
+            reduction_info = vk::SamplerReductionModeCreateInfo::builder()
+                .reduction_mode(conv::map_reduction(desc.reduction_mode))
+                .build();
+            info = info.push_next(&mut reduction_info);
+        }
 
         let result = self.shared.raw.create_sampler(&info, None);
 
