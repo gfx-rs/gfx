@@ -108,6 +108,12 @@ type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<fxhash::FxHasher>>;
 /// A type representing Metal binding's resource index.
 type ResourceIndex = u32;
 
+// For CALayer contentsGravity
+extern "C" {
+    #[allow(non_upper_case_globals)]
+    static kCAGravityTopLeft: cocoa_foundation::base::id;
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CGPoint {
@@ -420,6 +426,8 @@ impl Instance {
             let () = msg_send![layer, setDelegate: self.gfx_managed_metal_layer_delegate.0];
             layer
         };
+
+        let () = msg_send![render_layer, setContentsGravity:kCAGravityTopLeft];
 
         let _: *mut c_void = msg_send![view, retain];
         Surface::new(NonNull::new(view), render_layer)
