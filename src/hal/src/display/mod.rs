@@ -150,7 +150,7 @@ pub struct Plane<'a,B: Backend>
     /// The physical device.
     pub physical_device: &'a B::PhysicalDevice,
     /// The plane handle.
-    pub handle: B::Plane,
+    pub handle: u32,
     /// The current index on the z stack.
     pub z_index: u32
 }

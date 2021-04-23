@@ -63,7 +63,6 @@ impl hal::Backend for Backend {
 
     type Display = ();
     type DisplayMode = ();
-    type Plane = ();
 }
 
 /// Dummy physical device.

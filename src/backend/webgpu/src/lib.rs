@@ -58,7 +58,6 @@ impl hal::Backend for Backend {
     type QueryPool = ();
 
     type Display = ();
-    type Plane = ();
     type DisplayMode = ();
 }
 

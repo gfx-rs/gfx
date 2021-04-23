@@ -809,8 +809,6 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type QueryPool: fmt::Debug + Any + Send + Sync;
     /// The corresponding display type for this backend.
     type Display: fmt::Debug + Any + Send + Sync;
-    /// The corresponding plane type for this backend
-    type Plane: fmt::Debug + Any + Send + Sync;
     /// The corresponding display mode type for this backend
     type DisplayMode: fmt::Debug + Any + Send + Sync;
 }
