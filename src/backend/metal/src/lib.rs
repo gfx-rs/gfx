@@ -314,7 +314,7 @@ impl hal::Instance<Backend> for Instance {
         _plane_stack_index: u32,
         _transformation: hal::display::SurfaceTransformation,
         _alpha: hal::display::DisplayPlaneAlpha,
-        _image_extent: (u32,u32)
+        _image_extent: hal::window::Extent2D
     ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
 }
 
