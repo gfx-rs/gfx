@@ -208,8 +208,6 @@ impl hal::adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn enumerate_compatible_planes<'a>(&self,_display: &hal::display::Display<'a,crate::Backend>)->Result<Vec<hal::display::Plane<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
 
-    fn enumerate_builtin_display_modes<'a>(&self,_display: &'a hal::display::Display<'a,crate::Backend>,)->Result<Vec<hal::display::DisplayMode<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
-
     fn create_display_mode<'a>(
         &self,
         _display: &'a hal::display::Display<'a,crate::Backend>,

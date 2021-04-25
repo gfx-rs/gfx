@@ -670,7 +670,7 @@ impl hal::Instance<Backend> for Instance {
         image_extent: hal::window::Extent2D
     ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {
         let display_extension = self.raw.display.as_ref().unwrap();
-
+/*
         if !display_plane.display_mode.display.info.plane_reorder_possible && display_plane.plane.z_index != plane_stack_index
         {
             error!("Requested plane on a different z index while plane reordering is unsupported on the selected Display");
@@ -688,7 +688,7 @@ impl hal::Instance<Backend> for Instance {
             error!("Requested an unsupported alpha on the selected Display");
             return Err(hal::display::DisplayPlaneSurfaceError::UnsupportedParameters);
         }
-
+*/
 
         let display_surface_ci = {
             let builder = vk::DisplaySurfaceCreateInfoKHR::builder()

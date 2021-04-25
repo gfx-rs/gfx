@@ -115,24 +115,22 @@ pub enum DisplayPlaneSurfaceError {
 Representation of a display
 */
 #[derive(Debug)]
-pub struct Display<'a,B: Backend>
+pub struct Display<B: Backend>
 {
-    /// The physical device.
-    pub physical_device: &'a B::PhysicalDevice,
     /// The display handle.
     pub handle: B::Display,
-    /// General information about this display.
-    pub info: DisplayInfo
+    /// General informations about this display.
+    pub info: DisplayInfo,
+    /// Builtin display modes
+    pub modes: Vec<DisplayMode<B>>
 }
 
 /**
 General information about the a [DisplayMode][DisplayMode].
 */
 #[derive(Debug)]
-pub struct DisplayMode<'a,B: Backend>
+pub struct DisplayMode<B: Backend>
 {
-    /// The display
-    pub display: &'a Display<'a,B>,
     /// The display mode handle
     pub handle: B::DisplayMode,
     /// Resolution
@@ -145,16 +143,13 @@ pub struct DisplayMode<'a,B: Backend>
 Representation of a plane
 */
 #[derive(Debug)]
-pub struct Plane<'a,B: Backend>
+pub struct Plane
 {
-    /// The physical device.
-    pub physical_device: &'a B::PhysicalDevice,
     /// The plane handle.
     pub handle: u32,
     /// The current index on the z stack.
     pub z_index: u32
 }
-
 
 /**
 Represent a combination of [display mode][DisplayMode] (so [display][Display] and resolution) and a plane
@@ -163,9 +158,9 @@ Represent a combination of [display mode][DisplayMode] (so [display][Display] an
 pub struct DisplayPlane<'a,B: Backend>
 {
     /// Display mode
-    pub display_mode: &'a DisplayMode<'a,B>,
+    pub display_mode: &'a DisplayMode<B>,
     /// Plane index
-    pub plane: &'a Plane<'a,B>,
+    pub plane: &'a Plane,
     /// Supported alpha capabilities
     pub supported_alpha: Vec<DisplayPlaneAlpha>,
     /// The minimum source rectangle offset supported by this plane using the specified mode.

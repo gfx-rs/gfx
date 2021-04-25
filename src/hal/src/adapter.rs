@@ -139,21 +139,14 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # Arguments
     ///
     /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
-    fn enumerate_available_displays<'a>(&'a self)->Result<Vec<display::Display<'a,B>>,device::OutOfMemory>;
+    fn enumerate_available_displays(&self)->Result<Vec<display::Display<B>>,device::OutOfMemory>;
 
     #[cfg(target_os = "linux")]
     /// Enumerate compatibles planes with the provided display.
     /// # Arguments
     ///
     /// * `display` - display on which the the compatible planes will be listed.
-    fn enumerate_compatible_planes<'a>(&self,display: &display::Display<'a,B>)->Result<Vec<display::Plane<'a,B>>,device::OutOfMemory>;
-
-    #[cfg(target_os = "linux")]
-    /// Enumerate the builtin display modes from a display.
-    /// # Arguments
-    ///
-    /// * `display` - display on which the display mode will be enumerated.
-    fn enumerate_builtin_display_modes<'a>(&self,display: &'a display::Display<'a,B>,)->Result<Vec<display::DisplayMode<'a,B>>,device::OutOfMemory>;
+    fn enumerate_compatible_planes<'a>(&self,display: &display::Display<B>)->Result<Vec<display::Plane>,device::OutOfMemory>;
 
     #[cfg(target_os = "linux")]
     /// Create a new display mode from a display, a resolution, a refresh_rate and the plane index.
@@ -168,7 +161,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         display: &'a display::Display<B>,
         resolution: (u32,u32),
         refresh_rate: u32
-    )->Result<display::DisplayMode<'a,B>,display::DisplayModeError>;
+    )->Result<display::DisplayMode<B>,display::DisplayModeError>;
 
     #[cfg(target_os = "linux")]
     /// Create a display plane from a display, a resolution, a refresh_rate and a plane.
@@ -181,8 +174,8 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// * `refresh_rate` - the desired refresh_rate.
     fn create_display_plane<'a>(
         &self,
-        display: &'a display::DisplayMode<'a,B>,
-        plane: &'a display::Plane<'a,B>,
+        display: &'a display::DisplayMode<B>,
+        plane: &'a display::Plane,
     )->Result<display::DisplayPlane<'a,B>,device::OutOfMemory>;
 }
 

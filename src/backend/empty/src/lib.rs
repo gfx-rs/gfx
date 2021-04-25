@@ -160,27 +160,24 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     #[cfg(target_os = "linux")]
-    fn enumerate_available_displays<'a>(&'a self)->Result<Vec<display::Display<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
+    fn enumerate_available_displays(&self)->Result<Vec<display::Display<Backend>>,device::OutOfMemory> {unimplemented!();}
 
     #[cfg(target_os = "linux")]
-    fn enumerate_compatible_planes<'a>(&self,_display: &display::Display<'a,Backend>)->Result<Vec<display::Plane<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
+    fn enumerate_compatible_planes(&self,_display: &display::Display<Backend>)->Result<Vec<display::Plane>,device::OutOfMemory> {unimplemented!();}
 
     #[cfg(target_os = "linux")]
-    fn enumerate_builtin_display_modes<'a>(&self,_display: &'a display::Display<'a,Backend>,)->Result<Vec<display::DisplayMode<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
-
-    #[cfg(target_os = "linux")]
-    fn create_display_mode<'a>(
+    fn create_display_mode(
         &self,
-        _display: &'a display::Display<'a,Backend>,
+        _display: &display::Display<Backend>,
         _resolution: (u32,u32),
         _refresh_rate: u32
-    )->Result<display::DisplayMode<'a,Backend>,display::DisplayModeError> {unimplemented!();}
+    )->Result<display::DisplayMode<Backend>,display::DisplayModeError> {unimplemented!();}
 
     #[cfg(target_os = "linux")]
     fn create_display_plane<'a>(
         &self,
-        _display: &'a display::DisplayMode<'a,Backend>,
-        _plane: &'a display::Plane<'a,Backend>,
+        _display: &'a display::DisplayMode<Backend>,
+        _plane: &'a display::Plane,
     )->Result<display::DisplayPlane<'a,Backend>,device::OutOfMemory> {unimplemented!();}
 }
 

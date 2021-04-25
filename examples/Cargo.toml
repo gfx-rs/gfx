@@ -41,6 +41,8 @@ hal = { path = "../src/hal", version = "0.7", package = "gfx-hal" }
 auxil = { path = "../src/auxil/auxil", version = "0.8", package = "gfx-auxil" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.7" }
 winit = { version = "0.24", features = ["web-sys"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
 input_gatherer = { git = "https://github.com/Uniformbuffer3/input_gatherer", branch = "v0.1.0" }
 keystroke_decoder = { git = "https://github.com/Uniformbuffer3/keystroke_decoder", branch = "v0.1.0" }
 

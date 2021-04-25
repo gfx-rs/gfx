@@ -1322,7 +1322,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     #[cfg(target_os = "linux")]
-    fn enumerate_available_displays<'a>(&'a self)->Result<Vec<hal::display::Display<'a,Backend>>,hal::device::OutOfMemory>{
+    fn enumerate_available_displays(&self)->Result<Vec<hal::display::Display<Backend>>,hal::device::OutOfMemory>{
         let display_extension = self.instance.display.as_ref().unwrap();
 
         let display_properties = match unsafe{display_extension.get_physical_device_display_properties(self.handle)}
@@ -1368,11 +1368,32 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 persistent_content: display_property.persistent_content == 1
             };
 
+            let display_modes = match unsafe{display_extension.get_display_mode_properties(self.handle,display_property.display)}
+            {
+                Ok(display_modes)=>display_modes,
+                Err(error)=>{
+                    match error
+                    {
+                        ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
+                        ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
+                        _=>panic!("Unexpected error returned")
+                    };
+                }
+            }.iter().map(|display_mode_properties|
+            {
+                hal::display::DisplayMode {
+                    handle: native::DisplayMode(display_mode_properties.display_mode),
+                    resolution: (display_mode_properties.parameters.visible_region.width,display_mode_properties.parameters.visible_region.width),
+                    refresh_rate: display_mode_properties.parameters.refresh_rate
+                }
+
+            }).collect();
+
             let display = hal::display::Display
             {
-                physical_device: self,
                 handle: display_handle,
-                info: display_info
+                info: display_info,
+                modes: display_modes
             };
 
             displays.push(display);
@@ -1381,17 +1402,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     #[cfg(target_os = "linux")]
-    fn enumerate_compatible_planes<'a>(&self,display: &hal::display::Display<'a,Backend>)->Result<Vec<hal::display::Plane<'a,Backend>>,hal::device::OutOfMemory>
+    fn enumerate_compatible_planes<'a>(&self,display: &hal::display::Display<Backend>)->Result<Vec<hal::display::Plane>,hal::device::OutOfMemory>
     {
         let display_extension = self.instance.display.as_ref().unwrap();
 
-        match unsafe{display_extension.get_physical_device_display_plane_properties(display.physical_device.handle)}
+        match unsafe{display_extension.get_physical_device_display_plane_properties(self.handle)}
         {
             Ok(planes_properties)=>{
                 let mut planes = Vec::new();
                 for index in 0..planes_properties.len()
                 {
-                    let compatible_displays = match unsafe{display_extension.get_display_plane_supported_displays(display.physical_device.handle,index as u32)}
+                    let compatible_displays = match unsafe{display_extension.get_display_plane_supported_displays(self.handle,index as u32)}
                     {
                         Ok(compatible_displays)=>compatible_displays,
                         Err(error)=>{
@@ -1406,7 +1427,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     if compatible_displays.contains(&display.handle.0)
                     {
                         planes.push(hal::display::Plane{
-                            physical_device: display.physical_device,
                             handle: index as u32,
                             z_index: planes_properties[index].current_stack_index
                         });
@@ -1426,40 +1446,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     #[cfg(target_os = "linux")]
-    fn enumerate_builtin_display_modes<'a>(&self,display: &'a hal::display::Display<Backend>,)->Result<Vec<hal::display::DisplayMode<'a,Backend>>,hal::device::OutOfMemory>
-    {
-        let display_extension = self.instance.display.as_ref().unwrap();
-
-        Ok(match unsafe{display_extension.get_display_mode_properties(display.physical_device.handle,display.handle.0)}
-        {
-            Ok(display_modes)=>display_modes,
-            Err(error)=>{
-                match error
-                {
-                    ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY=>return Err(hal::device::OutOfMemory::Host),
-                    ash::vk::Result::ERROR_OUT_OF_DEVICE_MEMORY=>return Err(hal::device::OutOfMemory::Device),
-                    _=>panic!("Unexpected error returned")
-                };
-            }
-        }.iter().map(|display_mode_properties|
-        {
-            hal::display::DisplayMode {
-                display: &display,
-                handle: native::DisplayMode(display_mode_properties.display_mode),
-                resolution: (display_mode_properties.parameters.visible_region.width,display_mode_properties.parameters.visible_region.width),
-                refresh_rate: display_mode_properties.parameters.refresh_rate
-            }
-
-        }).collect())
-    }
-
-    #[cfg(target_os = "linux")]
     fn create_display_mode<'a>(
         &self,
         display: &'a hal::display::Display<Backend>,
         resolution: (u32,u32),
         refresh_rate: u32
-    )->Result<hal::display::DisplayMode<'a,Backend>,hal::display::DisplayModeError>
+    )->Result<hal::display::DisplayMode<Backend>,hal::display::DisplayModeError>
     {
         let display_extension = self.instance.display.as_ref().unwrap();
 
@@ -1474,11 +1466,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 }
             ).build();
 
-        match unsafe{display_extension.create_display_mode(display.physical_device.handle,display.handle.0,&display_mode_ci,None)}
+        match unsafe{display_extension.create_display_mode(self.handle,display.handle.0,&display_mode_ci,None)}
         {
             Ok(display_mode_handle)=>{
                 Ok(hal::display::DisplayMode{
-                    display: &display,
                     handle: native::DisplayMode(display_mode_handle),
                     resolution: resolution,
                     refresh_rate: refresh_rate
@@ -1499,13 +1490,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     #[cfg(target_os = "linux")]
     fn create_display_plane<'a>(
         &self,
-        display_mode: &'a hal::display::DisplayMode<'a,Backend>,
-        plane: &'a hal::display::Plane<Backend>
+        display_mode: &'a hal::display::DisplayMode<Backend>,
+        plane: &'a hal::display::Plane
     )->Result<hal::display::DisplayPlane<'a,Backend>,hal::device::OutOfMemory>
     {
         let display_extension = self.instance.display.as_ref().unwrap();
 
-        let display_plane_capabilities = match unsafe{display_extension.get_display_plane_capabilities(display_mode.display.physical_device.handle,display_mode.handle.0,plane.handle)}
+        let display_plane_capabilities = match unsafe{display_extension.get_display_plane_capabilities(self.handle,display_mode.handle.0,plane.handle)}
         {
             Ok(display_plane_capabilities)=>display_plane_capabilities,
             Err(error)=>{
