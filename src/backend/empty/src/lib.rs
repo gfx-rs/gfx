@@ -594,13 +594,13 @@ impl device::Device<Backend> for Device {
         Ok(true)
     }
 
-    /// Control the power state of the provided display
+    #[cfg(target_os = "linux")]
     unsafe fn set_display_power_state(&self, _display: &display::Display<Backend>, _power_state: &display::PowerState)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
 
-    /// Register device event
+    #[cfg(target_os = "linux")]
     unsafe fn register_device_event(&self, _device_event: &display::DeviceEvent, _fence: &mut ())->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
 
-    /// Register display event
+    #[cfg(target_os = "linux")]
     unsafe fn register_display_event(&self, _display: &display::Display<Backend>, _display_event: &display::DisplayEvent, _fence: &mut ())->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
 
 
