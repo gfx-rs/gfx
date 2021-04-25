@@ -3,6 +3,8 @@
 //! A display represent a physical display collected from an Adapter
 
 use crate::{Backend,window::{Offset2D,Extent2D}};
+pub mod display_control;
+pub use display_control::*;
 
 /**
 List of the hardware display transformations

@@ -21,6 +21,7 @@ use crate::{
     query,
     queue::QueueFamilyId,
     Backend, MemoryTypeId,
+    display
 };
 
 use std::{any::Any, fmt, iter, ops::Range};
@@ -712,6 +713,15 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Associate a name with a pipeline layout, for easier debugging in external tools or with
     /// validation layers that can print a friendly name when referring to objects in error messages
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut B::PipelineLayout, name: &str);
+
+    /// Control the power state of the provided display
+    unsafe fn set_display_power_state(&self, display: &display::Display<B>, power_state: &display::PowerState)->Result<(),display::DisplayControlError>;
+
+    /// Register device event
+    unsafe fn register_device_event(&self, device_event: &display::DeviceEvent, fence: &mut B::Fence)->Result<(),display::DisplayControlError>;
+
+    /// Register display event
+    unsafe fn register_display_event(&self, display: &display::Display<B>, display_event: &display::DisplayEvent, fence: &mut B::Fence)->Result<(),display::DisplayControlError>;
 
     /// Starts frame capture.
     fn start_capture(&self);

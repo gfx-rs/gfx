@@ -573,6 +573,9 @@ impl PhysicalDeviceInfo {
             requested_extensions.push(vk::KhrGetDisplayProperties2Fn::name()); // TODO NOT NEEDED, RIGHT?
         }
 
+        requested_extensions.push(vk::ExtDisplaySurfaceCounterFn::name());
+        requested_extensions.push(vk::ExtDisplayControlFn::name());
+
         requested_extensions
     }
 
@@ -864,6 +867,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             None
         };
 
+        let display_control = if enabled_extensions.contains(&vk::ExtDisplayControlFn::name()) {
+            Some(ExtensionFn::Extension(vk::ExtDisplayControlFn::load(|name| {
+                std::mem::transmute(
+                    self.instance.inner.get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                )
+            })))
+        } else {
+            None
+        };
+
         #[cfg(feature = "naga")]
         let naga_options = {
             use naga::back::spv;
@@ -903,6 +916,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 extension_fns: DeviceExtensionFunctions {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
+                    display_control: display_control,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
                     || self

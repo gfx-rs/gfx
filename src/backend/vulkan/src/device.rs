@@ -1872,6 +1872,68 @@ impl d::Device<B> for super::Device {
             .set_object_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.raw, name)
     }
 
+    unsafe fn set_display_power_state(&self,display: &hal::display::Display<B>,power_state: &hal::display::PowerState)->Result<(),hal::display::DisplayControlError> {
+        let display_control_extension = match &self.shared.extension_fns.display_control {
+            Some(super::ExtensionFn::Extension(display_control_extension))=>display_control_extension,
+            _=>return Err(hal::display::DisplayControlError::UnsupportedFeature)
+        };
+
+        let vk_power_state = match power_state {
+            hal::display::PowerState::Off => vk::DisplayPowerStateEXT::OFF,
+            hal::display::PowerState::Suspend => vk::DisplayPowerStateEXT::SUSPEND,
+            hal::display::PowerState::On => vk::DisplayPowerStateEXT::ON,
+        };
+
+        let vk_power_info = vk::DisplayPowerInfoEXT::builder().power_state(vk_power_state).build();
+
+        match display_control_extension.display_power_control_ext(self.shared.raw.handle(),display.handle.0,&vk_power_info) {
+            vk::Result::SUCCESS => Ok(()),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(hal::display::DisplayControlError::OutOfHostMemory),
+            _ => unreachable!(),
+        }
+    }
+    /// Register device event
+    unsafe fn register_device_event(&self, device_event: &hal::display::DeviceEvent, fence: &mut crate::native::Fence)->Result<(),hal::display::DisplayControlError> {
+        let display_control_extension = match &self.shared.extension_fns.display_control {
+            Some(super::ExtensionFn::Extension(display_control_extension))=>display_control_extension,
+            _=>return Err(hal::display::DisplayControlError::UnsupportedFeature)
+        };
+
+        let vk_device_event = match device_event {
+            hal::display::DeviceEvent::DisplayHotplug => vk::DeviceEventTypeEXT::DISPLAY_HOTPLUG,
+        };
+
+        let vk_device_event_info = vk::DeviceEventInfoEXT::builder().device_event(vk_device_event).build();
+
+        match display_control_extension.register_device_event_ext(self.shared.raw.handle(),&vk_device_event_info,std::ptr::null(),&mut fence.0)
+        {
+            vk::Result::SUCCESS => Ok(()),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(hal::display::DisplayControlError::OutOfHostMemory),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Register display event
+    unsafe fn register_display_event(&self, display: &hal::display::Display<B>, display_event: &hal::display::DisplayEvent, fence: &mut crate::native::Fence)->Result<(),hal::display::DisplayControlError> {
+        let display_control_extension = match &self.shared.extension_fns.display_control {
+            Some(super::ExtensionFn::Extension(display_control_extension))=>display_control_extension,
+            _=>return Err(hal::display::DisplayControlError::UnsupportedFeature)
+        };
+
+        let vk_display_event = match display_event {
+            hal::display::DisplayEvent::FirstPixelOut => vk::DisplayEventTypeEXT::FIRST_PIXEL_OUT,
+        };
+
+        let vk_display_event_info = vk::DisplayEventInfoEXT::builder().display_event(vk_display_event).build();
+
+        match display_control_extension.register_display_event_ext(self.shared.raw.handle(), display.handle.0, &vk_display_event_info, std::ptr::null(), &mut fence.0)
+        {
+            vk::Result::SUCCESS => Ok(()),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(hal::display::DisplayControlError::OutOfHostMemory),
+            _ => unreachable!(),
+        }
+    }
+
     fn start_capture(&self) {
         //TODO: RenderDoc
     }

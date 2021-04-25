@@ -594,6 +594,16 @@ impl device::Device<Backend> for Device {
         Ok(true)
     }
 
+    /// Control the power state of the provided display
+    unsafe fn set_display_power_state(&self, _display: &display::Display<Backend>, _power_state: &display::PowerState)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+
+    /// Register device event
+    unsafe fn register_device_event(&self, _device_event: &display::DeviceEvent, _fence: &mut ())->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+
+    /// Register display event
+    unsafe fn register_display_event(&self, _display: &display::Display<Backend>, _display_event: &display::DisplayEvent, _fence: &mut ())->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+
+
     fn start_capture(&self) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }

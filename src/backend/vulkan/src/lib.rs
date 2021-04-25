@@ -753,6 +753,7 @@ impl queue::QueueFamily for QueueFamily {
 struct DeviceExtensionFunctions {
     mesh_shaders: Option<ExtensionFn<MeshShader>>,
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
+    display_control: Option<ExtensionFn<vk::ExtDisplayControlFn>>
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.
