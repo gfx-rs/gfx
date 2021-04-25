@@ -554,7 +554,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             ..hal::PhysicalDeviceProperties::default()
         }
     }
-
+/*
     fn enumerate_available_displays<'a>(&'a self)->Result<Vec<hal::display::Display<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
 
     fn enumerate_compatible_planes<'a>(&self,_display: &hal::display::Display<'a,crate::Backend>)->Result<Vec<hal::display::Plane<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
@@ -573,6 +573,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _display: &'a hal::display::DisplayMode<'a,crate::Backend>,
         _plane: &'a hal::display::Plane<'a,crate::Backend>,
     )->Result<hal::display::DisplayPlane<'a,crate::Backend>,hal::device::OutOfMemory> {unimplemented!();}
+*/
 }
 
 pub struct LanguageVersion {

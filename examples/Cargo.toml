@@ -23,10 +23,6 @@ name = "quad"
 path = "quad/main.rs"
 
 [[bin]]
-name = "quad_windowless"
-path = "quad_windowless/main.rs"
-
-[[bin]]
 name = "compute"
 path = "compute/main.rs"
 

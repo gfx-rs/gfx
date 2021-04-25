@@ -9,10 +9,13 @@
 //! of that [backend][crate::Backend].
 
 use crate::{
-    device, format, image, memory, display,
+    device, format, image, memory,
     queue::{QueueGroup, QueuePriority},
     Backend, Features, PhysicalDeviceProperties,
 };
+
+#[cfg(target_os = "linux")]
+use crate::display;
 
 use std::{any::Any, fmt};
 
@@ -128,6 +131,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         false
     }
 
+    #[cfg(target_os = "linux")]
     /// Enumerate active displays [surface][display::Display] from display.
     /// Please notice that, even if a system has displays attached, they could be not returned because they are managed by some other components.
     /// This function only return the display that are available to be managed by the current application.
@@ -137,20 +141,21 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
     fn enumerate_available_displays<'a>(&'a self)->Result<Vec<display::Display<'a,B>>,device::OutOfMemory>;
 
-
+    #[cfg(target_os = "linux")]
     /// Enumerate compatibles planes with the provided display.
     /// # Arguments
     ///
     /// * `display` - display on which the the compatible planes will be listed.
     fn enumerate_compatible_planes<'a>(&self,display: &display::Display<'a,B>)->Result<Vec<display::Plane<'a,B>>,device::OutOfMemory>;
 
-
+    #[cfg(target_os = "linux")]
     /// Enumerate the builtin display modes from a display.
     /// # Arguments
     ///
     /// * `display` - display on which the display mode will be enumerated.
     fn enumerate_builtin_display_modes<'a>(&self,display: &'a display::Display<'a,B>,)->Result<Vec<display::DisplayMode<'a,B>>,device::OutOfMemory>;
 
+    #[cfg(target_os = "linux")]
     /// Create a new display mode from a display, a resolution, a refresh_rate and the plane index.
     /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
     /// # Arguments
@@ -165,6 +170,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         refresh_rate: u32
     )->Result<display::DisplayMode<'a,B>,display::DisplayModeError>;
 
+    #[cfg(target_os = "linux")]
     /// Create a display plane from a display, a resolution, a refresh_rate and a plane.
     /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
     /// # Arguments

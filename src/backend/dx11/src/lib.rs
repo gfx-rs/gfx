@@ -660,8 +660,8 @@ impl hal::Instance<Backend> for Instance {
     unsafe fn destroy_surface(&self, _surface: Surface) {
         // TODO: Implement Surface cleanup
     }
-
-     fn create_display_plane_surface(
+    /*
+    fn create_display_plane_surface(
         &self,
         _display_plane: &hal::display::DisplayPlane<crate::Backend>,
         _plane_stack_index: u32,
@@ -669,6 +669,7 @@ impl hal::Instance<Backend> for Instance {
         _alpha: hal::display::DisplayPlaneAlpha,
         _image_extent: hal::window::Extent2D
     ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
+    */
 }
 
 pub struct PhysicalDevice {
@@ -981,7 +982,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     fn properties(&self) -> hal::PhysicalDeviceProperties {
         self.properties
     }
-
+    /*
     fn enumerate_available_displays<'a>(&'a self)->Result<Vec<hal::display::Display<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
 
     fn enumerate_compatible_planes<'a>(&self,_display: &hal::display::Display<'a,crate::Backend>)->Result<Vec<hal::display::Plane<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
@@ -1000,6 +1001,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _display: &'a hal::display::DisplayMode<'a,crate::Backend>,
         _plane: &'a hal::display::Plane<'a,crate::Backend>,
     )->Result<hal::display::DisplayPlane<'a,crate::Backend>,hal::device::OutOfMemory> {unimplemented!();}
+    */
 }
 
 struct Presentation {

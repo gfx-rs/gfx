@@ -307,7 +307,7 @@ impl hal::Instance<Backend> for Instance {
     unsafe fn destroy_surface(&self, surface: Surface) {
         surface.dispose();
     }
-
+    /*
     fn create_display_plane_surface(
         &self,
         _display_plane: &hal::display::DisplayPlane<crate::Backend>,
@@ -316,6 +316,7 @@ impl hal::Instance<Backend> for Instance {
         _alpha: hal::display::DisplayPlaneAlpha,
         _image_extent: hal::window::Extent2D
     ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
+    */
 }
 
 extern "C" fn layer_should_inherit_contents_scale_from_window(

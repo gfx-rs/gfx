@@ -159,12 +159,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
+    #[cfg(target_os = "linux")]
     fn enumerate_available_displays<'a>(&'a self)->Result<Vec<display::Display<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
 
+    #[cfg(target_os = "linux")]
     fn enumerate_compatible_planes<'a>(&self,_display: &display::Display<'a,Backend>)->Result<Vec<display::Plane<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
 
+    #[cfg(target_os = "linux")]
     fn enumerate_builtin_display_modes<'a>(&self,_display: &'a display::Display<'a,Backend>,)->Result<Vec<display::DisplayMode<'a,Backend>>,device::OutOfMemory> {unimplemented!();}
 
+    #[cfg(target_os = "linux")]
     fn create_display_mode<'a>(
         &self,
         _display: &'a display::Display<'a,Backend>,
@@ -172,6 +176,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _refresh_rate: u32
     )->Result<display::DisplayMode<'a,Backend>,display::DisplayModeError> {unimplemented!();}
 
+    #[cfg(target_os = "linux")]
     fn create_display_plane<'a>(
         &self,
         _display: &'a display::DisplayMode<'a,Backend>,
@@ -1103,7 +1108,8 @@ impl hal::Instance<Backend> for Instance {
 
     unsafe fn destroy_surface(&self, _surface: Surface) {}
 
-     fn create_display_plane_surface(
+    #[cfg(target_os = "linux")]
+    fn create_display_plane_surface(
         &self,
         _display_plane: &display::DisplayPlane<Backend>,
         _plane_stack_index: u32,

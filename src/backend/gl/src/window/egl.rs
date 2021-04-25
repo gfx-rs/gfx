@@ -498,6 +498,7 @@ impl hal::Instance<crate::Backend> for Instance {
         }
     }
 
+    #[cfg(target_os = "linux")]
      fn create_display_plane_surface(
         &self,
         _display_plane: &hal::display::DisplayPlane<crate::Backend>,
