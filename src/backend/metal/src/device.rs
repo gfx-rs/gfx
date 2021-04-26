@@ -264,21 +264,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
         let spv_options = {
             use naga::back::spv;
-            let capabilities = [
-                spv::Capability::Shader,
-                spv::Capability::Matrix,
-                spv::Capability::InputAttachment,
-                spv::Capability::Sampled1D,
-                spv::Capability::Image1D,
-                spv::Capability::SampledBuffer,
-                spv::Capability::ImageBuffer,
-                spv::Capability::ImageQuery,
-                spv::Capability::DerivativeControl,
-                //TODO: fill out the rest
-            ]
-            .iter()
-            .cloned()
-            .collect();
             let mut flags = spv::WriterFlags::empty();
             flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
             flags.set(
@@ -288,7 +273,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             spv::Options {
                 lang_version: (1, 0),
                 flags,
-                capabilities,
+                // doesn't matter since we send it through SPIRV-Cross
+                capabilities: None,
             }
         };
 
@@ -1989,6 +1975,7 @@ impl hal::device::Device<Backend> for Device {
             naga: {
                 let options = naga::front::spv::Options {
                     adjust_coordinate_space: !self.features.contains(hal::Features::NDC_Y_UP),
+                    strict_capabilities: true,
                     flow_graph_dump_prefix: None,
                 };
                 let parser = naga::front::spv::Parser::new(raw_data.iter().cloned(), &options);
