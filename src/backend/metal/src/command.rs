@@ -3850,8 +3850,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     layouts: _,
                     ref resources,
                 } => {
-                    profiling::scope!("bind descriptor set");
-
                     let end_offsets = self.state.bind_set(
                         pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT,
                         &*pool.read(),
@@ -4018,8 +4016,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     layouts: _,
                     ref resources,
                 } => {
-                    profiling::scope!("bind descriptor set");
-
                     let end_offsets = self.state.bind_set(
                         pso::ShaderStageFlags::COMPUTE,
                         &*pool.read(),
