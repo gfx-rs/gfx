@@ -427,7 +427,7 @@ impl Instance {
             layer
         };
 
-        let () = msg_send![render_layer, setContentsGravity:kCAGravityTopLeft];
+        let () = msg_send![render_layer, setContentsGravity: kCAGravityTopLeft];
 
         let _: *mut c_void = msg_send![view, retain];
         Surface::new(NonNull::new(view), render_layer)

@@ -57,7 +57,7 @@ optional = true
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-tag = "gfx-22"
+tag = "gfx-23"
 features = ["spv-in", "msl-out"]
 
 # This forces docs.rs to build the crate on mac, otherwise the build fails
