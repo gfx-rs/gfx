@@ -669,7 +669,7 @@ impl Device {
         profiling::scope!("compile_shader_library_naga");
 
         let get_module_info = || {
-            profiling::scope!("naga::write_string");
+            profiling::scope!("naga::msl::write_string");
 
             let (source, info) = match naga::back::msl::write_string(
                 &shader.module,
@@ -1978,8 +1978,12 @@ impl hal::device::Device<Backend> for Device {
                     strict_capabilities: true,
                     flow_graph_dump_prefix: None,
                 };
-                let parser = naga::front::spv::Parser::new(raw_data.iter().cloned(), &options);
-                match parser.parse() {
+                let parse_result = {
+                    profiling::scope!("naga::spv::parse");
+                    let parser = naga::front::spv::Parser::new(raw_data.iter().cloned(), &options);
+                    parser.parse()
+                };
+                match parse_result {
                     Ok(module) => {
                         debug!("Naga module {:#?}", module);
                         match naga::valid::Validator::new(naga::valid::ValidationFlags::empty())
@@ -2538,6 +2542,7 @@ impl hal::device::Device<Backend> for Device {
         memory_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
+        profiling::scope!("allocate_memory");
         let (storage, cache) = MemoryTypes::describe(memory_type.0);
         let device = self.shared.device.lock();
         debug!("allocate_memory type {:?} of size {}", memory_type, size);
@@ -2567,6 +2572,7 @@ impl hal::device::Device<Backend> for Device {
     }
 
     unsafe fn free_memory(&self, memory: n::Memory) {
+        profiling::scope!("free_memory");
         debug!("free_memory of size {}", memory.size);
         if let n::MemoryHeap::Public(_, ref cpu_buffer) = memory.heap {
             debug!("\tbacked by cpu buffer {:?}", cpu_buffer.as_ptr());
@@ -2634,6 +2640,7 @@ impl hal::device::Device<Backend> for Device {
         offset: u64,
         buffer: &mut n::Buffer,
     ) -> Result<(), d::BindError> {
+        profiling::scope!("bind_buffer_memory");
         let (size, name) = match buffer {
             n::Buffer::Unbound { size, name, .. } => (*size, name),
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
@@ -2778,6 +2785,7 @@ impl hal::device::Device<Backend> for Device {
         _sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
     ) -> Result<n::Image, image::CreationError> {
+        profiling::scope!("create_image");
         debug!(
             "create_image {:?} with {} mips of {:?} {:?} and usage {:?} with {:?}",
             kind, mip_levels, format, tiling, usage, view_caps
@@ -2966,6 +2974,7 @@ impl hal::device::Device<Backend> for Device {
         offset: u64,
         image: &mut n::Image,
     ) -> Result<(), d::BindError> {
+        profiling::scope!("bind_image_memory");
         let like = {
             let (descriptor, mip_sizes, name) = match image.like {
                 n::ImageLike::Unbound {
@@ -3037,6 +3046,8 @@ impl hal::device::Device<Backend> for Device {
         _usage: image::Usage,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewCreationError> {
+        profiling::scope!("create_image_view");
+
         let mtl_format = match self
             .shared
             .private_caps

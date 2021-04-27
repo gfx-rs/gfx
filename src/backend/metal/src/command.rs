@@ -981,6 +981,7 @@ impl Journal {
     }
 
     fn record(&self, command_buf: &metal::CommandBufferRef) {
+        profiling::scope!("Journal::record");
         for (ref pass, ref range, ref label) in &self.passes {
             match *pass {
                 soft::Pass::Render(ref desc) => {
@@ -2819,6 +2820,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: Iterator<Item = i::SubresourceRange>,
     {
+        profiling::scope!("clear_image");
         let CommandBufferInner {
             ref mut retained_textures,
             ref mut sink,
@@ -3181,6 +3183,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: Iterator<Item = com::ImageBlit>,
     {
+        profiling::scope!("blit_image");
         let CommandBufferInner {
             ref mut retained_textures,
             ref mut sink,
@@ -3432,6 +3435,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     where
         T: Iterator<Item = (&'a native::Buffer, buffer::SubRange)>,
     {
+        profiling::scope!("bind_vertex_buffers");
         if self.state.vertex_buffers.len() <= first_binding as usize {
             self.state
                 .vertex_buffers
@@ -3545,6 +3549,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: Iterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
     {
+        profiling::scope!("begin_render_pass");
         // fill out temporary clear values per attachment
         self.temp.render_attachments.clear();
         for attachment in attachments {
@@ -4410,6 +4415,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         if instances.start == instances.end {
             return;
         }
+        profiling::scope!("draw");
 
         let command = soft::RenderCommand::Draw {
             primitive_type: self.state.primitive_type,
@@ -4429,6 +4435,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         if instances.start == instances.end {
             return;
         }
+        profiling::scope!("draw_indexed");
 
         let command = soft::RenderCommand::DrawIndexed {
             primitive_type: self.state.primitive_type,
