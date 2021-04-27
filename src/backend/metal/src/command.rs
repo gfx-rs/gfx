@@ -203,14 +203,17 @@ impl RenderPassDescriptorCache {
             let desc = rp_desc.color_attachments().object_at(i as _).unwrap();
             desc.set_texture(None);
             desc.set_resolve_texture(None);
+            desc.set_level(0);
             desc.set_slice(0);
         }
         if let Some(desc) = rp_desc.depth_attachment() {
             desc.set_texture(None);
+            desc.set_level(0);
             desc.set_slice(0);
         }
         if let Some(desc) = rp_desc.stencil_attachment() {
             desc.set_texture(None);
+            desc.set_level(0);
             desc.set_slice(0);
         }
         self.spare_descriptors.push(rp_desc);
@@ -978,6 +981,7 @@ impl Journal {
     }
 
     fn record(&self, command_buf: &metal::CommandBufferRef) {
+        profiling::scope!("Journal::record");
         for (ref pass, ref range, ref label) in &self.passes {
             match *pass {
                 soft::Pass::Render(ref desc) => {
@@ -1924,6 +1928,15 @@ where
                 offset,
             );
         }
+        Cmd::InsertDebugMarker { ref name } => {
+            encoder.insert_debug_signpost(name.as_ref());
+        }
+        Cmd::PushDebugMarker { ref name } => {
+            encoder.push_debug_group(name.as_ref());
+        }
+        Cmd::PopDebugGroup => {
+            encoder.pop_debug_group();
+        }
     }
 }
 
@@ -2209,6 +2222,7 @@ impl hal::queue::Queue<Backend> for Queue {
         Iw: Iterator<Item = (&'a native::Semaphore, pso::PipelineStage)>,
         Is: Iterator<Item = &'a native::Semaphore>,
     {
+        profiling::scope!("submit");
         debug!("submitting with fence {:?}", fence);
         self.wait(wait_semaphores.map(|(s, _)| s));
 
@@ -2229,6 +2243,7 @@ impl hal::queue::Queue<Backend> for Queue {
             let mut release_sinks = Vec::new();
 
             for cmd_buffer in command_buffers {
+                profiling::scope!("submit command buffer");
                 let mut inner = cmd_buffer.inner.borrow_mut();
                 let CommandBufferInner {
                     ref sink,
@@ -2411,6 +2426,7 @@ impl hal::queue::Queue<Backend> for Queue {
         image: window::SwapchainImage,
         wait_semaphore: Option<&mut native::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError> {
+        profiling::scope!("present");
         if let Some(semaphore) = wait_semaphore {
             if let Some(ref system) = semaphore.system {
                 system.wait(!0);
@@ -2418,7 +2434,6 @@ impl hal::queue::Queue<Backend> for Queue {
         }
 
         let queue = self.shared.queue.lock();
-        let drawable = image.into_drawable();
         autoreleasepool(|| {
             let command_buffer = queue.raw.new_command_buffer();
             if INTERNAL_LABELS {
@@ -2426,9 +2441,19 @@ impl hal::queue::Queue<Backend> for Queue {
             }
             self.record_empty(command_buffer);
 
-            command_buffer.present_drawable(&drawable);
+            // https://developer.apple.com/documentation/quartzcore/cametallayer/1478157-presentswithtransaction?language=objc
+            if !image.present_with_transaction {
+                command_buffer.present_drawable(&image.drawable);
+            }
+
             command_buffer.commit();
+
+            if image.present_with_transaction {
+                let () = msg_send![command_buffer, waitUntilScheduled];
+                image.drawable.present();
+            }
         });
+
         Ok(None)
     }
 
@@ -2795,6 +2820,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: Iterator<Item = i::SubresourceRange>,
     {
+        profiling::scope!("clear_image");
         let CommandBufferInner {
             ref mut retained_textures,
             ref mut sink,
@@ -3157,6 +3183,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: Iterator<Item = com::ImageBlit>,
     {
+        profiling::scope!("blit_image");
         let CommandBufferInner {
             ref mut retained_textures,
             ref mut sink,
@@ -3408,6 +3435,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     where
         T: Iterator<Item = (&'a native::Buffer, buffer::SubRange)>,
     {
+        profiling::scope!("bind_vertex_buffers");
         if self.state.vertex_buffers.len() <= first_binding as usize {
             self.state
                 .vertex_buffers
@@ -3521,6 +3549,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: Iterator<Item = com::RenderAttachmentInfo<'a, Backend>>,
     {
+        profiling::scope!("begin_render_pass");
         // fill out temporary clear values per attachment
         self.temp.render_attachments.clear();
         for attachment in attachments {
@@ -3672,6 +3701,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
+        profiling::scope!("bind_graphics_pipeline");
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
@@ -3775,7 +3805,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 pre.issue(com);
             }
         }
-        if let Some(ref color) = pipeline.baked_states.blend_color {
+        if let Some(ref color) = pipeline.baked_states.blend_constants {
             pre.issue(self.state.set_blend_color(color));
         }
     }
@@ -3790,6 +3820,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         I: Iterator<Item = &'a native::DescriptorSet>,
         J: Iterator<Item = com::DescriptorSetOffset>,
     {
+        profiling::scope!("bind_graphics_descriptor_sets");
+
         let vbuf_count = self
             .state
             .render_pso
@@ -3943,6 +3975,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
+        profiling::scope!("bind_compute_pipeline");
         self.state.compute_pso = Some(pipeline.raw.clone());
         self.state.work_group_size = pipeline.work_group_size;
 
@@ -3970,6 +4003,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         I: Iterator<Item = &'a native::DescriptorSet>,
         J: Iterator<Item = com::DescriptorSetOffset>,
     {
+        profiling::scope!("bind_compute_descriptor_sets");
         self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
 
         let mut dynamic_offset_iter = dynamic_offsets;
@@ -4381,6 +4415,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         if instances.start == instances.end {
             return;
         }
+        profiling::scope!("draw");
 
         let command = soft::RenderCommand::Draw {
             primitive_type: self.state.primitive_type,
@@ -4400,6 +4435,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         if instances.start == instances.end {
             return;
         }
+        profiling::scope!("draw_indexed");
 
         let command = soft::RenderCommand::DrawIndexed {
             primitive_type: self.state.primitive_type,
@@ -4871,13 +4907,27 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn insert_debug_marker(&mut self, _name: &str, _color: u32) {
-        //TODO
+    unsafe fn insert_debug_marker(&mut self, name: &str, _color: u32) {
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render()
+            .issue(soft::RenderCommand::InsertDebugMarker { name })
     }
-    unsafe fn begin_debug_marker(&mut self, _name: &str, _color: u32) {
-        //TODO
+
+    unsafe fn begin_debug_marker(&mut self, name: &str, _color: u32) {
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render()
+            .issue(soft::RenderCommand::PushDebugMarker { name })
     }
+
     unsafe fn end_debug_marker(&mut self) {
-        //TODO
+        self.inner
+            .borrow_mut()
+            .sink()
+            .pre_render()
+            .issue(soft::RenderCommand::PopDebugGroup)
     }
 }

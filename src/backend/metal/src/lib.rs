@@ -69,6 +69,7 @@ use cocoa_foundation::foundation::NSInteger;
 use dispatch;
 use foreign_types::ForeignTypeRef;
 use metal::MTLFeatureSet;
+use metal::MTLGPUFamily;
 use metal::MTLLanguageVersion;
 use metal::{CGFloat, CGSize, MetalLayer, MetalLayerRef};
 use objc::{
@@ -91,6 +92,8 @@ mod conversions;
 mod device;
 mod internal;
 mod native;
+#[cfg(feature = "pipeline-cache")]
+mod pipeline_cache;
 mod soft;
 mod window;
 
@@ -104,6 +107,12 @@ type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<fxhash::FxHasher>>;
 //TODO: investigate why exactly using `u8` here is slower (~5% total).
 /// A type representing Metal binding's resource index.
 type ResourceIndex = u32;
+
+// For CALayer contentsGravity
+extern "C" {
+    #[allow(non_upper_case_globals)]
+    static kCAGravityTopLeft: cocoa_foundation::base::id;
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -320,7 +329,7 @@ impl hal::Instance<Backend> for Instance {
 }
 
 extern "C" fn layer_should_inherit_contents_scale_from_window(
-    _: &Object,
+    _: &Class,
     _: Sel,
     _layer: *mut Object,
     _new_scale: CGFloat,
@@ -338,10 +347,10 @@ struct GfxManagedMetalLayerDelegate(&'static Class);
 impl GfxManagedMetalLayerDelegate {
     pub fn new() -> Self {
         CAML_DELEGATE_REGISTER.call_once(|| {
-            type Fun = extern "C" fn(&Object, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
+            type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
             let mut decl = ClassDecl::new(CAML_DELEGATE_CLASS, class!(NSObject)).unwrap();
             unsafe {
-                decl.add_method(
+                decl.add_class_method(
                     sel!(layer:shouldInheritContentsScale:fromWindow:),
                     layer_should_inherit_contents_scale_from_window as Fun,
                 );
@@ -427,6 +436,8 @@ impl Instance {
             let () = msg_send![layer, setDelegate: self.gfx_managed_metal_layer_delegate.0];
             layer
         };
+
+        let () = msg_send![render_layer, setContentsGravity: kCAGravityTopLeft];
 
         let _: *mut c_void = msg_send![view, retain];
         Surface::new(NonNull::new(view), render_layer)
@@ -759,6 +770,7 @@ struct PrivateCapabilities {
     max_total_threadgroup_memory: u32,
     sample_count_mask: u8,
     supports_debug_markers: bool,
+    supports_binary_archives: bool,
 }
 
 impl PrivateCapabilities {
@@ -1055,6 +1067,8 @@ impl PrivateCapabilities {
                     MTLFeatureSet::tvOS_GPUFamily2_v1,
                 ],
             ),
+            supports_binary_archives: device.supports_family(MTLGPUFamily::Apple3)
+                || device.supports_family(MTLGPUFamily::Mac1),
         }
     }
 

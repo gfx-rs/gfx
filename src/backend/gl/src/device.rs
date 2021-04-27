@@ -78,21 +78,6 @@ impl Device {
             #[cfg(feature = "cross")]
             spv_options: {
                 use naga::back::spv;
-                let capabilities = [
-                    spv::Capability::Shader,
-                    spv::Capability::Matrix,
-                    spv::Capability::InputAttachment,
-                    spv::Capability::Sampled1D,
-                    spv::Capability::Image1D,
-                    spv::Capability::SampledBuffer,
-                    spv::Capability::ImageBuffer,
-                    spv::Capability::ImageQuery,
-                    spv::Capability::DerivativeControl,
-                    //TODO: fill out the rest
-                ]
-                .iter()
-                .cloned()
-                .collect();
                 let mut flags = spv::WriterFlags::empty();
                 flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
                 flags.set(
@@ -102,7 +87,8 @@ impl Device {
                 spv::Options {
                     lang_version: (1, 0),
                     flags,
-                    capabilities,
+                    // doesn't matter since we send it through SPIRV-Cross
+                    capabilities: None,
                 }
             },
         }
@@ -605,7 +591,7 @@ impl Device {
         options: &naga::back::glsl::Options,
         context: CompilationContext,
     ) -> Result<n::Shader, d::ShaderError> {
-        let mut output = Vec::new();
+        let mut output = String::new();
         let mut writer =
             naga::back::glsl::Writer::new(&mut output, &shader.module, &shader.info, options)
                 .map_err(|e| {
@@ -629,9 +615,8 @@ impl Device {
                     reflection_info,
                     context,
                 );
-                let source = String::from_utf8(output).unwrap();
-                log::debug!("Naga generated shader:\n{}", source);
-                Self::create_shader_module_raw(gl, &source, options.shader_stage)
+                log::debug!("Naga generated shader:\n{}", output);
+                Self::create_shader_module_raw(gl, &output, options.shader_stage)
             }
             Err(e) => {
                 log::warn!("Naga GLSL write: {}", e);
@@ -1204,8 +1189,12 @@ impl d::Device<B> for Device {
             #[cfg(feature = "cross")]
             spv: raw_data.to_vec(),
             naga: {
-                let parser =
-                    naga::front::spv::Parser::new(raw_data.iter().cloned(), &Default::default());
+                let options = naga::front::spv::Options {
+                    adjust_coordinate_space: !self.features.contains(hal::Features::NDC_Y_UP),
+                    strict_capabilities: true,
+                    flow_graph_dump_prefix: None,
+                };
+                let parser = naga::front::spv::Parser::new(raw_data.iter().cloned(), &options);
                 match parser.parse() {
                     Ok(module) => {
                         log::debug!("Naga module {:#?}", module);
@@ -1667,6 +1656,7 @@ impl d::Device<B> for Device {
         kind: i::ViewKind,
         view_format: Format,
         swizzle: Swizzle,
+        _usage: i::Usage,
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewCreationError> {
         assert_eq!(swizzle, Swizzle::NO);

@@ -1063,6 +1063,7 @@ impl<B: Backend> ImageState<B> {
                 i::ViewKind::D2,
                 ColorFormat::SELF,
                 f::Swizzle::NO,
+                i::Usage::SAMPLED,
                 i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
                     ..Default::default()
@@ -1578,6 +1579,7 @@ fn main() {
 )))]
 fn main() {
     println!(
-        "You need to enable the native API feature (vulkan/metal) in order to run the example"
+        "You need to enable the native API feature (vulkan/metal/dx11/dx12/gl) in order to run \
+        the example"
     );
 }
