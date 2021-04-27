@@ -714,15 +714,12 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// validation layers that can print a friendly name when referring to objects in error messages
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut B::PipelineLayout, name: &str);
 
-    #[cfg(target_os = "linux")]
     /// Control the power state of the provided display
     unsafe fn set_display_power_state(&self, display: &display::Display<B>, power_state: &display::PowerState)->Result<(),display::DisplayControlError>;
 
-    #[cfg(target_os = "linux")]
     /// Register device event
     unsafe fn register_device_event(&self, device_event: &display::DeviceEvent, fence: &mut B::Fence)->Result<(),display::DisplayControlError>;
 
-    #[cfg(target_os = "linux")]
     /// Register display event
     unsafe fn register_display_event(&self, display: &display::Display<B>, display_event: &display::DisplayEvent, fence: &mut B::Fence)->Result<(),display::DisplayControlError>;
 

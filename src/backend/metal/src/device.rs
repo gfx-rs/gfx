@@ -3274,6 +3274,12 @@ impl hal::device::Device<Backend> for Device {
         // TODO
     }
 
+    unsafe fn set_display_power_state(&self, _display: &display::Display<Backend>, _power_state: &display::PowerState)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+
+    unsafe fn register_device_event(&self, _device_event: &display::DeviceEvent, _fence: &mut <Backend as hal::Backend>::Fence)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+
+    unsafe fn register_display_event(&self, _display: &display::Display<Backend>, _display_event: &display::DisplayEvent, _fence: &mut <Backend as hal::Backend>::Fence)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+
     fn start_capture(&self) {
         let device = self.shared.device.lock();
         let shared_capture_manager = CaptureManager::shared();

@@ -1872,7 +1872,6 @@ impl d::Device<B> for super::Device {
             .set_object_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.raw, name)
     }
 
-    #[cfg(target_os = "linux")]
     unsafe fn set_display_power_state(&self,display: &hal::display::Display<B>,power_state: &hal::display::PowerState)->Result<(),hal::display::DisplayControlError> {
         let display_control_extension = match &self.shared.extension_fns.display_control {
             Some(super::ExtensionFn::Extension(display_control_extension))=>display_control_extension,
@@ -1894,8 +1893,7 @@ impl d::Device<B> for super::Device {
         }
     }
 
-    #[cfg(target_os = "linux")]
-    unsafe fn register_device_event(&self, device_event: &hal::display::DeviceEvent, fence: &mut crate::native::Fence)->Result<(),hal::display::DisplayControlError> {
+    unsafe fn register_device_event(&self, device_event: &hal::display::DeviceEvent, fence: &mut <B as hal::Backend>::Fence)->Result<(),hal::display::DisplayControlError> {
         let display_control_extension = match &self.shared.extension_fns.display_control {
             Some(super::ExtensionFn::Extension(display_control_extension))=>display_control_extension,
             _=>return Err(hal::display::DisplayControlError::UnsupportedFeature)
@@ -1915,8 +1913,7 @@ impl d::Device<B> for super::Device {
         }
     }
 
-    #[cfg(target_os = "linux")]
-    unsafe fn register_display_event(&self, display: &hal::display::Display<B>, display_event: &hal::display::DisplayEvent, fence: &mut crate::native::Fence)->Result<(),hal::display::DisplayControlError> {
+    unsafe fn register_display_event(&self, display: &hal::display::Display<B>, display_event: &hal::display::DisplayEvent, fence: &mut <B as hal::Backend>::Fence)->Result<(),hal::display::DisplayControlError> {
         let display_control_extension = match &self.shared.extension_fns.display_control {
             Some(super::ExtensionFn::Extension(display_control_extension))=>display_control_extension,
             _=>return Err(hal::display::DisplayControlError::UnsupportedFeature)
