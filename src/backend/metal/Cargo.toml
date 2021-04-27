@@ -13,6 +13,7 @@ workspace = "../../.."
 edition = "2018"
 
 [features]
+#TODO: add a feature to enable `profiling`, so that we can CI test it
 default = []
 signpost = []
 cross = ["spirv_cross", "auxil", "naga/spv-out"]

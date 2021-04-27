@@ -773,7 +773,7 @@ impl Device {
             naga::ShaderStage::Fragment => "fragment",
             naga::ShaderStage::Compute => "compute",
         };
-        profiling::scope!("load_shader", [_profiling_tag]);
+        profiling::scope!("load_shader", _profiling_tag);
 
         let device = &self.shared.device;
 
