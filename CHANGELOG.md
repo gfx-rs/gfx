@@ -1,11 +1,28 @@
 # Change Log
 
-### unreleased
-  - the new "bench" example is added
-  - timestamp period query is moved to the `Queue`
-  - `DescriptorLimits` is added to consolidate descriptor-related limits and its fields changed from `usize` to `u32`
-  - `Limits` and `Capabilities` structures merged together as `PhysicalDeviceProperties`
-  - Entries for Mesh Shading and Descriptor Indexing added to `PhysicalDeviceProperties`
+### hal-0.8.0 (TBD)
+  - Naga is the required and preferred shader translation path in Metal and OpenGL
+  - enabling SPIRV-Cross is optional behind `cross` feature
+  API: 
+    - all backends can create shader modules from `naga::Module`
+    - sampler reduction modes (min/max samplers)
+    - image view creation requires `image::Usage` to be specified
+    - timestamp period query is moved to the `Queue`
+    - `DescriptorLimits` is added to consolidate descriptor-related limits and its fields changed from `usize` to `u32`
+    - `Limits` and `Capabilities` structures merged together as `PhysicalDeviceProperties`
+    - Entries for Mesh Shading and Descriptor Indexing added to `PhysicalDeviceProperties`
+    - buffer descriptor indexing
+    - sparse memory binding
+    - blend color is renamed to blend constants
+    - debug capture API for interfacing with XCode/RenderDoc/PIX
+    - better shader and pipeline creation errors
+  - Infrastructure:
+    - the new "bench" example is added
+  - Metal backend:
+    - pipeline cache support with binary archives
+    - `profiling` integration
+    - immutable sampler support on Naga path
+    - improve window resizing, expose "present with transaction" option
 
 ## hal-0.7.0 (30-01-2021)
   - `Borrow` and `ExactSizeIterator` bounds are removed from the iterators
