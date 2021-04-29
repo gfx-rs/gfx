@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-gl"
-version = "0.7.0"
+version = "0.8.0"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -24,8 +24,8 @@ arrayvec = "0.5"
 bitflags = "1"
 fxhash = "0.2.1"
 log = "0.4"
-hal = { package = "gfx-hal", path = "../../hal", version = "0.7" }
-glow = "0.7.2"
+hal = { package = "gfx-hal", path = "../../hal", version = "0.8" }
+glow = "0.9"
 parking_lot = "0.11"
 raw-window-handle = "0.3"
 
@@ -46,8 +46,9 @@ features = ["glsl"]
 optional = true
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-tag = "gfx-23"
+#git = "https://github.com/gfx-rs/naga"
+#tag = "gfx-23"
+version = "0.4"
 features = ["spv-in", "glsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

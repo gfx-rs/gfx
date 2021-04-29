@@ -1,6 +1,6 @@
 # Change Log
 
-### hal-0.8.0 (TBD)
+### hal-0.8.0 (29-04-2021)
   - Naga is the required and preferred shader translation path in Metal and OpenGL
   - enabling SPIRV-Cross is optional behind `cross` feature
   API: 

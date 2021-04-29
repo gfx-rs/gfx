@@ -12,7 +12,7 @@ workspace = "../../../"
 edition = "2018"
 
 [dependencies]
-hal = { path = "../../hal", version = "0.7", package = "gfx-hal" }
+hal = { path = "../../hal", version = "0.8", package = "gfx-hal" }
 fxhash = "0.2.1"
 spirv_cross = { version = "0.23", optional = true }
 
