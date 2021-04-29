@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-metal"
-version = "0.7.0"
+version = "0.8.0"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -23,15 +23,15 @@ pipeline-cache = ["tempfile", "serde", "bincode", "naga/serialize", "naga/deseri
 name = "gfx_backend_metal"
 
 [dependencies]
-hal = { package = "gfx-hal", path = "../../hal", version = "0.7" }
+hal = { package = "gfx-hal", path = "../../hal", version = "0.8" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1.4"
 fxhash = "0.2.1"
-log = { version = "0.4" }
+log = "0.4"
 dispatch = { version = "0.2", optional = true }
-metal = { git = "https://github.com/gfx-rs/metal-rs", rev="78f632d194c7c16d18b71d7373c4080847d110b0", features = ["private"] }
+metal = { version = "0.22", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
@@ -57,8 +57,9 @@ features = ["msl"]
 optional = true
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-tag = "gfx-23"
+#git = "https://github.com/gfx-rs/naga"
+#tag = "gfx-23"
+version = "0.4"
 features = ["spv-in", "msl-out"]
 
 # This forces docs.rs to build the crate on mac, otherwise the build fails
