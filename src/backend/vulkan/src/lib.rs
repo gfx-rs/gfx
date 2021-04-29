@@ -74,7 +74,6 @@ pub struct RawInstance {
     inner: ash::Instance,
     debug_messenger: Option<DebugMessenger>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
-    #[cfg(target_os = "linux")]
     display: Option<khr::Display>
 }
 
@@ -534,7 +533,6 @@ impl hal::Instance<Backend> for Instance {
                 })
             });
 
-        #[cfg(target_os = "linux")]
         let display = extensions
             .iter()
             .find(|&&ext| ext == khr::Display::name())
@@ -575,7 +573,6 @@ impl hal::Instance<Backend> for Instance {
                 inner: instance,
                 debug_messenger,
                 get_physical_device_properties,
-                #[cfg(target_os = "linux")]
                 display
             }),
             extensions,
@@ -660,7 +657,6 @@ impl hal::Instance<Backend> for Instance {
             .destroy_surface(surface.raw.handle, None);
     }
 
-    #[cfg(target_os = "linux")]
     fn create_display_plane_surface(
         &self,
         display_plane: &hal::display::DisplayPlane<Backend>,

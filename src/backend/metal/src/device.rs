@@ -542,26 +542,24 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             ..hal::PhysicalDeviceProperties::default()
         }
     }
-/*
-    fn enumerate_available_displays<'a>(&'a self)->Result<Vec<hal::display::Display<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
 
-    fn enumerate_compatible_planes<'a>(&self,_display: &hal::display::Display<'a,crate::Backend>)->Result<Vec<hal::display::Plane<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
+    fn enumerate_available_displays(&self)->Result<Vec<hal::display::Display<crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
 
-    fn enumerate_builtin_display_modes<'a>(&self,_display: &'a hal::display::Display<'a,crate::Backend>,)->Result<Vec<hal::display::DisplayMode<'a,crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
+    fn enumerate_compatible_planes(&self,_display: &hal::display::Display<crate::Backend>)->Result<Vec<hal::display::Plane>,hal::device::OutOfMemory> {unimplemented!();}
 
-    fn create_display_mode<'a>(
+    fn create_display_mode(
         &self,
-        _display: &'a hal::display::Display<'a,crate::Backend>,
+        _display: &hal::display::Display<crate::Backend>,
         _resolution: (u32,u32),
         _refresh_rate: u32
-    )->Result<hal::display::DisplayMode<'a,crate::Backend>,hal::display::DisplayModeError> {unimplemented!();}
+    )->Result<hal::display::DisplayMode<crate::Backend>,hal::display::DisplayModeError> {unimplemented!();}
 
     fn create_display_plane<'a>(
         &self,
-        _display: &'a hal::display::DisplayMode<'a,crate::Backend>,
-        _plane: &'a hal::display::Plane<'a,crate::Backend>,
+        _display: &'a hal::display::DisplayMode<crate::Backend>,
+        _plane: &'a hal::display::Plane,
     )->Result<hal::display::DisplayPlane<'a,crate::Backend>,hal::device::OutOfMemory> {unimplemented!();}
-*/
+
 }
 
 pub struct LanguageVersion {

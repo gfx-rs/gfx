@@ -1358,7 +1358,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         true
     }
 
-    #[cfg(target_os = "linux")]
     fn enumerate_available_displays(&self)->Result<Vec<hal::display::Display<Backend>>,hal::device::OutOfMemory>{
         let display_extension = self.instance.display.as_ref().unwrap();
 
@@ -1438,7 +1437,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         return Ok(displays);
     }
 
-    #[cfg(target_os = "linux")]
     fn enumerate_compatible_planes<'a>(&self,display: &hal::display::Display<Backend>)->Result<Vec<hal::display::Plane>,hal::device::OutOfMemory>
     {
         let display_extension = self.instance.display.as_ref().unwrap();
@@ -1482,7 +1480,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    #[cfg(target_os = "linux")]
     fn create_display_mode<'a>(
         &self,
         display: &'a hal::display::Display<Backend>,
@@ -1524,7 +1521,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    #[cfg(target_os = "linux")]
     fn create_display_plane<'a>(
         &self,
         display_mode: &'a hal::display::DisplayMode<Backend>,

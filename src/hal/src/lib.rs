@@ -715,7 +715,6 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     ///
     unsafe fn destroy_surface(&self, surface: B::Surface);
 
-    #[cfg(target_os = "linux")]
     /// Create a new [surface][window::Surface] from display.
     ///
     /// Surfaces can be used to render to windows.
