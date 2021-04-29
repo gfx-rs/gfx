@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-metal"
-version = "0.8.0"
+version = "0.8.1"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -47,7 +47,7 @@ bincode = { version = "1", optional = true }
 [dependencies.auxil]
 package = "gfx-auxil"
 path = "../../auxil/auxil"
-version = "0.8"
+version = "0.9"
 features = ["spirv_cross"]
 optional = true
 

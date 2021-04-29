@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-gl"
-version = "0.8.0"
+version = "0.8.1"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -36,7 +36,7 @@ libloading = "0.7"
 [dependencies.auxil]
 package = "gfx-auxil"
 path = "../../auxil/auxil"
-version = "0.8"
+version = "0.9"
 features = ["spirv_cross"]
 optional = true
 

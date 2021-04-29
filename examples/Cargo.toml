@@ -38,7 +38,7 @@ path = "bench/main.rs"
 image = "0.23.12"
 log = "0.4"
 hal = { path = "../src/hal", version = "0.8", package = "gfx-hal" }
-auxil = { path = "../src/auxil/auxil", version = "0.8", package = "gfx-auxil" }
+auxil = { path = "../src/auxil/auxil", version = "0.9", package = "gfx-auxil" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.8" }
 winit = { version = "0.24", features = ["web-sys"] }
 

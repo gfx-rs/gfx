@@ -28,7 +28,7 @@ gl = ["gfx-backend-gl"]
 #TODO: keep Warden backend-agnostic?
 
 [dependencies]
-auxil = { path = "../auxil/auxil", version = "0.8", package = "gfx-auxil" }
+auxil = { path = "../auxil/auxil", version = "0.9", package = "gfx-auxil" }
 hal = { path = "../hal", version = "0.8", package = "gfx-hal", features = ["serde"] }
 log = "0.4"
 ron = "0.6"
