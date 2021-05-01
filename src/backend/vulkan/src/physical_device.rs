@@ -588,9 +588,9 @@ impl PhysicalDeviceInfo {
 
         if requested_features.contains(Features::EXTERNAL_MEMORY) {
             requested_extensions.push(vk::KhrExternalMemoryFn::name());
-            #[cfg(all(not(unix),windows))]
+            #[cfg(all(not(unix), windows))]
             requested_extensions.push(vk::KhrExternalMemoryWin32Fn::name());
-            #[cfg(all(unix,not(windows)))]
+            #[cfg(all(unix, not(windows)))]
             {
                 requested_extensions.push(vk::KhrExternalMemoryFdFn::name());
                 requested_extensions.push(vk::ExtExternalMemoryDmaBufFn::name());
@@ -780,26 +780,35 @@ impl PhysicalDevice {
 
         let external_memory = enabled_extensions.contains(&vk::KhrExternalMemoryFn::name());
 
-        #[cfg(all(unix,not(windows)))]
-        let external_memory_fn = if enabled_extensions.contains(&crate::khr::ExternalMemoryFd::name()) {
-            Some(ExtensionFn::Extension(crate::khr::ExternalMemoryFd::new(
-                &self.instance.inner,
-                &device_raw,
-            )))
-        } else {
-            None
-        };
+        #[cfg(all(unix, not(windows)))]
+        let external_memory_fn =
+            if enabled_extensions.contains(&crate::khr::ExternalMemoryFd::name()) {
+                Some(ExtensionFn::Extension(crate::khr::ExternalMemoryFd::new(
+                    &self.instance.inner,
+                    &device_raw,
+                )))
+            } else {
+                None
+            };
 
-        #[cfg(all(not(unix),windows))]
-        let external_memory_fn = if enabled_extensions.contains(&vk::KhrExternalMemoryWin32Fn::name()) {
-            Some(ExtensionFn::Extension(vk::KhrExternalMemoryWin32Fn::load(|name| {
-                std::mem::transmute(self.instance.inner.get_device_proc_addr(device_raw.handle(), name.as_ptr()))
-            })))
-        } else {
-            None
-        };
-        #[cfg(all(unix,not(windows)))]
-        let external_memory_dma_buf = enabled_extensions.contains(&vk::ExtExternalMemoryDmaBufFn::name());
+        #[cfg(all(not(unix), windows))]
+        let external_memory_fn =
+            if enabled_extensions.contains(&vk::KhrExternalMemoryWin32Fn::name()) {
+                Some(ExtensionFn::Extension(vk::KhrExternalMemoryWin32Fn::load(
+                    |name| {
+                        std::mem::transmute(
+                            self.instance
+                                .inner
+                                .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                        )
+                    },
+                )))
+            } else {
+                None
+            };
+        #[cfg(all(unix, not(windows)))]
+        let external_memory_dma_buf =
+            enabled_extensions.contains(&vk::ExtExternalMemoryDmaBufFn::name());
 
 
         #[cfg(feature = "naga")]
@@ -842,8 +851,8 @@ impl PhysicalDevice {
                     display_control,
                     external_memory: external_memory,
                     external_memory_fn: external_memory_fn,
-                    #[cfg(all(unix,not(windows)))]
-                    external_memory_dma_buf: external_memory_dma_buf
+                    #[cfg(all(unix, not(windows)))]
+                    external_memory_dma_buf: external_memory_dma_buf,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
                     || self

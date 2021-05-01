@@ -75,7 +75,7 @@ pub struct RawInstance {
     debug_messenger: Option<DebugMessenger>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
     display: Option<khr::Display>,
-    external_memory_capabilities: Option<vk::KhrExternalMemoryCapabilitiesFn>
+    external_memory_capabilities: Option<vk::KhrExternalMemoryCapabilitiesFn>,
 }
 
 pub enum DebugMessenger {
@@ -810,13 +810,13 @@ struct DeviceExtensionFunctions {
     display_control: Option<vk::ExtDisplayControlFn>,
     // The extension does not have its own functions.
     external_memory: bool,
-    #[cfg(all(not(unix),windows))]
+    #[cfg(all(not(unix), windows))]
     external_memory_fn: Option<ExtensionFn<vk::KhrExternalMemoryWin32Fn>>,
-    #[cfg(all(unix,not(windows)))]
+    #[cfg(all(unix, not(windows)))]
     external_memory_fn: Option<ExtensionFn<khr::ExternalMemoryFd>>,
-    #[cfg(all(unix,not(windows)))]
+    #[cfg(all(unix, not(windows)))]
     // The extension does not have its own functions.
-    external_memory_dma_buf: bool
+    external_memory_dma_buf: bool,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.

@@ -22,6 +22,7 @@ use crate::{
     queue::QueueFamilyId,
     Backend, MemoryTypeId,
     external_memory,
+    adapter,
 };
 
 use std::{any::Any, fmt, iter, ops::Range};
@@ -737,13 +738,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         fence: &mut B::Fence,
     ) -> Result<(), display::control::DisplayControlError>;
 
-    #[cfg(all(unix,not(windows)))]
     /// Import external memory
-    unsafe fn import_memory(&self, external_memory: external_memory::ExternalMemoryHandle, fd: std::os::raw::c_int)->Result<B::Memory,external_memory::ExternalMemoryImportError>;
-
-    #[cfg(all(not(unix),windows))]
-    /// Import external memory
-    unsafe fn import_memory(&self, external_memory: external_memory::ExternalMemoryHandle, handle: *mut std::ffi::c_void)->Result<B::Memory,external_memory::ExternalMemoryImportError>;
+    unsafe fn import_memory_as_buffer(&self, adapter: &adapter::Adapter<B>, external_memory: external_memory::ExternalMemoryHandle, usage: buffer::Usage, sparse: memory::SparseFlags,)->Result<(B::Memory,B::Buffer),external_memory::ExternalMemoryImportError>;
 
     /// Export external memory
     unsafe fn export_memory(&self, handle: external_memory::ExternalMemoryType, memory: &B::Memory)->Result<std::fs::File,external_memory::ExternalMemoryExportError>;
