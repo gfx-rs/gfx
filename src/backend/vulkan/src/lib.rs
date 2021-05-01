@@ -75,6 +75,7 @@ pub struct RawInstance {
     debug_messenger: Option<DebugMessenger>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
     display: Option<khr::Display>,
+    external_memory_capabilities: Option<vk::KhrExternalMemoryCapabilitiesFn>
 }
 
 pub enum DebugMessenger {
@@ -491,6 +492,17 @@ impl Instance {
             .find(|&&ext| ext == khr::Display::name())
             .map(|_| khr::Display::new(&entry, &instance));
 
+        let external_memory_capabilities = extensions
+            .iter()
+            .find(|&&ext| ext == vk::KhrExternalMemoryCapabilitiesFn::name())
+            .map(|_| {
+                vk::KhrExternalMemoryCapabilitiesFn::load(|name| unsafe {
+                    std::mem::transmute(
+                        entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
+                    )
+                })
+            });
+
         #[allow(deprecated)] // `DebugReport`
         let debug_messenger = {
             // make sure VK_EXT_debug_utils is available
@@ -528,6 +540,7 @@ impl Instance {
                 debug_messenger,
                 get_physical_device_properties,
                 display,
+                external_memory_capabilities
             }),
             extensions,
             entry,
@@ -625,7 +638,6 @@ impl hal::Instance<Backend> for Instance {
                 hal::UnsupportedBackend
             })?
         };
-
         Instance::inner_create(entry, instance, false, driver_api_version, extensions)
     }
 
@@ -796,6 +808,15 @@ struct DeviceExtensionFunctions {
     mesh_shaders: Option<ExtensionFn<MeshShader>>,
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
     display_control: Option<vk::ExtDisplayControlFn>,
+    // The extension does not have its own functions.
+    external_memory: bool,
+    #[cfg(all(not(unix),windows))]
+    external_memory_fn: Option<ExtensionFn<vk::KhrExternalMemoryWin32Fn>>,
+    #[cfg(all(unix,not(windows)))]
+    external_memory_fn: Option<ExtensionFn<khr::ExternalMemoryFd>>,
+    #[cfg(all(unix,not(windows)))]
+    // The extension does not have its own functions.
+    external_memory_dma_buf: bool
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.

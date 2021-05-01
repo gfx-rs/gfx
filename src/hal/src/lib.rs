@@ -62,6 +62,7 @@ pub mod pso;
 pub mod query;
 pub mod queue;
 pub mod window;
+pub mod external_memory;
 
 /// Prelude module re-exports all the traits necessary to use `gfx-hal`.
 pub mod prelude {
@@ -290,6 +291,8 @@ bitflags! {
         const MESH_SHADER_MASK = Features::TASK_SHADER.bits | Features::MESH_SHADER.bits;
         /// Support sampler min/max reduction mode.
         const SAMPLER_REDUCTION = 0x0004 << 96;
+        /// Supports external memory import and export.
+        const EXTERNAL_MEMORY = 0x0008 << 96;
     }
 }
 
