@@ -71,6 +71,8 @@ fn main() {
             .unwrap()
     };
     let device = &gpu.device;
+    // Start render doc frame capture if available
+    device.start_capture();
     let queue_group = gpu.queue_groups.first_mut().unwrap();
 
     let glsl = fs::read_to_string("compute/shader/collatz.comp").unwrap();
@@ -257,6 +259,7 @@ fn main() {
             "Times: {:?}",
             slice::from_raw_parts::<u32>(mapping as *const u8 as *const u32, numbers.len()),
         );
+        device.stop_capture();
         device.unmap_memory(&mut staging_memory);
     }
 
