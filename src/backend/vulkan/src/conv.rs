@@ -199,6 +199,9 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
             },
         },
         pso::DescriptorType::InputAttachment => vk::DescriptorType::INPUT_ATTACHMENT,
+        pso::DescriptorType::AccelerationStructure => {
+            vk::DescriptorType::ACCELERATION_STRUCTURE_KHR
+        }
     }
 }
 
@@ -622,4 +625,182 @@ pub fn map_vk_memory_heap_flags(flags: vk::MemoryHeapFlags) -> hal::memory::Heap
     }
 
     hal_flags
+}
+
+pub fn map_acceleration_structure_type(
+    ty: hal::acceleration_structure::Type,
+) -> vk::AccelerationStructureTypeKHR {
+    match ty {
+        hal::acceleration_structure::Type::TopLevel => vk::AccelerationStructureTypeKHR::TOP_LEVEL,
+        hal::acceleration_structure::Type::BottomLevel => {
+            vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL
+        }
+        hal::acceleration_structure::Type::Generic => vk::AccelerationStructureTypeKHR::GENERIC,
+    }
+}
+
+pub fn map_acceleration_structure_copy_mode(
+    ty: hal::acceleration_structure::CopyMode,
+) -> vk::CopyAccelerationStructureModeKHR {
+    match ty {
+        hal::acceleration_structure::CopyMode::Copy => vk::CopyAccelerationStructureModeKHR::CLONE,
+        hal::acceleration_structure::CopyMode::Compact => {
+            vk::CopyAccelerationStructureModeKHR::COMPACT
+        }
+    }
+}
+
+pub fn map_acceleration_structure_flags(
+    accel_flags: hal::acceleration_structure::Flags,
+) -> vk::BuildAccelerationStructureFlagsKHR {
+    let mut flags = vk::BuildAccelerationStructureFlagsKHR::empty();
+    if accel_flags.contains(hal::acceleration_structure::Flags::ALLOW_UPDATE) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE;
+    }
+    if accel_flags.contains(hal::acceleration_structure::Flags::ALLOW_COMPACTION) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_COMPACTION;
+    }
+    if accel_flags.contains(hal::acceleration_structure::Flags::PREFER_FAST_TRACE) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE;
+    }
+    if accel_flags.contains(hal::acceleration_structure::Flags::PREFER_FAST_BUILD) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_BUILD;
+    }
+    if accel_flags.contains(hal::acceleration_structure::Flags::LOW_MEMORY) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::LOW_MEMORY;
+    }
+    flags
+}
+
+pub fn map_geometry_flags(
+    geometry_flags: hal::acceleration_structure::GeometryFlags,
+) -> vk::GeometryFlagsKHR {
+    let mut flags = vk::GeometryFlagsKHR::empty();
+    if geometry_flags.contains(hal::acceleration_structure::GeometryFlags::OPAQUE) {
+        flags |= vk::GeometryFlagsKHR::OPAQUE;
+    }
+    if geometry_flags
+        .contains(hal::acceleration_structure::GeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION)
+    {
+        flags |= vk::GeometryFlagsKHR::NO_DUPLICATE_ANY_HIT_INVOCATION;
+    }
+    flags
+}
+
+pub fn map_geometry_type(
+    geometry_data: &hal::acceleration_structure::GeometryData<crate::Backend>,
+) -> vk::GeometryTypeKHR {
+    match geometry_data {
+        hal::acceleration_structure::GeometryData::Triangles(_) => vk::GeometryTypeKHR::TRIANGLES,
+        hal::acceleration_structure::GeometryData::Aabbs(_) => vk::GeometryTypeKHR::AABBS,
+        hal::acceleration_structure::GeometryData::Instances(_) => vk::GeometryTypeKHR::INSTANCES,
+    }
+}
+
+pub unsafe fn map_geometry(
+    device: &crate::RawDevice,
+    geometry: &hal::acceleration_structure::Geometry<crate::Backend>,
+) -> vk::AccelerationStructureGeometryKHR {
+    vk::AccelerationStructureGeometryKHR::builder()
+        .geometry_type(map_geometry_type(&geometry.geometry))
+        .geometry(match geometry.geometry {
+            hal::acceleration_structure::GeometryData::Triangles(ref triangles) => {
+                vk::AccelerationStructureGeometryDataKHR {
+                    triangles: vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                        .vertex_format(map_format(triangles.vertex_format))
+                        .vertex_data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: device.get_buffer_device_address(
+                                triangles.vertex_buffer,
+                                triangles.vertex_buffer_offset,
+                            ),
+                        })
+                        .vertex_stride(triangles.vertex_buffer_stride as u64)
+                        .max_vertex(triangles.max_vertex as u32)
+                        .index_type(
+                            triangles
+                                .index_buffer
+                                .map(|index_buffer| map_index_type(index_buffer.2))
+                                .unwrap_or(vk::IndexType::NONE_KHR),
+                        )
+                        .index_data(
+                            triangles
+                                .index_buffer
+                                .map(|index_buffer| vk::DeviceOrHostAddressConstKHR {
+                                    device_address: device
+                                        .get_buffer_device_address(index_buffer.0, index_buffer.1),
+                                })
+                                .unwrap_or_default(),
+                        )
+                        .transform_data(
+                            triangles
+                                .transform
+                                .map(|transform| vk::DeviceOrHostAddressConstKHR {
+                                    device_address: device
+                                        .get_buffer_device_address(transform.0, transform.1),
+                                })
+                                .unwrap_or_default(),
+                        )
+                        .build(),
+                }
+            }
+            hal::acceleration_structure::GeometryData::Aabbs(ref aabbs) => {
+                vk::AccelerationStructureGeometryDataKHR {
+                    aabbs: vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+                        .data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: device
+                                .get_buffer_device_address(aabbs.buffer, aabbs.buffer_offset),
+                        })
+                        .stride(aabbs.buffer_stride as u64)
+                        .build(),
+                }
+            }
+            hal::acceleration_structure::GeometryData::Instances(ref instances) => {
+                vk::AccelerationStructureGeometryDataKHR {
+                    instances: vk::AccelerationStructureGeometryInstancesDataKHR::builder()
+                        .array_of_pointers(false)
+                        .data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: device.get_buffer_device_address(
+                                instances.buffer,
+                                instances.buffer_offset,
+                            ),
+                        })
+                        .build(),
+                }
+            }
+        })
+        .flags(map_geometry_flags(geometry.flags))
+        .build()
+}
+
+pub unsafe fn map_geometries<'a>(
+    device: &crate::RawDevice,
+    geometries: impl Iterator<Item = &'a &'a hal::acceleration_structure::Geometry<'a, crate::Backend>>,
+) -> Vec<vk::AccelerationStructureGeometryKHR> {
+    geometries
+        .map(|geometry| map_geometry(device, geometry))
+        .collect::<Vec<_>>()
+}
+
+pub unsafe fn map_geometry_info(
+    device: &crate::RawDevice,
+    desc: &hal::acceleration_structure::BuildDesc<crate::Backend>,
+) -> vk::AccelerationStructureBuildGeometryInfoKHR {
+    vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+        .ty(map_acceleration_structure_type(desc.geometry.ty))
+        .flags(map_acceleration_structure_flags(desc.geometry.flags))
+        .mode(if desc.src.is_some() {
+            vk::BuildAccelerationStructureModeKHR::UPDATE
+        } else {
+            vk::BuildAccelerationStructureModeKHR::BUILD
+        })
+        .src_acceleration_structure(desc.src.map(|a| a.0).unwrap_or_default())
+        .dst_acceleration_structure(desc.dst.0)
+        .geometries(
+            // TODO: this is unsafe since the lifetime of this vec could be shorter than its caller?
+            map_geometries(device, desc.geometry.geometries.iter()).as_slice(),
+        )
+        .scratch_data(vk::DeviceOrHostAddressKHR {
+            device_address: device.get_buffer_device_address(desc.scratch, desc.scratch_offset),
+        })
+        .build()
 }

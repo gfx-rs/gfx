@@ -1048,6 +1048,154 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         )
     }
 
+    unsafe fn build_acceleration_structure<'a>(
+        &self,
+        desc: &'a hal::acceleration_structure::BuildDesc<'a, Backend>,
+        ranges: &'a [hal::acceleration_structure::BuildRangeDesc],
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call build_acceleration_structure").unwrap_extension()
+            .cmd_build_acceleration_structures(
+                self.raw,
+                &[conv::map_geometry_info(&self.device, desc)],
+                &[mem::transmute::<
+                    &[hal::acceleration_structure::BuildRangeDesc],
+                    &[vk::AccelerationStructureBuildRangeInfoKHR],
+                >(ranges)],
+            );
+    }
+
+    unsafe fn build_acceleration_structure_indirect<'a>(
+        &self,
+        desc: &'a hal::acceleration_structure::BuildDesc<'a, Backend>,
+        buffer: &'a n::Buffer,
+        offset: buffer::Offset,
+        stride: buffer::Stride,
+        max_primitive_counts: &'a [u32],
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call build_acceleration_structure_indirect").unwrap_extension()
+            .cmd_build_acceleration_structures_indirect(
+                self.raw,
+                &[conv::map_geometry_info(&self.device, desc)],
+                &[self.device.get_buffer_device_address(buffer, offset)],
+                &[stride],
+                &[max_primitive_counts],
+            );
+    }
+
+    unsafe fn copy_acceleration_structure(
+        &self,
+        src: &n::AccelerationStructure,
+        dst: &n::AccelerationStructure,
+        mode: hal::acceleration_structure::CopyMode,
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call copy_acceleration_structure").unwrap_extension()
+            .cmd_copy_acceleration_structure(
+                self.raw,
+                &vk::CopyAccelerationStructureInfoKHR::builder()
+                    .src(src.0)
+                    .dst(dst.0)
+                    .mode(conv::map_acceleration_structure_copy_mode(mode))
+                    .build(),
+            );
+    }
+
+    unsafe fn serialize_acceleration_structure_to_memory(
+        &self,
+        src: &n::AccelerationStructure,
+        dst_buffer: &n::Buffer,
+        dst_offset: buffer::Offset,
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call serialize_acceleration_structure_to_memory").unwrap_extension()
+            .cmd_copy_acceleration_structure_to_memory(
+                self.raw,
+                &vk::CopyAccelerationStructureToMemoryInfoKHR::builder()
+                    .src(src.0)
+                    .dst(vk::DeviceOrHostAddressKHR {
+                        device_address: self
+                            .device
+                            .get_buffer_device_address(dst_buffer, dst_offset),
+                    })
+                    .mode(vk::CopyAccelerationStructureModeKHR::SERIALIZE)
+                    .build(),
+            );
+    }
+
+    unsafe fn deserialize_memory_to_acceleration_structure(
+        &self,
+        src_buffer: &n::Buffer,
+        src_offset: buffer::Offset,
+        dst: &n::AccelerationStructure,
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call deserialize_memory_to_acceleration_structure").unwrap_extension()
+            .cmd_copy_memory_to_acceleration_structure(
+                self.raw,
+                &vk::CopyMemoryToAccelerationStructureInfoKHR::builder()
+                    .src(vk::DeviceOrHostAddressConstKHR {
+                        device_address: self
+                            .device
+                            .get_buffer_device_address(src_buffer, src_offset),
+                    })
+                    .dst(dst.0)
+                    .mode(vk::CopyAccelerationStructureModeKHR::DESERIALIZE)
+                    .build(),
+            );
+    }
+
+    unsafe fn write_acceleration_structures_properties(
+        &self,
+        accel_structs: &[&n::AccelerationStructure],
+        query_type: query::Type,
+        pool: &n::QueryPool,
+        first_query: u32,
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call write_acceleration_structures_properties").unwrap_extension()
+            .cmd_write_acceleration_structures_properties(
+                self.raw,
+                accel_structs
+                    .iter()
+                    .map(|a| a.0)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                match query_type {
+                    query::Type::AccelerationStructureCompactedSize => {
+                        vk::QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR
+                    }
+                    query::Type::AccelerationStructureSerializationSize => {
+                        vk::QueryType::ACCELERATION_STRUCTURE_SERIALIZATION_SIZE_KHR
+                    }
+                    _ => {
+                        panic!("Unsupported query type")
+                    }
+                },
+                pool.0,
+                first_query,
+            );
+    }
+
     unsafe fn push_compute_constants(
         &mut self,
         layout: &n::PipelineLayout,

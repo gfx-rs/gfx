@@ -30,7 +30,7 @@ extern crate objc;
 use ash::Entry;
 use ash::{
     extensions::{ext, khr, nv::MeshShader},
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+    version::{DeviceV1_0, DeviceV1_2, EntryV1_0, InstanceV1_0},
     vk,
 };
 
@@ -43,6 +43,7 @@ use hal::{
     window::{OutOfDate, PresentError, Suboptimal, SurfaceLost},
     Features,
 };
+use vk::PhysicalDeviceProperties2;
 
 use std::{
     borrow::Cow,
@@ -676,6 +677,8 @@ impl queue::QueueFamily for QueueFamily {
 struct DeviceExtensionFunctions {
     mesh_shaders: Option<ExtensionFn<MeshShader>>,
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
+    buffer_device_address: Option<ExtensionFn<vk::KhrBufferDeviceAddressFn>>,
+    acceleration_structure: Option<ExtensionFn<khr::AccelerationStructure>>,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.
@@ -775,6 +778,28 @@ impl RawDevice {
                     .object_name(name_cstr),
             );
         }
+    }
+
+    pub(crate) unsafe fn get_buffer_device_address(
+        &self,
+        buffer: &native::Buffer,
+        offset: hal::buffer::Offset,
+    ) -> vk::DeviceAddress {
+        let info = vk::BufferDeviceAddressInfo::builder()
+            .buffer(buffer.raw)
+            .build();
+
+        let buffer_base_address = match self
+            .extension_fns
+            .buffer_device_address
+            .as_ref()
+            .expect("Feature DRAW_INDIRECT_COUNT must be enabled to call draw_indirect_count")
+        {
+            ExtensionFn::Extension(t) => t.get_buffer_device_address_khr(self.raw.handle(), &info),
+            ExtensionFn::Promoted => self.raw.get_buffer_device_address(&info),
+        };
+
+        buffer_base_address + offset
     }
 }
 
@@ -1071,4 +1096,6 @@ impl hal::Backend for Backend {
     type Semaphore = native::Semaphore;
     type Event = native::Event;
     type QueryPool = native::QueryPool;
+
+    type AccelerationStructure = native::AccelerationStructure;
 }

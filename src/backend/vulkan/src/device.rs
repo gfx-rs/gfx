@@ -459,9 +459,15 @@ impl d::Device<B> for super::Device {
         mem_type: MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
+        let mut flags_info = vk::MemoryAllocateFlagsInfo::builder().flags(
+            // TODO needs Vulkan 1.2? Also either expose in hal or infer from usage?
+            vk::MemoryAllocateFlags::DEVICE_ADDRESS,
+        );
+
         let info = vk::MemoryAllocateInfo::builder()
             .allocation_size(size)
-            .memory_type_index(self.get_ash_memory_type_index(mem_type));
+            .memory_type_index(self.get_ash_memory_type_index(mem_type))
+            .push_next(&mut flags_info);
 
         let result = self.shared.raw.allocate_memory(&info, None);
 
@@ -1337,12 +1343,23 @@ impl d::Device<B> for super::Device {
     where
         I: Iterator<Item = pso::Descriptor<'a, B>>,
     {
+        /// Stores the
+        struct RawWriteOffsets {
+            image_info: usize,
+            buffer_info: usize,
+            texel_buffer_view: usize,
+            accel_struct: usize,
+        }
+
         let descriptors = op.descriptors;
         let mut raw_writes =
             Vec::<vk::WriteDescriptorSet>::with_capacity(descriptors.size_hint().0);
+        // Parallel array to `raw_writes`.
+        let mut raw_writes_indices = Vec::<RawWriteOffsets>::new();
         let mut image_infos = Vec::new();
         let mut buffer_infos = Vec::new();
         let mut texel_buffer_views = Vec::new();
+        let mut accel_structs = Vec::new();
 
         // gfx-hal allows the type and stages to be different between the descriptor
         // in a single write, while Vulkan requires them to be the same.
@@ -1382,9 +1399,15 @@ impl d::Device<B> for super::Device {
                     },
                     descriptor_count: 1,
                     descriptor_type,
-                    p_image_info: image_infos.len() as _,
-                    p_buffer_info: buffer_infos.len() as _,
-                    p_texel_buffer_view: texel_buffer_views.len() as _,
+                    p_image_info: ptr::null(),
+                    p_buffer_info: ptr::null(),
+                    p_texel_buffer_view: ptr::null(),
+                });
+                raw_writes_indices.push(RawWriteOffsets {
+                    image_info: image_infos.len(),
+                    buffer_info: buffer_infos.len(),
+                    texel_buffer_view: texel_buffer_views.len(),
+                    accel_struct: accel_structs.len(),
                 });
             }
 
@@ -1428,11 +1451,18 @@ impl d::Device<B> for super::Device {
                 pso::Descriptor::TexelBuffer(view) => {
                     texel_buffer_views.push(view.raw);
                 }
+                pso::Descriptor::AccelerationStructure(accel_struct) => {
+                    accel_structs.push(accel_struct.0);
+                }
             }
         }
 
+        let mut accel_structure_writes =
+            Vec::<vk::WriteDescriptorSetAccelerationStructureKHR>::new();
+
         // Patch the pointers now that we have all the storage allocated.
-        for raw in raw_writes.iter_mut() {
+        debug_assert_eq!(raw_writes.len(), raw_writes_indices.len());
+        for (raw, offsets) in raw_writes.iter_mut().zip(raw_writes_indices) {
             use crate::vk::DescriptorType as Dt;
             match raw.descriptor_type {
                 Dt::SAMPLER
@@ -1440,23 +1470,27 @@ impl d::Device<B> for super::Device {
                 | Dt::STORAGE_IMAGE
                 | Dt::COMBINED_IMAGE_SAMPLER
                 | Dt::INPUT_ATTACHMENT => {
-                    raw.p_buffer_info = ptr::null();
-                    raw.p_texel_buffer_view = ptr::null();
-                    raw.p_image_info = image_infos[raw.p_image_info as usize..].as_ptr();
+                    raw.p_image_info = image_infos[offsets.image_info..].as_ptr();
                 }
                 Dt::UNIFORM_TEXEL_BUFFER | Dt::STORAGE_TEXEL_BUFFER => {
-                    raw.p_buffer_info = ptr::null();
-                    raw.p_image_info = ptr::null();
                     raw.p_texel_buffer_view =
-                        texel_buffer_views[raw.p_texel_buffer_view as usize..].as_ptr();
+                        texel_buffer_views[offsets.texel_buffer_view..].as_ptr();
                 }
                 Dt::UNIFORM_BUFFER
                 | Dt::STORAGE_BUFFER
                 | Dt::STORAGE_BUFFER_DYNAMIC
                 | Dt::UNIFORM_BUFFER_DYNAMIC => {
-                    raw.p_image_info = ptr::null();
-                    raw.p_texel_buffer_view = ptr::null();
-                    raw.p_buffer_info = buffer_infos[raw.p_buffer_info as usize..].as_ptr();
+                    raw.p_buffer_info = buffer_infos[offsets.buffer_info..].as_ptr();
+                }
+                Dt::ACCELERATION_STRUCTURE_KHR => {
+                    accel_structure_writes.push(vk::WriteDescriptorSetAccelerationStructureKHR {
+                        s_type: vk::StructureType::WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+                        p_next: ptr::null(),
+                        acceleration_structure_count: 1,
+                        p_acceleration_structures: accel_structs[offsets.accel_struct..].as_ptr(),
+                    });
+
+                    raw.p_next = accel_structure_writes.last_mut().unwrap() as *mut _ as *mut _;
                 }
                 _ => panic!("unknown descriptor type"),
             }
@@ -1682,6 +1716,14 @@ impl d::Device<B> for super::Device {
                 vk::QueryType::TIMESTAMP,
                 vk::QueryPipelineStatisticFlags::empty(),
             ),
+            query::Type::AccelerationStructureCompactedSize => (
+                vk::QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
+                vk::QueryPipelineStatisticFlags::empty(),
+            ),
+            query::Type::AccelerationStructureSerializationSize => (
+                vk::QueryType::ACCELERATION_STRUCTURE_SERIALIZATION_SIZE_KHR,
+                vk::QueryPipelineStatisticFlags::empty(),
+            ),
         };
 
         let info = vk::QueryPoolCreateInfo::builder()
@@ -1725,6 +1767,128 @@ impl d::Device<B> for super::Device {
             vk::Result::ERROR_DEVICE_LOST => Err(d::DeviceLost.into()),
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
             vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &hal::acceleration_structure::CreateDesc<B>,
+    ) -> Result<n::AccelerationStructure, d::OutOfMemory> {
+        let result = self
+            .shared
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call create_acceleration_structure").unwrap_extension()
+            .create_acceleration_structure(
+                &vk::AccelerationStructureCreateInfoKHR::builder()
+                    .buffer(desc.buffer.raw)
+                    .offset(desc.buffer_offset)
+                    .size(desc.size)
+                    .ty(match desc.ty {
+                        hal::acceleration_structure::Type::TopLevel => {
+                            vk::AccelerationStructureTypeKHR::TOP_LEVEL
+                        }
+                        hal::acceleration_structure::Type::BottomLevel => {
+                            vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL
+                        }
+                        hal::acceleration_structure::Type::Generic => {
+                            vk::AccelerationStructureTypeKHR::GENERIC
+                        }
+                    })
+                    // TODO(capture-replay)
+                    // .create_flags(vk::AccelerationStructureCreateFlagsKHR::empty())
+                    // .device_address()
+                    .build(),
+                None,
+            );
+
+        match result {
+            Ok(acceleration_structure) => Ok(n::AccelerationStructure(acceleration_structure)),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
+            // TODO(capture-replay)
+            Err(vk::Result::ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS) => todo!(),
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn get_acceleration_structure_build_requirements(
+        &self,
+        desc: &hal::acceleration_structure::GeometryDesc<B>,
+        max_primitive_counts: &[u32],
+    ) -> hal::acceleration_structure::SizeRequirements {
+        let geometries = desc
+            .geometries
+            .iter()
+            .map(|&geometry| conv::map_geometry(&self.shared, geometry))
+            .collect::<Vec<_>>();
+
+        let build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+            .ty(conv::map_acceleration_structure_type(desc.ty))
+            .flags(conv::map_acceleration_structure_flags(desc.flags))
+            .geometries(geometries.as_slice());
+
+        let build_size_info = self
+            .shared
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect(
+                // TODO: this string prevents rustfmt from running?
+                "Feature ACCELERATION_STRUCTURE must be enabled to call get_acceleration_structure_build_requirements",
+            ).unwrap_extension()
+            .get_acceleration_structure_build_sizes(
+                vk::AccelerationStructureBuildTypeKHR::DEVICE,
+                &build_info,
+                max_primitive_counts,
+            );
+
+        hal::acceleration_structure::SizeRequirements {
+            acceleration_structure_size: build_size_info.acceleration_structure_size,
+            update_scratch_size: build_size_info.update_scratch_size,
+            build_scratch_size: build_size_info.build_scratch_size,
+        }
+    }
+
+    unsafe fn get_acceleration_structure_address(
+        &self,
+        accel_struct: &n::AccelerationStructure,
+    ) -> hal::acceleration_structure::DeviceAddress {
+        hal::acceleration_structure::DeviceAddress(
+            self.shared
+                .extension_fns
+                .acceleration_structure
+                .as_ref()
+                .expect("Feature ACCELERATION_STRUCTURE must be enabled to call get_acceleration_structure_address").unwrap_extension()
+                .get_acceleration_structure_device_address(
+                    &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+                        .acceleration_structure(accel_struct.0)
+                        .build(),
+                ),
+        )
+    }
+
+    unsafe fn get_device_acceleration_structure_compatibility(
+        &self,
+        serialized_accel_struct: &[u8; 32],
+    ) -> hal::acceleration_structure::Compatibility {
+        match self
+            .shared
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call get_device_acceleration_structure_compatibility").unwrap_extension()
+            .get_device_acceleration_structure_compatibility(
+                &vk::AccelerationStructureVersionInfoKHR::builder()
+                    .version_data(serialized_accel_struct),
+            ) {
+            vk::AccelerationStructureCompatibilityKHR::COMPATIBLE => {
+                hal::acceleration_structure::Compatibility::Compatible
+            }
+            vk::AccelerationStructureCompatibilityKHR::INCOMPATIBLE => {
+                hal::acceleration_structure::Compatibility::Incompatible
+            }
             _ => unreachable!(),
         }
     }
@@ -1808,6 +1972,15 @@ impl d::Device<B> for super::Device {
         self.shared.raw.destroy_event(event.0, None);
     }
 
+    unsafe fn destroy_acceleration_structure(&self, accel_struct: n::AccelerationStructure) {
+        self.shared
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call destroy_acceleration_structure").unwrap_extension()
+            .destroy_acceleration_structure(accel_struct.0, None);
+    }
+
     fn wait_idle(&self) -> Result<(), d::OutOfMemory> {
         match unsafe { self.shared.raw.device_wait_idle() } {
             Ok(()) => Ok(()),
@@ -1888,6 +2061,18 @@ impl d::Device<B> for super::Device {
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut n::PipelineLayout, name: &str) {
         self.shared
             .set_object_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.raw, name)
+    }
+
+    unsafe fn set_acceleration_structure_name(
+        &self,
+        accel_struct: &mut n::AccelerationStructure,
+        name: &str,
+    ) {
+        self.shared.set_object_name(
+            vk::ObjectType::ACCELERATION_STRUCTURE_KHR,
+            accel_struct.0,
+            name,
+        )
     }
 
     fn start_capture(&self) {

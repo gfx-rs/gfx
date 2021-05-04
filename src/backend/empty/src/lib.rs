@@ -60,6 +60,8 @@ impl hal::Backend for Backend {
     type Semaphore = ();
     type Event = ();
     type QueryPool = ();
+
+    type AccelerationStructure = ();
 }
 
 /// Dummy physical device.
