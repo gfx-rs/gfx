@@ -290,7 +290,6 @@ pub struct Instance {
     pub instance_shader_binding_table_record_offset_24_and_flags_8: u32,
 
     /// The bottom-level acceleration structure this `Instance` refers to.
-    // TODO(host-commands): either B::AccelerationStructure (host commands)
     pub acceleration_structure_reference: DeviceAddress,
 }
 

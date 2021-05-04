@@ -689,7 +689,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Get the size requirements for the buffers needed to build an acceleration structure.
     ///
     /// `max_primitive_counts` must contain a number of entries equal to the number of geometries described in `desc`.
-    // TODO(host-commands): build_type: acceleration_structure::HostOrDevice,
     unsafe fn get_acceleration_structure_build_requirements(
         &self,
         _desc: &acceleration_structure::GeometryDesc<B>,
@@ -705,14 +704,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> acceleration_structure::DeviceAddress {
         unimplemented!()
     }
-
-    // TODO(host-commands)
-    // TODO(cpu-repr)
-    // - build_acceleration_structures
-    // - copy_acceleration_structure
-    // - copy_acceleration_structure_to_memory
-    // - copy_memory_to_acceleration_structure
-    // - write_acceleration_structures_properties
 
     /// Determine if a previously serialized acceleration structure (e.g. loaded from disk) is compatible with the current device.
     ///

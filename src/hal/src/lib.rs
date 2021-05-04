@@ -283,36 +283,26 @@ bitflags! {
         // Bits for Extensions
 
         /// Supports task shader stage.
-        const TASK_SHADER = 0x0001 << 96;
+        const TASK_SHADER = 0x0000_0001 << 96;
         /// Supports mesh shader stage.
-        const MESH_SHADER = 0x0002 << 96;
+        const MESH_SHADER = 0x0000_0002 << 96;
         /// Mask for all the features associated with mesh shader stages.
         const MESH_SHADER_MASK = Features::TASK_SHADER.bits | Features::MESH_SHADER.bits;
         /// Support sampler min/max reduction mode.
-        const SAMPLER_REDUCTION = 0x0004 << 96;
+        const SAMPLER_REDUCTION = 0x0000_0004 << 96;
 
         /// Supports acceleration structures.
         ///
         /// Requires `RAY_TRACING_PIPELINES` or `RAY_QUERY` to also be enabled.
-        const ACCELERATION_STRUCTURE = 0x0001 << 112;
-
-        // TODO the features below imply `ACCELERATION_STRUCTURE` and are really something that an app can query the backend if it supports. I'm unsure if these flags should actually go here. Maybe Limits? maybe it's own AccelerationStructureProperties?
-
-        // TODO "capture replay" is a vulkan term, which seems to be covered by PIX and AS (de)serialization on the DX side... should this just be an impl detail of gfx and not be exposed to end-users?
-        // TODO(capture-replay)
-        // const ACCELERATION_STRUCTURE_CAPTURE_REPLAY = 0x0002 << 112;
-
+        const ACCELERATION_STRUCTURE = 0x0000_0008 << 96;
         /// Supports a command to indirectly build an acceleration structure.
-        const ACCELERATION_STRUCTURE_INDIRECT_BUILD = 0x0004 << 112;
+        // TODO should this be part of `AccelerationStructureProperties`? The diff would be if app can depend on this feature vs. check for its availability.
+        const ACCELERATION_STRUCTURE_INDIRECT_BUILD = 0x0000_0010 << 96;
         /// Mask for all the features associated with acceleration structures.
         const ACCELERATION_STRUCTURE_MASK = Features::ACCELERATION_STRUCTURE.bits | Features::ACCELERATION_STRUCTURE_INDIRECT_BUILD.bits;
 
-        // TODO this could be a way to gate this feature
-        // TODO(host-commands) would deferred-host-operations?
-        // const ACCELERATION_STRUCTURE_HOST_COMMANDS = 0x0008 << 112;
-
         /// Support ray query functionality in shaders.
-        const RAY_QUERY = 0x0020 << 112;
+        const RAY_QUERY = 0x0000_0020 << 96;
     }
 }
 
