@@ -248,7 +248,8 @@ impl PhysicalDeviceFeatures {
             | Features::MUTABLE_COMPARISON_SAMPLER
             | Features::MUTABLE_UNNORMALIZED_SAMPLER
             | Features::TEXTURE_DESCRIPTOR_ARRAY
-            | Features::BUFFER_DESCRIPTOR_ARRAY;
+            | Features::BUFFER_DESCRIPTOR_ARRAY
+            | Features::EXTERNAL_MEMORY;
 
         if self.core.robust_buffer_access != 0 {
             bits |= Features::ROBUST_BUFFER_ACCESS;
@@ -588,9 +589,9 @@ impl PhysicalDeviceInfo {
 
         if requested_features.contains(Features::EXTERNAL_MEMORY) {
             requested_extensions.push(vk::KhrExternalMemoryFn::name());
-            #[cfg(all(not(unix), windows))]
+            #[cfg(window)]
             requested_extensions.push(vk::KhrExternalMemoryWin32Fn::name());
-            #[cfg(all(unix, not(windows)))]
+            #[cfg(unix)]
             {
                 requested_extensions.push(vk::KhrExternalMemoryFdFn::name());
                 requested_extensions.push(vk::ExtExternalMemoryDmaBufFn::name());
@@ -780,7 +781,7 @@ impl PhysicalDevice {
 
         let external_memory = enabled_extensions.contains(&vk::KhrExternalMemoryFn::name());
 
-        #[cfg(all(unix, not(windows)))]
+        #[cfg(unix)]
         let external_memory_fn =
             if enabled_extensions.contains(&crate::khr::ExternalMemoryFd::name()) {
                 Some(ExtensionFn::Extension(crate::khr::ExternalMemoryFd::new(
@@ -791,7 +792,7 @@ impl PhysicalDevice {
                 None
             };
 
-        #[cfg(all(not(unix), windows))]
+        #[cfg(windows)]
         let external_memory_fn =
             if enabled_extensions.contains(&vk::KhrExternalMemoryWin32Fn::name()) {
                 Some(ExtensionFn::Extension(vk::KhrExternalMemoryWin32Fn::load(
@@ -806,7 +807,7 @@ impl PhysicalDevice {
             } else {
                 None
             };
-        #[cfg(all(unix, not(windows)))]
+        #[cfg(unix)]
         let external_memory_dma_buf =
             enabled_extensions.contains(&vk::ExtExternalMemoryDmaBufFn::name());
 
@@ -851,7 +852,7 @@ impl PhysicalDevice {
                     display_control,
                     external_memory: external_memory,
                     external_memory_fn: external_memory_fn,
-                    #[cfg(all(unix, not(windows)))]
+                    #[cfg(unix)]
                     external_memory_dma_buf: external_memory_dma_buf,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1

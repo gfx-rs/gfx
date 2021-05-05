@@ -46,6 +46,10 @@ pub enum ExternalMemoryExportError {
     #[error("Out of host memory")]
     OutOfHostMemory,
 
+    /// Unsupported parameters.
+    #[error("Unsupported parameters")]
+    UnsupportedParameters,
+
     /// Unsupported feature.
     #[error("Unsupported feature")]
     UnsupportedFeature,
@@ -131,9 +135,36 @@ pub enum ExternalMemoryHandle {
         size: u64
     },
 }
+impl ExternalMemoryHandle {
+    /// Get the external memory type from this handle
+    pub fn as_type(&self)->ExternalMemoryType {
+        match self{
+            #[cfg(unix)]
+            Self::OpaqueFd{fd: _,size: _}=>ExternalMemoryType::OpaqueFd,
+            #[cfg(windows)]
+            Self::OpaqueWin32{handle: _,size: _}=>ExternalMemoryType::OpaqueWin32,
+            #[cfg(windows)]
+            Self::OpaqueWin32Kmt{handle: _,size: _}=>ExternalMemoryType::OpaqueWin32Kmt,
+            #[cfg(windows)]
+            Self::D3D11Texture{handle: _}=>ExternalMemoryType::D3D11Texture,
+            #[cfg(windows)]
+            Self::D3D11TextureKmt{handle: _}=>ExternalMemoryType::D3D11TextureKmt,
+            #[cfg(windows)]
+            Self::D3D12Heap{handle: _,size: _}=>ExternalMemoryType::D3D12Heap,
+            #[cfg(windows)]
+            Self::D3D12Resource{handle: _}=>ExternalMemoryType::D3D12Resource,
+            #[cfg(any(target_os = "linux",target_os = "android"))]
+            Self::DmaBuf{fd: _,size: _}=>ExternalMemoryType::DmaBuf,
+            #[cfg(target_os = "android")]
+            Self::AndroidHardwareBuffer{fd: _,size: _}=>ExternalMemoryType::AndroidHardwareBuffer,
+            Self::HostAllocation{size: _}=>ExternalMemoryType::HostAllocation,
+            Self::HostMappedForeignMemory{size: _}=>ExternalMemoryType::HostMappedForeignMemory,
+        }
+    }
+}
 
 /// External memory types
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ExternalMemoryType {
     #[cfg(unix)]
     /// Specifies a POSIX file descriptor handle that has only limited valid usage outside of Vulkan and other compatible APIs.
@@ -181,3 +212,4 @@ pub enum ExternalMemoryType {
     /// It does not own a reference to the underlying memory resource, and will therefore become invalid if the foreign memory is unmapped or otherwise becomes no longer available.
     HostMappedForeignMemory,
 }
+

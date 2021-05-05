@@ -1984,12 +1984,16 @@ impl d::Device<B> for super::Device {
         &self,
         adapter: &adapter::Adapter<B>,
         external_memory: external_memory::ExternalMemoryHandle,
+        memory_type_id: hal::MemoryTypeId,
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
     ) -> Result<(n::Memory, n::Buffer), external_memory::ExternalMemoryImportError> {
         let external_memory_extension = match &self.shared.extension_fns.external_memory_fn {
             Some(functor) => functor.unwrap_extension(),
-            _ => return Err(external_memory::ExternalMemoryImportError::UnsupportedFeature),
+            _ => {
+                println!("External memory not supported");
+                return Err(external_memory::ExternalMemoryImportError::UnsupportedFeature);
+            }
         };
 
         let external_memory_capabilities_extension =
@@ -2073,10 +2077,12 @@ impl d::Device<B> for super::Device {
             return Err(external_memory::ExternalMemoryImportError::UnsupportedParameters);
         }
 
-        let buffer = match self.create_buffer(size, usage, sparse) {
-            Ok(buffer) => buffer,
-            Err(error) => return Err(error.into()),
-        };
+        let buffer =
+            match self.create_external_buffer(size, usage, sparse, vec![external_memory.as_type()])
+            {
+                Ok(buffer) => buffer,
+                Err(err) => panic!("//TODO Error"),
+            };
 
         let mut dedicated_allocation_info = if external_memory_properties
             .external_memory_features
@@ -2092,7 +2098,8 @@ impl d::Device<B> for super::Device {
 
         #[cfg(unix)]
         let result = {
-            let memory_type_bits = match external_memory_extension
+            println!("Enumerating memory fd properties");
+            let required_memory_type_bits = match external_memory_extension
                 .get_memory_fd_properties_khr(vk_external_memory_type, fd_or_handle)
             {
                 Ok(memory_properties) => memory_properties.memory_type_bits,
@@ -2111,16 +2118,18 @@ impl d::Device<B> for super::Device {
                 .build();
 
             if let Some(dedicated_allocation_info) = &dedicated_allocation_info {
-                import_memory_info.p_next =
-                    std::mem::transmute::<_, *const core::ffi::c_void>(dedicated_allocation_info);
-            };
+                import_memory_info.p_next = std::mem::transmute::<
+                    &vk::MemoryDedicatedAllocateInfo,
+                    *const core::ffi::c_void,
+                >(dedicated_allocation_info);
+            }
 
-            let info = vk::MemoryAllocateInfo::builder()
+            let mut allocate_info = vk::MemoryAllocateInfo::builder()
                 .push_next(&mut import_memory_info)
                 .allocation_size(size)
-                .memory_type_index(self.filter_memory_requirements(memory_type_bits));
-
-            self.shared.raw.allocate_memory(&info, None)
+                .memory_type_index(self.get_ash_memory_type_index(memory_type_id));
+            println!("Allocating external memory");
+            self.shared.raw.allocate_memory(&allocate_info, None)
         };
 
         #[cfg(windows)]
@@ -2147,11 +2156,6 @@ impl d::Device<B> for super::Device {
                 .handle(fd_or_handle)
                 .build();
 
-            if let Some(dedicated_allocation_info) = &dedicated_allocation_info {
-                import_memory_info.p_next =
-                    std::mem::transmute::<_, *const core::ffi::c_void>(dedicated_allocation_info);
-            };
-
             let info = vk::MemoryAllocateInfo::builder()
                 .push_next(&mut import_memory_info)
                 .allocation_size(size)
@@ -2175,20 +2179,32 @@ impl d::Device<B> for super::Device {
             _ => unreachable!(),
         };
 
-        unreachable!();
+        Ok((memory, buffer))
     }
 
     /// Export external memory
-    unsafe fn export_memory(
+    unsafe fn export_memory_from_buffer(
         &self,
+        adapter: &adapter::Adapter<B>,
         memory_type: external_memory::ExternalMemoryType,
         memory: &n::Memory,
+        usage: buffer::Usage,
+        sparse: memory::SparseFlags,
     ) -> Result<std::fs::File, external_memory::ExternalMemoryExportError> {
         let external_memory_extension = match &self.shared.extension_fns.external_memory_fn {
             Some(functor) => functor.unwrap_extension(),
-            _ => return Err(external_memory::ExternalMemoryExportError::UnsupportedFeature),
+            _ => {
+                println!("External memory not supported");
+                return Err(external_memory::ExternalMemoryExportError::UnsupportedFeature);
+            }
         };
-
+        println!("External memory extension supported!");
+        let external_memory_capabilities_extension =
+            match &self.shared.instance.external_memory_capabilities {
+                Some(functor) => functor,
+                _ => return Err(external_memory::ExternalMemoryExportError::UnsupportedFeature),
+            };
+        println!("External memory capabilities extension supported!");
         let vk_external_memory_type = match memory_type {
             #[cfg(unix)]
             external_memory::ExternalMemoryType::OpaqueFd => {
@@ -2231,7 +2247,32 @@ impl d::Device<B> for super::Device {
             _ => unimplemented!(),
         };
 
-        #[cfg(all(unix, not(windows)))]
+        let external_buffer_info = vk::PhysicalDeviceExternalBufferInfo::builder()
+            .flags(conv::map_buffer_create_flags(sparse))
+            .usage(conv::map_buffer_usage(usage))
+            .handle_type(vk_external_memory_type)
+            .build();
+
+        // Not checking the return because this function does not have it and cannot fail.
+        let external_memory_properties = {
+            let mut external_buffer_properties = vk::ExternalBufferProperties::builder().build();
+            external_memory_capabilities_extension
+                .get_physical_device_external_buffer_properties_khr(
+                    adapter.physical_device.handle,
+                    &external_buffer_info,
+                    &mut external_buffer_properties,
+                );
+            external_buffer_properties.external_memory_properties
+        };
+
+        if !external_memory_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE)
+        {
+            return Err(external_memory::ExternalMemoryExportError::UnsupportedParameters);
+        }
+
+        #[cfg(unix)]
         {
             let memory_get_info = vk::MemoryGetFdInfoKHR::builder()
                 .memory(memory.raw)
@@ -2250,7 +2291,7 @@ impl d::Device<B> for super::Device {
             use std::os::unix::io::FromRawFd;
             return Ok(std::fs::File::from_raw_fd(fd));
         }
-        #[cfg(all(not(unix), windows))]
+        #[cfg(windows)]
         {
             let memory_get_info = vk::MemoryGetWin32HandleInfoKHR::builder()
                 .memory(memory.raw)
@@ -2273,6 +2314,80 @@ impl d::Device<B> for super::Device {
             }
             use std::os::windows::io::FromRawHandle;
             return Ok(std::fs::File::from_raw_handle(handle));
+        }
+    }
+
+    ///
+    unsafe fn create_external_buffer(
+        &self,
+        size: u64,
+        usage: buffer::Usage,
+        sparse: memory::SparseFlags,
+        external_memory_types: Vec<hal::external_memory::ExternalMemoryType>,
+    ) -> Result<n::Buffer, buffer::CreationError> {
+        let mut vk_external_memory_types = vk::ExternalMemoryHandleTypeFlags::empty();
+        for external_memory_type in external_memory_types {
+            vk_external_memory_types |= match external_memory_type {
+                #[cfg(unix)]
+                external_memory::ExternalMemoryType::OpaqueFd => {
+                    vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD
+                }
+                #[cfg(windows)]
+                external_memory::ExternalMemoryType::OpaqueWin32 => {
+                    vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32
+                }
+                #[cfg(windows)]
+                external_memory::ExternalMemoryType::OpaqueWin32Kmt => {
+                    vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KMT
+                }
+                #[cfg(windows)]
+                external_memory::ExternalMemoryType::D3D11Texture => {
+                    vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE
+                }
+                #[cfg(windows)]
+                external_memory::ExternalMemoryType::D3D11TextureKmt => {
+                    vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT
+                }
+                #[cfg(windows)]
+                external_memory::ExternalMemoryType::D3D12Heap => {
+                    vk::ExternalMemoryHandleTypeFlags::D3D12_HEAP
+                }
+                #[cfg(windows)]
+                external_memory::ExternalMemoryType::D3D12Resource => {
+                    vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE
+                }
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                external_memory::ExternalMemoryType::DmaBuf => {
+                    vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT
+                }
+                #[cfg(target_os = "android")]
+                external_memory::ExternalMemoryType::AndroidHardwareBuffer => {
+                    vk::ExternalMemoryHandleTypeFlags::ANDROID_HARDWARE_BUFFER_ANDROID
+                }
+                //external_memory::ExternalMemoryType::HostAllocation=>vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT,
+                //external_memory::ExternalMemoryType::HostMappedForeignMemory=>vk::ExternalMemoryHandleTypeFlags::HOST_MAPPED_FOREIGN_MEMORY_EXT,
+                _ => unimplemented!(),
+            };
+        }
+
+        let mut external_buffer_ci = vk::ExternalMemoryBufferCreateInfo::builder()
+            .handle_types(vk_external_memory_types)
+            .build();
+
+        let info = vk::BufferCreateInfo::builder()
+            .push_next(&mut external_buffer_ci)
+            .flags(conv::map_buffer_create_flags(sparse))
+            .size(size)
+            .usage(conv::map_buffer_usage(usage))
+            .sharing_mode(vk::SharingMode::EXCLUSIVE); // TODO:
+
+        let result = self.shared.raw.create_buffer(&info, None);
+
+        match result {
+            Ok(raw) => Ok(n::Buffer { raw }),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
+            _ => unreachable!(),
         }
     }
 

@@ -394,6 +394,13 @@ impl Instance {
         extensions.push(vk::ExtDisplaySurfaceCounterFn::name());
         extensions.push(khr::Display::name());
 
+        extensions.push(vk::KhrExternalMemoryCapabilitiesFn::name());
+
+        // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
+        if driver_api_version == Version::V1_0 {
+            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
+        }
+
         // Only keep available extensions.
         extensions.retain(|&ext| {
             if instance_extensions
