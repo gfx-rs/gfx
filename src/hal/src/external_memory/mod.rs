@@ -4,6 +4,30 @@ use crate::device::{AllocationError,OutOfMemory};
 use crate::buffer::CreationError;
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
+/// External buffer create error
+pub enum ExternalBufferCreateError {
+    /// Creation error.
+    #[error(transparent)]
+    CreationError(#[from] CreationError),
+
+    /// Invalid external handle.
+    #[error("The used external handle or the combination of them is invalid")]
+    InvalidExternalHandle,
+
+    /// Unsupported feature.
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
+}
+impl From<OutOfMemory> for ExternalBufferCreateError {
+    fn from(error: OutOfMemory)->Self {Self::CreationError(error.into())}
+}
+
+/*
+impl From<CreationError> for ExternalBufferCreateError {
+    fn from(error: CreationError)->Self {Self::CreationError(error.into())}
+}
+*/
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External memory import error
 pub enum ExternalMemoryImportError {
     /// Allocation error.
@@ -53,6 +77,69 @@ pub enum ExternalMemoryExportError {
     /// Unsupported feature.
     #[error("Unsupported feature")]
     UnsupportedFeature,
+}
+
+
+#[cfg(unix)]
+/// Unix file descriptor
+#[derive(Debug)]
+pub struct Fd(i32);
+#[cfg(unix)]
+impl From<i32> for Fd {
+    fn from(fd: i32)->Self {Self(fd)}
+}
+impl std::ops::Deref for Fd {
+    type Target = i32;
+    fn deref(&self) -> &Self::Target {&self.0}
+}
+#[cfg(windows)]
+/// Windows handle
+#[derive(Debug)]
+pub struct Handle(*mut std::ffi::c_void);
+#[cfg(windows)]
+impl From<*mut std::ffi::c_void> for Handle {
+    fn from(ptr: *mut std::ffi::c_void)->Self {Self(ptr)}
+}
+#[cfg(windows)]
+impl std::ops::Deref for Handle {
+    type Target = *mut std::ffi::c_void;
+    fn deref(&self) -> &Self::Target {&self.0}
+}
+
+/// Pointer to a host allocated memory
+#[derive(Debug)]
+pub struct Ptr(*mut std::ffi::c_void);
+impl From<*mut std::ffi::c_void> for Ptr {
+    fn from(ptr: *mut std::ffi::c_void)->Self {Self(ptr)}
+}
+impl std::ops::Deref for Ptr {
+    type Target = *mut std::ffi::c_void;
+    fn deref(&self) -> &Self::Target {&self.0}
+}
+
+/// Enumeration for all the external handles
+#[derive(Debug)]
+pub enum ExternalHandle {
+    #[cfg(unix)]
+    /// Unix file descriptor
+    Fd(Fd),
+    #[cfg(windows)]
+    /// Window handle
+    Handle(Handle),
+    /// Pointer to a host allocated memory
+    Ptr(Ptr)
+}
+
+#[cfg(unix)]
+impl From<Fd> for ExternalHandle {
+    fn from(fd: Fd)->Self {Self::Fd(fd)}
+}
+#[cfg(windows)]
+impl From<Handle> for ExternalHandle {
+    fn from(handle: Handle)->Self {Self::Handle(handle)}
+}
+impl From<Ptr> for ExternalHandle {
+    fn from(ptr: Ptr)->Self {Self::Ptr(ptr)}
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -126,11 +213,15 @@ pub enum ExternalMemoryHandle {
     },
     /// Tmp
     HostAllocation{
+        /// Pointer
+        ptr: *mut std::ffi::c_void,
         /// File descriptor size
         size: u64
     },
     /// Tmp
     HostMappedForeignMemory{
+        /// Pointer
+        ptr: *mut std::ffi::c_void,
         /// File descriptor size
         size: u64
     },
@@ -157,8 +248,33 @@ impl ExternalMemoryHandle {
             Self::DmaBuf{fd: _,size: _}=>ExternalMemoryType::DmaBuf,
             #[cfg(target_os = "android")]
             Self::AndroidHardwareBuffer{fd: _,size: _}=>ExternalMemoryType::AndroidHardwareBuffer,
-            Self::HostAllocation{size: _}=>ExternalMemoryType::HostAllocation,
-            Self::HostMappedForeignMemory{size: _}=>ExternalMemoryType::HostMappedForeignMemory,
+            Self::HostAllocation{ptr: _,size: _}=>ExternalMemoryType::HostAllocation,
+            Self::HostMappedForeignMemory{ptr: _,size: _}=>ExternalMemoryType::HostMappedForeignMemory,
+        }
+    }
+    /// Extract the info in a tuple format
+    pub fn extract(self)->(ExternalHandle,u64,ExternalMemoryType) {
+        match self {
+            #[cfg(unix)]
+            ExternalMemoryHandle::OpaqueFd{fd,size}=>(Fd::from(fd).into(),size,ExternalMemoryType::OpaqueFd),
+            #[cfg(windows)]
+            ExternalMemoryHandle::OpaqueWin32{handle,size}=>(Handle::from(handle).into(),size,ExternalMemoryType::OpaqueWin32),
+            #[cfg(windows)]
+            ExternalMemoryHandle::OpaqueWin32Kmt{handle,size}=>(Handle::from(handle).into(),size,ExternalMemoryType::OpaqueWin32Kmt),
+            #[cfg(windows)]
+            ExternalMemoryHandle::D3D11Texture{handle}=>(Handle::from(handle).into(),0,ExternalMemoryType::D3D11Texture),
+            #[cfg(windows)]
+            ExternalMemoryHandle::D3D11TextureKmt{handle}=>(Handle::from(handle).into(),0,ExternalMemoryType::D3D11TextureKmt),
+            #[cfg(windows)]
+            ExternalMemoryHandle::D3D12Heap{handle,size}=>(Handle::from(handle).into(),size,ExternalMemoryType::D3D12Heap),
+            #[cfg(windows)]
+            ExternalMemoryHandle::D3D12Resource{handle}=>(Handle::from(handle).into(),0,ExternalMemoryType::D3D12Resource),
+            #[cfg(any(target_os = "linux",target_os = "android"))]
+            ExternalMemoryHandle::DmaBuf{fd,size}=>(Fd::from(fd).into(),size,ExternalMemoryType::DmaBuf),
+            #[cfg(target_os = "android")]
+            ExternalMemoryHandle::AndroidHardwareBuffer{fd,size}=>(Fd::from(fd).into(),size,ExternalMemoryType::AndroidHardwareBuffer),
+            ExternalMemoryHandle::HostAllocation{ptr,size}=>(Ptr::from(ptr).into(),size,ExternalMemoryType::HostAllocation),
+            ExternalMemoryHandle::HostMappedForeignMemory{ptr,size}=>(Ptr::from(ptr).into(),size,ExternalMemoryType::HostMappedForeignMemory),
         }
     }
 }

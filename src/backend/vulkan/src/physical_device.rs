@@ -589,6 +589,7 @@ impl PhysicalDeviceInfo {
 
         if requested_features.contains(Features::EXTERNAL_MEMORY) {
             requested_extensions.push(vk::KhrExternalMemoryFn::name());
+            requested_extensions.push(vk::ExtExternalMemoryHostFn::name());
             #[cfg(window)]
             requested_extensions.push(vk::KhrExternalMemoryWin32Fn::name());
             #[cfg(unix)]
@@ -781,8 +782,23 @@ impl PhysicalDevice {
 
         let external_memory = enabled_extensions.contains(&vk::KhrExternalMemoryFn::name());
 
+        let external_memory_host =
+            if enabled_extensions.contains(&vk::ExtExternalMemoryHostFn::name()) {
+                Some(ExtensionFn::Extension(vk::ExtExternalMemoryHostFn::load(
+                    |name| {
+                        std::mem::transmute(
+                            self.instance
+                                .inner
+                                .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                        )
+                    },
+                )))
+            } else {
+                None
+            };
+
         #[cfg(unix)]
-        let external_memory_fn =
+        let external_memory_fd =
             if enabled_extensions.contains(&crate::khr::ExternalMemoryFd::name()) {
                 Some(ExtensionFn::Extension(crate::khr::ExternalMemoryFd::new(
                     &self.instance.inner,
@@ -792,8 +808,12 @@ impl PhysicalDevice {
                 None
             };
 
+        #[cfg(unix)]
+        let external_memory_dma_buf =
+            enabled_extensions.contains(&vk::ExtExternalMemoryDmaBufFn::name());
+
         #[cfg(windows)]
-        let external_memory_fn =
+        let external_memory_win32 =
             if enabled_extensions.contains(&vk::KhrExternalMemoryWin32Fn::name()) {
                 Some(ExtensionFn::Extension(vk::KhrExternalMemoryWin32Fn::load(
                     |name| {
@@ -807,9 +827,6 @@ impl PhysicalDevice {
             } else {
                 None
             };
-        #[cfg(unix)]
-        let external_memory_dma_buf =
-            enabled_extensions.contains(&vk::ExtExternalMemoryDmaBufFn::name());
 
 
         #[cfg(feature = "naga")]
@@ -851,7 +868,11 @@ impl PhysicalDevice {
                     draw_indirect_count: indirect_count_fn,
                     display_control,
                     external_memory: external_memory,
-                    external_memory_fn: external_memory_fn,
+                    external_memory_host: external_memory_host,
+                    #[cfg(unix)]
+                    external_memory_fd: external_memory_fd,
+                    #[cfg(windows)]
+                    external_memory_win32: external_memory_win32,
                     #[cfg(unix)]
                     external_memory_dma_buf: external_memory_dma_buf,
                 },

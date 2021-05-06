@@ -739,19 +739,25 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<(), display::control::DisplayControlError>;
 
     /// Import external memory
-    unsafe fn import_memory_as_buffer(&self, adapter: &adapter::Adapter<B>, external_memory: external_memory::ExternalMemoryHandle, memory_type_id: MemoryTypeId, usage: buffer::Usage, sparse: memory::SparseFlags)->Result<(B::Memory,B::Buffer),external_memory::ExternalMemoryImportError>;
+    unsafe fn import_memory_as_buffer(
+        &self,
+        adapter: &adapter::Adapter<B>,
+        external_memory: external_memory::ExternalMemoryHandle,
+        memory_properties: memory::Properties,
+        usage: buffer::Usage,
+        sparse: memory::SparseFlags)->Result<(B::Memory,B::Buffer),external_memory::ExternalMemoryImportError>;
 
-    /// Export external memory
-    unsafe fn export_memory_from_buffer(&self, adapter: &adapter::Adapter<B>, handle: external_memory::ExternalMemoryType, memory: &B::Memory, usage: buffer::Usage, sparse: memory::SparseFlags)->Result<std::fs::File,external_memory::ExternalMemoryExportError>;
-
-    /// Test
+    /// Create a buffer that can be exported.
     unsafe fn create_external_buffer(
         &self,
         size: u64,
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
         external_memory_types: Vec<external_memory::ExternalMemoryType>
-    ) -> Result<B::Buffer, buffer::CreationError>;
+    ) -> Result<B::Buffer, external_memory::ExternalBufferCreateError>;
+
+    /// Export external memory
+    unsafe fn export_memory_from_buffer(&self, adapter: &adapter::Adapter<B>, handle: external_memory::ExternalMemoryType, memory: &B::Memory, usage: buffer::Usage, sparse: memory::SparseFlags)->Result<std::fs::File,external_memory::ExternalMemoryExportError>;
 
     /// Starts frame capture.
     fn start_capture(&self);

@@ -817,10 +817,11 @@ struct DeviceExtensionFunctions {
     display_control: Option<vk::ExtDisplayControlFn>,
     // The extension does not have its own functions.
     external_memory: bool,
+    external_memory_host: Option<ExtensionFn<vk::ExtExternalMemoryHostFn>>,
     #[cfg(all(not(unix), windows))]
-    external_memory_fn: Option<ExtensionFn<vk::KhrExternalMemoryWin32Fn>>,
+    external_memory_win32: Option<ExtensionFn<vk::KhrExternalMemoryWin32Fn>>,
     #[cfg(all(unix, not(windows)))]
-    external_memory_fn: Option<ExtensionFn<khr::ExternalMemoryFd>>,
+    external_memory_fd: Option<ExtensionFn<khr::ExternalMemoryFd>>,
     #[cfg(all(unix, not(windows)))]
     // The extension does not have its own functions.
     external_memory_dma_buf: bool,
