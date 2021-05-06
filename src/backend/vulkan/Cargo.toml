@@ -30,6 +30,8 @@ parking_lot = "0.11"
 smallvec = "1.0"
 raw-window-handle = "0.3"
 inplace_it = "0.3.3"
+renderdoc-sys = "0.7.1"
+libloading = "0.7"
 
 [dependencies.naga]
 #git = "https://github.com/gfx-rs/naga"
