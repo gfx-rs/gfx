@@ -774,6 +774,7 @@ pub struct Device {
     // Indicates that there is currently an active device.
     open: Arc<Mutex<bool>>,
     library: Arc<native::D3D12Lib>,
+    render_doc: gfx_renderdoc::RenderDoc,
 }
 
 impl fmt::Debug for Device {
@@ -860,6 +861,7 @@ impl Device {
             present_queue,
             queues: Vec::new(),
             open: Arc::clone(&physical_device.is_open),
+            render_doc: Default::default(),
         }
     }
 

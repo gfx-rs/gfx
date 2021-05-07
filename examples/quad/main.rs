@@ -914,6 +914,9 @@ where
     }
 
     fn render(&mut self) {
+        // Start a RenderDoc capture, which allows analyzing the rendering pipeline
+        self.device.start_capture();
+
         let surface_image = unsafe {
             match self.surface.acquire_image(!0) {
                 Ok((image, _)) => image,
@@ -1003,6 +1006,9 @@ where
 
         // Increment our frame
         self.frame += 1;
+
+        // End the RenderDoc capture
+        self.device.stop_capture();
     }
 }
 
