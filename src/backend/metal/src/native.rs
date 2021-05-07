@@ -40,7 +40,6 @@ pub type EntryPointMap = FastHashMap<(naga::ShaderStage, String), EntryPoint>;
 pub type PoolResourceIndex = u32;
 
 pub struct ShaderModule {
-    pub(crate) prefer_naga: bool,
     #[cfg(feature = "cross")]
     pub(crate) spv: Vec<u32>,
     #[cfg(feature = "pipeline-cache")]
