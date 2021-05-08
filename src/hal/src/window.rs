@@ -90,7 +90,7 @@ pub enum SwapchainError {
     #[error("Window is in use")]
     WindowInUse,
     /// Unknown error.
-    #[error("Swapchain can't be created for an unlknown reason")]
+    #[error("Swapchain can't be created for an unknown reason")]
     Unknown,
 }
 
