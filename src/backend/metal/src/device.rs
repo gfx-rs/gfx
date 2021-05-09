@@ -655,6 +655,7 @@ impl Device {
             library,
             entry_point_map,
             rasterization_enabled,
+            sizes_buffer_map: vec![],
         })
     }
 
@@ -700,12 +701,32 @@ impl Device {
                 );
             }
 
+            let sizes_buffer_fields = shader
+                .module
+                .global_variables
+                .iter()
+                .filter_map(|(_, gv)| {
+                    if let naga::TypeInner::Struct { ref members, .. } = shader.module.types[gv.ty].inner {
+                        if let [.., member] = members.as_slice() {
+                            matches!(
+                                shader.module.types[member.ty].inner,
+                                naga::TypeInner::Array { size: naga::ArraySize::Dynamic, ..},
+                            ).then(|| gv.binding.clone()).flatten()
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }).collect();
+
             debug!("Naga generated shader:\n{}", source);
 
             Ok(n::SerializableModuleInfo {
                 source,
                 entry_point_map,
                 rasterization_enabled: true, //TODO
+                sizes_buffer_fields,
             })
         };
 
@@ -756,6 +777,7 @@ impl Device {
             library,
             entry_point_map: module_info.entry_point_map,
             rasterization_enabled: module_info.rasterization_enabled,
+            sizes_buffer_fields: module_info.sizes_buffer_fields,
         })
     }
 
@@ -767,7 +789,7 @@ impl Device {
         primitive_class: MTLPrimitiveTopologyClass,
         pipeline_cache: Option<&n::PipelineCache>,
         stage: naga::ShaderStage,
-    ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
+    ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool, Vec<naga::ResourceBinding>), pso::CreationError> {
         let _profiling_tag = match stage {
             naga::ShaderStage::Vertex => "vertex",
             naga::ShaderStage::Fragment => "fragment",
@@ -883,7 +905,7 @@ impl Device {
             pso::CreationError::ShaderCreationError(stage.into(), error)
         })?;
 
-        Ok((lib, mtl_function, wg_size, info.rasterization_enabled))
+        Ok((lib, mtl_function, wg_size, info.rasterization_enabled, info.sizes_buffer_fields))
     }
 
     fn make_sampler_descriptor(
@@ -1095,22 +1117,26 @@ impl hal::device::Device<Backend> for Device {
             stage: naga::ShaderStage,
             counters: n::ResourceData<ResourceIndex>,
             push_constant_buffer: Option<ResourceIndex>,
+            sizes_buffer: Option<ResourceIndex>,
         }
         let mut stage_infos = [
             StageInfo {
                 stage: naga::ShaderStage::Vertex,
                 counters: n::ResourceData::new(),
                 push_constant_buffer: None,
+                sizes_buffer: None,
             },
             StageInfo {
                 stage: naga::ShaderStage::Fragment,
                 counters: n::ResourceData::new(),
                 push_constant_buffer: None,
+                sizes_buffer: None,
             },
             StageInfo {
                 stage: naga::ShaderStage::Compute,
                 counters: n::ResourceData::new(),
                 push_constant_buffer: None,
+                sizes_buffer: None,
             },
         ];
         let mut binding_map = BTreeMap::default();
@@ -1147,6 +1173,12 @@ impl hal::device::Device<Backend> for Device {
                 info.push_constant_buffer = Some(info.counters.buffers);
                 info.counters.buffers += 1;
             }
+        }
+
+        // First and a half, take a slot in each stage for the sizes buffer.
+        for info in &mut stage_infos {
+            info.sizes_buffer = Some(info.counters.buffers);
+            info.counters.buffers += 1;
         }
 
         // Second, place the descripted resources
@@ -1372,16 +1404,31 @@ impl hal::device::Device<Backend> for Device {
             inline_samplers,
             spirv_cross_compatibility: cfg!(feature = "cross"),
             fake_missing_bindings: false,
-            push_constants_map: naga::back::msl::PushConstantsMap {
-                vs_buffer: stage_infos[0]
-                    .push_constant_buffer
-                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
-                fs_buffer: stage_infos[1]
-                    .push_constant_buffer
-                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
-                cs_buffer: stage_infos[2]
-                    .push_constant_buffer
-                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+            per_stage_map: naga::back::msl::PerStageMap {
+                vs: naga::back::msl::PerStageResources {
+                    push_constant_buffer: stage_infos[0]
+                        .push_constant_buffer
+                        .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                    sizes_buffer: stage_infos[0]
+                        .sizes_buffer
+                        .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                },
+                fs: naga::back::msl::PerStageResources {
+                    push_constant_buffer: stage_infos[1]
+                        .push_constant_buffer
+                        .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                    sizes_buffer: stage_infos[1]
+                        .sizes_buffer
+                        .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                },
+                cs: naga::back::msl::PerStageResources {
+                    push_constant_buffer: stage_infos[2]
+                        .push_constant_buffer
+                        .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                    sizes_buffer: stage_infos[2]
+                        .sizes_buffer
+                        .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                },  
             },
         };
 
@@ -1416,6 +1463,11 @@ impl hal::device::Device<Backend> for Device {
                     }),
             },
             total_push_constants: pc_limits[0].max(pc_limits[1]).max(pc_limits[2]),
+            sizes_buffers: n::MultiStageData {
+                vs: stage_infos[0].sizes_buffer,
+                ps: stage_infos[1].sizes_buffer,
+                cs: stage_infos[2].sizes_buffer,
+            }
         })
     }
 
@@ -1619,7 +1671,7 @@ impl hal::device::Device<Backend> for Device {
         }
 
         // Vertex shader
-        let (vs_lib, vs_function, _, enable_rasterization) = self.load_shader(
+        let (vs_lib, vs_function, _, enable_rasterization, vs_sizes_buffer_fields) = self.load_shader(
             vs,
             pipeline_layout,
             primitive_class,
@@ -1630,9 +1682,10 @@ impl hal::device::Device<Backend> for Device {
 
         // Fragment shader
         let fs_function;
+        let fs_sizes_buffer_fields;
         let fs_lib = match pipeline_desc.fragment {
             Some(ref ep) => {
-                let (lib, fun, _, _) = self.load_shader(
+                let (lib, fun, _, _, fields) = self.load_shader(
                     ep,
                     pipeline_layout,
                     primitive_class,
@@ -1641,6 +1694,7 @@ impl hal::device::Device<Backend> for Device {
                 )?;
                 fs_function = fun;
                 pipeline.set_fragment_function(Some(&fs_function));
+                fs_sizes_buffer_fields = fields;
                 Some(lib)
             }
             None => {
@@ -1903,7 +1957,7 @@ impl hal::device::Device<Backend> for Device {
         trace!("create_compute_pipeline {:?}", pipeline_desc);
         let pipeline = metal::ComputePipelineDescriptor::new();
 
-        let (cs_lib, cs_function, work_group_size, _) = self.load_shader(
+        let (cs_lib, cs_function, work_group_size, _, sizes_buffer_fields) = self.load_shader(
             &pipeline_desc.shader,
             &pipeline_desc.layout,
             MTLPrimitiveTopologyClass::Unspecified,
@@ -1932,6 +1986,9 @@ impl hal::device::Device<Backend> for Device {
                 raw,
                 work_group_size,
                 pc_info: pipeline_desc.layout.push_constants.cs,
+                sizes_buffer: pipeline_desc.layout.sizes_buffers.cs,
+                binding_map: pipeline_desc.layout.naga_options.binding_map.clone(),
+                sizes_buffer_fields,
             })
             .map_err(|err| {
                 error!("PSO creation failed: {}", err);

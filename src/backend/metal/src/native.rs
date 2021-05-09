@@ -199,6 +199,7 @@ pub struct PipelineLayout {
     pub(crate) total: MultiStageResourceCounters,
     pub(crate) push_constants: MultiStageData<Option<PushConstantInfo>>,
     pub(crate) total_push_constants: u32,
+    pub(crate) sizes_buffers: MultiStageData<Option<ResourceIndex>>,
 }
 
 #[derive(Clone, Debug)]
@@ -206,6 +207,9 @@ pub struct ModuleInfo {
     pub library: metal::Library,
     pub entry_point_map: EntryPointMap,
     pub rasterization_enabled: bool,
+    /// Refers to which resource the sequential fields in the sizes buffer
+    /// struct refer to.
+    pub(crate) sizes_buffer_fields: Vec<naga::ResourceBinding>,
 }
 
 #[derive(Clone, Debug)]
@@ -217,6 +221,7 @@ pub struct SerializableModuleInfo {
     pub source: String,
     pub entry_point_map: EntryPointMap,
     pub rasterization_enabled: bool,
+    pub(crate) sizes_buffer_fields: Vec<naga::ResourceBinding>,
 }
 
 #[cfg(not(feature = "pipeline-cache"))]
@@ -287,6 +292,9 @@ pub struct ComputePipeline {
     pub(crate) raw: metal::ComputePipelineState,
     pub(crate) work_group_size: metal::MTLSize,
     pub(crate) pc_info: Option<PushConstantInfo>,
+    pub(crate) binding_map: naga::back::msl::BindingMap,
+    pub(crate) sizes_buffer: Option<ResourceIndex>,
+    pub(crate) sizes_buffer_fields: Vec<naga::ResourceBinding>,
 }
 
 unsafe impl Send for ComputePipeline {}

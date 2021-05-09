@@ -57,7 +57,7 @@ features = ["msl"]
 optional = true
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
+git = "https://github.com/gfx-rs/naga"
 #tag = "gfx-23"
 version = "0.4"
 features = ["spv-in", "msl-out"]

@@ -31,18 +31,10 @@ use parking_lot::Mutex;
 
 #[cfg(feature = "dispatch")]
 use std::fmt;
-use std::{
-    borrow::Borrow,
-    cell::RefCell,
-    iter, mem,
-    ops::{Deref, Range},
-    ptr, slice,
-    sync::{
+use std::{borrow::Borrow, cell::RefCell, convert::TryInto, iter, mem, ops::{Deref, Range}, ptr, slice, sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
-    },
-    thread, time,
-};
+    }, thread, time};
 
 const INTERNAL_LABELS: bool = cfg!(debug_assertions);
 const WORD_SIZE: usize = 4;
@@ -661,6 +653,37 @@ impl State {
             index: pc.buffer_index,
             words: &self.push_constants[..pc.count as usize],
         }
+    }
+
+    fn retrieve_buffer_sizes(
+        &self,
+        binding_map: &naga::back::msl::BindingMap,
+        bindings: impl Iterator<Item=naga::ResourceBinding>,
+        stage: naga::ShaderStage,
+    ) -> Vec<u32> {
+        let resources = match stage {
+            naga::ShaderStage::Vertex => &self.resources_vs,
+            naga::ShaderStage::Fragment => &self.resources_ps,
+            naga::ShaderStage::Compute => &self.resources_cs,
+        };
+        bindings.map(|binding| {
+            let source = naga::back::msl::BindSource {
+                stage,
+                binding: binding.binding,
+                group: binding.group,
+            };
+            if let Some(naga::back::msl::BindTarget { buffer: Some(slot), ..}) = binding_map.get(&source) {
+                // There must be a better way to do this.
+                let buffer = resources
+                    .buffers[*slot as usize]
+                    .expect("buffers[slot]");
+                let buffer_ref = buffer.as_native();
+                
+                buffer_ref.length().try_into().expect("buffer length must fit into u32")
+            } else {
+                0
+            }
+        }).collect()
     }
 
     fn set_viewport<'a>(
@@ -3990,6 +4013,19 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             {
                 pre.issue(self.state.push_cs_constants(pc));
             }
+        }
+
+        if let Some(index) = pipeline.sizes_buffer {
+            let sizes = self.state.retrieve_buffer_sizes(
+                &pipeline.binding_map,
+                pipeline.sizes_buffer_fields.iter().cloned(),
+                naga::ShaderStage::Compute,
+            );
+
+            pre.issue(soft::ComputeCommand::<&soft::Ref>::BindBufferData {
+                index,
+                words: sizes.as_slice(),
+            });
         }
     }
 
