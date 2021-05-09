@@ -1188,7 +1188,7 @@ impl d::Device<B> for Device {
                         log::debug!("Naga module {:#?}", module);
                         match naga::valid::Validator::new(
                             naga::valid::ValidationFlags::empty(),
-                            //naga::valid::Capabilities::empty(),
+                            naga::valid::Capabilities::empty(), //TODO: PUSH_CONSTANT
                         )
                         .validate(&module)
                         {
