@@ -1353,18 +1353,6 @@ impl hal::device::Device<Backend> for Device {
             inline_samplers,
             spirv_cross_compatibility: cfg!(feature = "cross"),
             fake_missing_bindings: false,
-            push_constants_map: naga::back::msl::PushConstantsMap {
-                vs_buffer: stage_infos[0]
-                    .push_constant_buffer
-                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
-                fs_buffer: stage_infos[1]
-                    .push_constant_buffer
-                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
-                cs_buffer: stage_infos[2]
-                    .push_constant_buffer
-                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
-            },
-            /*
             per_stage_map: naga::back::msl::PerStageMap {
                 vs: naga::back::msl::PerStageResources {
                     push_constant_buffer: stage_infos[0]
@@ -1384,7 +1372,7 @@ impl hal::device::Device<Backend> for Device {
                         .map(|buffer_index| buffer_index as naga::back::msl::Slot),
                     sizes_buffer: None,
                 },
-            },*/
+            },
         };
 
         Ok(n::PipelineLayout {
@@ -1991,7 +1979,7 @@ impl hal::device::Device<Backend> for Device {
                         debug!("Naga module {:#?}", module);
                         match naga::valid::Validator::new(
                             naga::valid::ValidationFlags::empty(),
-                            //naga::valid::Capabilities::empty(),
+                            naga::valid::Capabilities::PUSH_CONSTANT,
                         )
                         .validate(&module)
                         {

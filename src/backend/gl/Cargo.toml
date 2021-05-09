@@ -46,9 +46,8 @@ features = ["glsl"]
 optional = true
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#tag = "gfx-23"
-version = "0.4"
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-24"
 features = ["spv-in", "glsl-out"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
