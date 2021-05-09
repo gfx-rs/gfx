@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.8.2 (08-05-2021)
+  - fix linking to QuartzCore
+
 ### hal-0.8.0 (29-04-2021)
   - Naga is the required and preferred shader translation path in Metal and OpenGL
   - enabling SPIRV-Cross is optional behind `cross` feature
