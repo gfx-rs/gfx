@@ -249,11 +249,16 @@ impl w::Surface<Backend> for Surface {
     fn capabilities(&self, physical_device: &PhysicalDevice) -> w::SurfaceCapabilities {
         // Capabilities
         let caps = unsafe {
-            self.raw
+            match self.raw
                 .functor
                 .get_physical_device_surface_capabilities(physical_device.handle, self.raw.handle)
-        }
-        .expect("Unable to query surface capabilities");
+                {
+                    Ok(caps) => caps,
+                    #[cfg(target_os = "android")]
+                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => vk::SurfaceCapabilitiesKHR::default(),
+                    Err(e) => panic!("Unable to query surface capabilities {:?}", e),
+                }
+        };
 
         // If image count is 0, the support number of images is unlimited.
         let max_images = if caps.max_image_count == 0 {
@@ -284,11 +289,16 @@ impl w::Surface<Backend> for Surface {
         };
 
         let raw_present_modes = unsafe {
-            self.raw
+            match self.raw
                 .functor
                 .get_physical_device_surface_present_modes(physical_device.handle, self.raw.handle)
-        }
-        .expect("Unable to query present modes");
+                {
+                    Ok(present_modes) => present_modes,
+                    #[cfg(target_os = "android")]
+                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => vec![vk::PresentModeKHR::default()],
+                    Err(e) => panic!("Unable to query present modes {:?}", e),
+                }
+        };
 
         w::SurfaceCapabilities {
             present_modes: raw_present_modes
@@ -308,11 +318,15 @@ impl w::Surface<Backend> for Surface {
     fn supported_formats(&self, physical_device: &PhysicalDevice) -> Option<Vec<Format>> {
         // Swapchain formats
         let raw_formats = unsafe {
-            self.raw
+            match self.raw
                 .functor
-                .get_physical_device_surface_formats(physical_device.handle, self.raw.handle)
-        }
-        .expect("Unable to query surface formats");
+                .get_physical_device_surface_formats(physical_device.handle, self.raw.handle) {
+                    Ok(formats) => formats,
+                    #[cfg(target_os = "android")]
+                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => return None,
+                    Err(e) => panic!("Unable to query surface formats {:?}", e),
+                }
+        };
 
         match raw_formats[0].format {
             // If pSurfaceFormats includes just one entry, whose value for format is
