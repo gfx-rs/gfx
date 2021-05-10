@@ -254,8 +254,10 @@ impl w::Surface<Backend> for Surface {
                 .get_physical_device_surface_capabilities(physical_device.handle, self.raw.handle)
                 {
                     Ok(caps) => caps,
-                    #[cfg(target_os = "android")]
-                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => vk::SurfaceCapabilitiesKHR::default(),
+                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
+                        error!("get_physical_device_surface_capabilities error {:?}", vk::Result::ERROR_SURFACE_LOST_KHR);
+                        vk::SurfaceCapabilitiesKHR::default()
+                    },
                     Err(e) => panic!("Unable to query surface capabilities {:?}", e),
                 }
         };
@@ -294,8 +296,10 @@ impl w::Surface<Backend> for Surface {
                 .get_physical_device_surface_present_modes(physical_device.handle, self.raw.handle)
                 {
                     Ok(present_modes) => present_modes,
-                    #[cfg(target_os = "android")]
-                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => vec![vk::PresentModeKHR::default()],
+                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
+                        error!("get_physical_device_surface_present_modes error {:?}", vk::Result::ERROR_SURFACE_LOST_KHR);
+                        Vec::new()
+                    },
                     Err(e) => panic!("Unable to query present modes {:?}", e),
                 }
         };
@@ -322,8 +326,10 @@ impl w::Surface<Backend> for Surface {
                 .functor
                 .get_physical_device_surface_formats(physical_device.handle, self.raw.handle) {
                     Ok(formats) => formats,
-                    #[cfg(target_os = "android")]
-                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => return None,
+                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
+                        error!("get_physical_device_surface_formats error {:?}", vk::Result::ERROR_SURFACE_LOST_KHR);
+                        return Some(Vec::new());
+                    },
                     Err(e) => panic!("Unable to query surface formats {:?}", e),
                 }
         };
