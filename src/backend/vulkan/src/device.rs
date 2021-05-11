@@ -2108,6 +2108,7 @@ impl d::Device<B> for super::Device {
                 let vk_external_memory_type =
                     conv::map_external_memory_handle_type(external_memory_fd_type.into());
 
+                #[cfg(any(target_os = "linux", target_os = "android", doc))]
                 if !self.shared.extension_fns.external_memory_dma_buf
                     && external_memory_fd_type
                         == hal::external_memory::ExternalMemoryFdType::DMA_BUF

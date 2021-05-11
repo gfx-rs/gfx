@@ -3576,7 +3576,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn allocate_exportable_memory(
         &self,
         external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
-        dedicated_allocation: Option<hal::external_memory::BufferOrImage<B>>,
+        dedicated_allocation: Option<hal::external_memory::BufferOrImage<Backend>>,
         mem_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, hal::external_memory::ExternalMemoryAllocateError> {
@@ -3586,7 +3586,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn import_external_memory(
         &self,
         external_memory: hal::external_memory::ExternalMemory,
-        dedicated_allocation: Option<hal::external_memory::BufferOrImage<B>>,
+        dedicated_allocation: Option<hal::external_memory::BufferOrImage<Backend>>,
         mem_type: hal::MemoryTypeId,
     ) -> Result<n::Memory, hal::external_memory::ExternalMemoryAllocateError> {
         unimplemented!()
