@@ -985,7 +985,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     ) -> Result<
         hal::external_memory::ExternalBufferProperties,
         hal::external_memory::ExternalMemoryQueryError,
-    > {unimplemented!()}
+    > {
+        unimplemented!()
+    }
 
     fn features(&self) -> hal::Features {
         self.features

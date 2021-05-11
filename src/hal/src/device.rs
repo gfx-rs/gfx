@@ -12,7 +12,7 @@
 //! and is used to actually do things.
 
 use crate::{
-    buffer, display, format, image, memory,
+    buffer, display, external_memory format, image, memory,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -21,7 +21,6 @@ use crate::{
     query,
     queue::QueueFamilyId,
     Backend, MemoryTypeId,
-    external_memory,
 };
 
 use std::{any::Any, fmt, iter, ops::Range};
@@ -748,17 +747,17 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Create a buffer that can be exported.
     unsafe fn create_external_buffer(
-	    &self,
-	    external_memory_type_flags: external_memory::ExternalMemoryTypeFlags,
-	    usage: buffer::Usage,
-	    sparse: memory::SparseFlags,
-	    size: u64,
+        &self,
+        external_memory_type_flags: external_memory::ExternalMemoryTypeFlags,
+        usage: buffer::Usage,
+        sparse: memory::SparseFlags,
+        size: u64,
     ) -> Result<B::Buffer, external_memory::ExternalBufferCreateError>;
 
     /// Allocate external memory
     unsafe fn allocate_exportable_memory(
         &self,
-	    external_memory_types: external_memory::ExternalMemoryTypeFlags,
+        external_memory_types: external_memory::ExternalMemoryTypeFlags,
         dedicated_allocation: Option<external_memory::BufferOrImage<B>>,
         mem_type: MemoryTypeId,
         size: u64,
@@ -772,31 +771,34 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         mem_type: MemoryTypeId,
     ) -> Result<B::Memory, external_memory::ExternalMemoryAllocateError>;
 
-    #[cfg(any(unix,doc))]
+    #[cfg(any(unix, doc))]
     /// Export memory as unix file descriptor
     unsafe fn export_memory_as_fd(
-	    &self,
+        &self,
         external_memory_type: external_memory::ExternalMemoryFdType,
         memory: &B::Memory,
     ) -> Result<std::os::unix::io::RawFd, external_memory::ExternalMemoryExportError>;
 
-    #[cfg(any(windows,doc))]
+    #[cfg(any(windows, doc))]
     /// Export memory as windows handle
     unsafe fn export_memory_as_handle(
-	    &self,
+        &self,
         external_memory_type: external_memory::ExternalMemoryHandleType,
         memory: &B::Memory,
     ) -> Result<std::os::windows::raw::HANDLE, external_memory::ExternalMemoryExportError>;
 
     /// Export memory as host pointer
     unsafe fn export_memory_as_ptr(
-	    &self,
+        &self,
         external_memory_type: external_memory::ExternalMemoryPtrType,
         memory: &B::Memory,
     ) -> Result<*mut std::ffi::c_void, external_memory::ExternalMemoryExportError>;
 
     /// Get memory mask for external handle
-    unsafe fn get_external_memory_mask(&self, external_memory_handle: &external_memory::ExternalMemory) -> Result<u32,external_memory::ExternalMemoryError>;
+    unsafe fn get_external_memory_mask(
+        &self,
+        external_memory_handle: &external_memory::ExternalMemory,
+    ) -> Result<u32, external_memory::ExternalMemoryError>;
 
     /// Starts frame capture.
     fn start_capture(&self);

@@ -2099,7 +2099,9 @@ impl d::Device<B> for super::Device {
             hal::external_memory::ExternalMemory::Fd(external_memory_fd) => {
                 if self.shared.extension_fns.external_memory_fd.is_none() {
                     error!("External memory fd extension not supported");
-                    return Err(hal::external_memory::ExternalMemoryAllocateError::UnsupportedFeature);
+                    return Err(
+                        hal::external_memory::ExternalMemoryAllocateError::UnsupportedFeature,
+                    );
                 };
 
                 let (external_memory_fd_type, fd, size) = external_memory_fd.into();
@@ -2107,10 +2109,13 @@ impl d::Device<B> for super::Device {
                     conv::map_external_memory_handle_type(external_memory_fd_type.into());
 
                 if !self.shared.extension_fns.external_memory_dma_buf
-                    && external_memory_fd_type == hal::external_memory::ExternalMemoryFdType::DMA_BUF
+                    && external_memory_fd_type
+                        == hal::external_memory::ExternalMemoryFdType::DMA_BUF
                 {
                     error!("Export to dma buf not supported");
-                    return Err(hal::external_memory::ExternalMemoryAllocateError::UnsupportedFeature);
+                    return Err(
+                        hal::external_memory::ExternalMemoryAllocateError::UnsupportedFeature,
+                    );
                 }
 
                 let mut import_memory_info = vk::ImportMemoryFdInfoKHR::builder()
@@ -2137,11 +2142,9 @@ impl d::Device<B> for super::Device {
                 let external_memory_extension =
                     match &self.shared.extension_fns.external_memory_win32 {
                         Some(functor) => functor.unwrap_extension(),
-                        None => {
-                            return Err(
-                                hal::external_memory::ExternalMemoryAllocateError::UnsupportedFeature,
-                            )
-                        }
+                        None => return Err(
+                            hal::external_memory::ExternalMemoryAllocateError::UnsupportedFeature,
+                        ),
                     };
 
                 let (external_memory_handle_type, handle, size) = external_memory_handle.into();
@@ -2232,7 +2235,7 @@ impl d::Device<B> for super::Device {
         Ok(memory)
     }
 
-    #[cfg(any(unix,doc))]
+    #[cfg(any(unix, doc))]
     unsafe fn export_memory_as_fd(
         &self,
         external_memory_type: hal::external_memory::ExternalMemoryFdType,
@@ -2275,23 +2278,27 @@ impl d::Device<B> for super::Device {
         return Ok(fd);
     }
 
-    #[cfg(any(windows,doc))]
+    #[cfg(any(windows, doc))]
     unsafe fn export_memory_as_handle(
         &self,
         external_memory_type: hal::external_memory::ExternalMemoryHandleType,
         memory: &n::Memory,
-    ) -> Result<std::os::windows::raw::HANDLE, hal::external_memory::ExternalMemoryExportError> {
+    ) -> Result<std::os::windows::raw::HANDLE, hal::external_memory::ExternalMemoryExportError>
+    {
         // Safety checks
         let external_memory_capabilities_extension =
             match &self.shared.instance.external_memory_capabilities {
                 Some(functor) => functor,
                 _ => {
                     error!("External memory not supported");
-                    return Err(hal::external_memory::ExternalMemoryExportError::UnsupportedFeature);
+                    return Err(
+                        hal::external_memory::ExternalMemoryExportError::UnsupportedFeature,
+                    );
                 }
             };
 
-        let external_memory_types: hal::external_memory::ExternalMemoryType = external_memory_type.into();
+        let external_memory_types: hal::external_memory::ExternalMemoryType =
+            external_memory_type.into();
 
         let external_memory_extension = match &self.shared.extension_fns.external_memory_win32 {
             Some(functor) => functor.unwrap_extension(),
@@ -2303,7 +2310,9 @@ impl d::Device<B> for super::Device {
 
         let memory_get_info = vk::MemoryGetWin32HandleInfoKHR::builder()
             .memory(memory.raw)
-            .handle_type(conv::map_external_memory_handle_types(external_memory_types.into()))
+            .handle_type(conv::map_external_memory_handle_types(
+                external_memory_types.into(),
+            ))
             .build();
         let mut handle = std::ptr::null_mut();
         match external_memory_extension.get_memory_win32_handle_khr(
@@ -2322,7 +2331,6 @@ impl d::Device<B> for super::Device {
         }
 
         return Ok(handle);
-
     }
 
     unsafe fn get_external_memory_mask(
@@ -2356,7 +2364,9 @@ impl d::Device<B> for super::Device {
                     }
                     Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
                         error!("Failed to get memory fd properties");
-                        return Err(hal::external_memory::ExternalMemoryError::InvalidExternalHandle);
+                        return Err(
+                            hal::external_memory::ExternalMemoryError::InvalidExternalHandle,
+                        );
                     }
                     _ => unreachable!(),
                 };
@@ -2369,11 +2379,14 @@ impl d::Device<B> for super::Device {
                         Some(functor) => functor.unwrap_extension(),
                         _ => {
                             error!("External memory handle not supported");
-                            return Err(hal::external_memory::ExternalMemoryError::UnsupportedFeature);
+                            return Err(
+                                hal::external_memory::ExternalMemoryError::UnsupportedFeature,
+                            );
                         }
                     };
 
-                let vk_external_memory_type = conv::map_external_memory_handle_type(external_memory_handle.get_type().into(),);
+                let vk_external_memory_type =
+                    conv::map_external_memory_handle_type(external_memory_handle.get_type().into());
 
                 use std::os::windows::io::AsRawHandle;
                 let mut memory_handle_properties =
@@ -2389,7 +2402,9 @@ impl d::Device<B> for super::Device {
                         return Err(hal::external_memory::ExternalMemoryError::OutOfHostMemory)
                     }
                     vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => {
-                        return Err(hal::external_memory::ExternalMemoryError::InvalidExternalHandle)
+                        return Err(
+                            hal::external_memory::ExternalMemoryError::InvalidExternalHandle,
+                        )
                     }
                     _ => unreachable!(),
                 };
@@ -2401,7 +2416,9 @@ impl d::Device<B> for super::Device {
                         Some(functor) => functor.unwrap_extension(),
                         _ => {
                             error!("External memory handle not supported");
-                            return Err(hal::external_memory::ExternalMemoryError::UnsupportedFeature);
+                            return Err(
+                                hal::external_memory::ExternalMemoryError::UnsupportedFeature,
+                            );
                         }
                     };
 
@@ -2421,7 +2438,9 @@ impl d::Device<B> for super::Device {
                         return Err(hal::external_memory::ExternalMemoryError::OutOfHostMemory)
                     }
                     vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => {
-                        return Err(hal::external_memory::ExternalMemoryError::InvalidExternalHandle)
+                        return Err(
+                            hal::external_memory::ExternalMemoryError::InvalidExternalHandle,
+                        )
                     }
                     _ => unreachable!(),
                 };

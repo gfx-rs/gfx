@@ -11,7 +11,6 @@
     missing_docs,
     unused
 )]
-
 #![cfg_attr(feature = "unstable", feature(doc_cfg))]
 
 //! Low-level graphics abstraction for Rust. Mostly operates on data, not types.
@@ -55,6 +54,7 @@ pub mod buffer;
 pub mod command;
 pub mod device;
 pub mod display;
+pub mod external_memory;
 pub mod format;
 pub mod image;
 pub mod memory;
@@ -64,7 +64,6 @@ pub mod pso;
 pub mod query;
 pub mod queue;
 pub mod window;
-pub mod external_memory;
 
 /// Prelude module re-exports all the traits necessary to use `gfx-hal`.
 pub mod prelude {

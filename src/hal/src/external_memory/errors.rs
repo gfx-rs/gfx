@@ -1,7 +1,7 @@
 //! Structures and enums related to external memory errors
 
-use crate::device::{AllocationError,OutOfMemory};
 use crate::buffer::CreationError;
+use crate::device::{AllocationError, OutOfMemory};
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External memory import error
@@ -27,7 +27,9 @@ pub enum ExternalBufferCreateError {
     UnsupportedFeature,
 }
 impl From<OutOfMemory> for ExternalBufferCreateError {
-    fn from(error: OutOfMemory)->Self {Self::CreationError(error.into())}
+    fn from(error: OutOfMemory) -> Self {
+        Self::CreationError(error.into())
+    }
 }
 
 /*
@@ -60,7 +62,9 @@ pub enum ExternalMemoryImportError {
 }
 
 impl From<OutOfMemory> for ExternalMemoryImportError {
-    fn from(error: OutOfMemory)->Self {Self::AllocationError(error.into())}
+    fn from(error: OutOfMemory) -> Self {
+        Self::AllocationError(error.into())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -80,7 +84,9 @@ pub enum ExternalMemoryAllocateError {
 }
 
 impl From<OutOfMemory> for ExternalMemoryAllocateError {
-    fn from(error: OutOfMemory)->Self {Self::AllocationError(error.into())}
+    fn from(error: OutOfMemory) -> Self {
+        Self::AllocationError(error.into())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

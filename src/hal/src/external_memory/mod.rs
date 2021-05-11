@@ -3,17 +3,17 @@
 mod errors;
 pub use errors::*;
 
-#[cfg(any(unix,doc))]
+#[cfg(any(unix, doc))]
 #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 mod fd;
-#[cfg(any(unix,doc))]
+#[cfg(any(unix, doc))]
 #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 pub use fd::*;
 
-#[cfg(any(windows,doc))]
+#[cfg(any(windows, doc))]
 #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
 mod handle;
-#[cfg(any(windows,doc))]
+#[cfg(any(windows, doc))]
 #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
 pub use handle::*;
 
@@ -22,69 +22,79 @@ pub use ptr::*;
 
 /// Buffer or image
 #[derive(Debug)]
-pub enum BufferOrImage<'a,B: crate::Backend> {
+pub enum BufferOrImage<'a, B: crate::Backend> {
     /// Buffer
     Buffer(&'a B::Buffer),
     /// Image
-    Image(&'a B::Image)
+    Image(&'a B::Image),
 }
 
 /// External buffer properties
 #[derive(Debug, PartialEq)]
 pub struct ExternalBufferProperties {
     usage: crate::buffer::Usage,
-	sparse: crate::memory::SparseFlags,
-	external_memory_properties: ExternalMemoryProperties
+    sparse: crate::memory::SparseFlags,
+    external_memory_properties: ExternalMemoryProperties,
 }
 impl ExternalBufferProperties {
     /// Constructor
     pub fn new(
         usage: crate::buffer::Usage,
         sparse: crate::memory::SparseFlags,
-        external_memory_properties: ExternalMemoryProperties
-	)->Self {
-        Self{
+        external_memory_properties: ExternalMemoryProperties,
+    ) -> Self {
+        Self {
             usage,
-	        sparse,
-	        external_memory_properties
+            sparse,
+            external_memory_properties,
         }
     }
     /// Is the queried configuration exportable
-    pub fn get_queried_buffer_usage(&self)->crate::buffer::Usage {self.usage}
+    pub fn get_queried_buffer_usage(&self) -> crate::buffer::Usage {
+        self.usage
+    }
     /// Is the queried configuration importable
-    pub fn get_queried_buffer_sparse(&self)->crate::memory::SparseFlags {self.sparse}
+    pub fn get_queried_buffer_sparse(&self) -> crate::memory::SparseFlags {
+        self.sparse
+    }
     /// Get external memory properties
-    pub fn get_external_memory_properties(&self)->&ExternalMemoryProperties {&self.external_memory_properties}
+    pub fn get_external_memory_properties(&self) -> &ExternalMemoryProperties {
+        &self.external_memory_properties
+    }
 }
 impl AsRef<ExternalMemoryProperties> for ExternalBufferProperties {
-    fn as_ref(&self)->&ExternalMemoryProperties {&self.external_memory_properties}
+    fn as_ref(&self) -> &ExternalMemoryProperties {
+        &self.external_memory_properties
+    }
 }
 impl std::ops::Deref for ExternalBufferProperties {
     type Target = ExternalMemoryProperties;
-    fn deref(&self) -> &Self::Target {&self.external_memory_properties}
+    fn deref(&self) -> &Self::Target {
+        &self.external_memory_properties
+    }
 }
 
 /// External memory properties
 #[derive(Debug, PartialEq)]
 pub struct ExternalMemoryProperties {
-	exportable: bool,
-	importable: bool,
-	dedicated_allocation: bool,
-	memory_type: ExternalMemoryType,
-	compatible_memory_types: ExternalMemoryTypeFlags,
-	export_from_imported_memory_types: ExternalMemoryTypeFlags,
+    exportable: bool,
+    importable: bool,
+    dedicated_allocation: bool,
+    memory_type: ExternalMemoryType,
+    compatible_memory_types: ExternalMemoryTypeFlags,
+    export_from_imported_memory_types: ExternalMemoryTypeFlags,
 }
 impl ExternalMemoryProperties {
     /// Constructor
     pub fn new(
         exportable: bool,
-	    importable: bool,
-	    dedicated_allocation: bool,
-	    memory_type: ExternalMemoryType,
-	    compatible_memory_types: ExternalMemoryTypeFlags,
-	    export_from_imported_memory_types: ExternalMemoryTypeFlags,
-	)->Self {
-        Self{
+        importable: bool,
+        dedicated_allocation: bool,
+        memory_type: ExternalMemoryType,
+        compatible_memory_types: ExternalMemoryTypeFlags,
+        export_from_imported_memory_types: ExternalMemoryTypeFlags,
+    ) -> Self {
+        Self {
             exportable,
             importable,
             dedicated_allocation,
@@ -94,17 +104,29 @@ impl ExternalMemoryProperties {
         }
     }
     /// Is the queried configuration exportable
-    pub fn is_exportable(&self)->bool {self.exportable}
+    pub fn is_exportable(&self) -> bool {
+        self.exportable
+    }
     /// Is the queried configuration importable
-    pub fn is_importable(&self)->bool {self.exportable}
+    pub fn is_importable(&self) -> bool {
+        self.exportable
+    }
     /// Does the queried configuration requires dedicated allocation
-    pub fn requires_dedicated_allocation(&self)->bool {self.dedicated_allocation}
+    pub fn requires_dedicated_allocation(&self) -> bool {
+        self.dedicated_allocation
+    }
     /// Get the queried memory type
-    pub fn get_queried_memory_type(&self)->ExternalMemoryType {self.memory_type}
+    pub fn get_queried_memory_type(&self) -> ExternalMemoryType {
+        self.memory_type
+    }
     /// Get the external handle types compatible with the queried one
-    pub fn get_compatile_memory_types(&self)->ExternalMemoryTypeFlags{self.compatible_memory_types}
+    pub fn get_compatile_memory_types(&self) -> ExternalMemoryTypeFlags {
+        self.compatible_memory_types
+    }
     /// Get the external handle types that can be exported from an imported memory using the queried external handle type
-    pub fn get_export_from_imported_memory_types(&self)->ExternalMemoryTypeFlags{self.export_from_imported_memory_types}
+    pub fn get_export_from_imported_memory_types(&self) -> ExternalMemoryTypeFlags {
+        self.export_from_imported_memory_types
+    }
 }
 
 bitflags!(
@@ -169,26 +191,28 @@ bitflags!(
 );
 
 impl From<ExternalMemoryType> for ExternalMemoryTypeFlags {
-    fn from(external_memory_type: ExternalMemoryType)->Self {
+    fn from(external_memory_type: ExternalMemoryType) -> Self {
         match external_memory_type {
-            #[cfg(any(unix,doc))]
-            ExternalMemoryType::Fd(external_memory_fd_type)=>external_memory_fd_type.into(),
-            #[cfg(any(windows,doc))]
-            ExternalMemoryType::Handle(external_memory_handle_type)=>external_memory_handle_type.into(),
-            ExternalMemoryType::Ptr(external_memory_ptr_type)=>external_memory_ptr_type.into(),
+            #[cfg(any(unix, doc))]
+            ExternalMemoryType::Fd(external_memory_fd_type) => external_memory_fd_type.into(),
+            #[cfg(any(windows, doc))]
+            ExternalMemoryType::Handle(external_memory_handle_type) => {
+                external_memory_handle_type.into()
+            }
+            ExternalMemoryType::Ptr(external_memory_ptr_type) => external_memory_ptr_type.into(),
         }
     }
 }
 
 /// External memory types
-#[derive(Clone,Copy,Debug,PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum ExternalMemoryType {
-    #[cfg(any(unix,doc))]
+    #[cfg(any(unix, doc))]
     #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
     /// External memory fd type
     Fd(ExternalMemoryFdType),
-    #[cfg(any(windows,doc))]
+    #[cfg(any(windows, doc))]
     #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
     /// External memory handle type
     Handle(ExternalMemoryHandleType),
@@ -196,42 +220,44 @@ pub enum ExternalMemoryType {
     Ptr(ExternalMemoryPtrType),
 }
 
-
-
 /// External memory handle
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum ExternalMemory {
-    #[cfg(any(unix,doc))]
+    #[cfg(any(unix, doc))]
     #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
     /// External memory fd
     Fd(ExternalMemoryFd),
-    #[cfg(any(windows,doc))]
+    #[cfg(any(windows, doc))]
     #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
     /// External memory handle
     Handle(ExternalMemoryHandle),
     /// External memory ptr
-    Ptr(ExternalMemoryPtr)
+    Ptr(ExternalMemoryPtr),
 }
 impl ExternalMemory {
     /// Get the size of this external memory
-    pub fn get_size(&self)->u64 {
+    pub fn get_size(&self) -> u64 {
         match self {
-            #[cfg(any(unix,doc))]
-            Self::Fd(external_memory_fd)=>external_memory_fd.get_size(),
-            #[cfg(any(windows,doc))]
-            Self::Handle(external_memory_handle)=>external_memory_handle.get_size(),
-            Self::Ptr(external_memory_ptr)=>external_memory_ptr.get_size(),
+            #[cfg(any(unix, doc))]
+            Self::Fd(external_memory_fd) => external_memory_fd.get_size(),
+            #[cfg(any(windows, doc))]
+            Self::Handle(external_memory_handle) => external_memory_handle.get_size(),
+            Self::Ptr(external_memory_ptr) => external_memory_ptr.get_size(),
         }
     }
     /// Get the type of this external memory
-    pub fn get_type(&self)->ExternalMemoryType {
+    pub fn get_type(&self) -> ExternalMemoryType {
         match self {
-            #[cfg(any(unix,doc))]
-            Self::Fd(external_memory_fd)=>ExternalMemoryType::Fd(external_memory_fd.get_type()),
-            #[cfg(any(windows,doc))]
-            Self::Handle(external_memory_handle)=>ExternalMemoryType::Handle(external_memory_handle.get_type()),
-            Self::Ptr(external_memory_ptr)=>ExternalMemoryType::Ptr(external_memory_ptr.get_type()),
+            #[cfg(any(unix, doc))]
+            Self::Fd(external_memory_fd) => ExternalMemoryType::Fd(external_memory_fd.get_type()),
+            #[cfg(any(windows, doc))]
+            Self::Handle(external_memory_handle) => {
+                ExternalMemoryType::Handle(external_memory_handle.get_type())
+            }
+            Self::Ptr(external_memory_ptr) => {
+                ExternalMemoryType::Ptr(external_memory_ptr.get_type())
+            }
         }
     }
 }

@@ -1,54 +1,60 @@
-use super::{ExternalMemoryTypeFlags,ExternalMemoryType};
+use super::{ExternalMemoryType, ExternalMemoryTypeFlags};
 
 /// Pointer to a host allocated memory
 #[derive(Debug)]
 pub struct Ptr(*mut std::ffi::c_void);
 impl Ptr {
     /// Get the inner ptr
-    pub fn as_raw_ptr(&self)->*mut std::ffi::c_void {self.0}
+    pub fn as_raw_ptr(&self) -> *mut std::ffi::c_void {
+        self.0
+    }
 }
 impl From<*mut std::ffi::c_void> for Ptr {
-    fn from(ptr: *mut std::ffi::c_void)->Self {Self(ptr)}
+    fn from(ptr: *mut std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
 }
 impl std::ops::Deref for Ptr {
     type Target = *mut std::ffi::c_void;
-    fn deref(&self) -> &Self::Target {&self.0}
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
-
 
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 /// External memory that rely on host pointers
 pub enum ExternalMemoryPtr {
     /// Tmp
-    HOST_ALLOCATION(Ptr,u64),
+    HOST_ALLOCATION(Ptr, u64),
     /// Tmp
-    HOST_MAPPED_FOREIGN_MEMORY(Ptr,u64),
+    HOST_MAPPED_FOREIGN_MEMORY(Ptr, u64),
 }
 impl ExternalMemoryPtr {
     /// Get the fd
-    pub fn get_ptr(&self)->&Ptr {
+    pub fn get_ptr(&self) -> &Ptr {
         match self {
-            Self::HOST_ALLOCATION(ptr,_)=>ptr,
-            Self::HOST_MAPPED_FOREIGN_MEMORY(ptr,_)=>ptr,
+            Self::HOST_ALLOCATION(ptr, _) => ptr,
+            Self::HOST_MAPPED_FOREIGN_MEMORY(ptr, _) => ptr,
         }
     }
     /// Get the size
-    pub fn get_size(&self)->u64 {
+    pub fn get_size(&self) -> u64 {
         match self {
-            Self::HOST_ALLOCATION(_,size)=>*size,
-            Self::HOST_MAPPED_FOREIGN_MEMORY(_,size)=>*size,
+            Self::HOST_ALLOCATION(_, size) => *size,
+            Self::HOST_MAPPED_FOREIGN_MEMORY(_, size) => *size,
         }
     }
     /// Get the external memory ptr type
-    pub fn get_type(&self)->ExternalMemoryPtrType {
+    pub fn get_type(&self) -> ExternalMemoryPtrType {
         match self {
-            Self::HOST_ALLOCATION(_,_)=>ExternalMemoryPtrType::HOST_ALLOCATION,
-            Self::HOST_MAPPED_FOREIGN_MEMORY(_,_)=>ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY,
+            Self::HOST_ALLOCATION(_, _) => ExternalMemoryPtrType::HOST_ALLOCATION,
+            Self::HOST_MAPPED_FOREIGN_MEMORY(_, _) => {
+                ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY
+            }
         }
     }
 }
-
 
 /// Subgroup of ExternalMemoryType that export as ptr
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -62,19 +68,18 @@ pub enum ExternalMemoryPtrType {
     HOST_MAPPED_FOREIGN_MEMORY,
 }
 impl From<ExternalMemoryPtrType> for ExternalMemoryTypeFlags {
-    fn from(external_memory_fd_type: ExternalMemoryPtrType)->Self {
+    fn from(external_memory_fd_type: ExternalMemoryPtrType) -> Self {
         match external_memory_fd_type {
-            ExternalMemoryPtrType::HOST_ALLOCATION=>Self::HOST_ALLOCATION,
-            ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY=>Self::HOST_MAPPED_FOREIGN_MEMORY,
+            ExternalMemoryPtrType::HOST_ALLOCATION => Self::HOST_ALLOCATION,
+            ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY => Self::HOST_MAPPED_FOREIGN_MEMORY,
         }
     }
 }
 impl From<ExternalMemoryPtrType> for ExternalMemoryType {
-    fn from(external_memory_ptr_type: ExternalMemoryPtrType)->Self {
+    fn from(external_memory_ptr_type: ExternalMemoryPtrType) -> Self {
         Self::Ptr(external_memory_ptr_type)
     }
 }
-
 
 /*
 impl std::convert::TryFrom<ExternalMemoryTypeFlags> for ExternalMemoryPtrType {
