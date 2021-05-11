@@ -179,9 +179,6 @@ fn main() {
         });
     }
     else {
-        use keystroke_decoder::{KeystrokeDecoder, KeyDirection, keysyms};
-        use input_gatherer::{InputGatherer,InputEvent,InputBackend,KeyboardEventTrait};
-
         let displays = adapter.physical_device.enumerate_available_displays().expect("Failed to enumerate displays");
         if displays.len() == 0 {panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");}
 
@@ -216,43 +213,7 @@ fn main() {
         let mut renderer = Renderer::new(instance, surface, adapter);
 
         renderer.render();
-
-        //Creating the gatherer
-        let mut gatherer = InputGatherer::new();
-        //Creating the keyboard decoder
-        let mut keystroke_decoder = KeystrokeDecoder::new();
-
-        let start = std::time::Instant::now();
-        let mut running = true;
-        while running {
-            //Dispatching events
-            gatherer
-                .dispatch_new_events(|event, _config| match event {
-                    InputEvent::Keyboard { seat: _, event } => {
-                        // Decoding keystrokes
-                        let keystrokes = keystroke_decoder.decode(event.key());
-
-                        //Decoding keys into chars
-                        for key in keystrokes.as_chars() {
-                            println!("Pressed key: {}", key);
-                        }
-                        //Decoding keys into keysym
-                        for key_and_direction in keystrokes.as_keysym() {
-                            if let (keysyms::KEY_Escape,KeyDirection::Down) = key_and_direction {
-                                println!("Esc pressed, early exit");
-                                running = false;
-                            }
-                        }
-                    }
-                    _=>{}
-                })
-                .unwrap();
-
-            //After 5 seconds the loop terminate and give the control back to the terminal
-            if start.elapsed().as_secs() >= 5 {
-                running = false;
-            }
-        }
+        std::thread::sleep(std::time::Duration::from_secs(5));
     }
 }
 
