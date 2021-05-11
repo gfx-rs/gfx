@@ -75,6 +75,7 @@ pub struct RawInstance {
     debug_messenger: Option<DebugMessenger>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
     display: Option<khr::Display>
+    pub render_doc_entry: Result<RenderDocEntry, String>,
 }
 
 pub enum DebugMessenger {
@@ -145,6 +146,16 @@ impl Into<Version> for u32 {
         Version(self)
     }
 }
+
+#[repr(C)]
+pub struct RenderDocEntry {
+    api: renderdoc_sys::RENDERDOC_API_1_4_1,
+    lib: libloading::Library,
+}
+
+unsafe impl Send for RenderDocEntry {}
+
+unsafe impl Sync for RenderDocEntry {}
 
 pub struct Instance {
     pub raw: Arc<RawInstance>,
@@ -573,7 +584,11 @@ impl hal::Instance<Backend> for Instance {
                 inner: instance,
                 debug_messenger,
                 get_physical_device_properties,
+<<<<<<< HEAD
                 display
+=======
+                render_doc_entry: unsafe { load_renderdoc_entrypoint() },
+>>>>>>> upstream/master
             }),
             extensions,
             entry,
@@ -720,6 +735,51 @@ impl hal::Instance<Backend> for Instance {
 
         Ok(self.create_surface_from_vk_surface_khr(surface))
     }
+}
+
+unsafe fn load_renderdoc_entrypoint() -> Result<RenderDocEntry, String> {
+    if !cfg!(debug_assertions) {
+        return Err("RenderDoc support is only enabled with 'debug_assertions'".into());
+    }
+
+    type GetApiFn = unsafe extern "C" fn(version: u32, out: *mut *mut std::ffi::c_void) -> i32;
+
+    #[cfg(windows)]
+    let renderdoc_filename = "renderdoc.dll";
+    #[cfg(all(unix, not(target_os = "android")))]
+    let renderdoc_filename = "librenderdoc.so";
+    #[cfg(target_os = "android")]
+    let renderdoc_filename = "libVkLayer_GLES_RenderDoc.so";
+
+    let renderdoc_lib = libloading::Library::new(renderdoc_filename).map_err(|e| {
+        format!(
+            "Unable to load renderdoc library '{}': {:?}",
+            renderdoc_filename, e
+        )
+    })?;
+
+    let get_api: libloading::Symbol<GetApiFn> =
+        renderdoc_lib.get(b"RENDERDOC_GetAPI\0").map_err(|e| {
+            format!(
+                "Unable to get RENDERDOC_GetAPI from renderdoc library '{}': {:?}",
+                renderdoc_filename, e
+            )
+        })?;
+    let mut obj = std::ptr::null_mut();
+    match get_api(10401, &mut obj) {
+        1 => Ok(RenderDocEntry {
+            api: *(obj as *mut renderdoc_sys::RENDERDOC_API_1_4_1),
+            lib: renderdoc_lib,
+        }),
+        return_value => Err(format!(
+            "Unable to get API from renderdoc library '{}': {}",
+            renderdoc_filename, return_value
+        )),
+    }
+    .map_err(|error| {
+        warn!("Error loading renderdoc library: {}", error);
+        error
+    })
 }
 
 #[derive(Debug, Clone)]

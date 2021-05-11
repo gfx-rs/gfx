@@ -28,8 +28,8 @@ gl = ["gfx-backend-gl"]
 #TODO: keep Warden backend-agnostic?
 
 [dependencies]
-auxil = { path = "../auxil/auxil", version = "0.8", package = "gfx-auxil" }
-hal = { path = "../hal", version = "0.7", package = "gfx-hal", features = ["serde"] }
+auxil = { path = "../auxil/auxil", version = "0.9", package = "gfx-auxil" }
+hal = { path = "../hal", version = "0.8", package = "gfx-hal", features = ["serde"] }
 log = "0.4"
 ron = "0.6"
 serde = { version = "1", features = ["serde_derive"] }
@@ -38,27 +38,27 @@ glsl-to-spirv = { version = "0.1", optional = true }
 
 [dependencies.gfx-backend-vulkan]
 path = "../../src/backend/vulkan"
-version = "0.7"
+version = "0.8"
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx12]
 path = "../../src/backend/dx12"
-version = "0.7"
+version = "0.8"
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx11]
 path = "../../src/backend/dx11"
-version = "0.7"
+version = "0.8"
 optional = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.gfx-backend-metal]
 path = "../../src/backend/metal"
-version = "0.7"
+version = "0.8"
 optional = true
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos"), not(target_os = "android")))'.dependencies.gfx-backend-gl]
 path = "../../src/backend/gl"
-version = "0.7"
+version = "0.8"
 optional = true
 
 [[example]]

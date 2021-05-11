@@ -57,7 +57,6 @@ impl<'a> CompilationContext<'a> {
 pub struct Device {
     pub(crate) share: Starc<Share>,
     features: hal::Features,
-    pub always_prefer_naga: bool,
     #[cfg(feature = "cross")]
     spv_options: naga::back::spv::Options,
 }
@@ -74,7 +73,6 @@ impl Device {
         Device {
             share: share,
             features,
-            always_prefer_naga: false,
             #[cfg(feature = "cross")]
             spv_options: {
                 use naga::back::spv;
@@ -646,17 +644,16 @@ impl Device {
             entry_point: ep.entry.to_string(),
         };
 
-        let mut result = Err(d::ShaderError::CompilationFailed(String::new()));
-        if ep.module.prefer_naga {
-            if let Some(ref shader) = ep.module.naga {
-                result = Self::compile_shader_library_naga(
-                    &self.share.context,
-                    shader,
-                    &naga_options,
-                    context.reborrow(),
-                );
-            }
-        }
+        #[cfg_attr(not(feature = "cross"), allow(unused_mut))]
+        let mut result = match ep.module.naga {
+            Ok(ref shader) => Self::compile_shader_library_naga(
+                &self.share.context,
+                shader,
+                &naga_options,
+                context.reborrow(),
+            ),
+            Err(ref e) => Err(d::ShaderError::CompilationFailed(e.clone())),
+        };
         #[cfg(feature = "cross")]
         if result.is_err() {
             let mut ast = self.parse_spirv_cross(&ep.module.spv).unwrap();
@@ -670,16 +667,6 @@ impl Device {
                 .unwrap();
             log::debug!("SPIRV-Cross generated shader:\n{}", glsl);
             result = Self::create_shader_module_raw(&self.share.context, &glsl, stage);
-        }
-        if result.is_err() && !ep.module.prefer_naga {
-            if let Some(ref shader) = ep.module.naga {
-                result = Self::compile_shader_library_naga(
-                    &self.share.context,
-                    shader,
-                    &naga_options,
-                    context,
-                );
-            }
         }
         result
     }
@@ -1185,10 +1172,11 @@ impl d::Device<B> for Device {
         raw_data: &[u32],
     ) -> Result<n::ShaderModule, d::ShaderError> {
         Ok(n::ShaderModule {
-            prefer_naga: self.always_prefer_naga,
             #[cfg(feature = "cross")]
             spv: raw_data.to_vec(),
-            naga: {
+            naga: if cfg!(feature = "cross") {
+                Err("Cross is enabled".into())
+            } else {
                 let options = naga::front::spv::Options {
                     adjust_coordinate_space: !self.features.contains(hal::Features::NDC_Y_UP),
                     strict_capabilities: true,
@@ -1198,20 +1186,17 @@ impl d::Device<B> for Device {
                 match parser.parse() {
                     Ok(module) => {
                         log::debug!("Naga module {:#?}", module);
-                        match naga::valid::Validator::new(naga::valid::ValidationFlags::empty())
-                            .validate(&module)
+                        match naga::valid::Validator::new(
+                            naga::valid::ValidationFlags::empty(),
+                            naga::valid::Capabilities::empty(), //TODO: PUSH_CONSTANT
+                        )
+                        .validate(&module)
                         {
-                            Ok(info) => Some(d::NagaShader { module, info }),
-                            Err(e) => {
-                                log::warn!("Naga validation failed: {:?}", e);
-                                None
-                            }
+                            Ok(info) => Ok(d::NagaShader { module, info }),
+                            Err(e) => Err(format!("Naga validation: {}", e)),
                         }
                     }
-                    Err(e) => {
-                        log::warn!("Naga parsing failed: {:?}", e);
-                        None
-                    }
+                    Err(e) => Err(format!("Naga parsing: {:?}", e)),
                 }
             },
         })
@@ -1222,7 +1207,6 @@ impl d::Device<B> for Device {
         shader: d::NagaShader,
     ) -> Result<n::ShaderModule, (d::ShaderError, d::NagaShader)> {
         Ok(n::ShaderModule {
-            prefer_naga: true,
             #[cfg(feature = "cross")]
             spv: match naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options) {
                 Ok(spv) => spv,
@@ -1230,7 +1214,7 @@ impl d::Device<B> for Device {
                     return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader))
                 }
             },
-            naga: Some(shader),
+            naga: Ok(shader),
         })
     }
 

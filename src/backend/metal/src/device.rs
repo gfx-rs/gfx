@@ -141,7 +141,6 @@ pub struct Device {
     memory_types: Vec<adapter::MemoryType>,
     features: hal::Features,
     pub online_recording: OnlineRecording,
-    pub always_prefer_naga: bool,
     #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
     spv_options: naga::back::spv::Options,
 }
@@ -284,7 +283,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             memory_types: self.memory_types.clone(),
             features: requested_features,
             online_recording: OnlineRecording::default(),
-            always_prefer_naga: false,
             #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
             spv_options,
         };
@@ -812,22 +810,20 @@ impl Device {
         };
 
         let info = {
-            let mut result = Err(String::new());
-            if ep.module.prefer_naga {
-                result = match ep.module.naga {
-                    Ok(ref shader) => Self::compile_shader_library_naga(
-                        device,
-                        shader,
-                        &layout.naga_options,
-                        &pipeline_options,
-                        #[cfg(feature = "pipeline-cache")]
-                        ep.module.spv_hash,
-                        #[cfg(feature = "pipeline-cache")]
-                        pipeline_cache.as_ref().map(|cache| &cache.spv_to_msl),
-                    ),
-                    Err(ref e) => Err(e.clone()),
-                }
-            }
+            #[cfg_attr(not(feature = "cross"), allow(unused_mut))]
+            let mut result = match ep.module.naga {
+                Ok(ref shader) => Self::compile_shader_library_naga(
+                    device,
+                    shader,
+                    &layout.naga_options,
+                    &pipeline_options,
+                    #[cfg(feature = "pipeline-cache")]
+                    ep.module.spv_hash,
+                    #[cfg(feature = "pipeline-cache")]
+                    pipeline_cache.as_ref().map(|cache| &cache.spv_to_msl),
+                ),
+                Err(ref e) => Err(e.clone()),
+            };
             #[cfg(feature = "cross")]
             if result.is_err() {
                 result = Self::compile_shader_library_cross(
@@ -838,21 +834,6 @@ impl Device {
                     &ep.specialization,
                     stage,
                 );
-            }
-            if result.is_err() && !ep.module.prefer_naga {
-                result = match ep.module.naga {
-                    Ok(ref shader) => Self::compile_shader_library_naga(
-                        device,
-                        shader,
-                        &layout.naga_options,
-                        &pipeline_options,
-                        #[cfg(feature = "pipeline-cache")]
-                        ep.module.spv_hash,
-                        #[cfg(feature = "pipeline-cache")]
-                        pipeline_cache.as_ref().map(|cache| &cache.spv_to_msl),
-                    ),
-                    Err(ref e) => Err(e.clone()),
-                }
             }
             result.map_err(|e| {
                 let error = format!("Error compiling the shader {:?}", e);
@@ -1390,16 +1371,25 @@ impl hal::device::Device<Backend> for Device {
             inline_samplers,
             spirv_cross_compatibility: cfg!(feature = "cross"),
             fake_missing_bindings: false,
-            push_constants_map: naga::back::msl::PushConstantsMap {
-                vs_buffer: stage_infos[0]
-                    .push_constant_buffer
-                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
-                fs_buffer: stage_infos[1]
-                    .push_constant_buffer
-                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
-                cs_buffer: stage_infos[2]
-                    .push_constant_buffer
-                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+            per_stage_map: naga::back::msl::PerStageMap {
+                vs: naga::back::msl::PerStageResources {
+                    push_constant_buffer: stage_infos[0]
+                        .push_constant_buffer
+                        .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                    sizes_buffer: None,
+                },
+                fs: naga::back::msl::PerStageResources {
+                    push_constant_buffer: stage_infos[1]
+                        .push_constant_buffer
+                        .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                    sizes_buffer: None,
+                },
+                cs: naga::back::msl::PerStageResources {
+                    push_constant_buffer: stage_infos[2]
+                        .push_constant_buffer
+                        .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                    sizes_buffer: None,
+                },
             },
         };
 
@@ -1985,12 +1975,13 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<n::ShaderModule, d::ShaderError> {
         profiling::scope!("create_shader_module");
         Ok(n::ShaderModule {
-            prefer_naga: self.always_prefer_naga,
             #[cfg(feature = "cross")]
             spv: raw_data.to_vec(),
             #[cfg(feature = "pipeline-cache")]
             spv_hash: fxhash::hash64(raw_data),
-            naga: {
+            naga: if cfg!(feature = "cross") {
+                Err("Cross is enabled".into())
+            } else {
                 let options = naga::front::spv::Options {
                     adjust_coordinate_space: !self.features.contains(hal::Features::NDC_Y_UP),
                     strict_capabilities: true,
@@ -2004,11 +1995,14 @@ impl hal::device::Device<Backend> for Device {
                 match parse_result {
                     Ok(module) => {
                         debug!("Naga module {:#?}", module);
-                        match naga::valid::Validator::new(naga::valid::ValidationFlags::empty())
-                            .validate(&module)
+                        match naga::valid::Validator::new(
+                            naga::valid::ValidationFlags::empty(),
+                            naga::valid::Capabilities::PUSH_CONSTANT,
+                        )
+                        .validate(&module)
                         {
                             Ok(info) => Ok(d::NagaShader { module, info }),
-                            Err(e) => Err(format!("Naga validation: {:?}", e)),
+                            Err(e) => Err(format!("Naga validation: {}", e)),
                         }
                     }
                     Err(e) => Err(format!("Naga parsing: {:?}", e)),
@@ -2031,7 +2025,6 @@ impl hal::device::Device<Backend> for Device {
         };
 
         Ok(n::ShaderModule {
-            prefer_naga: true,
             #[cfg(feature = "pipeline-cache")]
             spv_hash: fxhash::hash64(&spv),
             #[cfg(feature = "cross")]

@@ -292,10 +292,9 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 }
 
 pub struct ShaderModule {
-    pub(crate) prefer_naga: bool,
     #[cfg(feature = "cross")]
     pub(crate) spv: Vec<u32>,
-    pub(crate) naga: Option<hal::device::NagaShader>,
+    pub(crate) naga: Result<hal::device::NagaShader, String>,
 }
 
 impl fmt::Debug for ShaderModule {

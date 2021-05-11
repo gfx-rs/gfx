@@ -109,6 +109,7 @@ type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<fxhash::FxHasher>>;
 type ResourceIndex = u32;
 
 // For CALayer contentsGravity
+#[link(name = "QuartzCore", kind = "framework")]
 extern "C" {
     #[allow(non_upper_case_globals)]
     static kCAGravityTopLeft: cocoa_foundation::base::id;
@@ -1067,8 +1068,9 @@ impl PrivateCapabilities {
                     MTLFeatureSet::tvOS_GPUFamily2_v1,
                 ],
             ),
-            supports_binary_archives: device.supports_family(MTLGPUFamily::Apple3)
-                || device.supports_family(MTLGPUFamily::Mac1),
+            supports_binary_archives: cfg!(feature = "pipeline-cache")
+                && (device.supports_family(MTLGPUFamily::Apple3)
+                    || device.supports_family(MTLGPUFamily::Mac1)),
         }
     }
 
