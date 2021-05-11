@@ -646,7 +646,7 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    #[cfg(any(unix, doc))]
+    #[cfg(unix)]
     /// Export memory as file
     unsafe fn export_memory_as_fd(
         &self,
@@ -656,7 +656,7 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    #[cfg(any(windows, doc))]
+    #[cfg(windows)]
     /// Export memory as windows handle
     unsafe fn export_memory_as_handle(
         &self,

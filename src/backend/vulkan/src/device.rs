@@ -2236,7 +2236,7 @@ impl d::Device<B> for super::Device {
         Ok(memory)
     }
 
-    #[cfg(any(unix, doc))]
+    #[cfg(unix)]
     unsafe fn export_memory_as_fd(
         &self,
         external_memory_type: hal::external_memory::ExternalMemoryFdType,
@@ -2279,7 +2279,7 @@ impl d::Device<B> for super::Device {
         return Ok(fd);
     }
 
-    #[cfg(any(windows, doc))]
+    #[cfg(windows)]
     unsafe fn export_memory_as_handle(
         &self,
         external_memory_type: hal::external_memory::ExternalMemoryHandleType,
@@ -2373,7 +2373,7 @@ impl d::Device<B> for super::Device {
                 };
                 memory_handle_properties.memory_type_bits
             }
-            #[cfg(any(windows, doc))]
+            #[cfg(windows)]
             hal::external_memory::ExternalMemory::Handle(external_memory_handle) => {
                 let external_memory_extension =
                     match &self.shared.extension_fns.external_memory_win32 {

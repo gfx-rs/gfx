@@ -2199,7 +2199,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    #[cfg(any(unix, doc))]
+    #[cfg(unix)]
     unsafe fn export_memory_as_fd(
         &self,
         external_memory_type: hal::external_memory::ExternalMemoryFdType,
@@ -2208,7 +2208,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    #[cfg(any(windows, doc))]
+    #[cfg(windows)]
     unsafe fn export_memory_as_handle(
         &self,
         external_memory_type: hal::external_memory::ExternalMemoryHandleType,

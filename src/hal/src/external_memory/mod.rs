@@ -3,17 +3,17 @@
 mod errors;
 pub use errors::*;
 
-#[cfg(any(unix, doc))]
+#[cfg(any(unix))]
 #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 mod fd;
-#[cfg(any(unix, doc))]
+#[cfg(any(unix))]
 #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 pub use fd::*;
 
-#[cfg(any(windows, doc))]
+#[cfg(any(windows))]
 #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
 mod handle;
-#[cfg(any(windows, doc))]
+#[cfg(any(windows))]
 #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
 pub use handle::*;
 
@@ -193,9 +193,9 @@ bitflags!(
 impl From<ExternalMemoryType> for ExternalMemoryTypeFlags {
     fn from(external_memory_type: ExternalMemoryType) -> Self {
         match external_memory_type {
-            #[cfg(any(unix, doc))]
+            #[cfg(unix)]
             ExternalMemoryType::Fd(external_memory_fd_type) => external_memory_fd_type.into(),
-            #[cfg(any(windows, doc))]
+            #[cfg(windows)]
             ExternalMemoryType::Handle(external_memory_handle_type) => {
                 external_memory_handle_type.into()
             }
@@ -208,11 +208,11 @@ impl From<ExternalMemoryType> for ExternalMemoryTypeFlags {
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum ExternalMemoryType {
-    #[cfg(any(unix, doc))]
+    #[cfg(any(unix))]
     #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
     /// External memory fd type
     Fd(ExternalMemoryFdType),
-    #[cfg(any(windows, doc))]
+    #[cfg(any(windows))]
     #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
     /// External memory handle type
     Handle(ExternalMemoryHandleType),
@@ -224,11 +224,11 @@ pub enum ExternalMemoryType {
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
 pub enum ExternalMemory {
-    #[cfg(any(unix, doc))]
+    #[cfg(any(unix))]
     #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
     /// External memory fd
     Fd(ExternalMemoryFd),
-    #[cfg(any(windows, doc))]
+    #[cfg(any(windows))]
     #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
     /// External memory handle
     Handle(ExternalMemoryHandle),
@@ -239,9 +239,9 @@ impl ExternalMemory {
     /// Get the size of this external memory
     pub fn get_size(&self) -> u64 {
         match self {
-            #[cfg(any(unix, doc))]
+            #[cfg(unix)]
             Self::Fd(external_memory_fd) => external_memory_fd.get_size(),
-            #[cfg(any(windows, doc))]
+            #[cfg(windows)]
             Self::Handle(external_memory_handle) => external_memory_handle.get_size(),
             Self::Ptr(external_memory_ptr) => external_memory_ptr.get_size(),
         }
@@ -249,9 +249,9 @@ impl ExternalMemory {
     /// Get the type of this external memory
     pub fn get_type(&self) -> ExternalMemoryType {
         match self {
-            #[cfg(any(unix, doc))]
+            #[cfg(unix)]
             Self::Fd(external_memory_fd) => ExternalMemoryType::Fd(external_memory_fd.get_type()),
-            #[cfg(any(windows, doc))]
+            #[cfg(windows)]
             Self::Handle(external_memory_handle) => {
                 ExternalMemoryType::Handle(external_memory_handle.get_type())
             }

@@ -771,7 +771,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         mem_type: MemoryTypeId,
     ) -> Result<B::Memory, external_memory::ExternalMemoryAllocateError>;
 
-    #[cfg(any(unix, doc))]
+    #[cfg(any(unix))]
+    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
     /// Export memory as unix file descriptor
     unsafe fn export_memory_as_fd(
         &self,
@@ -779,7 +780,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         memory: &B::Memory,
     ) -> Result<std::os::unix::io::RawFd, external_memory::ExternalMemoryExportError>;
 
-    #[cfg(any(windows, doc))]
+    #[cfg(any(windows))]
+    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
     /// Export memory as windows handle
     unsafe fn export_memory_as_handle(
         &self,
