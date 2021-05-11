@@ -626,6 +626,88 @@ pub fn map_vk_memory_heap_flags(flags: vk::MemoryHeapFlags) -> hal::memory::Heap
 
 use hal::external_memory;
 
+pub fn map_external_memory_handle_type(external_memory_type: hal::external_memory::ExternalMemoryType)->vk::ExternalMemoryHandleTypeFlags {
+    match external_memory_type {
+        #[cfg(unix)]
+        external_memory::ExternalMemoryType::Fd(extenal_memory_fd_type)=>{
+            match extenal_memory_fd_type {
+                external_memory::ExternalMemoryFdType::OPAQUE_FD=>vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
+                #[cfg(any(target_os = "linux",target_os = "android"))]
+                external_memory::ExternalMemoryFdType::DMA_BUF=>vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
+                #[cfg(target_os = "android")]
+                external_memory::ExternalMemoryFdType::ANDROID_HARDWARE_BUFFER=>vk::ExternalMemoryHandleTypeFlags::ANDROID_HARDWARE_BUFFER_ANDROID,
+            }
+        }
+        #[cfg(windows)]
+        external_memory::ExternalMemoryType::Handle(extenal_memory_handle_type)=>{
+            match extenal_memory_handle_type {
+                external_memory::ExternalMemoryHandleType::OPAQUE_WIN32=>vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32,
+                external_memory::ExternalMemoryHandleType::OPAQUE_WIN32_KMT=>vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KMT,
+                external_memory::ExternalMemoryHandleType::D3D11_TEXTURE=>vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE,
+                external_memory::ExternalMemoryHandleType::D3D11_TEXTURE_KMT=>vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT,
+                external_memory::ExternalMemoryHandleType::D3D12_HEAP=>vk::ExternalMemoryHandleTypeFlags::D3D12_HEAP,
+                external_memory::ExternalMemoryHandleType::D3D12_RESOURCE=>vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE,
+            }
+        }
+        external_memory::ExternalMemoryType::Ptr(extenal_memory_ptr_type)=>{
+            match extenal_memory_ptr_type {
+                external_memory::ExternalMemoryPtrType::HOST_ALLOCATION=>vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT,
+                external_memory::ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY=>vk::ExternalMemoryHandleTypeFlags::HOST_MAPPED_FOREIGN_MEMORY_EXT,
+            }
+        }
+    }
+}
+
+pub fn map_external_memory_handle_types(flags: external_memory::ExternalMemoryTypeFlags)->vk::ExternalMemoryHandleTypeFlags {
+    let mut vk_flags = vk::ExternalMemoryHandleTypeFlags::empty();
+    #[cfg(unix)]
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::OPAQUE_FD){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD;}
+    #[cfg(windows)]
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::OPAQUE_WIN32){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32;}
+    #[cfg(windows)]
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KMT;}
+    #[cfg(windows)]
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::D3D11_TEXTURE){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE;}
+    #[cfg(windows)]
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT;}
+    #[cfg(windows)]
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::D3D12_HEAP){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::D3D12_HEAP;}
+    #[cfg(windows)]
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::D3D12_RESOURCE){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE;}
+    #[cfg(any(target_os = "linux",target_os = "android"))]
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::DMA_BUF){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT;}
+    #[cfg(target_os = "android")]
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::ANDROID_HARDWARE_BUFFER;}
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::HOST_ALLOCATION){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT;}
+    if flags.contains(external_memory::ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY){ vk_flags |= vk::ExternalMemoryHandleTypeFlags::HOST_MAPPED_FOREIGN_MEMORY_EXT;}
+    vk_flags
+}
+
+pub fn map_vk_external_memory_handle_type_flags(vk_flags: vk::ExternalMemoryHandleTypeFlags)->external_memory::ExternalMemoryTypeFlags {
+    let mut flags = hal::external_memory::ExternalMemoryTypeFlags::empty();
+    #[cfg(unix)]
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD){ flags |= external_memory::ExternalMemoryTypeFlags::OPAQUE_FD;}
+    #[cfg(windows)]
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32){ flags |= external_memory::ExternalMemoryTypeFlags::OPAQUE_WIN32;}
+    #[cfg(windows)]
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KMT){ flags |= external_memory::ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT;}
+    #[cfg(windows)]
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE){ flags |= external_memory::ExternalMemoryTypeFlags::D3D11_TEXTURE;}
+    #[cfg(windows)]
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT){ flags |= external_memory::ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT;}
+    #[cfg(windows)]
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::D3D12_HEAP){ flags |= external_memory::ExternalMemoryTypeFlags::D3D12_HEAP;}
+    #[cfg(windows)]
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE){ flags |= external_memory::ExternalMemoryTypeFlags::D3D12_RESOURCE;}
+    #[cfg(any(target_os = "linux",target_os = "android"))]
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT){ flags |= external_memory::ExternalMemoryTypeFlags::DMA_BUF;}
+    #[cfg(target_os = "android")]
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::ANDROID_HARDWARE_BUFFER){ flags |= external_memory::ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER;}
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT){ flags |= external_memory::ExternalMemoryTypeFlags::HOST_ALLOCATION;}
+    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::HOST_MAPPED_FOREIGN_MEMORY_EXT){ flags |= external_memory::ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY;}
+    flags
+}
+/*
 pub fn map_external_memory_type(external_memory_type: external_memory::ExternalMemoryType)->vk::ExternalMemoryHandleTypeFlags {
     match external_memory_type {
         #[cfg(unix)]
@@ -649,6 +731,6 @@ pub fn map_external_memory_type(external_memory_type: external_memory::ExternalM
         external_memory::ExternalMemoryType::HostAllocation=>vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT,
         external_memory::ExternalMemoryType::HostMappedForeignMemory=>vk::ExternalMemoryHandleTypeFlags::HOST_MAPPED_FOREIGN_MEMORY_EXT,
     }
-}
+}*/
 
 

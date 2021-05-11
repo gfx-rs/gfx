@@ -115,6 +115,14 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Fetch details for the memory regions provided by the device.
     fn memory_properties(&self) -> MemoryProperties;
 
+    /// Get external buffer properties
+    fn query_external_buffer_properties(
+	    &self,
+	    usage: crate::buffer::Usage,
+	    sparse: crate::memory::SparseFlags,
+	    memory_type: crate::external_memory::ExternalMemoryType,
+    )->Result<crate::external_memory::ExternalBufferProperties,crate::external_memory::ExternalMemoryQueryError>;
+
     /// Returns the features of this `PhysicalDevice`. This usually depends on the graphics API being
     /// used, as well as the actual platform underneath.
     fn features(&self) -> Features;

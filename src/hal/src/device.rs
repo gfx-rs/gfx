@@ -22,7 +22,6 @@ use crate::{
     queue::QueueFamilyId,
     Backend, MemoryTypeId,
     external_memory,
-    adapter,
 };
 
 use std::{any::Any, fmt, iter, ops::Range};
@@ -749,15 +748,54 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Create a buffer that can be exported.
     unsafe fn create_external_buffer(
-        &self,
-        size: u64,
-        usage: buffer::Usage,
-        sparse: memory::SparseFlags,
-        external_memory_types: Vec<external_memory::ExternalMemoryType>
+	    &self,
+	    external_memory_type_flags: external_memory::ExternalMemoryTypeFlags,
+	    usage: buffer::Usage,
+	    sparse: memory::SparseFlags,
+	    size: u64,
     ) -> Result<B::Buffer, external_memory::ExternalBufferCreateError>;
 
-    /// Export external memory
-    unsafe fn export_memory_from_buffer(&self, adapter: &adapter::Adapter<B>, handle: external_memory::ExternalMemoryType, memory: &B::Memory, usage: buffer::Usage, sparse: memory::SparseFlags)->Result<std::fs::File,external_memory::ExternalMemoryExportError>;
+    /// Allocate external memory
+    unsafe fn allocate_exportable_memory(
+        &self,
+	    external_memory_types: external_memory::ExternalMemoryTypeFlags,
+        dedicated_allocation: Option<external_memory::BufferOrImage<B>>,
+        mem_type: MemoryTypeId,
+        size: u64,
+    ) -> Result<B::Memory, external_memory::ExternalMemoryAllocateError>;
+
+    /// Import external memory
+    unsafe fn import_external_memory(
+        &self,
+        external_memory: external_memory::ExternalMemory,
+        dedicated_allocation: Option<external_memory::BufferOrImage<B>>,
+        mem_type: MemoryTypeId,
+    ) -> Result<B::Memory, external_memory::ExternalMemoryAllocateError>;
+
+    #[cfg(any(unix,doc))]
+    /// Export memory as file
+    unsafe fn export_memory_as_fd(
+	    &self,
+        external_memory_type: external_memory::ExternalMemoryFdType,
+        memory: &B::Memory,
+    ) -> Result<std::os::unix::io::RawFd, external_memory::ExternalMemoryExportError>;
+
+    #[cfg(any(windows,doc))]
+    unsafe fn export_memory_as_handle(
+	    &self,
+        external_memory_type: external_memory::ExternalMemoryHandleType,
+        memory: &B::Memory,
+    ) -> Result<*mut std::ffi::c_void, external_memory::ExternalMemoryExportError>;
+
+    /// Export memory as ptr
+    unsafe fn export_memory_as_ptr(
+	    &self,
+        external_memory_type: external_memory::ExternalMemoryPtrType,
+        memory: &B::Memory,
+    ) -> Result<*mut std::ffi::c_void, external_memory::ExternalMemoryExportError>;
+
+    /// Get memory mask for external handle
+    unsafe fn get_external_memory_mask(&self, external_memory_handle: &external_memory::ExternalMemory) -> Result<u32,external_memory::ExternalMemoryError>;
 
     /// Starts frame capture.
     fn start_capture(&self);

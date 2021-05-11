@@ -12,6 +12,8 @@
     unused
 )]
 
+#![cfg_attr(feature = "unstable", feature(doc_cfg))]
+
 //! Low-level graphics abstraction for Rust. Mostly operates on data, not types.
 //! Designed for use by libraries and higher-level abstractions only.
 //!

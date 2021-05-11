@@ -28,7 +28,6 @@ pub struct ComputePipeline(pub vk::Pipeline);
 #[derive(Debug, Hash)]
 pub struct Memory {
     pub(crate) raw: vk::DeviceMemory,
-    pub(crate) external_memory_type: Option<vk::ExternalMemoryHandleTypeFlags>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
