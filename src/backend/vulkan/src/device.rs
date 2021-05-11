@@ -1866,7 +1866,6 @@ impl d::Device<B> for super::Device {
             .set_object_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.raw, name)
     }
 
-<<<<<<< HEAD
     unsafe fn set_display_power_state(
         &self,
         display: &hal::display::Display<B>,

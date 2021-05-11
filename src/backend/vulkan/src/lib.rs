@@ -547,7 +547,7 @@ impl Instance {
                 debug_messenger,
                 get_physical_device_properties,
                 display,
-                external_memory_capabilities
+                render_doc_entry: unsafe { load_renderdoc_entrypoint() },
             }),
             extensions,
             entry,
