@@ -1,26 +1,20 @@
-use super::{ExternalMemoryTypeFlags,ExternalMemoryType};
+use super::{ExternalMemoryTypeFlags,ExternalMemoryType,ExternalMemory};
 
-#[cfg(any(unix,doc))]
 /// Unix file descriptor
 #[derive(Debug)]
 pub struct Fd(i32);
-#[cfg(any(unix,doc))]
 impl From<i32> for Fd {
     fn from(fd: i32)->Self {Self(fd)}
 }
-#[cfg(any(unix,doc))]
 impl std::os::unix::io::AsRawFd for Fd {
     fn as_raw_fd(&self) -> std::os::unix::io::RawFd {self.0}
 }
-#[cfg(any(unix,doc))]
 impl std::ops::Deref for Fd {
     type Target = i32;
     fn deref(&self) -> &Self::Target {&self.0}
 }
 
 
-
-#[cfg(any(unix,doc))]
 #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
@@ -59,8 +53,9 @@ impl ExternalMemoryFd {
         }
     }
     /// Get the external memory fd type
-    pub fn get_external_memory_fd_type(&self)->ExternalMemoryFdType {
+    pub fn get_type(&self)->ExternalMemoryFdType {
         match self {
+
             Self::OPAQUE_FD(_,_)=>ExternalMemoryFdType::OPAQUE_FD,
             #[cfg(any(target_os = "linux",target_os = "android",doc))]
             Self::DMA_BUF(_,_)=>ExternalMemoryFdType::DMA_BUF,
@@ -70,8 +65,6 @@ impl ExternalMemoryFd {
     }
 }
 
-#[cfg(any(unix,doc))]
-#[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 impl From<(ExternalMemoryFdType,Fd,u64)> for ExternalMemoryFd {
     fn from(tuple: (ExternalMemoryFdType,Fd,u64))->Self {
         match tuple.0 {
@@ -84,8 +77,6 @@ impl From<(ExternalMemoryFdType,Fd,u64)> for ExternalMemoryFd {
     }
 }
 
-#[cfg(any(unix,doc))]
-#[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 impl Into<(ExternalMemoryFdType,Fd,u64)> for ExternalMemoryFd {
     fn into(self)->(ExternalMemoryFdType,Fd,u64) {
         match self {
@@ -98,10 +89,15 @@ impl Into<(ExternalMemoryFdType,Fd,u64)> for ExternalMemoryFd {
     }
 }
 
+
+impl From<ExternalMemoryFd> for ExternalMemory {
+    fn from(external_memory_fd: ExternalMemoryFd)->Self {
+        Self::Fd(external_memory_fd)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(non_camel_case_types)]
-#[cfg(any(unix,doc))]
-#[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 /// Subgroup of ExternalMemoryType that export as file
 pub enum ExternalMemoryFdType {
     /// Specifies a POSIX file descriptor handle that has only limited valid usage outside of Vulkan and other compatible APIs.

@@ -1223,18 +1223,22 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    /// Get external buffer properties
     fn query_external_buffer_properties(
-	    &self,
-	    usage: hal::buffer::Usage,
-	    sparse: hal::memory::SparseFlags,
-	    memory_type: hal::external_memory::ExternalMemoryType,
-    )->Result<hal::external_memory::ExternalBufferProperties,hal::external_memory::ExternalMemoryQueryError> {
-        let external_memory_capabilities_extension =
-            match &self.instance.external_memory_capabilities {
-                Some(functor) => functor,
-                _ => return Err(hal::external_memory::ExternalMemoryQueryError::UnsupportedFeature),
-            };
+        &self,
+        usage: hal::buffer::Usage,
+        sparse: hal::memory::SparseFlags,
+        memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalBufferProperties,
+        hal::external_memory::ExternalMemoryQueryError,
+    > {
+        let external_memory_capabilities_extension = match &self
+            .instance
+            .external_memory_capabilities
+        {
+            Some(functor) => functor,
+            _ => return Err(hal::external_memory::ExternalMemoryQueryError::UnsupportedFeature),
+        };
         let external_buffer_info = vk::PhysicalDeviceExternalBufferInfo::builder()
             .flags(conv::map_buffer_create_flags(sparse))
             .usage(conv::map_buffer_usage(usage))
@@ -1242,30 +1246,40 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .build();
         let vk_mem_properties = {
             let mut external_buffer_properties = vk::ExternalBufferProperties::builder().build();
-            unsafe{
-            external_memory_capabilities_extension
-                .get_physical_device_external_buffer_properties_khr(
-                    self.handle,
-                    &external_buffer_info,
-                    &mut external_buffer_properties,
-                )};
+            unsafe {
+                external_memory_capabilities_extension
+                    .get_physical_device_external_buffer_properties_khr(
+                        self.handle,
+                        &external_buffer_info,
+                        &mut external_buffer_properties,
+                    )
+            };
             external_buffer_properties.external_memory_properties
         };
 
         let external_memory_properties = hal::external_memory::ExternalMemoryProperties::new(
-	        vk_mem_properties.external_memory_features.contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE),
-	        vk_mem_properties.external_memory_features.contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE),
-	        vk_mem_properties.external_memory_features.contains(vk::ExternalMemoryFeatureFlags::DEDICATED_ONLY),
-	        memory_type,
-	        conv::map_vk_external_memory_handle_type_flags(vk_mem_properties.compatible_handle_types),
-	        conv::map_vk_external_memory_handle_type_flags(vk_mem_properties.export_from_imported_handle_types),
+            vk_mem_properties
+                .external_memory_features
+                .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE),
+            vk_mem_properties
+                .external_memory_features
+                .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE),
+            vk_mem_properties
+                .external_memory_features
+                .contains(vk::ExternalMemoryFeatureFlags::DEDICATED_ONLY),
+            memory_type,
+            conv::map_vk_external_memory_handle_type_flags(
+                vk_mem_properties.compatible_handle_types,
+            ),
+            conv::map_vk_external_memory_handle_type_flags(
+                vk_mem_properties.export_from_imported_handle_types,
+            ),
         );
-
 
         Ok(hal::external_memory::ExternalBufferProperties::new(
             usage,
             sparse,
-            external_memory_properties
+            external_memory_properties,
         ))
     }
 

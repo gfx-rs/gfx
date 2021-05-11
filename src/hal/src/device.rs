@@ -773,7 +773,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<B::Memory, external_memory::ExternalMemoryAllocateError>;
 
     #[cfg(any(unix,doc))]
-    /// Export memory as file
+    /// Export memory as unix file descriptor
     unsafe fn export_memory_as_fd(
 	    &self,
         external_memory_type: external_memory::ExternalMemoryFdType,
@@ -781,13 +781,14 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<std::os::unix::io::RawFd, external_memory::ExternalMemoryExportError>;
 
     #[cfg(any(windows,doc))]
+    /// Export memory as windows handle
     unsafe fn export_memory_as_handle(
 	    &self,
         external_memory_type: external_memory::ExternalMemoryHandleType,
         memory: &B::Memory,
-    ) -> Result<*mut std::ffi::c_void, external_memory::ExternalMemoryExportError>;
+    ) -> Result<std::os::windows::raw::HANDLE, external_memory::ExternalMemoryExportError>;
 
-    /// Export memory as ptr
+    /// Export memory as host pointer
     unsafe fn export_memory_as_ptr(
 	    &self,
         external_memory_type: external_memory::ExternalMemoryPtrType,

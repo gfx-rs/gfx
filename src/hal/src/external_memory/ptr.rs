@@ -41,7 +41,7 @@ impl ExternalMemoryPtr {
         }
     }
     /// Get the external memory ptr type
-    pub fn get_external_memory_ptr_type(&self)->ExternalMemoryPtrType {
+    pub fn get_type(&self)->ExternalMemoryPtrType {
         match self {
             Self::HOST_ALLOCATION(_,_)=>ExternalMemoryPtrType::HOST_ALLOCATION,
             Self::HOST_MAPPED_FOREIGN_MEMORY(_,_)=>ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY,

@@ -2170,6 +2170,54 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
+    unsafe fn create_external_buffer(
+        &self,
+        external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        usage: hal::buffer::Usage,
+        sparse: hal::memory::SparseFlags,
+        size: u64,
+    ) -> Result<n::Buffer, hal::external_memory::ExternalBufferCreateError> {unimplemented!()}
+
+    unsafe fn allocate_exportable_memory(
+        &self,
+        external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        dedicated_allocation: Option<hal::external_memory::BufferOrImage<B>>,
+        mem_type: hal::MemoryTypeId,
+        size: u64,
+    ) -> Result<n::Memory, hal::external_memory::ExternalMemoryAllocateError> {unimplemented!()}
+
+    unsafe fn import_external_memory(
+        &self,
+        external_memory: hal::external_memory::ExternalMemory,
+        dedicated_allocation: Option<hal::external_memory::BufferOrImage<B>>,
+        mem_type: hal::MemoryTypeId,
+    ) -> Result<n::Memory, hal::external_memory::ExternalMemoryAllocateError> {unimplemented!()}
+
+    #[cfg(any(unix,doc))]
+    unsafe fn export_memory_as_fd(
+        &self,
+        external_memory_type: hal::external_memory::ExternalMemoryFdType,
+        memory: &n::Memory,
+    ) -> Result<std::os::unix::io::RawFd, hal::external_memory::ExternalMemoryExportError> {unimplemented!()}
+
+    #[cfg(any(windows,doc))]
+    unsafe fn export_memory_as_handle(
+        &self,
+        external_memory_type: hal::external_memory::ExternalMemoryHandleType,
+        memory: &n::Memory,
+    ) -> Result<std::os::windows::raw::HANDLE, hal::external_memory::ExternalMemoryExportError> {unimplemented!()}
+
+    unsafe fn get_external_memory_mask(
+        &self,
+        external_memory: &hal::external_memory::ExternalMemory,
+    ) -> Result<u32, hal::external_memory::ExternalMemoryError> {unimplemented!()}
+
+    unsafe fn export_memory_as_ptr(
+        &self,
+        external_memory_type: hal::external_memory::ExternalMemoryPtrType,
+        memory: &n::Memory,
+    ) -> Result<*mut std::ffi::c_void, hal::external_memory::ExternalMemoryExportError> {unimplemented!()}
+
     fn start_capture(&self) {
         //TODO
     }

@@ -144,6 +144,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
+    fn query_external_buffer_properties(
+        &self,
+        usage: hal::buffer::Usage,
+        sparse: hal::memory::SparseFlags,
+        memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalBufferProperties,
+        hal::external_memory::ExternalMemoryQueryError,
+    > {unimplemented!()}
+
     fn features(&self) -> hal::Features {
         hal::Features::empty()
     }
@@ -595,6 +605,57 @@ impl device::Device<Backend> for Device {
     unsafe fn set_pipeline_layout_name(&self, _pipeline_layout: &mut (), _name: &str) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
+
+    unsafe fn create_external_buffer(
+        &self,
+        external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        usage: hal::buffer::Usage,
+        sparse: hal::memory::SparseFlags,
+        size: u64,
+    ) -> Result<<Backend as gfx_hal::Backend>::Buffer, hal::external_memory::ExternalBufferCreateError> {unimplemented!()}
+
+    unsafe fn allocate_exportable_memory(
+        &self,
+        external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        dedicated_allocation: Option<hal::external_memory::BufferOrImage<Backend>>,
+        mem_type: hal::MemoryTypeId,
+        size: u64,
+    ) -> Result<<Backend as gfx_hal::Backend>::Memory, hal::external_memory::ExternalMemoryAllocateError> {unimplemented!()}
+
+    unsafe fn import_external_memory(
+        &self,
+        external_memory: hal::external_memory::ExternalMemory,
+        dedicated_allocation: Option<hal::external_memory::BufferOrImage<Backend>>,
+        mem_type: hal::MemoryTypeId,
+    ) -> Result<<Backend as gfx_hal::Backend>::Memory, hal::external_memory::ExternalMemoryAllocateError> {unimplemented!()}
+
+    #[cfg(any(unix,doc))]
+    /// Export memory as file
+    unsafe fn export_memory_as_fd(
+        &self,
+        external_memory_type: hal::external_memory::ExternalMemoryFdType,
+        memory: &<Backend as gfx_hal::Backend>::Memory,
+    ) -> Result<std::os::unix::io::RawFd, hal::external_memory::ExternalMemoryExportError> {unimplemented!()}
+
+    #[cfg(any(windows,doc))]
+    /// Export memory as windows handle
+    unsafe fn export_memory_as_handle(
+        &self,
+        external_memory_type: hal::external_memory::ExternalMemoryHandleType,
+        memory: &<Backend as gfx_hal::Backend>::Memory,
+    ) -> Result<std::os::windows::raw::HANDLE, hal::external_memory::ExternalMemoryExportError> {unimplemented!()}
+
+    unsafe fn get_external_memory_mask(
+        &self,
+        external_memory: &hal::external_memory::ExternalMemory,
+    ) -> Result<u32, hal::external_memory::ExternalMemoryError> {unimplemented!()}
+
+    unsafe fn export_memory_as_ptr(
+        &self,
+        external_memory_type: hal::external_memory::ExternalMemoryPtrType,
+        memory: &<Backend as gfx_hal::Backend>::Memory,
+    ) -> Result<*mut std::ffi::c_void, hal::external_memory::ExternalMemoryExportError> {unimplemented!()}
+
 
     unsafe fn reset_fence(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {
         Ok(())

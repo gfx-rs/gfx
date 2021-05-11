@@ -3,10 +3,18 @@
 mod errors;
 pub use errors::*;
 
+#[cfg(any(unix,doc))]
+#[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 mod fd;
+#[cfg(any(unix,doc))]
+#[cfg_attr(feature = "unstable", doc(cfg(unix)))]
 pub use fd::*;
 
+#[cfg(any(windows,doc))]
+#[cfg_attr(feature = "unstable", doc(cfg(windows)))]
 mod handle;
+#[cfg(any(windows,doc))]
+#[cfg_attr(feature = "unstable", doc(cfg(windows)))]
 pub use handle::*;
 
 mod ptr;
@@ -21,29 +29,8 @@ pub enum BufferOrImage<'a,B: crate::Backend> {
     Image(&'a B::Image)
 }
 
-/// External buffer
-#[derive(Debug)]
-pub struct ExternalBuffer<B: crate::Backend>(B::Buffer,ExternalBufferProperties,ExternalMemoryTypeFlags);
-impl<B: crate::Backend> ExternalBuffer<B> {
-    /// Constructor
-    pub fn new(buffer: B::Buffer,properties: ExternalBufferProperties, external_memory_types: ExternalMemoryTypeFlags)->Self {
-        Self(buffer,properties,external_memory_types)
-    }
-    /// Get the buffer
-    pub fn get_buffer(&self)->&B::Buffer {&self.0}
-    /// Get the external buffer properties
-    pub fn get_properties(&self)->&ExternalBufferProperties {&self.1}
-    /// Get external memory types
-    pub fn get_external_memory_types(&self)->&ExternalMemoryTypeFlags {&self.2}
-}
-impl<B: crate::Backend> std::ops::Deref for ExternalBuffer<B> {
-    type Target = B::Buffer;
-    fn deref(&self) -> &Self::Target {&self.0}
-}
-
-
 /// External buffer properties
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct ExternalBufferProperties {
     usage: crate::buffer::Usage,
 	sparse: crate::memory::SparseFlags,
@@ -78,7 +65,7 @@ impl std::ops::Deref for ExternalBufferProperties {
 }
 
 /// External memory properties
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct ExternalMemoryProperties {
 	exportable: bool,
 	importable: bool,
@@ -119,64 +106,6 @@ impl ExternalMemoryProperties {
     /// Get the external handle types that can be exported from an imported memory using the queried external handle type
     pub fn get_export_from_imported_memory_types(&self)->ExternalMemoryTypeFlags{self.export_from_imported_memory_types}
 }
-
-
-/// Enumeration for all the external handles
-#[derive(Debug)]
-pub enum ExternalHandleType {
-    #[cfg(any(unix,doc))]
-    /// Unix file descriptor
-    Fd,
-    #[cfg(any(windows,doc))]
-    /// Window handle
-    Handle,
-    /// Pointer to a host allocated memory
-    Ptr
-}
-
-
-/// Enumeration for all the external handles
-#[derive(Debug)]
-pub enum ExternalHandle {
-    #[cfg(unix)]
-    /// Unix file descriptor
-    Fd(Fd),
-    #[cfg(windows)]
-    /// Window handle
-    Handle(Handle),
-    /// Pointer to a host allocated memory
-    Ptr(Ptr)
-}
-
-#[cfg(unix)]
-impl From<Fd> for ExternalHandle {
-    fn from(fd: Fd)->Self {Self::Fd(fd)}
-}
-#[cfg(windows)]
-impl From<Handle> for ExternalHandle {
-    fn from(handle: Handle)->Self {Self::Handle(handle)}
-}
-impl From<Ptr> for ExternalHandle {
-    fn from(ptr: Ptr)->Self {Self::Ptr(ptr)}
-}
-
-
-/// External memory handle
-#[derive(Debug)]
-#[allow(non_camel_case_types)]
-pub enum ExternalMemory {
-    #[cfg(any(unix,doc))]
-    #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
-    /// External memory fd
-    Fd(ExternalMemoryFd),
-    #[cfg(any(windows,doc))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-    /// External memory handle
-    Handle(ExternalMemoryHandle),
-    /// External memory ptr
-    Ptr(ExternalMemoryPtr)
-}
-
 
 bitflags!(
     /// External memory type flags.
@@ -252,7 +181,7 @@ impl From<ExternalMemoryType> for ExternalMemoryTypeFlags {
 }
 
 /// External memory types
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone,Copy,Debug,PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum ExternalMemoryType {
     #[cfg(any(unix,doc))]
@@ -269,179 +198,40 @@ pub enum ExternalMemoryType {
 
 
 
-
-
-
-
-
-/*
-impl From<ExternalMemoryFileType> for ExternalMemoryType {
-    fn from(external_memory_type: ExternalMemoryFileType)->Self {
-        match external_memory_type {
-            #[cfg(any(unix,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
-            ExternalMemoryFileType::OPAQUE_FD=>Self::OPAQUE_FD,
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryFileType::OPAQUE_WIN32=>Self::OPAQUE_WIN32,
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryFileType::OPAQUE_WIN32_KMT=>Self::OPAQUE_WIN32_KMT,
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryFileType::D3D11_TEXTURE=>Self::D3D11_TEXTURE,
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryFileType::D3D11_TEXTURE_KMT=>Self::D3D11_TEXTURE_KMT,
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryFileType::D3D12_HEAP=>Self::D3D12_HEAP,
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryFileType::D3D12_RESOURCE=>Self::D3D12_RESOURCE,
-            #[cfg(any(target_os = "linux",target_os = "android",doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(any(target_os = "linux",target_os = "android"))))]
-            ExternalMemoryFileType::DMA_BUF=>Self::DMA_BUF,
-            #[cfg(any(target_os = "android",doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(target_os = "android")))]
-            ExternalMemoryFileType::ANDROID_HARDWARE_BUFFER=>Self::ANDROID_HARDWARE_BUFFER,
-        }
-    }
-}
-impl From<ExternalMemoryPtrType> for ExternalMemoryType {
-    fn from(external_memory_type: ExternalMemoryPtrType)->Self {
-        match external_memory_type {
-            ExternalMemoryPtrType::HOST_ALLOCATION=>Self::HOST_ALLOCATION,
-            ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY=>Self::HOST_MAPPED_FOREIGN_MEMORY,
-        }
-    }
-}
-*/
-
-
-
-
-
-
-
-
-
-/*
-//TODO Remove after no more needed
-/// Subgroup of ExternalMemoryType that export as file
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// External memory handle
+#[derive(Debug)]
 #[allow(non_camel_case_types)]
-pub enum ExternalMemoryFileType {
+pub enum ExternalMemory {
     #[cfg(any(unix,doc))]
     #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
-    /// Specifies a POSIX file descriptor handle that has only limited valid usage outside of Vulkan and other compatible APIs.
-    /// It must be compatible with the POSIX system calls dup, dup2, close, and the non-standard system call dup3.
-    /// Additionally, it must be transportable over a socket using an SCM_RIGHTS control message.
-    /// It owns a reference to the underlying memory resource represented by its memory object.
-    OPAQUE_FD,
+    /// External memory fd
+    Fd(ExternalMemoryFd),
     #[cfg(any(windows,doc))]
     #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-    /// Specifies an NT handle that has only limited valid usage outside of Vulkan and other compatible APIs.
-    /// It must be compatible with the functions DuplicateHandle, CloseHandle, CompareObjectHandles, GetHandleInformation, and SetHandleInformation.
-    /// It owns a reference to the underlying memory resource represented by its memory object.
-    OPAQUE_WIN32,
-    #[cfg(any(windows,doc))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-    /// Specifies a global share handle that has only limited valid usage outside of Vulkan and other compatible APIs.
-    /// It is not compatible with any native APIs.
-    /// It does not own a reference to the underlying memory resource represented by its memory object, and will therefore become invalid when all the memory objects with it are destroyed.
-    OPAQUE_WIN32_KMT,
-    #[cfg(any(windows,doc))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-    /// Specifies an NT handle returned by IDXGIResource1::CreateSharedHandle referring to a Direct3D 10 or 11 texture resource.
-    /// It owns a reference to the memory used by the Direct3D resource.
-    D3D11_TEXTURE,
-    #[cfg(any(windows,doc))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-    /// Specifies a global share handle returned by IDXGIResource::GetSharedHandle referring to a Direct3D 10 or 11 texture resource.
-    /// It does not own a reference to the underlying Direct3D resource, and will therefore become invalid when all the memory objects and Direct3D resources associated with it are destroyed.
-    D3D11_TEXTURE_KMT,
-    #[cfg(any(windows,doc))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-    /// Specifies an NT handle returned by ID3D12Device::CreateSharedHandle referring to a Direct3D 12 heap resource.
-    /// It owns a reference to the resources used by the Direct3D heap.
-    D3D12_HEAP,
-    #[cfg(any(windows,doc))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-    /// Specifies an NT handle returned by ID3D12Device::CreateSharedHandle referring to a Direct3D 12 committed resource.
-    /// It owns a reference to the memory used by the Direct3D resource.
-    D3D12_RESOURCE,
-    #[cfg(any(target_os = "linux",target_os = "android",doc))]
-    #[cfg_attr(feature = "unstable", doc(cfg(any(target_os = "linux",target_os = "android"))))]
-    /// Is a file descriptor for a Linux dma_buf.
-    /// It owns a reference to the underlying memory resource represented by its Vulkan memory object.
-    DMA_BUF,
-    #[cfg(any(target_os = "android",doc))]
-    #[cfg_attr(feature = "unstable", doc(cfg(target_os = "android")))]
-    /// Specifies an AHardwareBuffer object defined by the Android NDK. See Android Hardware Buffers for more details of this handle type.
-    ANDROID_HARDWARE_BUFFER,
+    /// External memory handle
+    Handle(ExternalMemoryHandle),
+    /// External memory ptr
+    Ptr(ExternalMemoryPtr)
 }
-
-impl std::convert::TryFrom<ExternalMemoryTypeFlags> for ExternalMemoryFileType {
-    type Error = &'static str;
-    fn try_from(external_memory_types: ExternalMemoryTypeFlags)->Result<Self, Self::Error> {
-        match external_memory_types {
+impl ExternalMemory {
+    /// Get the size of this external memory
+    pub fn get_size(&self)->u64 {
+        match self {
             #[cfg(any(unix,doc))]
-            ExternalMemoryTypeFlags::OPAQUE_FD=>Ok(Self::OPAQUE_FD),
+            Self::Fd(external_memory_fd)=>external_memory_fd.get_size(),
             #[cfg(any(windows,doc))]
-            ExternalMemoryTypeFlags::OPAQUE_WIN32=>Ok(Self::OPAQUE_WIN32),
+            Self::Handle(external_memory_handle)=>external_memory_handle.get_size(),
+            Self::Ptr(external_memory_ptr)=>external_memory_ptr.get_size(),
+        }
+    }
+    /// Get the type of this external memory
+    pub fn get_type(&self)->ExternalMemoryType {
+        match self {
+            #[cfg(any(unix,doc))]
+            Self::Fd(external_memory_fd)=>ExternalMemoryType::Fd(external_memory_fd.get_type()),
             #[cfg(any(windows,doc))]
-            ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT=>Ok(Self::OPAQUE_WIN32_KMT),
-            #[cfg(any(windows,doc))]
-            ExternalMemoryTypeFlags::D3D11_TEXTURE=>Ok(Self::D3D11_TEXTURE),
-            #[cfg(any(windows,doc))]
-            ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT=>Ok(Self::D3D11_TEXTURE_KMT),
-            #[cfg(any(windows,doc))]
-            ExternalMemoryTypeFlags::D3D12_HEAP=>Ok(Self::D3D12_HEAP),
-            #[cfg(any(windows,doc))]
-            ExternalMemoryTypeFlags::D3D12_RESOURCE=>Ok(Self::D3D12_RESOURCE),
-            #[cfg(any(target_os = "linux",target_os = "android",doc))]
-            ExternalMemoryTypeFlags::DMA_BUF=>Ok(Self::DMA_BUF),
-            #[cfg(any(target_os = "android",doc))]
-            ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER=>Ok(Self::ANDROID_HARDWARE_BUFFER),
-            _=>Err("Cannot convert")
+            Self::Handle(external_memory_handle)=>ExternalMemoryType::Handle(external_memory_handle.get_type()),
+            Self::Ptr(external_memory_ptr)=>ExternalMemoryType::Ptr(external_memory_ptr.get_type()),
         }
     }
 }
-impl std::convert::TryFrom<ExternalMemoryType> for ExternalMemoryFileType {
-    type Error = &'static str;
-    fn try_from(external_memory_type: ExternalMemoryType)->Result<Self, Self::Error> {
-        match external_memory_type {
-            #[cfg(any(unix,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
-            ExternalMemoryType::OPAQUE_FD=>Ok(Self::OPAQUE_FD),
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryType::OPAQUE_WIN32=>Ok(Self::OPAQUE_WIN32),
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryType::OPAQUE_WIN32_KMT=>Ok(Self::OPAQUE_WIN32_KMT),
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryType::D3D11_TEXTURE=>Ok(Self::D3D11_TEXTURE),
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryType::D3D11_TEXTURE_KMT=>Ok(Self::D3D11_TEXTURE_KMT),
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryType::D3D12_HEAP=>Ok(Self::D3D12_HEAP),
-            #[cfg(any(windows,doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-            ExternalMemoryType::D3D12_RESOURCE=>Ok(Self::D3D12_RESOURCE),
-            #[cfg(any(target_os = "linux",target_os = "android",doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(any(target_os = "linux",target_os = "android"))))]
-            ExternalMemoryType::DMA_BUF=>Ok(Self::DMA_BUF),
-            #[cfg(any(target_os = "android",doc))]
-            #[cfg_attr(feature = "unstable", doc(cfg(target_os = "android")))]
-            ExternalMemoryType::ANDROID_HARDWARE_BUFFER=>Ok(Self::ANDROID_HARDWARE_BUFFER),
-            _=>Err("Cannot convert")
-        }
-    }
-}
-
-*/
