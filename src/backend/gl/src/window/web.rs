@@ -105,7 +105,7 @@ impl hal::Instance<B> for Instance {
         &self,
         _display_plane: &hal::display::DisplayPlane<crate::Backend>,
         _plane_stack_index: u32,
-        _transformation: hal::display::SurfaceTransformation,
+        _transformation: hal::display::SurfaceTransform,
         _alpha: hal::display::DisplayPlaneAlpha,
         _image_extent: hal::window::Extent2D,
     ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {

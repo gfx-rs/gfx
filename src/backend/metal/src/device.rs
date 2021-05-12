@@ -11,7 +11,7 @@ use cocoa_foundation::foundation::NSUInteger;
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use hal::{
-    adapter, buffer, device as d, format, image, memory,
+    adapter, buffer, device as d, display, format, image, memory,
     memory::Properties,
     pass,
     pool::CommandPoolCreateFlags,
@@ -3413,7 +3413,7 @@ impl hal::device::Device<Backend> for Device {
         _display: &display::Display<Backend>,
         _power_state: &display::PowerState,
     ) -> Result<(), display::DisplayControlError> {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+        unimplemented!()
     }
 
     unsafe fn register_device_event(
@@ -3421,7 +3421,7 @@ impl hal::device::Device<Backend> for Device {
         _device_event: &display::DeviceEvent,
         _fence: &mut <Backend as hal::Backend>::Fence,
     ) -> Result<(), display::DisplayControlError> {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+        unimplemented!()
     }
 
     unsafe fn register_display_event(
@@ -3430,7 +3430,7 @@ impl hal::device::Device<Backend> for Device {
         _display_event: &display::DisplayEvent,
         _fence: &mut <Backend as hal::Backend>::Fence,
     ) -> Result<(), display::DisplayControlError> {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+        unimplemented!()
     }
 
     fn start_capture(&self) {
