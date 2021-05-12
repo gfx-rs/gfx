@@ -498,14 +498,16 @@ impl hal::Instance<crate::Backend> for Instance {
         }
     }
 
-     fn create_display_plane_surface(
+    fn create_display_plane_surface(
         &self,
         _display_plane: &hal::display::DisplayPlane<crate::Backend>,
         _plane_stack_index: u32,
         _transformation: hal::display::SurfaceTransformation,
         _alpha: hal::display::DisplayPlaneAlpha,
-        _image_extent: hal::window::Extent2D
-    ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
+        _image_extent: hal::window::Extent2D,
+    ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {
+        unimplemented!();
+    }
 }
 
 #[derive(Debug)]

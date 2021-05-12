@@ -137,13 +137,17 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # Arguments
     ///
     /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
-    fn enumerate_available_displays(&self)->Result<Vec<display::Display<B>>,device::OutOfMemory>;
+    fn enumerate_available_displays(&self)
+        -> Result<Vec<display::Display<B>>, device::OutOfMemory>;
 
     /// Enumerate compatibles planes with the provided display.
     /// # Arguments
     ///
     /// * `display` - display on which the the compatible planes will be listed.
-    fn enumerate_compatible_planes(&self,display: &display::Display<B>)->Result<Vec<display::Plane>,device::OutOfMemory>;
+    fn enumerate_compatible_planes(
+        &self,
+        display: &display::Display<B>,
+    ) -> Result<Vec<display::Plane>, device::OutOfMemory>;
 
     /// Create a new display mode from a display, a resolution, a refresh_rate and the plane index.
     /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
@@ -155,9 +159,9 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     fn create_display_mode(
         &self,
         display: &display::Display<B>,
-        resolution: (u32,u32),
-        refresh_rate: u32
-    )->Result<display::DisplayMode<B>,display::DisplayModeError>;
+        resolution: (u32, u32),
+        refresh_rate: u32,
+    ) -> Result<display::DisplayMode<B>, display::DisplayModeError>;
 
     /// Create a display plane from a display, a resolution, a refresh_rate and a plane.
     /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
@@ -171,7 +175,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         display: &'a display::DisplayMode<B>,
         plane: &'a display::Plane,
-    )->Result<display::DisplayPlane<'a,B>,device::OutOfMemory>;
+    ) -> Result<display::DisplayPlane<'a, B>, device::OutOfMemory>;
 }
 
 /// The type of a physical graphics device

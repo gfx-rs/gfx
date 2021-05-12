@@ -450,23 +450,35 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.properties
     }
 
-    fn enumerate_available_displays(&self)->Result<Vec<hal::display::Display<crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
+    fn enumerate_available_displays(
+        &self,
+    ) -> Result<Vec<hal::display::Display<crate::Backend>>, hal::device::OutOfMemory> {
+        unimplemented!();
+    }
 
-    fn enumerate_compatible_planes(&self,_display: &hal::display::Display<crate::Backend>)->Result<Vec<hal::display::Plane>,hal::device::OutOfMemory> {unimplemented!();}
+    fn enumerate_compatible_planes(
+        &self,
+        _display: &hal::display::Display<crate::Backend>,
+    ) -> Result<Vec<hal::display::Plane>, hal::device::OutOfMemory> {
+        unimplemented!();
+    }
 
     fn create_display_mode(
         &self,
         _display: &hal::display::Display<crate::Backend>,
-        _resolution: (u32,u32),
-        _refresh_rate: u32
-    )->Result<hal::display::DisplayMode<crate::Backend>,hal::display::DisplayModeError> {unimplemented!();}
+        _resolution: (u32, u32),
+        _refresh_rate: u32,
+    ) -> Result<hal::display::DisplayMode<crate::Backend>, hal::display::DisplayModeError> {
+        unimplemented!();
+    }
 
     fn create_display_plane<'a>(
         &self,
         _display: &'a hal::display::DisplayMode<crate::Backend>,
         _plane: &'a hal::display::Plane,
-    )->Result<hal::display::DisplayPlane<'a,crate::Backend>,hal::device::OutOfMemory> {unimplemented!();}
-
+    ) -> Result<hal::display::DisplayPlane<'a, crate::Backend>, hal::device::OutOfMemory> {
+        unimplemented!();
+    }
 }
 
 #[derive(Clone)]
@@ -1518,8 +1530,10 @@ impl hal::Instance<Backend> for Instance {
         _plane_stack_index: u32,
         _transformation: hal::display::SurfaceTransformation,
         _alpha: hal::display::DisplayPlaneAlpha,
-        _image_extent: hal::window::Extent2D
-    ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
+        _image_extent: hal::window::Extent2D,
+    ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {
+        unimplemented!();
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

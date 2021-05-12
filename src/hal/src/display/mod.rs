@@ -2,7 +2,10 @@
 //!
 //! A display represent a physical display collected from an Adapter
 
-use crate::{Backend,window::{Offset2D,Extent2D}};
+use crate::{
+    window::{Extent2D, Offset2D},
+    Backend,
+};
 pub mod display_control;
 pub use display_control::*;
 
@@ -32,28 +35,27 @@ bitflags! {
     }
 }
 impl From<SurfaceTransform> for SurfaceTransformFlags {
-    fn from(surface_transformation: SurfaceTransform)->Self {
+    fn from(surface_transformation: SurfaceTransform) -> Self {
         match surface_transformation {
-            SurfaceTransform::IDENTITY=>Self::IDENTITY,
-            SurfaceTransform::ROTATE_90=>Self::ROTATE_90,
-            SurfaceTransform::ROTATE_180=>Self::ROTATE_180,
-            SurfaceTransform::ROTATE_270=>Self::ROTATE_270,
-            SurfaceTransform::HORIZONTAL_MIRROR=>Self::HORIZONTAL_MIRROR,
-            SurfaceTransform::HORIZONTAL_MIRROR_ROTATE_90=>Self::HORIZONTAL_MIRROR_ROTATE_90,
-            SurfaceTransform::HORIZONTAL_MIRROR_ROTATE_180=>Self::HORIZONTAL_MIRROR_ROTATE_180,
-            SurfaceTransform::HORIZONTAL_MIRROR_ROTATE_270=>Self::HORIZONTAL_MIRROR_ROTATE_270,
-            SurfaceTransform::INHERIT=>Self::INHERIT
+            SurfaceTransform::IDENTITY => Self::IDENTITY,
+            SurfaceTransform::ROTATE_90 => Self::ROTATE_90,
+            SurfaceTransform::ROTATE_180 => Self::ROTATE_180,
+            SurfaceTransform::ROTATE_270 => Self::ROTATE_270,
+            SurfaceTransform::HORIZONTAL_MIRROR => Self::HORIZONTAL_MIRROR,
+            SurfaceTransform::HORIZONTAL_MIRROR_ROTATE_90 => Self::HORIZONTAL_MIRROR_ROTATE_90,
+            SurfaceTransform::HORIZONTAL_MIRROR_ROTATE_180 => Self::HORIZONTAL_MIRROR_ROTATE_180,
+            SurfaceTransform::HORIZONTAL_MIRROR_ROTATE_270 => Self::HORIZONTAL_MIRROR_ROTATE_270,
+            SurfaceTransform::INHERIT => Self::INHERIT,
         }
     }
 }
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 #[allow(non_camel_case_types)]
 /**
 List of the hardware display transformations
 */
-pub enum SurfaceTransform
-{
+pub enum SurfaceTransform {
     /// Specify that image content is presented without being transformed.
     IDENTITY,
     /// Specify that image content is rotated 90 degrees clockwise.
@@ -71,19 +73,19 @@ pub enum SurfaceTransform
     /// Specify that image content is mirrored horizontally, then rotated 270 degrees clockwise.
     HORIZONTAL_MIRROR_ROTATE_270,
     /// Specify that the presentation transform is not specified, and is instead determined by platform-specific considerations and mechanisms outside Vulkan.
-    INHERIT
+    INHERIT,
 }
-impl Default for SurfaceTransform
-{
-    fn default() -> Self { Self::IDENTITY }
+impl Default for SurfaceTransform {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
 }
 
 /**
 General information about the a [display][Display].
 */
 #[derive(Debug)]
-pub struct DisplayInfo
-{
+pub struct DisplayInfo {
     /// Name of the display. Generally, this will be the name provided by the display’s EDID.
     pub name: Option<String>,
     /// Physical width and height of the visible portion of the display, in millimeters.
@@ -95,9 +97,8 @@ pub struct DisplayInfo
     /// Tells whether the planes on the display can have their z order changed. If true, the application can re-arrange the planes on this display in any order relative to each other.
     pub plane_reorder_possible: bool,
     /// Tells whether the display supports self-refresh/internal buffering. If true, the application can submit persistent present operations on swapchains created against this display.
-    pub persistent_content: bool
+    pub persistent_content: bool,
 }
-
 
 bitflags! {
     /**
@@ -116,12 +117,12 @@ bitflags! {
     }
 }
 impl From<DisplayPlaneAlpha> for DisplayPlaneAlphaFlags {
-    fn from(display_plane_alpha: DisplayPlaneAlpha)->Self {
+    fn from(display_plane_alpha: DisplayPlaneAlpha) -> Self {
         match display_plane_alpha {
-            DisplayPlaneAlpha::OPAQUE=>Self::OPAQUE,
-            DisplayPlaneAlpha::GLOBAL(_)=>Self::GLOBAL,
-            DisplayPlaneAlpha::PER_PIXEL=>Self::PER_PIXEL,
-            DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED=>Self::PER_PIXEL_PREMULTIPLIED
+            DisplayPlaneAlpha::OPAQUE => Self::OPAQUE,
+            DisplayPlaneAlpha::GLOBAL(_) => Self::GLOBAL,
+            DisplayPlaneAlpha::PER_PIXEL => Self::PER_PIXEL,
+            DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED => Self::PER_PIXEL_PREMULTIPLIED,
         }
     }
 }
@@ -131,8 +132,7 @@ Alpha mode used in display surface creation
 */
 #[derive(Debug)]
 #[allow(non_camel_case_types)]
-pub enum DisplayPlaneAlpha
-{
+pub enum DisplayPlaneAlpha {
     /// Specifies that the source image will be treated as opaque
     OPAQUE,
     /// Specifies that the provided global alpha value will be applied to all pixels in the source image.
@@ -140,24 +140,27 @@ pub enum DisplayPlaneAlpha
     /// Specifies that the alpha value will be determined by the alpha channel of the source image’s pixels. If the source format contains no alpha values, no blending will be applied. The source alpha values are not premultiplied into the source image’s other color channels.
     PER_PIXEL,
     /// Equivalent to PerPixel, except the source alpha values are assumed to be premultiplied into the source image’s other color channels.
-    PER_PIXEL_PREMULTIPLIED
+    PER_PIXEL_PREMULTIPLIED,
 }
 
-impl Default for DisplayPlaneAlpha
-{
-    fn default() -> Self { Self::OPAQUE }
+impl Default for DisplayPlaneAlpha {
+    fn default() -> Self {
+        Self::OPAQUE
+    }
 }
 
 // This implementation is done to ignore differences on the value in DisplayPlaneAlpha::Global
 impl PartialEq for DisplayPlaneAlpha {
     fn eq(&self, other: &Self) -> bool {
-        match (self,other)
-        {
-            (DisplayPlaneAlpha::OPAQUE,DisplayPlaneAlpha::OPAQUE)=>true,
-            (DisplayPlaneAlpha::GLOBAL(_),DisplayPlaneAlpha::GLOBAL(_))=>true,
-            (DisplayPlaneAlpha::PER_PIXEL,DisplayPlaneAlpha::PER_PIXEL)=>true,
-            (DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED,DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED)=>true,
-            _=>false
+        match (self, other) {
+            (DisplayPlaneAlpha::OPAQUE, DisplayPlaneAlpha::OPAQUE) => true,
+            (DisplayPlaneAlpha::GLOBAL(_), DisplayPlaneAlpha::GLOBAL(_)) => true,
+            (DisplayPlaneAlpha::PER_PIXEL, DisplayPlaneAlpha::PER_PIXEL) => true,
+            (
+                DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED,
+                DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED,
+            ) => true,
+            _ => false,
         }
     }
 }
@@ -188,48 +191,44 @@ pub enum DisplayPlaneSurfaceError {
 Representation of a display
 */
 #[derive(Debug)]
-pub struct Display<B: Backend>
-{
+pub struct Display<B: Backend> {
     /// The display handle.
     pub handle: B::Display,
     /// General informations about this display.
     pub info: DisplayInfo,
     /// Builtin display modes
-    pub modes: Vec<DisplayMode<B>>
+    pub modes: Vec<DisplayMode<B>>,
 }
 
 /**
 General information about the a [DisplayMode][DisplayMode].
 */
 #[derive(Debug)]
-pub struct DisplayMode<B: Backend>
-{
+pub struct DisplayMode<B: Backend> {
     /// The display mode handle
     pub handle: B::DisplayMode,
     /// Resolution
-    pub resolution: (u32,u32),
+    pub resolution: (u32, u32),
     /// Refresh rate
-    pub refresh_rate: u32
+    pub refresh_rate: u32,
 }
 
 /**
 Representation of a plane
 */
 #[derive(Debug)]
-pub struct Plane
-{
+pub struct Plane {
     /// The plane handle.
     pub handle: u32,
     /// The current index on the z stack.
-    pub z_index: u32
+    pub z_index: u32,
 }
 
 /**
 Represent a combination of [display mode][DisplayMode] (so [display][Display] and resolution) and a plane
 */
 #[derive(Debug)]
-pub struct DisplayPlane<'a,B: Backend>
-{
+pub struct DisplayPlane<'a, B: Backend> {
     /// Display mode
     pub display_mode: &'a DisplayMode<B>,
     /// Plane index
@@ -251,6 +250,5 @@ pub struct DisplayPlane<'a,B: Backend>
     /// Same as min_src_extent. but applied to destination.
     pub min_dst_extent: Extent2D,
     /// Same as max_src_extent. but applied to destination.
-    pub max_dst_extent: Extent2D
+    pub max_dst_extent: Extent2D,
 }
-

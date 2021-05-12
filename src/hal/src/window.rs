@@ -118,8 +118,8 @@ impl From<image::Extent> for Extent2D {
     }
 }
 
-impl From<(image::Size,image::Size)> for Extent2D {
-    fn from(tuple: (image::Size,image::Size)) -> Self {
+impl From<(image::Size, image::Size)> for Extent2D {
+    fn from(tuple: (image::Size, image::Size)) -> Self {
         Extent2D {
             width: tuple.0,
             height: tuple.1,
@@ -149,8 +149,8 @@ pub struct Offset2D {
     pub y: image::TexelCoordinate,
 }
 
-impl From<(image::TexelCoordinate,image::TexelCoordinate)> for Offset2D {
-    fn from(tuple: (image::TexelCoordinate,image::TexelCoordinate)) -> Self {
+impl From<(image::TexelCoordinate, image::TexelCoordinate)> for Offset2D {
+    fn from(tuple: (image::TexelCoordinate, image::TexelCoordinate)) -> Self {
         Offset2D {
             x: tuple.0,
             y: tuple.1,

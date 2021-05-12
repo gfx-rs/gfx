@@ -541,23 +541,35 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn enumerate_available_displays(&self)->Result<Vec<hal::display::Display<crate::Backend>>,hal::device::OutOfMemory> {unimplemented!();}
+    fn enumerate_available_displays(
+        &self,
+    ) -> Result<Vec<hal::display::Display<crate::Backend>>, hal::device::OutOfMemory> {
+        unimplemented!();
+    }
 
-    fn enumerate_compatible_planes(&self,_display: &hal::display::Display<crate::Backend>)->Result<Vec<hal::display::Plane>,hal::device::OutOfMemory> {unimplemented!();}
+    fn enumerate_compatible_planes(
+        &self,
+        _display: &hal::display::Display<crate::Backend>,
+    ) -> Result<Vec<hal::display::Plane>, hal::device::OutOfMemory> {
+        unimplemented!();
+    }
 
     fn create_display_mode(
         &self,
         _display: &hal::display::Display<crate::Backend>,
-        _resolution: (u32,u32),
-        _refresh_rate: u32
-    )->Result<hal::display::DisplayMode<crate::Backend>,hal::display::DisplayModeError> {unimplemented!();}
+        _resolution: (u32, u32),
+        _refresh_rate: u32,
+    ) -> Result<hal::display::DisplayMode<crate::Backend>, hal::display::DisplayModeError> {
+        unimplemented!();
+    }
 
     fn create_display_plane<'a>(
         &self,
         _display: &'a hal::display::DisplayMode<crate::Backend>,
         _plane: &'a hal::display::Plane,
-    )->Result<hal::display::DisplayPlane<'a,crate::Backend>,hal::device::OutOfMemory> {unimplemented!();}
-
+    ) -> Result<hal::display::DisplayPlane<'a, crate::Backend>, hal::device::OutOfMemory> {
+        unimplemented!();
+    }
 }
 
 pub struct LanguageVersion {
@@ -3396,11 +3408,30 @@ impl hal::device::Device<Backend> for Device {
         // TODO
     }
 
-    unsafe fn set_display_power_state(&self, _display: &display::Display<Backend>, _power_state: &display::PowerState)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+    unsafe fn set_display_power_state(
+        &self,
+        _display: &display::Display<Backend>,
+        _power_state: &display::PowerState,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
 
-    unsafe fn register_device_event(&self, _device_event: &display::DeviceEvent, _fence: &mut <Backend as hal::Backend>::Fence)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+    unsafe fn register_device_event(
+        &self,
+        _device_event: &display::DeviceEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
 
-    unsafe fn register_display_event(&self, _display: &display::Display<Backend>, _display_event: &display::DisplayEvent, _fence: &mut <Backend as hal::Backend>::Fence)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+    unsafe fn register_display_event(
+        &self,
+        _display: &display::Display<Backend>,
+        _display_event: &display::DisplayEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
 
     fn start_capture(&self) {
         let device = self.shared.device.lock();

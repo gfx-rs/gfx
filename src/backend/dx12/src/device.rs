@@ -16,9 +16,9 @@ use winapi::{
 
 use auxil::{spirv_cross_specialize_ast, ShaderStage};
 use hal::{
-    buffer, device as d, format, format::Aspects, image, memory, memory::Requirements, pass,
-    pool::CommandPoolCreateFlags, pso, pso::VertexInputRate, query, queue::QueueFamilyId,
-    window as w, display
+    buffer, device as d, display, format, format::Aspects, image, memory, memory::Requirements,
+    pass, pool::CommandPoolCreateFlags, pso, pso::VertexInputRate, query, queue::QueueFamilyId,
+    window as w,
 };
 
 use crate::{
@@ -3776,12 +3776,30 @@ impl d::Device<B> for Device {
         pipeline_layout.shared.signature.SetName(cwstr.as_ptr());
     }
 
-    unsafe fn set_display_power_state(&self, _display: &display::Display<B>, _power_state: &display::PowerState)->Result<(),display::DisplayControlError> { unimplemented!() }
+    unsafe fn set_display_power_state(
+        &self,
+        _display: &display::Display<B>,
+        _power_state: &display::PowerState,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!()
+    }
 
-    unsafe fn register_device_event(&self, _device_event: &display::DeviceEvent, _fence: &mut <B as hal::Backend>::Fence)->Result<(),display::DisplayControlError> { unimplemented!() }
+    unsafe fn register_device_event(
+        &self,
+        _device_event: &display::DeviceEvent,
+        _fence: &mut <B as hal::Backend>::Fence,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!()
+    }
 
-    unsafe fn register_display_event(&self, _display: &display::Display<B>, _display_event: &display::DisplayEvent, _fence: &mut <B as hal::Backend>::Fence)->Result<(),display::DisplayControlError> { unimplemented!() }
-
+    unsafe fn register_display_event(
+        &self,
+        _display: &display::Display<B>,
+        _display_event: &display::DisplayEvent,
+        _fence: &mut <B as hal::Backend>::Fence,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!()
+    }
 
     fn start_capture(&self) {
         //TODO

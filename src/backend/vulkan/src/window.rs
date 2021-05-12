@@ -249,17 +249,21 @@ impl w::Surface<Backend> for Surface {
     fn capabilities(&self, physical_device: &PhysicalDevice) -> w::SurfaceCapabilities {
         // Capabilities
         let caps = unsafe {
-            match self.raw
+            match self
+                .raw
                 .functor
                 .get_physical_device_surface_capabilities(physical_device.handle, self.raw.handle)
-                {
-                    Ok(caps) => caps,
-                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
-                        error!("get_physical_device_surface_capabilities error {:?}", vk::Result::ERROR_SURFACE_LOST_KHR);
-                        vk::SurfaceCapabilitiesKHR::default()
-                    },
-                    Err(e) => panic!("Unable to query surface capabilities {:?}", e),
+            {
+                Ok(caps) => caps,
+                Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
+                    error!(
+                        "get_physical_device_surface_capabilities error {:?}",
+                        vk::Result::ERROR_SURFACE_LOST_KHR
+                    );
+                    vk::SurfaceCapabilitiesKHR::default()
                 }
+                Err(e) => panic!("Unable to query surface capabilities {:?}", e),
+            }
         };
 
         // If image count is 0, the support number of images is unlimited.
@@ -291,17 +295,21 @@ impl w::Surface<Backend> for Surface {
         };
 
         let raw_present_modes = unsafe {
-            match self.raw
+            match self
+                .raw
                 .functor
                 .get_physical_device_surface_present_modes(physical_device.handle, self.raw.handle)
-                {
-                    Ok(present_modes) => present_modes,
-                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
-                        error!("get_physical_device_surface_present_modes error {:?}", vk::Result::ERROR_SURFACE_LOST_KHR);
-                        Vec::new()
-                    },
-                    Err(e) => panic!("Unable to query present modes {:?}", e),
+            {
+                Ok(present_modes) => present_modes,
+                Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
+                    error!(
+                        "get_physical_device_surface_present_modes error {:?}",
+                        vk::Result::ERROR_SURFACE_LOST_KHR
+                    );
+                    Vec::new()
                 }
+                Err(e) => panic!("Unable to query present modes {:?}", e),
+            }
         };
 
         w::SurfaceCapabilities {
@@ -322,16 +330,21 @@ impl w::Surface<Backend> for Surface {
     fn supported_formats(&self, physical_device: &PhysicalDevice) -> Option<Vec<Format>> {
         // Swapchain formats
         let raw_formats = unsafe {
-            match self.raw
+            match self
+                .raw
                 .functor
-                .get_physical_device_surface_formats(physical_device.handle, self.raw.handle) {
-                    Ok(formats) => formats,
-                    Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
-                        error!("get_physical_device_surface_formats error {:?}", vk::Result::ERROR_SURFACE_LOST_KHR);
-                        return Some(Vec::new());
-                    },
-                    Err(e) => panic!("Unable to query surface formats {:?}", e),
+                .get_physical_device_surface_formats(physical_device.handle, self.raw.handle)
+            {
+                Ok(formats) => formats,
+                Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
+                    error!(
+                        "get_physical_device_surface_formats error {:?}",
+                        vk::Result::ERROR_SURFACE_LOST_KHR
+                    );
+                    return Some(Vec::new());
                 }
+                Err(e) => panic!("Unable to query surface formats {:?}", e),
+            }
         };
 
         match raw_formats[0].format {

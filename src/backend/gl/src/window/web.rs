@@ -107,8 +107,10 @@ impl hal::Instance<B> for Instance {
         _plane_stack_index: u32,
         _transformation: hal::display::SurfaceTransformation,
         _alpha: hal::display::DisplayPlaneAlpha,
-        _image_extent: hal::window::Extent2D
-    ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
+        _image_extent: hal::window::Extent2D,
+    ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {
+        unimplemented!();
+    }
 }
 
 #[derive(Clone, Debug)]

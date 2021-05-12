@@ -20,21 +20,20 @@ pub enum PowerState {
     /// This state may be the same as PowerState::Off
     Suspend,
     /// Specifies that the display is powered on.
-    On
+    On,
 }
-
 
 /// Device event
 #[derive(Clone, Debug, PartialEq)]
 pub enum DeviceEvent {
     /// Specifies that the fence is signaled when a display is plugged into or unplugged from the specified device.
     /// Applications can use this notification to determine when they need to re-enumerate the available displays on a device.
-    DisplayHotplug
+    DisplayHotplug,
 }
 
 /// Device event
 #[derive(Clone, Debug, PartialEq)]
 pub enum DisplayEvent {
     /// Specifies that the fence is signaled when the first pixel of the next display refresh cycle leaves the display engine for the display.
-    FirstPixelOut
+    FirstPixelOut,
 }

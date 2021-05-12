@@ -12,7 +12,7 @@
 //! and is used to actually do things.
 
 use crate::{
-    buffer, format, image, memory,
+    buffer, display, format, image, memory,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -21,7 +21,6 @@ use crate::{
     query,
     queue::QueueFamilyId,
     Backend, MemoryTypeId,
-    display
 };
 
 use std::{any::Any, fmt, iter, ops::Range};
@@ -716,13 +715,26 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut B::PipelineLayout, name: &str);
 
     /// Control the power state of the provided display
-    unsafe fn set_display_power_state(&self, display: &display::Display<B>, power_state: &display::PowerState)->Result<(),display::DisplayControlError>;
+    unsafe fn set_display_power_state(
+        &self,
+        display: &display::Display<B>,
+        power_state: &display::PowerState,
+    ) -> Result<(), display::DisplayControlError>;
 
     /// Register device event
-    unsafe fn register_device_event(&self, device_event: &display::DeviceEvent, fence: &mut B::Fence)->Result<(),display::DisplayControlError>;
+    unsafe fn register_device_event(
+        &self,
+        device_event: &display::DeviceEvent,
+        fence: &mut B::Fence,
+    ) -> Result<(), display::DisplayControlError>;
 
     /// Register display event
-    unsafe fn register_display_event(&self, display: &display::Display<B>, display_event: &display::DisplayEvent, fence: &mut B::Fence)->Result<(),display::DisplayControlError>;
+    unsafe fn register_display_event(
+        &self,
+        display: &display::Display<B>,
+        display_event: &display::DisplayEvent,
+        fence: &mut B::Fence,
+    ) -> Result<(), display::DisplayControlError>;
 
     /// Starts frame capture.
     fn start_capture(&self);

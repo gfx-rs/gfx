@@ -2459,12 +2459,30 @@ impl device::Device<Backend> for Device {
         // TODO
     }
 
-    unsafe fn set_display_power_state(&self, _display: &hal::display::Display<Backend>, _power_state: &hal::display::PowerState)->Result<(),hal::display::DisplayControlError> { unimplemented!() }
+    unsafe fn set_display_power_state(
+        &self,
+        _display: &hal::display::Display<Backend>,
+        _power_state: &hal::display::PowerState,
+    ) -> Result<(), hal::display::DisplayControlError> {
+        unimplemented!()
+    }
 
-    unsafe fn register_device_event(&self, _device_event: &hal::display::DeviceEvent, _fence: &mut <Backend as hal::Backend>::Fence)->Result<(),hal::display::DisplayControlError> { unimplemented!() }
+    unsafe fn register_device_event(
+        &self,
+        _device_event: &hal::display::DeviceEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), hal::display::DisplayControlError> {
+        unimplemented!()
+    }
 
-    unsafe fn register_display_event(&self, _display: &hal::display::Display<Backend>, _display_event: &hal::display::DisplayEvent, _fence: &mut <Backend as hal::Backend>::Fence)->Result<(),hal::display::DisplayControlError> { unimplemented!() }
-
+    unsafe fn register_display_event(
+        &self,
+        _display: &hal::display::Display<Backend>,
+        _display_event: &hal::display::DisplayEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), hal::display::DisplayControlError> {
+        unimplemented!()
+    }
 
     fn start_capture(&self) {
         //TODO

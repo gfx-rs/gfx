@@ -52,6 +52,7 @@ pub mod adapter;
 pub mod buffer;
 pub mod command;
 pub mod device;
+pub mod display;
 pub mod format;
 pub mod image;
 pub mod memory;
@@ -61,7 +62,6 @@ pub mod pso;
 pub mod query;
 pub mod queue;
 pub mod window;
-pub mod display;
 //pub mod common;
 
 /// Prelude module re-exports all the traits necessary to use `gfx-hal`.
@@ -723,13 +723,13 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     ///
     /// This method can cause undefined behavior if `raw_window_handle` isn't
     /// a handle to a valid window for the current platform.
-     fn create_display_plane_surface<'a>(
+    fn create_display_plane_surface<'a>(
         &self,
-        display_plane: &display::DisplayPlane<'a,B>,
+        display_plane: &display::DisplayPlane<'a, B>,
         plane_stack_index: u32,
         transformation: display::SurfaceTransform,
         alpha: display::DisplayPlaneAlpha,
-        image_extent: window::Extent2D
+        image_extent: window::Extent2D,
     ) -> Result<B::Surface, display::DisplayPlaneSurfaceError>;
 }
 

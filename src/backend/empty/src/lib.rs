@@ -10,7 +10,7 @@ use crate::{
     memory::Memory,
 };
 
-use hal::{adapter, command, device, format, pass, pool, pso, query, queue, window, display};
+use hal::{adapter, command, device, display, format, pass, pool, pso, query, queue, window};
 use log::debug;
 
 use std::{borrow::Borrow, ops::Range};
@@ -159,22 +159,35 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn enumerate_available_displays(&self)->Result<Vec<display::Display<Backend>>,device::OutOfMemory> {unimplemented!();}
+    fn enumerate_available_displays(
+        &self,
+    ) -> Result<Vec<display::Display<Backend>>, device::OutOfMemory> {
+        unimplemented!();
+    }
 
-    fn enumerate_compatible_planes(&self,_display: &display::Display<Backend>)->Result<Vec<display::Plane>,device::OutOfMemory> {unimplemented!();}
+    fn enumerate_compatible_planes(
+        &self,
+        _display: &display::Display<Backend>,
+    ) -> Result<Vec<display::Plane>, device::OutOfMemory> {
+        unimplemented!();
+    }
 
     fn create_display_mode(
         &self,
         _display: &display::Display<Backend>,
-        _resolution: (u32,u32),
-        _refresh_rate: u32
-    )->Result<display::DisplayMode<Backend>,display::DisplayModeError> {unimplemented!();}
+        _resolution: (u32, u32),
+        _refresh_rate: u32,
+    ) -> Result<display::DisplayMode<Backend>, display::DisplayModeError> {
+        unimplemented!();
+    }
 
     fn create_display_plane<'a>(
         &self,
         _display: &'a display::DisplayMode<Backend>,
         _plane: &'a display::Plane,
-    )->Result<display::DisplayPlane<'a,Backend>,device::OutOfMemory> {unimplemented!();}
+    ) -> Result<display::DisplayPlane<'a, Backend>, device::OutOfMemory> {
+        unimplemented!();
+    }
 }
 
 /// Dummy command queue doing nothing.
@@ -591,12 +604,30 @@ impl device::Device<Backend> for Device {
         Ok(true)
     }
 
-    unsafe fn set_display_power_state(&self, _display: &display::Display<Backend>, _power_state: &display::PowerState)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+    unsafe fn set_display_power_state(
+        &self,
+        _display: &display::Display<Backend>,
+        _power_state: &display::PowerState,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
 
-    unsafe fn register_device_event(&self, _device_event: &display::DeviceEvent, _fence: &mut <Backend as hal::Backend>::Fence)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
+    unsafe fn register_device_event(
+        &self,
+        _device_event: &display::DeviceEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
 
-    unsafe fn register_display_event(&self, _display: &display::Display<Backend>, _display_event: &display::DisplayEvent, _fence: &mut <Backend as hal::Backend>::Fence)->Result<(),display::DisplayControlError> { unimplemented!("{}", NOT_SUPPORTED_MESSAGE) }
-
+    unsafe fn register_display_event(
+        &self,
+        _display: &display::Display<Backend>,
+        _display_event: &display::DisplayEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
 
     fn start_capture(&self) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
@@ -1115,6 +1146,8 @@ impl hal::Instance<Backend> for Instance {
         _plane_stack_index: u32,
         _transformation: display::SurfaceTransformation,
         _alpha: display::DisplayPlaneAlpha,
-        _image_extent: window::Extent2D
-    ) -> Result<Surface, display::DisplayPlaneSurfaceError> {unimplemented!();}
+        _image_extent: window::Extent2D,
+    ) -> Result<Surface, display::DisplayPlaneSurfaceError> {
+        unimplemented!();
+    }
 }

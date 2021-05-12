@@ -28,7 +28,7 @@ pub fn wasm_main() {
 }
 
 use hal::{
-    buffer, command, format as f,
+    buffer, command, display, format as f,
     format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle},
     image as i, memory as m, pass,
     pass::Subpass,
@@ -38,7 +38,6 @@ use hal::{
     pso::{PipelineStage, ShaderStageFlags, VertexInputRate},
     queue::QueueGroup,
     window,
-    display
 };
 
 use std::{
@@ -100,13 +99,12 @@ fn main() {
         adapters.remove(0)
     };
 
-    let direct_display = match std::env::var("DIRECT_DISPLAY"){
-        Ok(_)=>true,
-        Err(_)=>false
+    let direct_display = match std::env::var("DIRECT_DISPLAY") {
+        Ok(_) => true,
+        Err(_) => false,
     };
 
     if !direct_display {
-
         let event_loop = winit::event_loop::EventLoop::new();
 
         let wb = winit::window::WindowBuilder::new()
@@ -131,7 +129,6 @@ fn main() {
             .unwrap()
             .append_child(&winit::platform::web::WindowExtWebSys::canvas(&window))
             .unwrap();
-
 
         let surface = unsafe {
             instance
@@ -177,38 +174,50 @@ fn main() {
                 _ => {}
             }
         });
-    }
-    else {
-        let displays = adapter.physical_device.enumerate_available_displays().expect("Failed to enumerate displays");
-        if displays.len() == 0 {panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");}
+    } else {
+        let displays = adapter
+            .physical_device
+            .enumerate_available_displays()
+            .expect("Failed to enumerate displays");
+        if displays.len() == 0 {
+            panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");
+        }
 
         //Get the first available display
         let display = &displays[0];
-        println!("Display: {:#?}",&display);
+        println!("Display: {:#?}", &display);
 
         //Enumerate compatible planes
-        let compatible_planes = adapter.physical_device.enumerate_compatible_planes(&display).expect("Failed to enumerate compatible planes");
+        let compatible_planes = adapter
+            .physical_device
+            .enumerate_compatible_planes(&display)
+            .expect("Failed to enumerate compatible planes");
 
         //Get the first available plane (it is granted to have at least 1 plane compatible)
         let plane = &compatible_planes[0];
-        println!("Plane: {:#?}",&plane);
+        println!("Plane: {:#?}", &plane);
 
         //Get the first available display mode (generally the preferred one)
         let display_mode = &display.modes[0];
-        println!("Display mode: {:#?}",&display_mode);
+        println!("Display mode: {:#?}", &display_mode);
 
         //Create display plane
-        let display_plane = adapter.physical_device.create_display_plane(&display_mode,&plane).expect("Failed to create display plane");
-        println!("Display plane: {:#?}",&display_plane);
+        let display_plane = adapter
+            .physical_device
+            .create_display_plane(&display_mode, &plane)
+            .expect("Failed to create display plane");
+        println!("Display plane: {:#?}", &display_plane);
 
         //Create a surface from the display
-        let surface = instance.create_display_plane_surface(
-            &display_plane,                             //Display plane
-            plane.z_index,                              //Z plane index
-            display::SurfaceTransformation::Identity,   //Surface transformation
-            display::DisplayPlaneAlpha::OPAQUE,         //Opacity
-            display_plane.max_dst_extent,               //Image extent (u32, u32)
-        ).expect("Failed to create a surface!");
+        let surface = instance
+            .create_display_plane_surface(
+                &display_plane,                           //Display plane
+                plane.z_index,                            //Z plane index
+                display::SurfaceTransformation::Identity, //Surface transformation
+                display::DisplayPlaneAlpha::OPAQUE,       //Opacity
+                display_plane.max_dst_extent,             //Image extent (u32, u32)
+            )
+            .expect("Failed to create a surface!");
 
         let mut renderer = Renderer::new(instance, surface, adapter);
 
