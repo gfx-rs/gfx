@@ -2421,41 +2421,6 @@ impl d::Device<B> for super::Device {
         Ok(self.filter_memory_requirements(vk_memory_bits))
     }
 
-    unsafe fn export_memory_as_ptr(
-        &self,
-        external_memory_type: hal::external_memory::ExternalMemoryPtrType,
-        memory: &n::Memory,
-    ) -> Result<*mut std::ffi::c_void, hal::external_memory::ExternalMemoryExportError> {
-        /*
-        let external_memory_extension = match &self.shared.extension_fns.external_memory_host {
-            Some(functor) => functor.unwrap_extension(),
-            _ => {
-                error!("External memory host not supported");
-                return Err(hal::external_memory::ExternalMemoryExportError::UnsupportedFeature);
-            }
-        };
-
-        let memory_get_info = vk::MemoryGetFdInfoKHR::builder()
-            .memory(memory.raw)
-            .handle_type(conv::map_external_memory_handle_types(external_memory_types.into()))
-            .build();
-        let fd = match external_memory_extension.get_memory_fd(&memory_get_info) {
-            Ok(fd) => fd,
-            Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => {
-                return Err(hal::external_memory::ExternalMemoryExportError::TooManyObjects)
-            }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                return Err(hal::external_memory::ExternalMemoryExportError::OutOfHostMemory)
-            }
-            _ => unreachable!(),
-        };
-
-        use std::os::unix::io::FromRawFd;
-        return Ok(std::fs::File::from_raw_fd(fd));
-        */
-        unimplemented!()
-    }
-
     fn start_capture(&self) {
         unsafe {
             self.render_doc

@@ -674,14 +674,6 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn export_memory_as_ptr(
-        &self,
-        external_memory_type: hal::external_memory::ExternalMemoryPtrType,
-        memory: &<Backend as gfx_hal::Backend>::Memory,
-    ) -> Result<*mut std::ffi::c_void, hal::external_memory::ExternalMemoryExportError> {
-        unimplemented!()
-    }
-
     unsafe fn reset_fence(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {
         Ok(())
     }

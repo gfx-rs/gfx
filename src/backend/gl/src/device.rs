@@ -2225,14 +2225,6 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn export_memory_as_ptr(
-        &self,
-        external_memory_type: hal::external_memory::ExternalMemoryPtrType,
-        memory: &n::Memory,
-    ) -> Result<*mut std::ffi::c_void, hal::external_memory::ExternalMemoryExportError> {
-        unimplemented!()
-    }
-
     fn start_capture(&self) {
         //TODO
     }

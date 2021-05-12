@@ -2541,14 +2541,6 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn export_memory_as_ptr(
-        &self,
-        external_memory_type: hal::external_memory::ExternalMemoryPtrType,
-        memory: &Memory,
-    ) -> Result<*mut std::ffi::c_void, hal::external_memory::ExternalMemoryExportError> {
-        unimplemented!()
-    }
-
     fn start_capture(&self) {
         unsafe {
             self.render_doc

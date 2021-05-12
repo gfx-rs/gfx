@@ -789,13 +789,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         memory: &B::Memory,
     ) -> Result<std::os::windows::raw::HANDLE, external_memory::ExternalMemoryExportError>;
 
-    /// Export memory as host pointer
-    unsafe fn export_memory_as_ptr(
-        &self,
-        external_memory_type: external_memory::ExternalMemoryPtrType,
-        memory: &B::Memory,
-    ) -> Result<*mut std::ffi::c_void, external_memory::ExternalMemoryExportError>;
-
     /// Get memory mask for external handle
     unsafe fn get_external_memory_mask(
         &self,
