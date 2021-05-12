@@ -247,7 +247,7 @@ impl w::PresentationSurface<Backend> for Surface {
         #[cfg(target_os = "macos")]
         {
             if self.view.is_some() && self.main_thread_id != thread::current().id() {
-                return Err(w::SwapchainError::WrongThread)
+                return Err(w::SwapchainError::WrongThread);
             }
         }
         self.swapchain_format = self.configure(&device.shared, &config);

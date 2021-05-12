@@ -274,11 +274,12 @@ pub struct CommandBuffer {
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Temp {
     clear_vertices: Vec<ClearVertex>,
     blit_vertices: FastHashMap<(Aspects, i::Level), Vec<BlitVertex>>,
     render_attachments: Vec<(metal::Texture, com::ClearValue)>,
+    binding_sizes: Vec<native::StorageBindingSize>,
 }
 
 type VertexBufferMaybeVec = Vec<Option<(pso::VertexBufferDesc, pso::ElemOffset)>>;
@@ -358,6 +359,7 @@ struct State {
     vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
     active_depth_stencil_desc: pso::DepthStencilDesc,
     active_scissor: MTLScissorRect,
+    stage_infos: native::MultiStageData<native::PipelineStageInfo>,
 }
 
 impl State {
@@ -385,6 +387,10 @@ impl State {
         }
         self.index_buffer = None;
         self.vertex_buffers.clear();
+
+        self.stage_infos.vs.clear();
+        self.stage_infos.ps.clear();
+        self.stage_infos.cs.clear();
     }
 
     fn clamp_scissor(sr: MTLScissorRect, extent: i::Extent) -> MTLScissorRect {
@@ -427,11 +433,13 @@ impl State {
             .map(|&(rect, ref depth)| soft::RenderCommand::SetViewport(rect, depth.clone()))
     }
 
-    fn make_render_commands(
-        &self,
+    // Apply previously bound values for this command buffer
+    fn make_render_commands<'a>(
+        &'a self,
         aspects: Aspects,
+        temp_sizes_vs: &'a mut Vec<u32>,
+        temp_sizes_ps: &'a mut Vec<u32>,
     ) -> impl Iterator<Item = soft::RenderCommand<&soft::Ref>> {
-        // Apply previously bound values for this command buffer
         let com_blend = if aspects.contains(Aspects::COLOR) {
             self.blend_color.map(soft::RenderCommand::SetBlendColor)
         } else {
@@ -455,11 +463,13 @@ impl State {
         let (com_pso, com_rast) = self.make_pso_commands();
 
         let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_ps));
+        let temp_sizes = iter::once(temp_sizes_vs).chain(iter::once(temp_sizes_ps));
         let push_constants = self.push_constants.as_slice();
         let com_resources = [naga::ShaderStage::Vertex, naga::ShaderStage::Fragment]
             .iter()
             .zip(render_resources)
-            .flat_map(move |(&stage, resources)| {
+            .zip(temp_sizes)
+            .flat_map(move |((&stage, resources), temp_sizes)| {
                 let com_buffers = soft::RenderCommand::BindBuffers {
                     stage,
                     index: 0,
@@ -483,10 +493,18 @@ impl State {
                             index: pc.buffer_index as _,
                             words: &push_constants[..pc.count as usize],
                         });
+                let com_sizes_buffer =
+                    self.make_sizes_buffer_update(stage, temp_sizes)
+                        .map(move |index| soft::RenderCommand::BindBufferData {
+                            stage,
+                            index,
+                            words: temp_sizes.as_slice(),
+                        });
                 iter::once(com_buffers)
                     .chain(iter::once(com_textures))
                     .chain(iter::once(com_samplers))
                     .chain(com_push_constants)
+                    .chain(com_sizes_buffer)
             });
         let com_used_resources = self.descriptor_sets.iter().flat_map(|ds| {
             ds.graphics_resources
@@ -507,7 +525,10 @@ impl State {
             .chain(com_used_resources)
     }
 
-    fn make_compute_commands(&self) -> impl Iterator<Item = soft::ComputeCommand<&soft::Ref>> {
+    fn make_compute_commands<'a>(
+        &'a self,
+        temp_sizes_cs: &'a mut Vec<u32>,
+    ) -> impl 'a + Iterator<Item = soft::ComputeCommand<&'a soft::Ref>> {
         let resources = &self.resources_cs;
         let com_pso = self
             .compute_pso
@@ -532,6 +553,12 @@ impl State {
                     index: pc.buffer_index as _,
                     words: &self.push_constants[..pc.count as usize],
                 });
+        let com_sizes_buffer = self
+            .make_sizes_buffer_update(naga::ShaderStage::Compute, temp_sizes_cs)
+            .map(move |index| soft::ComputeCommand::BindBufferData {
+                index,
+                words: temp_sizes_cs.as_slice(),
+            });
         let com_used_resources = self.descriptor_sets.iter().flat_map(|ds| {
             ds.compute_resources
                 .iter()
@@ -545,6 +572,7 @@ impl State {
             .chain(iter::once(com_samplers))
             .chain(com_push_constants)
             .chain(com_used_resources)
+            .chain(com_sizes_buffer)
     }
 
     fn set_vertex_buffers(&mut self, end: usize) -> Option<soft::RenderCommand<&soft::Ref>> {
@@ -734,6 +762,29 @@ impl State {
         data[offset..offset + constants.len()].copy_from_slice(constants);
     }
 
+    fn make_sizes_buffer_update(
+        &self,
+        stage: naga::ShaderStage,
+        result_sizes: &mut Vec<u32>,
+    ) -> Option<u32> {
+        let stage_info = &self.stage_infos[stage];
+        let slot = stage_info.sizes_slot?;
+        result_sizes.clear();
+        let resources = match stage {
+            naga::ShaderStage::Vertex => &self.resources_vs,
+            naga::ShaderStage::Fragment => &self.resources_ps,
+            naga::ShaderStage::Compute => &self.resources_cs,
+        };
+        for &length_index in stage_info.sizes_indices.iter() {
+            // If it's None, this isn't the right time to update the sizes
+            let size = resources
+                .storage_buffer_lengths
+                .get(length_index as usize)?;
+            result_sizes.push(*size);
+        }
+        Some(slot as _)
+    }
+
     fn set_visibility_query(
         &mut self,
         mode: metal::MTLVisibilityResultMode,
@@ -747,31 +798,51 @@ impl State {
         &mut self,
         stage_filter: pso::ShaderStageFlags,
         data: &native::DescriptorEmulatedPoolInner,
-        base_res_offsets: &native::MultiStageResourceCounters,
+        set_info: &native::DescriptorSetInfo,
         pool_range: &native::ResourceData<Range<native::PoolResourceIndex>>,
-    ) -> native::MultiStageResourceCounters {
-        let mut offsets = base_res_offsets.clone();
+    ) -> (
+        native::MultiStageResourceCounters,
+        native::MultiStageData<u8>,
+    ) {
+        let mut offsets = set_info.offsets.clone();
+        let mut buffer_sizes_offsets = set_info.buffer_sizes_offsets.clone();
         let pool_range = pool_range.map(|r| r.start as usize..r.end as usize);
 
-        for &(mut stages, value, offset) in &data.buffers[pool_range.buffers] {
+        for &(mut stages, value, offset, storage_binding_size) in &data.buffers[pool_range.buffers]
+        {
             stages &= stage_filter;
             if stages.contains(pso::ShaderStageFlags::VERTEX) {
                 let reg = offsets.vs.buffers as usize;
                 self.resources_vs.buffers[reg] = value;
                 self.resources_vs.buffer_offsets[reg] = offset;
                 offsets.vs.buffers += 1;
+                if storage_binding_size != !0 {
+                    self.resources_vs.storage_buffer_lengths[buffer_sizes_offsets.vs as usize] =
+                        storage_binding_size;
+                    buffer_sizes_offsets.vs += 1;
+                }
             }
             if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
                 let reg = offsets.ps.buffers as usize;
                 self.resources_ps.buffers[reg] = value;
                 self.resources_ps.buffer_offsets[reg] = offset;
                 offsets.ps.buffers += 1;
+                if storage_binding_size != !0 {
+                    self.resources_ps.storage_buffer_lengths[buffer_sizes_offsets.ps as usize] =
+                        storage_binding_size;
+                    buffer_sizes_offsets.ps += 1;
+                }
             }
             if stages.contains(pso::ShaderStageFlags::COMPUTE) {
                 let reg = offsets.cs.buffers as usize;
                 self.resources_cs.buffers[reg] = value;
                 self.resources_cs.buffer_offsets[reg] = offset;
                 offsets.cs.buffers += 1;
+                if storage_binding_size != !0 {
+                    self.resources_cs.storage_buffer_lengths[buffer_sizes_offsets.cs as usize] =
+                        storage_binding_size;
+                    buffer_sizes_offsets.cs += 1;
+                }
             }
         }
         for &(mut stages, value, _layout) in &data.textures[pool_range.textures] {
@@ -805,7 +876,7 @@ impl State {
             }
         }
 
-        offsets
+        (offsets, buffer_sizes_offsets)
     }
 }
 
@@ -816,6 +887,7 @@ struct StageResources {
     textures: Vec<Option<TexturePtr>>,
     samplers: Vec<Option<SamplerPtr>>,
     push_constants: Option<native::PushConstantInfo>,
+    storage_buffer_lengths: Vec<native::StorageBindingSize>,
 }
 
 impl StageResources {
@@ -826,6 +898,7 @@ impl StageResources {
             textures: Vec::new(),
             samplers: Vec::new(),
             push_constants: None,
+            storage_buffer_lengths: Vec::new(),
         }
     }
 
@@ -835,6 +908,7 @@ impl StageResources {
         self.textures.clear();
         self.samplers.clear();
         self.push_constants = None;
+        self.storage_buffer_lengths.clear();
     }
 
     fn pre_allocate_buffers(&mut self, count: usize) {
@@ -845,7 +919,7 @@ impl StageResources {
         }
     }
 
-    fn pre_allocate(&mut self, counters: &native::ResourceData<ResourceIndex>) {
+    fn pre_allocate(&mut self, counters: &native::ResourceData<ResourceIndex>, sizes_counter: u8) {
         if self.textures.len() < counters.textures as usize {
             self.textures.resize(counters.textures as usize, None);
         }
@@ -853,6 +927,10 @@ impl StageResources {
             self.samplers.resize(counters.samplers as usize, None);
         }
         self.pre_allocate_buffers(counters.buffers as usize);
+        if self.storage_buffer_lengths.len() < sizes_counter as usize {
+            self.storage_buffer_lengths
+                .resize(sizes_counter as usize, 0);
+        }
     }
 }
 
@@ -2550,12 +2628,9 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
                     width: 0,
                     height: 0,
                 },
+                stage_infos: native::MultiStageData::default(),
             },
-            temp: Temp {
-                clear_vertices: Vec::new(),
-                blit_vertices: FastHashMap::default(),
-                render_attachments: Vec::new(),
-            },
+            temp: Temp::default(),
             name: String::new(),
         }
     }
@@ -3681,9 +3756,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             None => None,
         };
 
+        let (mut temp_binding_sizes_vs, mut temp_binding_sizes_ps) = (Vec::new(), Vec::new()); //TODO: avoid the heap?
         let init_commands = self
             .state
-            .make_render_commands(sin.combined_aspects)
+            .make_render_commands(
+                sin.combined_aspects,
+                &mut temp_binding_sizes_vs,
+                &mut temp_binding_sizes_ps,
+            )
             .chain(com_scissor)
             .chain(com_ds);
 
@@ -3704,6 +3784,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         profiling::scope!("bind_graphics_pipeline");
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
+
+        self.state.stage_infos.vs.assign_from(&pipeline.vs_info);
+        self.state.stage_infos.ps.assign_from(&pipeline.ps_info);
 
         if let Some(ref stencil) = pipeline.depth_stencil_desc.stencil {
             if let pso::State::Static(value) = stencil.read_masks {
@@ -3760,7 +3843,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     pre.issue(command);
                 }
                 // re-bind push constants
-                if let Some(pc) = pipeline.vs_pc_info {
+                if let Some(pc) = pipeline.vs_info.push_constants {
                     if Some(pc) != self.state.resources_vs.push_constants {
                         // if we don't have enough constants, then binding will follow
                         if pc.count as usize <= self.state.push_constants.len() {
@@ -3768,12 +3851,34 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         }
                     }
                 }
-                if let Some(pc) = pipeline.ps_pc_info {
+                if let Some(pc) = pipeline.ps_info.push_constants {
                     if Some(pc) != self.state.resources_ps.push_constants
                         && pc.count as usize <= self.state.push_constants.len()
                     {
                         pre.issue(self.state.push_ps_constants(pc));
                     }
+                }
+
+                // re-bind sizes buffer
+                if let Some(index) = self.state.make_sizes_buffer_update(
+                    naga::ShaderStage::Vertex,
+                    &mut self.temp.binding_sizes,
+                ) {
+                    pre.issue(soft::RenderCommand::BindBufferData {
+                        stage: naga::ShaderStage::Vertex,
+                        index,
+                        words: &self.temp.binding_sizes,
+                    });
+                }
+                if let Some(index) = self.state.make_sizes_buffer_update(
+                    naga::ShaderStage::Fragment,
+                    &mut self.temp.binding_sizes,
+                ) {
+                    pre.issue(soft::RenderCommand::BindBufferData {
+                        stage: naga::ShaderStage::Fragment,
+                        index,
+                        words: &self.temp.binding_sizes,
+                    });
                 }
             } else {
                 debug_assert_eq!(self.state.rasterizer_state, pipeline.rasterizer_state);
@@ -3832,9 +3937,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 <= self.shared.private_caps.max_buffers_per_stage
         );
 
-        self.state.resources_vs.pre_allocate(&pipe_layout.total.vs);
-        self.state.resources_ps.pre_allocate(&pipe_layout.total.ps);
+        self.state
+            .resources_vs
+            .pre_allocate(&pipe_layout.total.vs, pipe_layout.total_buffer_sizes.vs);
+        self.state
+            .resources_ps
+            .pre_allocate(&pipe_layout.total.ps, pipe_layout.total_buffer_sizes.ps);
 
+        let mut changes_sizes_buffer_vs = false;
+        let mut changes_sizes_buffer_ps = false;
         let mut dynamic_offset_iter = dynamic_offsets;
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
@@ -3855,14 +3966,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     layouts: _,
                     ref resources,
                 } => {
-                    let end_offsets = self.state.bind_set(
+                    let (end_offsets, end_sizes_offsets) = self.state.bind_set(
                         pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT,
                         &*pool.read(),
-                        &info.offsets,
+                        info,
                         resources,
                     );
                     bind_range.vs.expand(end_offsets.vs);
                     bind_range.ps.expand(end_offsets.ps);
+
+                    changes_sizes_buffer_vs |= end_sizes_offsets.vs != info.buffer_sizes_offsets.vs;
+                    changes_sizes_buffer_ps |= end_sizes_offsets.ps != info.buffer_sizes_offsets.ps;
 
                     for (dyn_data, offset) in info
                         .dynamic_buffers
@@ -3935,15 +4049,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
 
         // now bind all the affected resources
-        for (stage, cache, range) in iter::once((
+        for (stage, cache, range, changes_sizes_buffer) in iter::once((
             naga::ShaderStage::Vertex,
             &self.state.resources_vs,
             bind_range.vs,
+            changes_sizes_buffer_vs,
         ))
         .chain(iter::once((
             naga::ShaderStage::Fragment,
             &self.state.resources_ps,
             bind_range.ps,
+            changes_sizes_buffer_ps,
         ))) {
             if range.textures.start != range.textures.end {
                 pre.issue(soft::RenderCommand::BindTextures {
@@ -3971,6 +4087,18 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     },
                 });
             }
+            if changes_sizes_buffer {
+                if let Some(index) = self
+                    .state
+                    .make_sizes_buffer_update(stage, &mut self.temp.binding_sizes)
+                {
+                    pre.issue(soft::RenderCommand::BindBufferData {
+                        stage,
+                        index,
+                        words: &self.temp.binding_sizes,
+                    });
+                }
+            }
         }
     }
 
@@ -3978,18 +4106,28 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         profiling::scope!("bind_compute_pipeline");
         self.state.compute_pso = Some(pipeline.raw.clone());
         self.state.work_group_size = pipeline.work_group_size;
+        self.state.stage_infos.cs.assign_from(&pipeline.info);
 
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
 
         pre.issue(soft::ComputeCommand::BindPipeline(&*pipeline.raw));
 
-        if let Some(pc) = pipeline.pc_info {
+        if let Some(pc) = pipeline.info.push_constants {
             if Some(pc) != self.state.resources_cs.push_constants
                 && pc.count as usize <= self.state.push_constants.len()
             {
                 pre.issue(self.state.push_cs_constants(pc));
             }
+        }
+        if let Some(index) = self
+            .state
+            .make_sizes_buffer_update(naga::ShaderStage::Compute, &mut self.temp.binding_sizes)
+        {
+            pre.issue(soft::ComputeCommand::BindBufferData {
+                index,
+                words: &self.temp.binding_sizes,
+            });
         }
     }
 
@@ -4004,8 +4142,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         J: Iterator<Item = com::DescriptorSetOffset>,
     {
         profiling::scope!("bind_compute_descriptor_sets");
-        self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
+        self.state
+            .resources_cs
+            .pre_allocate(&pipe_layout.total.cs, pipe_layout.total_buffer_sizes.cs);
 
+        let mut changes_sizes_buffer_cs = false;
         let mut dynamic_offset_iter = dynamic_offsets;
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
@@ -4021,13 +4162,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     layouts: _,
                     ref resources,
                 } => {
-                    let end_offsets = self.state.bind_set(
+                    let (end_offsets, end_sizes_offsets) = self.state.bind_set(
                         pso::ShaderStageFlags::COMPUTE,
                         &*pool.read(),
-                        &info.offsets,
+                        info,
                         resources,
                     );
                     bind_range.expand(end_offsets.cs);
+
+                    changes_sizes_buffer_cs |= end_sizes_offsets.cs != info.buffer_sizes_offsets.cs;
 
                     for (dyn_data, offset) in info
                         .dynamic_buffers
@@ -4103,13 +4246,27 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 },
             });
         }
+        if changes_sizes_buffer_cs {
+            if let Some(index) = self
+                .state
+                .make_sizes_buffer_update(naga::ShaderStage::Compute, &mut self.temp.binding_sizes)
+            {
+                pre.issue(soft::ComputeCommand::BindBufferData {
+                    index,
+                    words: &self.temp.binding_sizes,
+                });
+            }
+        }
     }
 
     unsafe fn dispatch(&mut self, count: WorkGroupCount) {
         let mut inner = self.inner.borrow_mut();
         let (mut pre, init) = inner.sink().switch_compute();
         if init {
-            pre.issue_many(self.state.make_compute_commands());
+            pre.issue_many(
+                self.state
+                    .make_compute_commands(&mut self.temp.binding_sizes),
+            );
         }
 
         pre.issue(soft::ComputeCommand::Dispatch {
@@ -4126,7 +4283,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let (mut pre, init) = inner.sink().switch_compute();
         if init {
-            pre.issue_many(self.state.make_compute_commands());
+            pre.issue_many(
+                self.state
+                    .make_compute_commands(&mut self.temp.binding_sizes),
+            );
         }
 
         let (raw, range) = buffer.as_bound();
