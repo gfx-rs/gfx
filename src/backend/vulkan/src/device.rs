@@ -2164,47 +2164,15 @@ impl d::Device<B> for super::Device {
 
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
-            /*
-            hal::external_memory::ExternalHandle::Ptr(external_memory_ptr)=>{
+            hal::external_memory::ExternalMemory::Ptr(external_memory_ptr)=>{
                 let external_memory_extension = match &self.shared.extension_fns.external_memory_host {
                     Some(functor) => functor.unwrap_extension(),
                     None => return Err(hal::external_memory::ExternalMemoryAllocateError::UnsupportedFeature)
                 };
 
-                let (external_memory_ptr_type,fd,size) = external_memory_ptr.into();
-                let vk_external_memory_type = conv::map_external_memory_handle_type(external_memory_ptr_type);
+                let (external_memory_ptr_type,ptr,size) = external_memory_ptr.into();
+                let vk_external_memory_type = conv::map_external_memory_handle_type(external_memory_ptr_type.into());
 
-                let mut memory_handle_properties =
-                    vk::MemoryHostPointerPropertiesEXT::builder().build();
-                match external_memory_extension.get_memory_host_pointer_properties_ext(
-                    self.shared.raw.handle(),
-                    vk_external_memory_type,
-                    *ptr,
-                    &mut memory_handle_properties,
-                ) {
-                    vk::Result::SUCCESS => (),
-                    vk::Result::ERROR_OUT_OF_HOST_MEMORY => return Err(d::OutOfMemory::Host.into()),
-                    vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => {
-                        return Err(hal::external_memory::ExternalMemoryAllocateError::InvalidExternalHandle)
-                    }
-                    _ => unreachable!(),
-                };
-                let required_memory_type_bits = memory_handle_properties.memory_type_bits;
-                /*
-                let memory_type_id = memory_types
-                    .iter()
-                    .enumerate()
-                    .position(|(id, mem_type)| {
-                        // type_mask is a bit field where each bit represents a memory type. If the bit is set
-                        // to 1 it means we can use that type for our buffer. So this code finds the first
-                        // memory type that has a `1` (or, is allowed), and is visible to the CPU.
-                        required_memory_type_bits & (1 << id) != 0
-                            && mem_type.properties.contains(memory_properties)
-                    })
-                    .unwrap()
-                    .into();
-                    */
-                let memory_type_id = 0.into();
                 let mut import_memory_info = vk::ImportMemoryHostPointerInfoEXT::builder()
                     .handle_type(vk_external_memory_type)
                     .host_pointer(*ptr)
@@ -2213,12 +2181,10 @@ impl d::Device<B> for super::Device {
                 let info = vk::MemoryAllocateInfo::builder()
                     .push_next(&mut import_memory_info)
                     .allocation_size(size)
-                    .memory_type_index(self.get_ash_memory_type_index(memory_type_id));
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
 
                 self.shared.raw.allocate_memory(&info, None)
             }
-            */
-            _ => unimplemented!(),
         };
 
         let memory: n::Memory = match memory_result {
@@ -2230,7 +2196,10 @@ impl d::Device<B> for super::Device {
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 return Err(d::OutOfMemory::Device.into())
             }
-            _ => unreachable!(),
+            Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
+                return Err(hal::external_memory::ExternalMemoryAllocateError::InvalidExternalHandle);
+            }
+            Err(val) => unreachable!("Returned unexpected value: {}",val),
         };
 
         Ok(memory)
