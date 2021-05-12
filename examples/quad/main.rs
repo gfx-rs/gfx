@@ -206,7 +206,7 @@ fn main() {
             &display_plane,                             //Display plane
             plane.z_index,                              //Z plane index
             display::SurfaceTransformation::Identity,   //Surface transformation
-            display::DisplayPlaneAlpha::Opaque,         //Opacity
+            display::DisplayPlaneAlpha::OPAQUE,         //Opacity
             display_plane.max_dst_extent,               //Image extent (u32, u32)
         ).expect("Failed to create a surface!");
 

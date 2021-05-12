@@ -74,7 +74,7 @@ pub struct RawInstance {
     inner: ash::Instance,
     debug_messenger: Option<DebugMessenger>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
-    display: Option<khr::Display>
+    display: Option<khr::Display>,
     pub render_doc_entry: Result<RenderDocEntry, String>,
 }
 
@@ -584,11 +584,8 @@ impl hal::Instance<Backend> for Instance {
                 inner: instance,
                 debug_messenger,
                 get_physical_device_properties,
-<<<<<<< HEAD
-                display
-=======
+                display,
                 render_doc_entry: unsafe { load_renderdoc_entrypoint() },
->>>>>>> upstream/master
             }),
             extensions,
             entry,
@@ -676,7 +673,7 @@ impl hal::Instance<Backend> for Instance {
         &self,
         display_plane: &hal::display::DisplayPlane<Backend>,
         plane_stack_index: u32,
-        transformation: hal::display::SurfaceTransformation,
+        transformation: hal::display::SurfaceTransform,
         alpha: hal::display::DisplayPlaneAlpha,
         image_extent: hal::window::Extent2D
     ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {
@@ -700,33 +697,22 @@ impl hal::Instance<Backend> for Instance {
             return Err(hal::display::DisplayPlaneSurfaceError::UnsupportedParameters);
         }
 */
+        let vk_surface_transform_flags = conv::map_surface_transform_flags(transformation.into());
 
         let display_surface_ci = {
             let builder = vk::DisplaySurfaceCreateInfoKHR::builder()
             .display_mode(display_plane.display_mode.handle.0)
             .plane_index(display_plane.plane.handle)
             .plane_stack_index(plane_stack_index)
-            .image_extent(vk::Extent2D{width: image_extent.width,height: image_extent.height});
-
-            let builder = match transformation
-            {
-                hal::display::SurfaceTransformation::Identity=>builder.transform(vk::SurfaceTransformFlagsKHR::IDENTITY),
-                hal::display::SurfaceTransformation::Rotate90=>builder.transform(vk::SurfaceTransformFlagsKHR::ROTATE_90),
-                hal::display::SurfaceTransformation::Rotate180=>builder.transform(vk::SurfaceTransformFlagsKHR::ROTATE_180),
-                hal::display::SurfaceTransformation::Rotate270=>builder.transform(vk::SurfaceTransformFlagsKHR::ROTATE_270),
-                hal::display::SurfaceTransformation::HorizontalMirror=>builder.transform(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR),
-                hal::display::SurfaceTransformation::HorizontalMirrorRotate90=>builder.transform(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_90),
-                hal::display::SurfaceTransformation::HorizontalMirrorRotate180=>builder.transform(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_180),
-                hal::display::SurfaceTransformation::HorizontalMirrorRotate270=>builder.transform(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_270),
-                hal::display::SurfaceTransformation::Inherit=>builder.transform(vk::SurfaceTransformFlagsKHR::INHERIT)
-            };
+            .image_extent(vk::Extent2D{width: image_extent.width,height: image_extent.height})
+            .transform(vk_surface_transform_flags);
 
             match alpha
             {
-                hal::display::DisplayPlaneAlpha::Opaque=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE),
-                hal::display::DisplayPlaneAlpha::Global(value)=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::GLOBAL).global_alpha(value),
-                hal::display::DisplayPlaneAlpha::PerPixel=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL),
-                hal::display::DisplayPlaneAlpha::PerPixelPremultiplied=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED)
+                hal::display::DisplayPlaneAlpha::OPAQUE=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE),
+                hal::display::DisplayPlaneAlpha::GLOBAL(value)=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::GLOBAL).global_alpha(value),
+                hal::display::DisplayPlaneAlpha::PER_PIXEL=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL),
+                hal::display::DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED=>builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED)
             }
             .build()
         };

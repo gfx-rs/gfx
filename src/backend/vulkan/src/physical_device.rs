@@ -1379,20 +1379,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         {
             let display_handle = native::Display(display_property.display);
 
-            let supported_transforms = {
-                let mut transformations = Vec::new();
-                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::IDENTITY) {transformations.push(hal::display::SurfaceTransformation::Identity);}
-                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::ROTATE_90) {transformations.push(hal::display::SurfaceTransformation::Rotate90);}
-                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::ROTATE_180) {transformations.push(hal::display::SurfaceTransformation::Rotate180);}
-                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::ROTATE_270) {transformations.push(hal::display::SurfaceTransformation::Rotate270);}
-                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR) {transformations.push(hal::display::SurfaceTransformation::HorizontalMirror);}
-                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_90) {transformations.push(hal::display::SurfaceTransformation::HorizontalMirrorRotate90);}
-                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_180) {transformations.push(hal::display::SurfaceTransformation::HorizontalMirrorRotate180);}
-                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::HORIZONTAL_MIRROR_ROTATE_270) {transformations.push(hal::display::SurfaceTransformation::HorizontalMirrorRotate270);}
-                if display_property.supported_transforms.contains(vk::SurfaceTransformFlagsKHR::INHERIT) {transformations.push(hal::display::SurfaceTransformation::Inherit);}
-                transformations
-            };
-
+            let supported_transforms = conv::map_vk_surface_transform_flags(display_property.supported_transforms);
             let display_name = if display_property.display_name == std::ptr::null(){None}else{Some(unsafe{std::ffi::CStr::from_ptr(display_property.display_name)}.to_str().unwrap().to_owned())};
 
             let display_info = hal::display::DisplayInfo {
@@ -1543,10 +1530,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         let mut supported_alpha_capabilities = Vec::new();
-        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::OPAQUE) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::Opaque);}
-        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::GLOBAL) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::Global(1.0));}
-        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::PerPixel);}
-        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::PerPixelPremultiplied);}
+        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::OPAQUE) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::OPAQUE);}
+        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::GLOBAL) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::GLOBAL(1.0));}
+        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::PER_PIXEL);}
+        if display_plane_capabilities.supported_alpha.contains(ash::vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED) {supported_alpha_capabilities.push(hal::display::DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED);}
 
         Ok(hal::display::DisplayPlane
         {

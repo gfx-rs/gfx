@@ -143,7 +143,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # Arguments
     ///
     /// * `display` - display on which the the compatible planes will be listed.
-    fn enumerate_compatible_planes<'a>(&self,display: &display::Display<B>)->Result<Vec<display::Plane>,device::OutOfMemory>;
+    fn enumerate_compatible_planes(&self,display: &display::Display<B>)->Result<Vec<display::Plane>,device::OutOfMemory>;
 
     /// Create a new display mode from a display, a resolution, a refresh_rate and the plane index.
     /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
@@ -152,9 +152,9 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// * `display` - display on which the display mode will be created.
     /// * `resolution` - the desired resolution.
     /// * `refresh_rate` - the desired refresh_rate.
-    fn create_display_mode<'a>(
+    fn create_display_mode(
         &self,
-        display: &'a display::Display<B>,
+        display: &display::Display<B>,
         resolution: (u32,u32),
         refresh_rate: u32
     )->Result<display::DisplayMode<B>,display::DisplayModeError>;
