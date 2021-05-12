@@ -109,7 +109,7 @@ impl ExternalMemoryProperties {
     }
     /// Is the queried configuration importable
     pub fn is_importable(&self) -> bool {
-        self.exportable
+        self.importable
     }
     /// Does the queried configuration requires dedicated allocation
     pub fn requires_dedicated_allocation(&self) -> bool {
