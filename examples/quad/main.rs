@@ -213,7 +213,7 @@ fn main() {
             .create_display_plane_surface(
                 &display_plane,                           //Display plane
                 plane.z_index,                            //Z plane index
-                display::SurfaceTransformation::Identity, //Surface transformation
+                display::SurfaceTransform::Identity, //Surface transformation
                 display::DisplayPlaneAlpha::OPAQUE,       //Opacity
                 display_plane.max_dst_extent,             //Image extent (u32, u32)
             )
