@@ -15,6 +15,7 @@ edition = "2018"
 [features]
 default = []
 use-rtld-next = ["shared_library"]
+use-openxr = ["openxr", "once_cell"]
 
 [lib]
 name = "gfx_backend_vulkan"
@@ -30,6 +31,9 @@ parking_lot = "0.11"
 smallvec = "1.0"
 raw-window-handle = "0.3"
 inplace_it = "0.3.3"
+openxr = { version = "0.14", features = ["loaded"], default-features = false, optional = true }
+once_cell = { version = "1.5.2", optional = true }
+bitflags = "1" # FIXME: not required? features to wgt
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"

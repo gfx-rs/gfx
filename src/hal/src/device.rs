@@ -417,6 +417,21 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         view_caps: image::ViewCapabilities,
     ) -> Result<B::Image, image::CreationError>;
 
+    /// Create openxr raw image
+    #[cfg(feature = "use-openxr")]
+    unsafe fn create_image_from_openxr_raw_image(
+        &self,
+        _kind: image::Kind,
+        _mip_levels: image::Level,
+        _format: format::Format,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _view_caps: image::ViewCapabilities,
+        _raw_image: u64,
+    ) -> Result<B::Image, image::CreationError> {
+        panic!("Unimplemented")
+    }
+
     /// Get memory requirements for the Image
     unsafe fn get_image_requirements(&self, image: &B::Image) -> Requirements;
 

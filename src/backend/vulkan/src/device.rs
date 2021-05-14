@@ -1,5 +1,5 @@
 use arrayvec::ArrayVec;
-use ash::{extensions::khr, version::DeviceV1_0, vk};
+use ash::{extensions::khr, version::DeviceV1_0, vk::{self, Handle}};
 use inplace_it::inplace_or_alloc_from_iter;
 use smallvec::SmallVec;
 
@@ -14,6 +14,8 @@ use hal::{
 use std::{ffi::CString, marker::PhantomData, mem, ops::Range, ptr, sync::Arc};
 
 use crate::{command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B};
+
+use crate::xr;
 
 #[derive(Debug, Default)]
 struct GraphicsPipelineInfoBuf<'a> {
@@ -579,11 +581,25 @@ impl d::Device<B> for super::Device {
                 .collect::<Box<[_]>>();
 
             inplace_or_alloc_from_iter(dependencies_iter, |dependencies| {
-                let info = vk::RenderPassCreateInfo::builder()
-                    .flags(vk::RenderPassCreateFlags::empty())
-                    .attachments(&attachments)
-                    .subpasses(&subpasses)
-                    .dependencies(&dependencies);
+                const VIEW_COUNT: u32 = 2; // FIXME get from xr
+                let view_mask = [!(!0 << VIEW_COUNT)];
+                let mut multiview_info = vk::RenderPassMultiviewCreateInfo::builder()
+                    .view_masks(&view_mask)
+                    .correlation_masks(&view_mask);
+
+                let info = {
+                    let info = vk::RenderPassCreateInfo::builder()
+                        .flags(vk::RenderPassCreateFlags::empty())
+                        .attachments(&attachments)
+                        .subpasses(&subpasses)
+                        .dependencies(&dependencies);
+
+                    if xr::in_use() {
+                        info.push_next(&mut multiview_info)
+                    } else {
+                        info
+                    }
+                };
 
                 self.shared
                     .raw
@@ -1147,6 +1163,36 @@ impl d::Device<B> for super::Device {
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
+    }
+
+    #[cfg(feature = "use-openxr")]
+    unsafe fn create_image_from_openxr_raw_image(
+        &self,
+        kind: image::Kind,
+        _mip_levels: image::Level,
+        _format: format::Format,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        view_caps: image::ViewCapabilities,
+        raw_image: u64,
+    ) -> Result<n::Image, image::CreationError> {
+        let vk_image = vk::Image::from_raw(raw_image);
+
+        let flags = conv::map_view_capabilities(view_caps);
+        let image_type = match kind {
+            image::Kind::D1(..) => vk::ImageType::TYPE_1D,
+            image::Kind::D2(..) => vk::ImageType::TYPE_2D,
+            image::Kind::D3(..) => vk::ImageType::TYPE_3D,
+        };
+
+        let image = n::Image {
+                raw: vk_image,
+                ty: image_type,
+                flags,
+                extent: conv::map_extent(kind.extent()),
+        };
+
+        Ok(image)
     }
 
     unsafe fn get_image_requirements(&self, image: &n::Image) -> Requirements {

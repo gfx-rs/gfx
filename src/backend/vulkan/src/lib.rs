@@ -50,13 +50,7 @@ use hal::{
     Capabilities, DynamicStates, Features, Limits,
 };
 
-use std::{
-    borrow::Cow,
-    ffi::{CStr, CString},
-    fmt, mem, slice,
-    sync::Arc,
-    thread,
-};
+use std::{borrow::{Cow}, ffi::{CStr, CString}, fmt, mem, slice, sync::Arc, thread};
 
 #[cfg(feature = "use-rtld-next")]
 use ash::EntryCustom;
@@ -70,6 +64,11 @@ mod info;
 mod native;
 mod pool;
 mod window;
+
+mod xr;
+
+#[cfg(feature = "use-openxr")]
+pub use xr::OpenXR;
 
 // Sets up the maximum count we expect in most cases, but maybe not all of them.
 const ROUGH_MAX_ATTACHMENT_COUNT: usize = 5;
@@ -322,30 +321,22 @@ impl hal::Instance<Backend> for Instance {
         });
 
         let app_name = CString::new(name).unwrap();
-        let app_info = vk::ApplicationInfo::builder()
-            .application_name(app_name.as_c_str())
-            .application_version(version)
-            .engine_name(CStr::from_bytes_with_nul(b"gfx-rs\0").unwrap())
-            .engine_version(1)
-            .api_version(
-                // Pick the latest version of Vulkan available.
-                match entry.try_enumerate_instance_version() {
-                    // Vulkan 1.1+
-                    Ok(Some(version)) => {
-                        vk::make_version(vk::version_major(version), vk::version_minor(version), 0)
-                    }
+        let app_info = /*if xr::in_use() { FIXME use this for xr?
+            vk::ApplicationInfo::builder()
+                .application_name(app_name.as_c_str())
+                .application_version(0) // FIXME use version?
+                .engine_name(CStr::from_bytes_with_nul(b"gfx-rs\0").unwrap())
+                .engine_version(0)
+                .api_version(vk::make_version(1, 1, 0))
+        } else {*/
 
-                    // Vulkan 1.0
-                    Ok(None) => vk::make_version(1, 0, 0),
-
-                    // Ignore out of memory since it's unlikely to happen and `Instance::create` doesn't have a way to express it in the return value.
-                    Err(err) if err == vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                        panic!("{}", err);
-                    }
-
-                    Err(_) => unreachable!(),
-                },
-            );
+            vk::ApplicationInfo::builder()
+                .application_name(app_name.as_c_str())
+                .application_version(version)
+                .engine_name(CStr::from_bytes_with_nul(b"gfx-rs\0").unwrap())
+                .engine_version(1)
+                .api_version(vk::make_version(1, 0, 0));
+        //};
 
         let instance_extensions = entry
             .enumerate_instance_extension_properties()
@@ -406,6 +397,16 @@ impl hal::Instance<Backend> for Instance {
                     false
                 }
             });
+
+            #[cfg(feature = "use-openxr")]
+            if xr::in_use() {
+                let instance_guard = xr::INSTANCE.lock().unwrap();
+                let openxr_instance = instance_guard.as_ref().unwrap();
+                openxr_instance.verify_vulkan_version(&entry);
+                openxr_instance.add_required_instance_extensions(&mut extensions);
+                openxr_instance.verify_instance_extensions(&instance_extensions);
+            }
+
             extensions
         };
 
@@ -508,13 +509,27 @@ impl hal::Instance<Backend> for Instance {
     }
 
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
-        let devices = match unsafe { self.raw.inner.enumerate_physical_devices() } {
-            Ok(devices) => devices,
-            Err(err) => {
-                error!("Could not enumerate physical devices! {}", err);
-                vec![]
+        let devices;
+
+        if xr::in_use() {
+            #[cfg(feature = "use-openxr")]
+            {
+                let mut instance_guard = xr::INSTANCE.lock().unwrap();
+                let openxr_instance = instance_guard.as_mut().unwrap();
+                let vk_physical_device = openxr_instance.get_device(self.raw.inner.handle());
+                devices = vec![vk_physical_device];
             }
-        };
+            #[cfg(not(feature = "use-openxr"))]
+            panic!("Meh");
+        } else {
+            devices = match unsafe { self.raw.inner.enumerate_physical_devices() } {
+                Ok(devices) => devices,
+                Err(err) => {
+                    error!("Could not enumerate physical devices! {}", err);
+                    vec![]
+                }
+            };
+        }
 
         devices
             .into_iter()
@@ -557,17 +572,33 @@ impl hal::Instance<Backend> for Instance {
                         | vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
                 };
                 let queue_families = unsafe {
-                    self.raw
+                    let queue_families = self.raw
                         .inner
                         .get_physical_device_queue_family_properties(device)
                         .into_iter()
-                        .enumerate()
-                        .map(|(i, properties)| QueueFamily {
+                        .enumerate();
+
+                    if xr::in_use() {
+                        queue_families.filter(|(_, info)| {
+                            if info.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
+                                true
+                            } else {
+                                false
+                            }
+                        }).map(|(i, properties)| QueueFamily {
                             properties,
                             device,
                             index: i as u32,
                         })
                         .collect()
+                    } else {
+                        queue_families.map(|(i, properties)| QueueFamily {
+                            properties,
+                            device,
+                            index: i as u32,
+                        })
+                        .collect()
+                    }
                 };
 
                 adapter::Adapter {
@@ -776,8 +807,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 enabled_extensions.push(DrawIndirectCount::name());
             }
 
+            #[cfg(feature = "use-openxr")]
+            if xr::in_use() {
+                let instance_guard = xr::INSTANCE.lock().unwrap();
+                let openxr_instance = instance_guard.as_ref().unwrap();
+                openxr_instance.add_required_device_extensions(&mut enabled_extensions);
+            }
+
             enabled_extensions
         };
+
 
         let valid_ash_memory_types = {
             let mem_properties = self
@@ -806,10 +845,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 })
                 .collect::<Vec<_>>();
 
+            let multiview_features = &mut vk::PhysicalDeviceVulkan11Features {
+                multiview: vk::TRUE,
+                ..Default::default()
+            };
+
             let mut info = vk::DeviceCreateInfo::builder()
                 .queue_create_infos(&family_infos)
                 .enabled_extension_names(&str_pointers)
+                .push_next(multiview_features) // FIXME only on xr_use()
                 .enabled_features(&enabled_features.core);
+
             if let Some(ref mut feature) = enabled_features.descriptor_indexing {
                 info = info.push_next(feature);
             }
@@ -855,6 +901,24 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         } else {
             None
         };
+
+        #[cfg(feature = "use-openxr")]
+        if xr::in_use() {
+            let mut instance_guard = xr::INSTANCE.lock().unwrap();
+            let instance = instance_guard.as_mut().unwrap();
+
+            let xr_queue_family_index = families
+                .first()
+                .map(|&(family, _)| {
+                    family.index
+                }).unwrap();
+
+            instance.create_session(
+                self.instance.inner.handle(),
+                self.handle,
+                device_raw.handle(),
+                xr_queue_family_index);
+        }
 
         let device = Device {
             shared: Arc::new(RawDevice {

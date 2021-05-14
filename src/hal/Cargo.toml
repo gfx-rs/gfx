@@ -13,6 +13,7 @@ edition = "2018"
 
 [features]
 unstable = []
+use-openxr = ["openxr"]
 
 [lib]
 name = "gfx_hal"
@@ -24,6 +25,7 @@ naga = { git = "https://github.com/gfx-rs/naga", tag = "gfx-9" }
 raw-window-handle = "0.3"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 thiserror = "1"
+openxr = { version = "0.14", features = ["loaded"], default-features = false, optional = true }
 
 [dev-dependencies]
 gfx-backend-empty = { path = "../backend/empty", version = "0.7" }
