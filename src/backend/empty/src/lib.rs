@@ -159,20 +159,20 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn enumerate_available_displays(
+    unsafe fn enumerate_available_displays(
         &self,
-    ) -> Result<Vec<display::Display<Backend>>, device::OutOfMemory> {
+    ) -> Result<Vec<display::Display<Backend>>, display::DisplayError> {
         unimplemented!();
     }
 
-    fn enumerate_compatible_planes(
+    unsafe fn enumerate_compatible_planes(
         &self,
         _display: &display::Display<Backend>,
-    ) -> Result<Vec<display::Plane>, device::OutOfMemory> {
+    ) -> Result<Vec<display::Plane>, display::DisplayError> {
         unimplemented!();
     }
 
-    fn create_display_mode(
+    unsafe fn create_display_mode(
         &self,
         _display: &display::Display<Backend>,
         _resolution: (u32, u32),
@@ -181,11 +181,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         unimplemented!();
     }
 
-    fn create_display_plane<'a>(
+    unsafe fn create_display_plane<'a>(
         &self,
         _display: &'a display::DisplayMode<Backend>,
         _plane: &'a display::Plane,
-    ) -> Result<display::DisplayPlane<'a, Backend>, device::OutOfMemory> {
+    ) -> Result<display::DisplayPlane<'a, Backend>, display::DisplayError> {
         unimplemented!();
     }
 }
@@ -1140,7 +1140,7 @@ impl hal::Instance<Backend> for Instance {
 
     unsafe fn destroy_surface(&self, _surface: Surface) {}
 
-    fn create_display_plane_surface(
+    unsafe fn create_display_plane_surface(
         &self,
         _display_plane: &display::DisplayPlane<Backend>,
         _plane_stack_index: u32,

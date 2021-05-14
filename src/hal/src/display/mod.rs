@@ -165,26 +165,47 @@ impl PartialEq for DisplayPlaneAlpha {
     }
 }
 
-/// Error occurring while creating a display plane.
+/// Error occurring on displays operations.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
-pub enum DisplayModeError {
-    /// Display error.
+pub enum DisplayError {
+    /// Out of either host or device memory.
     #[error(transparent)]
     OutOfMemory(#[from] crate::device::OutOfMemory),
+
+    /// Unsupported feature
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
+}
+
+/// Error occurring on display modes operations.
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+pub enum DisplayModeError {
+    /// Out of either host or device memory.
+    #[error(transparent)]
+    OutOfMemory(#[from] crate::device::OutOfMemory),
+
     /// Unsupported resolution and refresh rate combination
     #[error("Unsupported resolution and refresh rate combination")]
     UnsupportedDisplayMode,
+
+    /// Unsupported feature
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
 }
 
 /// Error occurring while creating a display plane surface.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 pub enum DisplayPlaneSurfaceError {
-    /// Display error.
+    /// Out of either host or device memory.
     #[error(transparent)]
     OutOfMemory(#[from] crate::device::OutOfMemory),
     /// Unsupported resolution and refresh rate combination
     #[error("Unsupported parameters used")]
     UnsupportedParameters,
+
+    /// Unsupported feature
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
 }
 
 /**

@@ -175,10 +175,12 @@ fn main() {
             }
         });
     } else {
-        let displays = adapter
-            .physical_device
-            .enumerate_available_displays()
-            .expect("Failed to enumerate displays");
+        let displays = unsafe {
+            adapter
+                .physical_device
+                .enumerate_available_displays()
+                .expect("Failed to enumerate displays")
+        };
         if displays.len() == 0 {
             panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");
         }
@@ -189,10 +191,12 @@ fn main() {
         println!("Selected display: {:#?}", &display);
 
         //Enumerate compatible planes
-        let compatible_planes = adapter
-            .physical_device
-            .enumerate_compatible_planes(&display)
-            .expect("Failed to enumerate compatible planes");
+        let compatible_planes = unsafe {
+            adapter
+                .physical_device
+                .enumerate_compatible_planes(&display)
+                .expect("Failed to enumerate compatible planes")
+        };
 
         //Get the first available plane (it is granted to have at least 1 plane compatible)
         let plane = &compatible_planes[0];
@@ -208,10 +212,11 @@ fn main() {
             Some(display_mode) => display_mode,
             None => {
                 println!("Monitor does not expose the resolution {:#?} as built-in mode, trying to create it",DIMS);
-                match adapter
-                    .physical_device
-                    .create_display_mode(&display, DIMS.into(), 60)
-                {
+                match unsafe {
+                    adapter
+                        .physical_device
+                        .create_display_mode(&display, DIMS.into(), 60)
+                } {
                     Ok(display_mode) => {
                         custom_display_mode = display_mode;
                         &custom_display_mode
@@ -231,22 +236,26 @@ fn main() {
         println!("Display mode: {:#?}", &display_mode);
 
         //Create display plane
-        let display_plane = adapter
-            .physical_device
-            .create_display_plane(&display_mode, &plane)
-            .expect("Failed to create display plane");
+        let display_plane = unsafe {
+            adapter
+                .physical_device
+                .create_display_plane(&display_mode, &plane)
+                .expect("Failed to create display plane")
+        };
         println!("Display plane: {:#?}", &display_plane);
 
         //Create a surface from the display
-        let surface = instance
-            .create_display_plane_surface(
-                &display_plane,                      //Display plane
-                plane.z_index,                       //Z plane index
-                display::SurfaceTransform::IDENTITY, //Surface transformation
-                display::DisplayPlaneAlpha::OPAQUE,  //Opacity
-                display_plane.max_dst_extent,        //Image extent
-            )
-            .expect("Failed to create a surface!");
+        let surface = unsafe {
+            instance
+                .create_display_plane_surface(
+                    &display_plane,                      //Display plane
+                    plane.z_index,                       //Z plane index
+                    display::SurfaceTransform::IDENTITY, //Surface transformation
+                    display::DisplayPlaneAlpha::OPAQUE,  //Opacity
+                    display_plane.max_dst_extent,        //Image extent
+                )
+                .expect("Failed to create a surface!")
+        };
 
         let mut renderer = Renderer::new(instance, surface, adapter);
         if display_mode.resolution != DIMS.into() {

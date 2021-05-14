@@ -137,17 +137,18 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # Arguments
     ///
     /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
-    fn enumerate_available_displays(&self)
-        -> Result<Vec<display::Display<B>>, device::OutOfMemory>;
+    unsafe fn enumerate_available_displays(
+        &self,
+    ) -> Result<Vec<display::Display<B>>, display::DisplayError>;
 
     /// Enumerate compatibles planes with the provided display.
     /// # Arguments
     ///
     /// * `display` - display on which the the compatible planes will be listed.
-    fn enumerate_compatible_planes(
+    unsafe fn enumerate_compatible_planes(
         &self,
         display: &display::Display<B>,
-    ) -> Result<Vec<display::Plane>, device::OutOfMemory>;
+    ) -> Result<Vec<display::Plane>, display::DisplayError>;
 
     /// Create a new display mode from a display, a resolution, a refresh_rate and the plane index.
     /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
@@ -156,7 +157,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// * `display` - display on which the display mode will be created.
     /// * `resolution` - the desired resolution.
     /// * `refresh_rate` - the desired refresh_rate.
-    fn create_display_mode(
+    unsafe fn create_display_mode(
         &self,
         display: &display::Display<B>,
         resolution: (u32, u32),
@@ -171,11 +172,11 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// * `plane` - the plane on which the surface will be rendered on.
     /// * `resolution` - the desired resolution.
     /// * `refresh_rate` - the desired refresh_rate.
-    fn create_display_plane<'a>(
+    unsafe fn create_display_plane<'a>(
         &self,
         display: &'a display::DisplayMode<B>,
         plane: &'a display::Plane,
-    ) -> Result<display::DisplayPlane<'a, B>, device::OutOfMemory>;
+    ) -> Result<display::DisplayPlane<'a, B>, display::DisplayError>;
 }
 
 /// The type of a physical graphics device

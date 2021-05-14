@@ -715,7 +715,7 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     ///
     unsafe fn destroy_surface(&self, surface: B::Surface);
 
-    /// Create a new [surface][window::Surface] from display.
+    /// Create a new [surface][window::Surface] from a [display plane][display::DisplayPlane].
     ///
     /// Surfaces can be used to render to windows.
     ///
@@ -723,7 +723,7 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     ///
     /// This method can cause undefined behavior if `raw_window_handle` isn't
     /// a handle to a valid window for the current platform.
-    fn create_display_plane_surface<'a>(
+    unsafe fn create_display_plane_surface<'a>(
         &self,
         display_plane: &display::DisplayPlane<'a, B>,
         plane_stack_index: u32,

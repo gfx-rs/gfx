@@ -541,20 +541,20 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn enumerate_available_displays(
+    unsafe fn enumerate_available_displays(
         &self,
-    ) -> Result<Vec<hal::display::Display<crate::Backend>>, hal::device::OutOfMemory> {
+    ) -> Result<Vec<hal::display::Display<crate::Backend>>, display::DisplayError> {
         unimplemented!();
     }
 
-    fn enumerate_compatible_planes(
+    unsafe fn enumerate_compatible_planes(
         &self,
         _display: &hal::display::Display<crate::Backend>,
-    ) -> Result<Vec<hal::display::Plane>, hal::device::OutOfMemory> {
+    ) -> Result<Vec<hal::display::Plane>, display::DisplayError> {
         unimplemented!();
     }
 
-    fn create_display_mode(
+    unsafe fn create_display_mode(
         &self,
         _display: &hal::display::Display<crate::Backend>,
         _resolution: (u32, u32),
@@ -563,11 +563,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         unimplemented!();
     }
 
-    fn create_display_plane<'a>(
+    unsafe fn create_display_plane<'a>(
         &self,
         _display: &'a hal::display::DisplayMode<crate::Backend>,
         _plane: &'a hal::display::Plane,
-    ) -> Result<hal::display::DisplayPlane<'a, crate::Backend>, hal::device::OutOfMemory> {
+    ) -> Result<hal::display::DisplayPlane<'a, crate::Backend>, display::DisplayError> {
         unimplemented!();
     }
 }

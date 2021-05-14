@@ -37,7 +37,7 @@ use ash::{
 use hal::{
     adapter,
     device::{DeviceLost, OutOfMemory},
-    image, memory,
+    display, image, memory,
     pso::PipelineStage,
     queue,
     window::{OutOfDate, PresentError, Suboptimal, SurfaceLost},
@@ -670,7 +670,7 @@ impl hal::Instance<Backend> for Instance {
             .destroy_surface(surface.raw.handle, None);
     }
 
-    fn create_display_plane_surface(
+    unsafe fn create_display_plane_surface(
         &self,
         display_plane: &hal::display::DisplayPlane<Backend>,
         plane_stack_index: u32,
@@ -678,7 +678,13 @@ impl hal::Instance<Backend> for Instance {
         alpha: hal::display::DisplayPlaneAlpha,
         image_extent: hal::window::Extent2D,
     ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {
-        let display_extension = self.raw.display.as_ref().unwrap();
+        let display_extension = match &self.raw.display {
+            Some(display_extension) => display_extension,
+            None => {
+                error!("Direct display feature not supported");
+                return Err(display::DisplayPlaneSurfaceError::UnsupportedFeature);
+            }
+        };
         /*
                 if !display_plane.display_mode.display.info.plane_reorder_possible && display_plane.plane.z_index != plane_stack_index
                 {
@@ -728,9 +734,9 @@ impl hal::Instance<Backend> for Instance {
             .build()
         };
 
-        let surface =
-            unsafe { display_extension.create_display_plane_surface(&display_surface_ci, None) }
-                .unwrap();
+        let surface = display_extension
+            .create_display_plane_surface(&display_surface_ci, None)
+            .unwrap();
 
         Ok(self.create_surface_from_vk_surface_khr(surface))
     }

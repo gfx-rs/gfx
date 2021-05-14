@@ -24,8 +24,9 @@ extern crate log;
 use crate::{debug::set_debug_name, device::DepthStencilState};
 use auxil::ShaderStage;
 use hal::{
-    adapter, buffer, command, format, image, memory, pass, pso, query, queue, window, DrawCount,
-    IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
+    adapter, buffer, command, display, format, image, memory, pass, pso, query, queue, window,
+    DrawCount, IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset,
+    WorkGroupCount,
 };
 use range_alloc::RangeAllocator;
 use smallvec::SmallVec;
@@ -661,14 +662,14 @@ impl hal::Instance<Backend> for Instance {
         // TODO: Implement Surface cleanup
     }
 
-    fn create_display_plane_surface(
+    unsafe fn create_display_plane_surface(
         &self,
-        _display_plane: &hal::display::DisplayPlane<crate::Backend>,
+        _display_plane: &display::DisplayPlane<crate::Backend>,
         _plane_stack_index: u32,
-        _transformation: hal::display::SurfaceTransform,
-        _alpha: hal::display::DisplayPlaneAlpha,
+        _transformation: display::SurfaceTransform,
+        _alpha: display::DisplayPlaneAlpha,
         _image_extent: hal::window::Extent2D,
-    ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {
+    ) -> Result<Surface, display::DisplayPlaneSurfaceError> {
         unimplemented!();
     }
 }
@@ -984,33 +985,33 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.properties
     }
 
-    fn enumerate_available_displays(
+    unsafe fn enumerate_available_displays(
         &self,
-    ) -> Result<Vec<hal::display::Display<crate::Backend>>, hal::device::OutOfMemory> {
+    ) -> Result<Vec<display::Display<crate::Backend>>, display::DisplayError> {
         unimplemented!();
     }
 
-    fn enumerate_compatible_planes(
+    unsafe fn enumerate_compatible_planes(
         &self,
-        _display: &hal::display::Display<crate::Backend>,
-    ) -> Result<Vec<hal::display::Plane>, hal::device::OutOfMemory> {
+        _display: &display::Display<crate::Backend>,
+    ) -> Result<Vec<display::Plane>, display::DisplayError> {
         unimplemented!();
     }
 
-    fn create_display_mode(
+    unsafe fn create_display_mode(
         &self,
-        _display: &hal::display::Display<crate::Backend>,
+        _display: &display::Display<crate::Backend>,
         _resolution: (u32, u32),
         _refresh_rate: u32,
-    ) -> Result<hal::display::DisplayMode<crate::Backend>, hal::display::DisplayModeError> {
+    ) -> Result<display::DisplayMode<crate::Backend>, display::DisplayModeError> {
         unimplemented!();
     }
 
-    fn create_display_plane<'a>(
+    unsafe fn create_display_plane<'a>(
         &self,
-        _display: &'a hal::display::DisplayMode<crate::Backend>,
-        _plane: &'a hal::display::Plane,
-    ) -> Result<hal::display::DisplayPlane<'a, crate::Backend>, hal::device::OutOfMemory> {
+        _display: &'a display::DisplayMode<crate::Backend>,
+        _plane: &'a display::Plane,
+    ) -> Result<display::DisplayPlane<'a, crate::Backend>, display::DisplayError> {
         unimplemented!();
     }
 }

@@ -101,7 +101,7 @@ impl hal::Instance<B> for Instance {
         }
     }
 
-    fn create_display_plane_surface(
+    unsafe fn create_display_plane_surface(
         &self,
         _display_plane: &hal::display::DisplayPlane<crate::Backend>,
         _plane_stack_index: u32,
