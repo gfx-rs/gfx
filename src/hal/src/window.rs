@@ -127,9 +127,9 @@ impl From<(image::Size, image::Size)> for Extent2D {
     }
 }
 
-impl From<Extent2D> for (image::Size, image::Size){
+impl From<Extent2D> for (image::Size, image::Size) {
     fn from(extent: Extent2D) -> Self {
-        (extent.width,extent.height)
+        (extent.width, extent.height)
     }
 }
 

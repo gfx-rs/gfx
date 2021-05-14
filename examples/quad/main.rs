@@ -200,16 +200,29 @@ fn main() {
 
         //Get the first available display mode (generally the preferred one)
         let custom_display_mode;
-        let display_mode = match display.modes.iter().find(|display_mode|display_mode.resolution == DIMS.into()){
-            Some(display_mode)=>display_mode,
-            None=>{
+        let display_mode = match display
+            .modes
+            .iter()
+            .find(|display_mode| display_mode.resolution == DIMS.into())
+        {
+            Some(display_mode) => display_mode,
+            None => {
                 println!("Monitor does not expose the resolution {:#?} as built-in mode, trying to create it",DIMS);
-                match adapter.physical_device.create_display_mode(&display,DIMS.into(),60){
-                    Ok(display_mode)=>{custom_display_mode = display_mode; &custom_display_mode}
+                match adapter
+                    .physical_device
+                    .create_display_mode(&display, DIMS.into(), 60)
+                {
+                    Ok(display_mode) => {
+                        custom_display_mode = display_mode;
+                        &custom_display_mode
+                    }
                     // If was not possible to create custom display mode, use the first built-in mode available
-                    Err(err)=>{
+                    Err(err) => {
                         println!("Failed to create display mode: {:#?}\nUsing the first display mode available on the monitor",err);
-                        display.modes.get(0).expect("The selected monitor does not have built-in display modes")
+                        display
+                            .modes
+                            .get(0)
+                            .expect("The selected monitor does not have built-in display modes")
                     }
                 }
             }
@@ -227,11 +240,11 @@ fn main() {
         //Create a surface from the display
         let surface = instance
             .create_display_plane_surface(
-                &display_plane,                           //Display plane
-                plane.z_index,                            //Z plane index
-                display::SurfaceTransform::IDENTITY,      //Surface transformation
-                display::DisplayPlaneAlpha::OPAQUE,       //Opacity
-                display_plane.max_dst_extent,             //Image extent (u32, u32)
+                &display_plane,                      //Display plane
+                plane.z_index,                       //Z plane index
+                display::SurfaceTransform::IDENTITY, //Surface transformation
+                display::DisplayPlaneAlpha::OPAQUE,  //Opacity
+                display_plane.max_dst_extent,        //Image extent
             )
             .expect("Failed to create a surface!");
 
