@@ -1384,10 +1384,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
+        println!("DISPLAY_PROPERTIES\n:{:#?}",&display_properties);
+
         let mut displays = Vec::new();
         for display_property in display_properties {
-            let display_handle = native::Display(display_property.display);
-
             let supported_transforms =
                 conv::map_vk_surface_transform_flags(display_property.supported_transforms);
             let display_name = if display_property.display_name == std::ptr::null() {
@@ -1439,14 +1439,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 handle: native::DisplayMode(display_mode_properties.display_mode),
                 resolution: (
                     display_mode_properties.parameters.visible_region.width,
-                    display_mode_properties.parameters.visible_region.width,
+                    display_mode_properties.parameters.visible_region.height,
                 ),
                 refresh_rate: display_mode_properties.parameters.refresh_rate,
             })
             .collect();
 
             let display = hal::display::Display {
-                handle: display_handle,
+                handle: native::Display(display_property.display),
                 info: display_info,
                 modes: display_modes,
             };
@@ -1461,17 +1461,18 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         display: &hal::display::Display<Backend>,
     ) -> Result<Vec<hal::display::Plane>, hal::device::OutOfMemory> {
         let display_extension = self.instance.display.as_ref().unwrap();
-
+        println!("Enumerating plane surfaces");
         match unsafe { display_extension.get_physical_device_display_plane_properties(self.handle) }
         {
             Ok(planes_properties) => {
                 let mut planes = Vec::new();
                 for index in 0..planes_properties.len() {
+                    println!("get_display_plane_supported_displays: {}",index);
                     let compatible_displays = match unsafe {
                         display_extension
                             .get_display_plane_supported_displays(self.handle, index as u32)
                     } {
-                        Ok(compatible_displays) => compatible_displays,
+                        Ok(compatible_displays) => {println!("compatible displays: {:#?}",&compatible_displays);compatible_displays},
                         Err(error) => {
                             match error {
                                 ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
@@ -1507,9 +1508,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn create_display_mode<'a>(
+    fn create_display_mode(
         &self,
-        display: &'a hal::display::Display<Backend>,
+        display: &hal::display::Display<Backend>,
         resolution: (u32, u32),
         refresh_rate: u32,
     ) -> Result<hal::display::DisplayMode<Backend>, hal::display::DisplayModeError> {

@@ -182,10 +182,11 @@ fn main() {
         if displays.len() == 0 {
             panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");
         }
+        println!("Displays: {:#?}", &displays);
 
         //Get the first available display
         let display = &displays[0];
-        println!("Display: {:#?}", &display);
+        println!("Selected display: {:#?}", &display);
 
         //Enumerate compatible planes
         let compatible_planes = adapter
@@ -198,7 +199,22 @@ fn main() {
         println!("Plane: {:#?}", &plane);
 
         //Get the first available display mode (generally the preferred one)
-        let display_mode = &display.modes[0];
+        let custom_display_mode;
+        let display_mode = match display.modes.iter().find(|display_mode|display_mode.resolution == DIMS.into()){
+            Some(display_mode)=>display_mode,
+            None=>{
+                println!("Monitor does not expose the resolution {:#?} as built-in mode, trying to create it",DIMS);
+                match adapter.physical_device.create_display_mode(&display,DIMS.into(),60){
+                    Ok(display_mode)=>{custom_display_mode = display_mode; &custom_display_mode}
+                    // If was not possible to create custom display mode, use the first built-in mode available
+                    Err(err)=>{
+                        println!("Failed to create display mode: {:#?}\nUsing the first display mode available on the monitor",err);
+                        display.modes.get(0).expect("The selected monitor does not have built-in display modes")
+                    }
+                }
+            }
+        };
+
         println!("Display mode: {:#?}", &display_mode);
 
         //Create display plane
@@ -215,11 +231,15 @@ fn main() {
                 plane.z_index,                            //Z plane index
                 display::SurfaceTransform::IDENTITY,      //Surface transformation
                 display::DisplayPlaneAlpha::OPAQUE,       //Opacity
-                display_plane.max_dst_extent,             //Image extent (u32, u32)
+                DIMS.into()//display_plane.max_dst_extent,             //Image extent (u32, u32)
             )
             .expect("Failed to create a surface!");
 
         let mut renderer = Renderer::new(instance, surface, adapter);
+        if display_mode.resolution != DIMS.into() {
+            renderer.dimensions = display_mode.resolution.into();
+            renderer.recreate_swapchain();
+        }
 
         renderer.render();
         std::thread::sleep(std::time::Duration::from_secs(5));

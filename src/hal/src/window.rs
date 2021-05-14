@@ -127,6 +127,12 @@ impl From<(image::Size, image::Size)> for Extent2D {
     }
 }
 
+impl From<Extent2D> for (image::Size, image::Size){
+    fn from(extent: Extent2D) -> Self {
+        (extent.width,extent.height)
+    }
+}
+
 impl Extent2D {
     /// Convert into a regular image extent.
     pub fn to_extent(&self) -> image::Extent {
