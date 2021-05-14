@@ -459,6 +459,7 @@ impl hal::Instance<Backend> for Instance {
                 extensions.push(vk::KhrStorageBufferStorageClassFn::name());
             }
 
+            extensions.push(vk::ExtDisplaySurfaceCounterFn::name());
             extensions.push(khr::Display::name());
 
             // Only keep available extensions.

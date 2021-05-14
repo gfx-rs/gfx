@@ -582,7 +582,6 @@ impl PhysicalDeviceInfo {
             requested_extensions.push(vk::KhrGetDisplayProperties2Fn::name()); // TODO NOT NEEDED, RIGHT?
         }
 
-        requested_extensions.push(vk::ExtDisplaySurfaceCounterFn::name());
         requested_extensions.push(vk::ExtDisplayControlFn::name());
 
         requested_extensions
