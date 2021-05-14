@@ -231,7 +231,7 @@ fn main() {
                 plane.z_index,                            //Z plane index
                 display::SurfaceTransform::IDENTITY,      //Surface transformation
                 display::DisplayPlaneAlpha::OPAQUE,       //Opacity
-                DIMS.into()//display_plane.max_dst_extent,             //Image extent (u32, u32)
+                display_plane.max_dst_extent,             //Image extent (u32, u32)
             )
             .expect("Failed to create a surface!");
 

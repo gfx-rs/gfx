@@ -1384,8 +1384,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
-        println!("DISPLAY_PROPERTIES\n:{:#?}",&display_properties);
-
         let mut displays = Vec::new();
         for display_property in display_properties {
             let supported_transforms =
@@ -1461,18 +1459,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         display: &hal::display::Display<Backend>,
     ) -> Result<Vec<hal::display::Plane>, hal::device::OutOfMemory> {
         let display_extension = self.instance.display.as_ref().unwrap();
-        println!("Enumerating plane surfaces");
+
         match unsafe { display_extension.get_physical_device_display_plane_properties(self.handle) }
         {
             Ok(planes_properties) => {
                 let mut planes = Vec::new();
                 for index in 0..planes_properties.len() {
-                    println!("get_display_plane_supported_displays: {}",index);
                     let compatible_displays = match unsafe {
                         display_extension
                             .get_display_plane_supported_displays(self.handle, index as u32)
                     } {
-                        Ok(compatible_displays) => {println!("compatible displays: {:#?}",&compatible_displays);compatible_displays},
+                        Ok(compatible_displays) => compatible_displays,
                         Err(error) => {
                             match error {
                                 ash::vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
