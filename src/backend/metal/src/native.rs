@@ -191,7 +191,6 @@ pub type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>
 pub struct DescriptorSetInfo {
     pub offsets: MultiStageResourceCounters,
     pub dynamic_buffers: Vec<MultiStageData<PoolResourceIndex>>,
-    pub buffer_sizes_offsets: MultiStageData<u8>,
     pub sized_buffer_bindings: Vec<(pso::DescriptorBinding, pso::ShaderStageFlags)>,
 }
 
@@ -210,7 +209,6 @@ pub struct PipelineLayout {
     pub(crate) total: MultiStageResourceCounters,
     pub(crate) push_constants: MultiStageData<Option<PushConstantInfo>>,
     pub(crate) total_push_constants: u32,
-    pub(crate) total_buffer_sizes: MultiStageData<u8>,
 }
 
 #[derive(Clone, Debug)]
@@ -270,21 +268,21 @@ pub type VertexBufferVec = Vec<(pso::VertexBufferDesc, pso::ElemOffset)>;
 pub struct PipelineStageInfo {
     pub(crate) push_constants: Option<PushConstantInfo>,
     pub(crate) sizes_slot: Option<naga::back::msl::Slot>,
-    pub(crate) sizes_indices: Vec<u8>,
+    pub(crate) sized_bindings: Vec<naga::ResourceBinding>,
 }
 
 impl PipelineStageInfo {
     pub(crate) fn clear(&mut self) {
         self.push_constants = None;
         self.sizes_slot = None;
-        self.sizes_indices.clear();
+        self.sized_bindings.clear();
     }
 
     pub(crate) fn assign_from(&mut self, other: &Self) {
         self.push_constants = other.push_constants;
         self.sizes_slot = other.sizes_slot;
-        self.sizes_indices.clear();
-        self.sizes_indices.extend_from_slice(&other.sizes_indices);
+        self.sized_bindings.clear();
+        self.sized_bindings.extend_from_slice(&other.sized_bindings);
     }
 }
 
@@ -490,6 +488,7 @@ pub struct DescriptorEmulatedPoolInner {
         pso::ShaderStageFlags,
         Option<BufferPtr>,
         buffer::Offset,
+        pso::DescriptorBinding,
         StorageBindingSize,
     )>,
 }

@@ -139,7 +139,7 @@ struct CompiledShader {
     function: metal::Function,
     wg_size: metal::MTLSize,
     rasterizing: bool,
-    sizes_indices: Vec<u8>,
+    sized_bindings: Vec<naga::ResourceBinding>,
 }
 
 #[derive(Debug)]
@@ -833,7 +833,7 @@ impl Device {
         };
 
         // collect sizes indices
-        let mut sizes_indices = Vec::new();
+        let mut sized_bindings = Vec::new();
         if let Ok(ref shader) = ep.module.naga {
             for (_handle, var) in shader.module.global_variables.iter() {
                 if let naga::TypeInner::Struct { ref members, .. } =
@@ -847,17 +847,7 @@ impl Device {
                         {
                             // Note: unwraps are fine, since the MSL is already generated
                             let br = var.binding.clone().unwrap();
-                            let set_info = &layout.infos[br.group as usize];
-                            let mut sizes_index = set_info.buffer_sizes_offsets[stage];
-                            for &(binding, stages) in set_info.sized_buffer_bindings.iter() {
-                                if binding == br.binding {
-                                    break;
-                                }
-                                if stages.contains(stage.into()) {
-                                    sizes_index += 1;
-                                }
-                            }
-                            sizes_indices.push(sizes_index);
+                            sized_bindings.push(br);
                         }
                     }
                 }
@@ -910,7 +900,7 @@ impl Device {
             function: mtl_function,
             wg_size,
             rasterizing: info.rasterization_enabled,
-            sizes_indices,
+            sized_bindings,
         })
     }
 
@@ -1196,11 +1186,6 @@ impl hal::device::Device<Backend> for Device {
                 ps: stage_infos[1].counters.clone(),
                 cs: stage_infos[2].counters.clone(),
             };
-            let buffer_sizes_offsets = n::MultiStageData {
-                vs: stage_infos[0].sizes_count,
-                ps: stage_infos[1].sizes_count,
-                cs: stage_infos[2].sizes_count,
-            };
 
             match *set_layout {
                 n::DescriptorSetLayout::Emulated {
@@ -1321,7 +1306,6 @@ impl hal::device::Device<Backend> for Device {
             infos.alloc().init(n::DescriptorSetInfo {
                 offsets,
                 dynamic_buffers,
-                buffer_sizes_offsets,
                 sized_buffer_bindings,
             });
         }
@@ -1500,11 +1484,6 @@ impl hal::device::Device<Backend> for Device {
                     }),
             },
             total_push_constants: pc_limits[0].max(pc_limits[1]).max(pc_limits[2]),
-            total_buffer_sizes: n::MultiStageData {
-                vs: stage_infos[0].sizes_count,
-                ps: stage_infos[1].sizes_count,
-                cs: stage_infos[2].sizes_count,
-            },
         })
     }
 
@@ -1942,8 +1921,8 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_binary_archives(&[&binary_archive.inner]);
         }
 
-        let (fs_lib, ps_sizes_indices) = match fs {
-            Some(compiled) => (Some(compiled.library), compiled.sizes_indices),
+        let (fs_lib, ps_sized_bindings) = match fs {
+            Some(compiled) => (Some(compiled.library), compiled.sized_bindings),
             None => (None, Vec::new()),
         };
 
@@ -1964,7 +1943,7 @@ impl hal::device::Device<Backend> for Device {
                         .per_stage_map
                         .vs
                         .sizes_buffer,
-                    sizes_indices: vs.sizes_indices,
+                    sized_bindings: vs.sized_bindings,
                 },
                 ps_info: n::PipelineStageInfo {
                     push_constants: pipeline_desc.layout.push_constants.ps,
@@ -1974,7 +1953,7 @@ impl hal::device::Device<Backend> for Device {
                         .per_stage_map
                         .fs
                         .sizes_buffer,
-                    sizes_indices: ps_sizes_indices,
+                    sized_bindings: ps_sized_bindings,
                 },
                 rasterizer_state,
                 depth_bias,
@@ -2049,7 +2028,7 @@ impl hal::device::Device<Backend> for Device {
                         .per_stage_map
                         .cs
                         .sizes_buffer,
-                    sizes_indices: cs.sizes_indices,
+                    sized_bindings: cs.sized_bindings,
                 },
             })
             .map_err(|err| {
@@ -2558,6 +2537,7 @@ impl hal::device::Device<Backend> for Device {
                                 layout.stages,
                                 Some(AsNative::from(raw)),
                                 range.start + sub.offset,
+                                layout.binding,
                                 if layout.content.contains(n::DescriptorContent::SIZED_BUFFER) {
                                     raw_binding_size.min(u32::MAX as buffer::Offset - 1) as u32
                                 } else {

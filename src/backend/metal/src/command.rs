@@ -360,6 +360,8 @@ struct State {
     active_depth_stencil_desc: pso::DepthStencilDesc,
     active_scissor: MTLScissorRect,
     stage_infos: native::MultiStageData<native::PipelineStageInfo>,
+    storage_buffer_length_map:
+        FastHashMap<(pso::DescriptorSetIndex, pso::DescriptorBinding), native::StorageBindingSize>,
 }
 
 impl State {
@@ -391,6 +393,7 @@ impl State {
         self.stage_infos.vs.clear();
         self.stage_infos.ps.clear();
         self.stage_infos.cs.clear();
+        self.storage_buffer_length_map.clear();
     }
 
     fn clamp_scissor(sr: MTLScissorRect, extent: i::Extent) -> MTLScissorRect {
@@ -770,16 +773,9 @@ impl State {
         let stage_info = &self.stage_infos[stage];
         let slot = stage_info.sizes_slot?;
         result_sizes.clear();
-        let resources = match stage {
-            naga::ShaderStage::Vertex => &self.resources_vs,
-            naga::ShaderStage::Fragment => &self.resources_ps,
-            naga::ShaderStage::Compute => &self.resources_cs,
-        };
-        for &length_index in stage_info.sizes_indices.iter() {
+        for br in stage_info.sized_bindings.iter() {
             // If it's None, this isn't the right time to update the sizes
-            let size = resources
-                .storage_buffer_lengths
-                .get(length_index as usize)?;
+            let size = self.storage_buffer_length_map.get(&(br.group as pso::DescriptorSetIndex, br.binding))?;
             result_sizes.push(*size);
         }
         Some(slot as _)
@@ -798,17 +794,16 @@ impl State {
         &mut self,
         stage_filter: pso::ShaderStageFlags,
         data: &native::DescriptorEmulatedPoolInner,
+        set_index: pso::DescriptorSetIndex,
         set_info: &native::DescriptorSetInfo,
         pool_range: &native::ResourceData<Range<native::PoolResourceIndex>>,
-    ) -> (
-        native::MultiStageResourceCounters,
-        native::MultiStageData<u8>,
-    ) {
+    ) -> (native::MultiStageResourceCounters, pso::ShaderStageFlags) {
         let mut offsets = set_info.offsets.clone();
-        let mut buffer_sizes_offsets = set_info.buffer_sizes_offsets.clone();
         let pool_range = pool_range.map(|r| r.start as usize..r.end as usize);
+        let mut changed_storage_binding_stages = pso::ShaderStageFlags::empty();
 
-        for &(mut stages, value, offset, storage_binding_size) in &data.buffers[pool_range.buffers]
+        for &(mut stages, value, offset, binding, storage_binding_size) in
+            &data.buffers[pool_range.buffers]
         {
             stages &= stage_filter;
             if stages.contains(pso::ShaderStageFlags::VERTEX) {
@@ -816,33 +811,23 @@ impl State {
                 self.resources_vs.buffers[reg] = value;
                 self.resources_vs.buffer_offsets[reg] = offset;
                 offsets.vs.buffers += 1;
-                if storage_binding_size != !0 {
-                    self.resources_vs.storage_buffer_lengths[buffer_sizes_offsets.vs as usize] =
-                        storage_binding_size;
-                    buffer_sizes_offsets.vs += 1;
-                }
             }
             if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
                 let reg = offsets.ps.buffers as usize;
                 self.resources_ps.buffers[reg] = value;
                 self.resources_ps.buffer_offsets[reg] = offset;
                 offsets.ps.buffers += 1;
-                if storage_binding_size != !0 {
-                    self.resources_ps.storage_buffer_lengths[buffer_sizes_offsets.ps as usize] =
-                        storage_binding_size;
-                    buffer_sizes_offsets.ps += 1;
-                }
             }
             if stages.contains(pso::ShaderStageFlags::COMPUTE) {
                 let reg = offsets.cs.buffers as usize;
                 self.resources_cs.buffers[reg] = value;
                 self.resources_cs.buffer_offsets[reg] = offset;
                 offsets.cs.buffers += 1;
-                if storage_binding_size != !0 {
-                    self.resources_cs.storage_buffer_lengths[buffer_sizes_offsets.cs as usize] =
-                        storage_binding_size;
-                    buffer_sizes_offsets.cs += 1;
-                }
+            }
+            if storage_binding_size != !0 {
+                self.storage_buffer_length_map
+                    .insert((set_index, binding), storage_binding_size);
+                changed_storage_binding_stages |= stages;
             }
         }
         for &(mut stages, value, _layout) in &data.textures[pool_range.textures] {
@@ -876,7 +861,7 @@ impl State {
             }
         }
 
-        (offsets, buffer_sizes_offsets)
+        (offsets, changed_storage_binding_stages)
     }
 }
 
@@ -887,7 +872,6 @@ struct StageResources {
     textures: Vec<Option<TexturePtr>>,
     samplers: Vec<Option<SamplerPtr>>,
     push_constants: Option<native::PushConstantInfo>,
-    storage_buffer_lengths: Vec<native::StorageBindingSize>,
 }
 
 impl StageResources {
@@ -898,7 +882,6 @@ impl StageResources {
             textures: Vec::new(),
             samplers: Vec::new(),
             push_constants: None,
-            storage_buffer_lengths: Vec::new(),
         }
     }
 
@@ -908,7 +891,6 @@ impl StageResources {
         self.textures.clear();
         self.samplers.clear();
         self.push_constants = None;
-        self.storage_buffer_lengths.clear();
     }
 
     fn pre_allocate_buffers(&mut self, count: usize) {
@@ -919,7 +901,7 @@ impl StageResources {
         }
     }
 
-    fn pre_allocate(&mut self, counters: &native::ResourceData<ResourceIndex>, sizes_counter: u8) {
+    fn pre_allocate(&mut self, counters: &native::ResourceData<ResourceIndex>) {
         if self.textures.len() < counters.textures as usize {
             self.textures.resize(counters.textures as usize, None);
         }
@@ -927,10 +909,6 @@ impl StageResources {
             self.samplers.resize(counters.samplers as usize, None);
         }
         self.pre_allocate_buffers(counters.buffers as usize);
-        if self.storage_buffer_lengths.len() < sizes_counter as usize {
-            self.storage_buffer_lengths
-                .resize(sizes_counter as usize, 0);
-        }
     }
 }
 
@@ -2629,6 +2607,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
                     height: 0,
                 },
                 stage_infos: native::MultiStageData::default(),
+                storage_buffer_length_map: FastHashMap::default(),
             },
             temp: Temp::default(),
             name: String::new(),
@@ -3937,15 +3916,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 <= self.shared.private_caps.max_buffers_per_stage
         );
 
-        self.state
-            .resources_vs
-            .pre_allocate(&pipe_layout.total.vs, pipe_layout.total_buffer_sizes.vs);
-        self.state
-            .resources_ps
-            .pre_allocate(&pipe_layout.total.ps, pipe_layout.total_buffer_sizes.ps);
+        self.state.resources_vs.pre_allocate(&pipe_layout.total.vs);
+        self.state.resources_ps.pre_allocate(&pipe_layout.total.ps);
 
-        let mut changes_sizes_buffer_vs = false;
-        let mut changes_sizes_buffer_ps = false;
+        let mut changes_sizes_buffer_stages = pso::ShaderStageFlags::empty();
         let mut dynamic_offset_iter = dynamic_offsets;
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
@@ -3966,17 +3940,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     layouts: _,
                     ref resources,
                 } => {
-                    let (end_offsets, end_sizes_offsets) = self.state.bind_set(
+                    let (end_offsets, changes_sizes_stages) = self.state.bind_set(
                         pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT,
                         &*pool.read(),
+                        (first_set + set_offset) as _,
                         info,
                         resources,
                     );
                     bind_range.vs.expand(end_offsets.vs);
                     bind_range.ps.expand(end_offsets.ps);
 
-                    changes_sizes_buffer_vs |= end_sizes_offsets.vs != info.buffer_sizes_offsets.vs;
-                    changes_sizes_buffer_ps |= end_sizes_offsets.ps != info.buffer_sizes_offsets.ps;
+                    changes_sizes_buffer_stages |= changes_sizes_stages;
 
                     for (dyn_data, offset) in info
                         .dynamic_buffers
@@ -4049,17 +4023,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
 
         // now bind all the affected resources
-        for (stage, cache, range, changes_sizes_buffer) in iter::once((
+        for (stage, cache, range) in iter::once((
             naga::ShaderStage::Vertex,
             &self.state.resources_vs,
             bind_range.vs,
-            changes_sizes_buffer_vs,
         ))
         .chain(iter::once((
             naga::ShaderStage::Fragment,
             &self.state.resources_ps,
             bind_range.ps,
-            changes_sizes_buffer_ps,
         ))) {
             if range.textures.start != range.textures.end {
                 pre.issue(soft::RenderCommand::BindTextures {
@@ -4087,7 +4059,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     },
                 });
             }
-            if changes_sizes_buffer {
+            if changes_sizes_buffer_stages.contains(stage.into()) {
                 if let Some(index) = self
                     .state
                     .make_sizes_buffer_update(stage, &mut self.temp.binding_sizes)
@@ -4142,11 +4114,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         J: Iterator<Item = com::DescriptorSetOffset>,
     {
         profiling::scope!("bind_compute_descriptor_sets");
-        self.state
-            .resources_cs
-            .pre_allocate(&pipe_layout.total.cs, pipe_layout.total_buffer_sizes.cs);
+        self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
 
-        let mut changes_sizes_buffer_cs = false;
+        let mut changes_sizes_buffer = false;
         let mut dynamic_offset_iter = dynamic_offsets;
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
@@ -4162,15 +4132,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     layouts: _,
                     ref resources,
                 } => {
-                    let (end_offsets, end_sizes_offsets) = self.state.bind_set(
+                    let (end_offsets, changes_sizes_stages) = self.state.bind_set(
                         pso::ShaderStageFlags::COMPUTE,
                         &*pool.read(),
+                        (first_set + set_offset) as _,
                         info,
                         resources,
                     );
                     bind_range.expand(end_offsets.cs);
 
-                    changes_sizes_buffer_cs |= end_sizes_offsets.cs != info.buffer_sizes_offsets.cs;
+                    changes_sizes_buffer |= !changes_sizes_stages.is_empty();
 
                     for (dyn_data, offset) in info
                         .dynamic_buffers
@@ -4246,7 +4217,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 },
             });
         }
-        if changes_sizes_buffer_cs {
+        if changes_sizes_buffer {
             if let Some(index) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Compute, &mut self.temp.binding_sizes)
