@@ -22,12 +22,11 @@ will be minimal, if any.
 
 #![allow(missing_docs, missing_copy_implementations)]
 
-#[macro_use]
-extern crate log;
-
 use std::{
     cell::Cell,
+    collections::HashMap,
     fmt,
+    hash::BuildHasherDefault,
     ops::{Deref, Range},
     sync::{Arc, Weak},
     thread,
@@ -59,6 +58,7 @@ pub use glow::Context as GlContext;
 use glow::HasContext;
 
 type ColorSlot = u8;
+type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<fxhash::FxHasher>>;
 
 // we can support more samplers if not every one of them is used at a time,
 // but it probably doesn't worth it.
@@ -176,7 +176,7 @@ fn debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, mess
         _ => unreachable!(),
     };
 
-    log!(
+    log::log!(
         log_severity,
         "[{}/{}] ID {} : {}",
         source_str,
@@ -203,12 +203,12 @@ struct Share {
     info: Info,
     supported_features: hal::Features,
     legacy_features: info::LegacyFeatures,
-    limits: hal::Limits,
-    public_caps: hal::Capabilities,
+    public_caps: hal::PhysicalDeviceProperties,
     private_caps: info::PrivateCaps,
     // Indicates if there is an active logical device.
     open: Cell<bool>,
     memory_types: Vec<(adapter::MemoryType, MemoryUsage)>,
+    texture_format_filter: info::TextureFormatFilter,
 }
 
 impl Share {
@@ -237,7 +237,7 @@ impl Share {
             }
         }
         if type_mask == 0 {
-            error!(
+            log::error!(
                 "gl backend capability does not allow a buffer with usage {:?}",
                 usage
             );
@@ -354,19 +354,26 @@ impl PhysicalDevice {
     fn new_adapter(context: GlContext) -> adapter::Adapter<Backend> {
         let gl = GlContainer { context };
         // query information
-        let (info, supported_features, legacy_features, limits, public_caps, private_caps) =
-            info::query_all(&gl);
-        info!("Vendor: {:?}", info.platform_name.vendor);
-        info!("Renderer: {:?}", info.platform_name.renderer);
-        info!("Version: {:?}", info.version);
-        info!("Shading Language: {:?}", info.shading_language);
-        info!("Supported Features: {:?}", supported_features);
-        info!("Legacy Features: {:?}", legacy_features);
-        debug!("Public capabilities: {:#?}", public_caps);
-        debug!("Private capabilities: {:#?}", private_caps);
-        debug!("Loaded Extensions:");
+        let (
+            info,
+            supported_features,
+            legacy_features,
+            public_caps,
+            private_caps,
+            texture_format_filter,
+        ) = info::query_all(&gl);
+        log::info!("Vendor: {:?}", info.platform_name.vendor);
+        log::info!("Renderer: {:?}", info.platform_name.renderer);
+        log::info!("Version: {:?}", info.version);
+        log::info!("Shading Language: {:?}", info.shading_language);
+        log::info!("Supported Features: {:?}", supported_features);
+        log::info!("Legacy Features: {:?}", legacy_features);
+        log::debug!("Public capabilities: {:#?}", public_caps);
+        log::debug!("Private capabilities: {:#?}", private_caps);
+        log::debug!("Texture format filter: {:#?}", texture_format_filter);
+        log::debug!("Loaded Extensions:");
         for extension in info.extensions.iter() {
-            debug!("- {}", *extension);
+            log::debug!("- {}", *extension);
         }
         let name = info.platform_name.renderer.clone();
         let vendor: std::string::String = info.platform_name.vendor.clone();
@@ -382,7 +389,10 @@ impl PhysicalDevice {
                 // If `index_buffer_role_change` is false, ELEMENT_ARRAY_BUFFER buffers may not be
                 // mixed with other targets, so we need to provide one type of memory for INDEX
                 // usage only and another type for all other uses.
-                memory_types.push((memory_type, MemoryUsage::Buffer(buffer::Usage::INDEX)));
+                memory_types.push((
+                    memory_type,
+                    MemoryUsage::Buffer(buffer::Usage::INDEX | buffer::Usage::TRANSFER_DST),
+                ));
                 memory_types.push((
                     memory_type,
                     MemoryUsage::Buffer(buffer::Usage::all() - buffer::Usage::INDEX),
@@ -432,8 +442,8 @@ impl PhysicalDevice {
             info,
             supported_features,
             legacy_features,
-            limits,
             public_caps,
+            texture_format_filter,
             private_caps,
             open: Cell::new(false),
             memory_types,
@@ -543,7 +553,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let gl = &self.0.context;
 
         if cfg!(debug_assertions) && !cfg!(target_arch = "wasm32") && gl.supports_debug() {
-            info!("Debug output is enabled");
+            log::info!("Debug output is enabled");
             gl.enable(glow::DEBUG_OUTPUT);
             gl.debug_message_callback(debug_message_callback);
         }
@@ -552,7 +562,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .0
             .legacy_features
             .contains(info::LegacyFeatures::SRGB_COLOR)
+            && !self.0.info.version.is_embedded
         {
+            // `FRAMEBUFFER_SRGB` is enabled by default on embedded targets.
             // TODO: Find way to emulate this on older Opengl versions.
             gl.enable(glow::FRAMEBUFFER_SRGB);
         }
@@ -604,7 +616,22 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _usage: image::Usage,
         _view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
-        conv::describe_format(format)?;
+        let conv::FormatDescription {
+            tex_external,
+            tex_internal,
+            data_type,
+            ..
+        } = conv::describe_format(format)?;
+
+        if !self
+            .0
+            .texture_format_filter
+            .check(tex_internal, tex_external, data_type)
+        {
+            /* This format is not supported. */
+            return None;
+        }
+
         Some(image::FormatProperties {
             max_extent: image::Extent {
                 width: !0,
@@ -643,12 +670,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.0.supported_features
     }
 
-    fn capabilities(&self) -> hal::Capabilities {
+    fn properties(&self) -> hal::PhysicalDeviceProperties {
         self.0.public_caps
-    }
-
-    fn limits(&self) -> hal::Limits {
-        self.0.limits
     }
 }
 
@@ -665,6 +688,9 @@ impl q::QueueFamily for QueueFamily {
     fn id(&self) -> q::QueueFamilyId {
         q::QueueFamilyId(0)
     }
+    fn supports_sparse_binding(&self) -> bool {
+        false
+    }
 }
 
 fn resolve_sub_range(
@@ -673,4 +699,8 @@ fn resolve_sub_range(
 ) -> Range<buffer::Offset> {
     let end = sub.size.map_or(whole.end, |s| whole.start + sub.offset + s);
     whole.start + sub.offset..end
+}
+
+const fn is_webgl() -> bool {
+    cfg!(target_arch = "wasm32")
 }

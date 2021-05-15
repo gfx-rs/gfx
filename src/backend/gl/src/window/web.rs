@@ -111,7 +111,7 @@ pub struct Surface {
 
 impl Surface {
     fn swapchain_formats(&self) -> Vec<f::Format> {
-        vec![f::Format::Rgba8Unorm, f::Format::Bgra8Unorm]
+        vec![f::Format::Rgba8Srgb, f::Format::Rgba8Unorm]
     }
 
     pub(crate) unsafe fn present(

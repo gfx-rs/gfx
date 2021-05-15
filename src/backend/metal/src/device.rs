@@ -1,12 +1,12 @@
+#[cfg(feature = "pipeline-cache")]
+use crate::pipeline_cache;
 use crate::{
-    command, conversions as conv,
-    internal::{Channel, FastStorageMap},
-    native as n, AsNative, Backend, OnlineRecording, QueueFamily, ResourceIndex, Shared,
-    VisibilityShared, MAX_BOUND_DESCRIPTOR_SETS, MAX_COLOR_ATTACHMENTS,
+    command, conversions as conv, internal::Channel, native as n, AsNative, Backend, FastHashMap,
+    OnlineRecording, QueueFamily, ResourceIndex, Shared, VisibilityShared,
+    MAX_BOUND_DESCRIPTOR_SETS, MAX_COLOR_ATTACHMENTS,
 };
 
 use arrayvec::ArrayVec;
-use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
 use cocoa_foundation::foundation::NSUInteger;
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
@@ -30,13 +30,12 @@ use objc::{
     runtime::{Object, BOOL, NO},
 };
 use parking_lot::Mutex;
-use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
+use std::collections::BTreeMap;
+#[cfg(feature = "pipeline-cache")]
+use std::io::Write;
 use std::{
-    cmp,
-    collections::hash_map::Entry,
-    collections::BTreeMap,
-    iter, mem,
+    cmp, iter, mem,
     ops::Range,
     ptr,
     sync::{
@@ -46,10 +45,8 @@ use std::{
     thread, time,
 };
 
-const PUSH_CONSTANTS_DESC_SET: u32 = !0;
-const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
-const SHADER_STAGE_COUNT: usize = 3;
+const SHADER_STAGE_COUNT: u32 = 3;
 
 #[derive(Clone, Debug)]
 enum FunctionError {
@@ -65,6 +62,7 @@ fn get_final_function(
     function_specialization: bool,
 ) -> Result<metal::Function, FunctionError> {
     type MTLFunctionConstant = Object;
+    profiling::scope!("get_final_function");
 
     let mut mtl_function = library.get_function(entry, None).map_err(|e| {
         error!(
@@ -143,22 +141,12 @@ pub struct Device {
     memory_types: Vec<adapter::MemoryType>,
     features: hal::Features,
     pub online_recording: OnlineRecording,
+    pub always_prefer_naga: bool,
+    #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
+    spv_options: naga::back::spv::Options,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
-
-impl Drop for Device {
-    fn drop(&mut self) {
-        if cfg!(feature = "auto-capture") {
-            info!("Metal capture stop");
-            let shared_capture_manager = CaptureManager::shared();
-            if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
-                default_capture_scope.end_scope();
-            }
-            shared_capture_manager.stop_capture();
-        }
-    }
-}
 
 bitflags! {
     /// Memory type bits.
@@ -266,16 +254,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         let device = self.shared.device.lock();
 
-        if cfg!(feature = "auto-capture") {
-            info!("Metal capture start");
-            let shared_capture_manager = CaptureManager::shared();
-            let default_capture_scope =
-                shared_capture_manager.new_capture_scope_with_device(&*device);
-            shared_capture_manager.set_default_capture_scope(&default_capture_scope);
-            shared_capture_manager.start_capture_with_scope(&default_capture_scope);
-            default_capture_scope.begin_scope();
-        }
-
         assert_eq!(families.len(), 1);
         assert_eq!(families[0].1.len(), 1);
         let mut queue_group = QueueGroup::new(families[0].0.id());
@@ -283,12 +261,32 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             queue_group.add_queue(command::Queue::new(self.shared.clone()));
         }
 
+        #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
+        let spv_options = {
+            use naga::back::spv;
+            let mut flags = spv::WriterFlags::empty();
+            flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
+            flags.set(
+                spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+                !requested_features.contains(hal::Features::NDC_Y_UP),
+            );
+            spv::Options {
+                lang_version: (1, 0),
+                flags,
+                // doesn't matter since we send it through SPIRV-Cross
+                capabilities: None,
+            }
+        };
+
         let device = Device {
             shared: self.shared.clone(),
             invalidation_queue: command::QueueInner::new(&*device, Some(1)),
             memory_types: self.memory_types.clone(),
             features: requested_features,
             online_recording: OnlineRecording::default(),
+            always_prefer_naga: false,
+            #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
+            spv_options,
         };
 
         Ok(adapter::Gpu {
@@ -417,7 +415,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             F::NON_FILL_POLYGON_MODE,
             self.shared.private_caps.expose_line_mode,
         );
-        if self.shared.private_caps.msl_version >= metal::MTLLanguageVersion::V2_0 {
+        if self.shared.private_caps.msl_version >= MTLLanguageVersion::V2_0 {
             features |= F::TEXTURE_DESCRIPTOR_ARRAY
                 | F::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING
                 | F::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
@@ -437,110 +435,111 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         features
     }
 
-    fn capabilities(&self) -> hal::Capabilities {
+    fn properties(&self) -> hal::PhysicalDeviceProperties {
+        let pc = &self.shared.private_caps;
+        let device = self.shared.device.lock();
+
         let mut caveats = hal::PerformanceCaveats::empty();
         if !self.shared.private_caps.base_vertex_instance_drawing {
             caveats |= hal::PerformanceCaveats::BASE_VERTEX_INSTANCE_DRAWING;
         }
-        hal::Capabilities {
+        hal::PhysicalDeviceProperties {
+            limits: hal::Limits {
+                max_image_1d_size: pc.max_texture_size as _,
+                max_image_2d_size: pc.max_texture_size as _,
+                max_image_3d_size: pc.max_texture_3d_size as _,
+                max_image_cube_size: pc.max_texture_size as _,
+                max_image_array_layers: pc.max_texture_layers as _,
+                max_texel_elements: (pc.max_texture_size * pc.max_texture_size) as usize,
+                max_uniform_buffer_range: pc.max_buffer_size,
+                max_storage_buffer_range: pc.max_buffer_size,
+                // "Maximum length of an inlined constant data buffer, per graphics or compute function"
+                max_push_constants_size: 0x1000,
+                max_sampler_allocation_count: !0,
+                max_bound_descriptor_sets: MAX_BOUND_DESCRIPTOR_SETS as _,
+                descriptor_limits: hal::DescriptorLimits {
+                    max_per_stage_descriptor_samplers: pc.max_samplers_per_stage,
+                    max_per_stage_descriptor_uniform_buffers: pc.max_buffers_per_stage,
+                    max_per_stage_descriptor_storage_buffers: pc.max_buffers_per_stage,
+                    max_per_stage_descriptor_sampled_images: pc
+                        .max_textures_per_stage
+                        .min(pc.max_samplers_per_stage)
+                        as u32,
+                    max_per_stage_descriptor_storage_images: pc.max_textures_per_stage,
+                    max_per_stage_descriptor_input_attachments: pc.max_textures_per_stage, //TODO
+                    max_per_stage_resources: 0x100,                                        //TODO
+                    max_descriptor_set_samplers: pc.max_samplers_per_stage * SHADER_STAGE_COUNT,
+                    max_descriptor_set_uniform_buffers: pc.max_buffers_per_stage
+                        * SHADER_STAGE_COUNT,
+                    max_descriptor_set_uniform_buffers_dynamic: 8 * SHADER_STAGE_COUNT,
+                    max_descriptor_set_storage_buffers: pc.max_buffers_per_stage
+                        * SHADER_STAGE_COUNT,
+                    max_descriptor_set_storage_buffers_dynamic: 4 * SHADER_STAGE_COUNT,
+                    max_descriptor_set_sampled_images: pc
+                        .max_textures_per_stage
+                        .min(pc.max_samplers_per_stage)
+                        * SHADER_STAGE_COUNT,
+                    max_descriptor_set_storage_images: pc.max_textures_per_stage
+                        * SHADER_STAGE_COUNT,
+                    max_descriptor_set_input_attachments: pc.max_textures_per_stage
+                        * SHADER_STAGE_COUNT,
+                },
+                max_fragment_input_components: pc.max_fragment_input_components as usize,
+                max_framebuffer_layers: 2048, // TODO: Determine is this is the correct value
+                max_memory_allocation_count: 4096, // TODO: Determine is this is the correct value
+
+                max_patch_size: 0, // No tessellation
+
+                // Note: The maximum number of supported viewports and scissor rectangles varies by device.
+                // TODO: read from Metal Feature Sets.
+                max_viewports: 1,
+                max_viewport_dimensions: [pc.max_texture_size as _; 2],
+                max_framebuffer_extent: hal::image::Extent {
+                    //TODO
+                    width: pc.max_texture_size as _,
+                    height: pc.max_texture_size as _,
+                    depth: pc.max_texture_layers as _,
+                },
+                min_memory_map_alignment: 4,
+
+                optimal_buffer_copy_offset_alignment: pc.buffer_alignment,
+                optimal_buffer_copy_pitch_alignment: 4,
+                min_texel_buffer_offset_alignment: pc.buffer_alignment,
+                min_uniform_buffer_offset_alignment: pc.buffer_alignment,
+                min_storage_buffer_offset_alignment: pc.buffer_alignment,
+
+                max_compute_work_group_count: [!0; 3], // really undefined
+                max_compute_work_group_size: {
+                    let size = device.max_threads_per_threadgroup();
+                    [size.width as u32, size.height as u32, size.depth as u32]
+                },
+                max_compute_shared_memory_size: pc.max_total_threadgroup_memory as usize,
+
+                max_vertex_input_attributes: 31,
+                max_vertex_input_bindings: 31,
+                max_vertex_input_attribute_offset: 255, // TODO
+                max_vertex_input_binding_stride: 256,   // TODO
+                max_vertex_output_components: pc.max_fragment_input_components as usize,
+
+                framebuffer_color_sample_counts: 0b101, // TODO
+                framebuffer_depth_sample_counts: 0b101, // TODO
+                framebuffer_stencil_sample_counts: 0b101, // TODO
+                max_color_attachments: pc.max_color_render_targets as usize,
+
+                buffer_image_granularity: 1,
+                // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
+                // and those need to operate on sizes being multiples of 4.
+                non_coherent_atom_size: 4,
+                max_sampler_anisotropy: 16.,
+                min_vertex_input_binding_stride_alignment: STRIDE_GRANULARITY as u64,
+
+                ..hal::Limits::default() // TODO!
+            },
+            downlevel: hal::DownlevelProperties::all_enabled(),
             performance_caveats: caveats,
             dynamic_pipeline_states: hal::DynamicStates::all(),
-        }
-    }
 
-    fn limits(&self) -> hal::Limits {
-        let pc = &self.shared.private_caps;
-        let device = self.shared.device.lock();
-        hal::Limits {
-            max_image_1d_size: pc.max_texture_size as _,
-            max_image_2d_size: pc.max_texture_size as _,
-            max_image_3d_size: pc.max_texture_3d_size as _,
-            max_image_cube_size: pc.max_texture_size as _,
-            max_image_array_layers: pc.max_texture_layers as _,
-            max_texel_elements: (pc.max_texture_size * pc.max_texture_size) as usize,
-            max_uniform_buffer_range: pc.max_buffer_size,
-            max_storage_buffer_range: pc.max_buffer_size,
-            // "Maximum length of an inlined constant data buffer, per graphics or compute function"
-            max_push_constants_size: 0x1000,
-            max_sampler_allocation_count: !0,
-            max_bound_descriptor_sets: MAX_BOUND_DESCRIPTOR_SETS as _,
-            max_descriptor_set_samplers: pc.max_samplers_per_stage as usize * SHADER_STAGE_COUNT,
-            max_descriptor_set_uniform_buffers: pc.max_buffers_per_stage as usize
-                * SHADER_STAGE_COUNT,
-            max_descriptor_set_uniform_buffers_dynamic: 8 * SHADER_STAGE_COUNT,
-            max_descriptor_set_storage_buffers: pc.max_buffers_per_stage as usize
-                * SHADER_STAGE_COUNT,
-            max_descriptor_set_storage_buffers_dynamic: 4 * SHADER_STAGE_COUNT,
-            max_descriptor_set_sampled_images: pc
-                .max_textures_per_stage
-                .min(pc.max_samplers_per_stage)
-                as usize
-                * SHADER_STAGE_COUNT,
-            max_descriptor_set_storage_images: pc.max_textures_per_stage as usize
-                * SHADER_STAGE_COUNT,
-            max_descriptor_set_input_attachments: pc.max_textures_per_stage as usize
-                * SHADER_STAGE_COUNT,
-            max_fragment_input_components: pc.max_fragment_input_components as usize,
-            max_framebuffer_layers: 2048, // TODO: Determine is this is the correct value
-            max_memory_allocation_count: 4096, // TODO: Determine is this is the correct value
-
-            max_per_stage_descriptor_samplers: pc.max_samplers_per_stage as usize,
-            max_per_stage_descriptor_uniform_buffers: pc.max_buffers_per_stage as usize,
-            max_per_stage_descriptor_storage_buffers: pc.max_buffers_per_stage as usize,
-            max_per_stage_descriptor_sampled_images: pc
-                .max_textures_per_stage
-                .min(pc.max_samplers_per_stage)
-                as usize,
-            max_per_stage_descriptor_storage_images: pc.max_textures_per_stage as usize,
-            max_per_stage_descriptor_input_attachments: pc.max_textures_per_stage as usize, //TODO
-            max_per_stage_resources: 0x100,                                                 //TODO
-
-            max_patch_size: 0, // No tessellation
-
-            // Note: The maximum number of supported viewports and scissor rectangles varies by device.
-            // TODO: read from Metal Feature Sets.
-            max_viewports: 1,
-            max_viewport_dimensions: [pc.max_texture_size as _; 2],
-            max_framebuffer_extent: hal::image::Extent {
-                //TODO
-                width: pc.max_texture_size as _,
-                height: pc.max_texture_size as _,
-                depth: pc.max_texture_layers as _,
-            },
-            min_memory_map_alignment: 4,
-
-            optimal_buffer_copy_offset_alignment: pc.buffer_alignment,
-            optimal_buffer_copy_pitch_alignment: 4,
-            min_texel_buffer_offset_alignment: pc.buffer_alignment,
-            min_uniform_buffer_offset_alignment: pc.buffer_alignment,
-            min_storage_buffer_offset_alignment: pc.buffer_alignment,
-
-            max_compute_work_group_count: [!0; 3], // really undefined
-            max_compute_work_group_size: {
-                let size = device.max_threads_per_threadgroup();
-                [size.width as u32, size.height as u32, size.depth as u32]
-            },
-            max_compute_shared_memory_size: pc.max_total_threadgroup_memory as usize,
-
-            max_vertex_input_attributes: 31,
-            max_vertex_input_bindings: 31,
-            max_vertex_input_attribute_offset: 255, // TODO
-            max_vertex_input_binding_stride: 256,   // TODO
-            max_vertex_output_components: pc.max_fragment_input_components as usize,
-
-            framebuffer_color_sample_counts: 0b101,   // TODO
-            framebuffer_depth_sample_counts: 0b101,   // TODO
-            framebuffer_stencil_sample_counts: 0b101, // TODO
-            max_color_attachments: pc.max_color_render_targets as usize,
-
-            buffer_image_granularity: 1,
-            // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
-            // and those need to operate on sizes being multiples of 4.
-            non_coherent_atom_size: 4,
-            max_sampler_anisotropy: 16.,
-            min_vertex_input_binding_stride_alignment: STRIDE_GRANULARITY as u64,
-
-            ..hal::Limits::default() // TODO!
+            ..hal::PhysicalDeviceProperties::default()
         }
     }
 }
@@ -567,38 +566,50 @@ impl Device {
         }
     }
 
+    #[cfg(feature = "cross")]
     fn compile_shader_library_cross(
         device: &Mutex<metal::Device>,
         raw_data: &[u32],
-        compiler_options: &msl::CompilerOptions,
+        compiler_options: &spirv_cross::msl::CompilerOptions,
         msl_version: MTLLanguageVersion,
         specialization: &pso::Specialization,
+        stage: naga::ShaderStage,
     ) -> Result<n::ModuleInfo, String> {
-        let module = spirv::Module::from_words(raw_data);
+        use spirv_cross::ErrorCode as Ec;
+        profiling::scope!("compile_shader_library_cross");
 
         // now parse again using the new overrides
-        let mut ast = spirv::Ast::<msl::Target>::parse(&module).map_err(|err| match err {
-            SpirvErrorCode::CompilationError(msg) => msg,
-            SpirvErrorCode::Unhandled => "Unexpected parse error".into(),
-        })?;
+        let mut ast = {
+            profiling::scope!("spvc::parse");
+            let module = spirv_cross::spirv::Module::from_words(raw_data);
+            spirv_cross::spirv::Ast::<spirv_cross::msl::Target>::parse(&module).map_err(|err| {
+                match err {
+                    Ec::CompilationError(msg) => msg,
+                    Ec::Unhandled => "Unexpected parse error".into(),
+                }
+            })?
+        };
 
-        spirv_cross_specialize_ast(&mut ast, specialization)?;
+        auxil::spirv_cross_specialize_ast(&mut ast, specialization)?;
 
         ast.set_compiler_options(compiler_options)
             .map_err(|err| match err {
-                SpirvErrorCode::CompilationError(msg) => msg,
-                SpirvErrorCode::Unhandled => "Unexpected error".into(),
+                Ec::CompilationError(msg) => msg,
+                Ec::Unhandled => "Unexpected error".into(),
             })?;
 
         let entry_points = ast.get_entry_points().map_err(|err| match err {
-            SpirvErrorCode::CompilationError(msg) => msg,
-            SpirvErrorCode::Unhandled => "Unexpected entry point error".into(),
+            Ec::CompilationError(msg) => msg,
+            Ec::Unhandled => "Unexpected entry point error".into(),
         })?;
 
-        let shader_code = ast.compile().map_err(|err| match err {
-            SpirvErrorCode::CompilationError(msg) => msg,
-            SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-        })?;
+        let shader_code = {
+            profiling::scope!("spvc::compile");
+            ast.compile().map_err(|err| match err {
+                Ec::CompilationError(msg) => msg,
+                Ec::Unhandled => "Unknown compile error".into(),
+            })?
+        };
 
         let mut entry_point_map = n::EntryPointMap::default();
         for entry_point in entry_points {
@@ -606,23 +617,19 @@ impl Device {
             let cleansed = ast
                 .get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
                 .map_err(|err| match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
+                    Ec::CompilationError(msg) => msg,
+                    Ec::Unhandled => "Unknown compile error".into(),
                 })?;
-            let stage = match entry_point.execution_model {
-                spirv::ExecutionModel::Vertex => ShaderStage::Vertex,
-                spirv::ExecutionModel::Fragment => ShaderStage::Fragment,
-                spirv::ExecutionModel::GlCompute => ShaderStage::Compute,
-                other => {
-                    warn!("Unexpected execution_modell: {:?}", other);
-                    continue;
-                }
-            };
             entry_point_map.insert(
                 (stage, entry_point.name),
-                spirv::EntryPoint {
-                    name: cleansed,
-                    ..entry_point
+                n::EntryPoint {
+                    //TODO: should we try to do better?
+                    internal_name: Ok(cleansed),
+                    work_group_size: [
+                        entry_point.work_group_size.x,
+                        entry_point.work_group_size.y,
+                        entry_point.work_group_size.z,
+                    ],
                 },
             );
         }
@@ -633,14 +640,16 @@ impl Device {
 
         // done
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
-
         let options = metal::CompileOptions::new();
         options.set_language_version(msl_version);
 
-        let library = device
-            .lock()
-            .new_library_with_source(shader_code.as_ref(), &options)
-            .map_err(|err| err.to_string())?;
+        let library = {
+            profiling::scope!("Metal::new_library_with_source");
+            device
+                .lock()
+                .new_library_with_source(shader_code.as_ref(), &options)
+                .map_err(|err| err.to_string())?
+        };
 
         Ok(n::ModuleInfo {
             library,
@@ -649,41 +658,74 @@ impl Device {
         })
     }
 
-    #[cfg(feature = "naga")]
     fn compile_shader_library_naga(
         device: &Mutex<metal::Device>,
-        module: &naga::Module,
+        shader: &d::NagaShader,
         naga_options: &naga::back::msl::Options,
-    ) -> Result<n::ModuleInfo, d::ShaderError> {
-        let (source, info) = naga::back::msl::write_string(module, naga_options)
-            .map_err(|e| d::ShaderError::CompilationFailed(format!("{:?}", e)))?;
+        pipeline_options: &naga::back::msl::PipelineOptions,
+        #[cfg(feature = "pipeline-cache")] spv_hash: u64,
+        #[cfg(feature = "pipeline-cache")] spv_to_msl_cache: Option<&pipeline_cache::SpvToMsl>,
+    ) -> Result<n::ModuleInfo, String> {
+        profiling::scope!("compile_shader_library_naga");
 
-        let mut entry_point_map = n::EntryPointMap::default();
-        for ((pair, ep), name) in module.entry_points.iter().zip(info.entry_point_names) {
-            let (stage, execution_model) = match pair.0 {
-                naga::ShaderStage::Vertex => (ShaderStage::Vertex, spirv::ExecutionModel::Vertex),
-                naga::ShaderStage::Fragment => {
-                    (ShaderStage::Fragment, spirv::ExecutionModel::Fragment)
-                }
-                naga::ShaderStage::Compute => {
-                    (ShaderStage::Compute, spirv::ExecutionModel::GlCompute)
+        let get_module_info = || {
+            profiling::scope!("naga::msl::write_string");
+
+            let (source, info) = match naga::back::msl::write_string(
+                &shader.module,
+                &shader.info,
+                naga_options,
+                pipeline_options,
+            ) {
+                Ok(pair) => pair,
+                Err(e) => {
+                    warn!("Naga: {:?}", e);
+                    return Err(format!("MSL: {:?}", e));
                 }
             };
-            entry_point_map.insert(
-                (stage, pair.1.clone()),
-                spirv::EntryPoint {
-                    name,
-                    execution_model,
-                    work_group_size: spirv::WorkGroupSize {
-                        x: ep.workgroup_size[0],
-                        y: ep.workgroup_size[1],
-                        z: ep.workgroup_size[2],
-                    },
-                },
-            );
-        }
 
-        debug!("Naga generated shader:\n{}", source);
+            let mut entry_point_map = n::EntryPointMap::default();
+            for (ep, internal_name) in shader
+                .module
+                .entry_points
+                .iter()
+                .zip(info.entry_point_names)
+            {
+                entry_point_map.insert(
+                    (ep.stage, ep.name.clone()),
+                    n::EntryPoint {
+                        internal_name,
+                        work_group_size: ep.workgroup_size,
+                    },
+                );
+            }
+
+            debug!("Naga generated shader:\n{}", source);
+
+            Ok(n::SerializableModuleInfo {
+                source,
+                entry_point_map,
+                rasterization_enabled: true, //TODO
+            })
+        };
+
+        #[cfg(feature = "pipeline-cache")]
+        let module_info = if let Some(spv_to_msl_cache) = spv_to_msl_cache {
+            let key = pipeline_cache::SpvToMslKey {
+                options: naga_options.clone(),
+                pipeline_options: pipeline_options.clone(),
+                spv_hash,
+            };
+
+            spv_to_msl_cache
+                .get_or_create_with(&key, || get_module_info().unwrap())
+                .clone()
+        } else {
+            get_module_info()?
+        };
+
+        #[cfg(not(feature = "pipeline-cache"))]
+        let module_info = get_module_info()?;
 
         let options = metal::CompileOptions::new();
         let msl_version = match naga_options.lang_version {
@@ -698,89 +740,106 @@ impl Device {
         };
         options.set_language_version(msl_version);
 
-        let library = device
-            .lock()
-            .new_library_with_source(source.as_ref(), &options)
-            .map_err(|err| d::ShaderError::CompilationFailed(err.into()))?;
+        let library = {
+            profiling::scope!("Metal::new_library_with_source");
+            device
+                .lock()
+                .new_library_with_source(module_info.source.as_ref(), &options)
+                .map_err(|err| {
+                    warn!("Naga generated shader:\n{}", module_info.source);
+                    warn!("Failed to compile: {}", err);
+                    format!("{:?}", err)
+                })?
+        };
 
         Ok(n::ModuleInfo {
             library,
-            entry_point_map,
-            rasterization_enabled: true, //TODO
+            entry_point_map: module_info.entry_point_map,
+            rasterization_enabled: module_info.rasterization_enabled,
         })
     }
 
+    #[cfg_attr(not(feature = "pipeline-cache"), allow(unused_variables))]
     fn load_shader(
         &self,
         ep: &pso::EntryPoint<Backend>,
         layout: &n::PipelineLayout,
         primitive_class: MTLPrimitiveTopologyClass,
         pipeline_cache: Option<&n::PipelineCache>,
-        stage: ShaderStage,
+        stage: naga::ShaderStage,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
-        let device = &self.shared.device;
-        let msl_version = self.shared.private_caps.msl_version;
-        let module_map;
-        let (info_owned, info_guard);
-
-        let compiler_options = &mut match primitive_class {
-            MTLPrimitiveTopologyClass::Point => layout.shader_compiler_options_point.clone(),
-            _ => layout.shader_compiler_options.clone(),
+        let _profiling_tag = match stage {
+            naga::ShaderStage::Vertex => "vertex",
+            naga::ShaderStage::Fragment => "fragment",
+            naga::ShaderStage::Compute => "compute",
         };
-        compiler_options.entry_point = Some((
-            ep.entry.to_string(),
-            match stage {
-                ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
-                ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
-                ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
-                _ => return Err(pso::CreationError::UnsupportedPipeline),
-            },
-        ));
+        profiling::scope!("load_shader", _profiling_tag);
 
-        let data = &ep.module.spv;
-        let info = match pipeline_cache {
-            Some(cache) => {
-                module_map = cache
-                    .modules
-                    .get_or_create_with(compiler_options, FastStorageMap::default);
-                info_guard = module_map.get_or_create_with(data, || {
-                    Self::compile_shader_library_cross(
+        let device = &self.shared.device;
+
+        #[cfg(feature = "cross")]
+        let mut compiler_options = layout.spirv_cross_options.clone();
+        #[cfg(feature = "cross")]
+        {
+            compiler_options.entry_point =
+                Some((ep.entry.to_string(), conv::map_naga_stage_to_cross(stage)));
+            compiler_options.enable_point_size_builtin =
+                primitive_class == MTLPrimitiveTopologyClass::Point;
+        }
+        let pipeline_options = naga::back::msl::PipelineOptions {
+            allow_point_size: match primitive_class {
+                MTLPrimitiveTopologyClass::Point => true,
+                _ => false,
+            },
+        };
+
+        let info = {
+            let mut result = Err(String::new());
+            if ep.module.prefer_naga {
+                result = match ep.module.naga {
+                    Ok(ref shader) => Self::compile_shader_library_naga(
                         device,
-                        data,
-                        compiler_options,
-                        msl_version,
-                        &ep.specialization,
-                    )
-                    .unwrap()
-                });
-                &*info_guard
-            }
-            None => {
-                let mut result = Err(d::ShaderError::CompilationFailed(String::new()));
-                #[cfg(feature = "naga")]
-                if let Some(ref module) = ep.module.naga {
-                    result =
-                        Self::compile_shader_library_naga(device, module, &layout.naga_options);
-                    if let Err(d::ShaderError::CompilationFailed(ref msg)) = result {
-                        warn!("Naga: {:?}", msg);
-                    }
+                        shader,
+                        &layout.naga_options,
+                        &pipeline_options,
+                        #[cfg(feature = "pipeline-cache")]
+                        ep.module.spv_hash,
+                        #[cfg(feature = "pipeline-cache")]
+                        pipeline_cache.as_ref().map(|cache| &cache.spv_to_msl),
+                    ),
+                    Err(ref e) => Err(e.clone()),
                 }
-                if result.is_err() {
-                    result = Self::compile_shader_library_cross(
+            }
+            #[cfg(feature = "cross")]
+            if result.is_err() {
+                result = Self::compile_shader_library_cross(
+                    device,
+                    &ep.module.spv,
+                    &compiler_options,
+                    self.shared.private_caps.msl_version,
+                    &ep.specialization,
+                    stage,
+                );
+            }
+            if result.is_err() && !ep.module.prefer_naga {
+                result = match ep.module.naga {
+                    Ok(ref shader) => Self::compile_shader_library_naga(
                         device,
-                        data,
-                        compiler_options,
-                        msl_version,
-                        &ep.specialization,
-                    )
-                    .map_err(d::ShaderError::CompilationFailed);
+                        shader,
+                        &layout.naga_options,
+                        &pipeline_options,
+                        #[cfg(feature = "pipeline-cache")]
+                        ep.module.spv_hash,
+                        #[cfg(feature = "pipeline-cache")]
+                        pipeline_cache.as_ref().map(|cache| &cache.spv_to_msl),
+                    ),
+                    Err(ref e) => Err(e.clone()),
                 }
-                info_owned = result.map_err(|e| {
-                    error!("Error compiling the shader {:?}", e);
-                    pso::CreationError::Other
-                })?;
-                &info_owned
             }
+            result.map_err(|e| {
+                let error = format!("Error compiling the shader {:?}", e);
+                pso::CreationError::ShaderCreationError(stage.into(), error)
+            })?
         };
 
         let lib = info.library.clone();
@@ -788,11 +847,19 @@ impl Device {
         //TODO: avoid heap-allocating the string?
         let (name, wg_size) = match info.entry_point_map.get(&entry_key) {
             Some(p) => (
-                p.name.as_str(),
+                match p.internal_name {
+                    Ok(ref name) => name.as_str(),
+                    Err(ref e) => {
+                        return Err(pso::CreationError::ShaderCreationError(
+                            stage.into(),
+                            format!("{}", e),
+                        ))
+                    }
+                },
                 metal::MTLSize {
-                    width: p.work_group_size.x as _,
-                    height: p.work_group_size.y as _,
-                    depth: p.work_group_size.z as _,
+                    width: p.work_group_size[0] as _,
+                    height: p.work_group_size[1] as _,
+                    depth: p.work_group_size[2] as _,
                 },
             ),
             // this can only happen if the shader came directly from the user
@@ -812,8 +879,8 @@ impl Device {
             self.shared.private_caps.function_specialization,
         )
         .map_err(|e| {
-            error!("Invalid shader entry point '{}': {:?}", name, e);
-            pso::CreationError::Other
+            let error = format!("Invalid shader entry point '{}': {:?}", name, e);
+            pso::CreationError::ShaderCreationError(stage.into(), error)
         })?;
 
         Ok((lib, mtl_function, wg_size, info.rasterization_enabled))
@@ -884,72 +951,6 @@ impl Device {
         }
 
         Some(descriptor)
-    }
-
-    fn make_sampler_data(info: &image::SamplerDesc) -> msl::SamplerData {
-        fn map_address(wrap: image::WrapMode) -> msl::SamplerAddress {
-            match wrap {
-                image::WrapMode::Tile => msl::SamplerAddress::Repeat,
-                image::WrapMode::Mirror => msl::SamplerAddress::MirroredRepeat,
-                image::WrapMode::Clamp => msl::SamplerAddress::ClampToEdge,
-                image::WrapMode::Border => msl::SamplerAddress::ClampToBorder,
-                image::WrapMode::MirrorClamp => {
-                    unimplemented!("https://github.com/grovesNL/spirv_cross/issues/138")
-                }
-            }
-        }
-
-        let lods = info.lod_range.start.0..info.lod_range.end.0;
-        msl::SamplerData {
-            coord: if info.normalized {
-                msl::SamplerCoord::Normalized
-            } else {
-                msl::SamplerCoord::Pixel
-            },
-            min_filter: match info.min_filter {
-                image::Filter::Nearest => msl::SamplerFilter::Nearest,
-                image::Filter::Linear => msl::SamplerFilter::Linear,
-            },
-            mag_filter: match info.mag_filter {
-                image::Filter::Nearest => msl::SamplerFilter::Nearest,
-                image::Filter::Linear => msl::SamplerFilter::Linear,
-            },
-            mip_filter: match info.min_filter {
-                image::Filter::Nearest if info.lod_range.end.0 < 0.5 => msl::SamplerMipFilter::None,
-                image::Filter::Nearest => msl::SamplerMipFilter::Nearest,
-                image::Filter::Linear => msl::SamplerMipFilter::Linear,
-            },
-            s_address: map_address(info.wrap_mode.0),
-            t_address: map_address(info.wrap_mode.1),
-            r_address: map_address(info.wrap_mode.2),
-            compare_func: match info.comparison {
-                Some(func) => unsafe { mem::transmute(conv::map_compare_function(func) as u32) },
-                None => msl::SamplerCompareFunc::Always,
-            },
-            border_color: match info.border {
-                image::BorderColor::TransparentBlack => msl::SamplerBorderColor::TransparentBlack,
-                image::BorderColor::OpaqueBlack => msl::SamplerBorderColor::OpaqueBlack,
-                image::BorderColor::OpaqueWhite => msl::SamplerBorderColor::OpaqueWhite,
-            },
-            lod_clamp_min: lods.start.into(),
-            lod_clamp_max: lods.end.into(),
-            max_anisotropy: info.anisotropy_clamp.map_or(0, |aniso| aniso as i32),
-            planes: 0,
-            resolution: msl::FormatResolution::_444,
-            chroma_filter: msl::SamplerFilter::Nearest,
-            x_chroma_offset: msl::ChromaLocation::CositedEven,
-            y_chroma_offset: msl::ChromaLocation::CositedEven,
-            swizzle: [
-                msl::ComponentSwizzle::Identity,
-                msl::ComponentSwizzle::Identity,
-                msl::ComponentSwizzle::Identity,
-                msl::ComponentSwizzle::Identity,
-            ],
-            ycbcr_conversion_enable: false,
-            ycbcr_model: msl::SamplerYCbCrModelConversion::RgbIdentity,
-            ycbcr_range: msl::SamplerYCbCrRange::ItuFull,
-            bpc: 8,
-        }
     }
 }
 
@@ -1022,12 +1023,20 @@ impl hal::device::Device<Backend> for Device {
                     }
                 });
 
+                let samples = colors
+                    .iter()
+                    .chain(depth_stencil.as_ref())
+                    .map(|at_info| attachments[at_info.id].samples)
+                    .max()
+                    .unwrap_or(1);
+
                 n::Subpass {
                     attachments: n::SubpassData {
                         colors,
                         depth_stencil,
                     },
                     inputs: sub.inputs.iter().map(|&(id, _)| id).collect(),
+                    samples,
                 }
             })
             .collect();
@@ -1082,33 +1091,40 @@ impl hal::device::Device<Backend> for Device {
         Is: Iterator<Item = &'a n::DescriptorSetLayout>,
         Ic: Iterator<Item = (pso::ShaderStageFlags, Range<u32>)>,
     {
+        struct StageInfo {
+            stage: naga::ShaderStage,
+            counters: n::ResourceData<ResourceIndex>,
+            push_constant_buffer: Option<ResourceIndex>,
+        }
         let mut stage_infos = [
-            (
-                pso::ShaderStageFlags::VERTEX,
-                spirv::ExecutionModel::Vertex,
-                n::ResourceData::<ResourceIndex>::new(),
-            ),
-            (
-                pso::ShaderStageFlags::FRAGMENT,
-                spirv::ExecutionModel::Fragment,
-                n::ResourceData::<ResourceIndex>::new(),
-            ),
-            (
-                pso::ShaderStageFlags::COMPUTE,
-                spirv::ExecutionModel::GlCompute,
-                n::ResourceData::<ResourceIndex>::new(),
-            ),
+            StageInfo {
+                stage: naga::ShaderStage::Vertex,
+                counters: n::ResourceData::new(),
+                push_constant_buffer: None,
+            },
+            StageInfo {
+                stage: naga::ShaderStage::Fragment,
+                counters: n::ResourceData::new(),
+                push_constant_buffer: None,
+            },
+            StageInfo {
+                stage: naga::ShaderStage::Compute,
+                counters: n::ResourceData::new(),
+                push_constant_buffer: None,
+            },
         ];
-        let mut res_overrides = BTreeMap::new();
-        let mut const_samplers = BTreeMap::new();
+        let mut binding_map = BTreeMap::default();
+        let mut argument_buffer_bindings = FastHashMap::default();
+        let mut inline_samplers = Vec::new();
+        #[cfg(feature = "cross")]
+        let mut cross_const_samplers = BTreeMap::new();
         let mut infos = Vec::new();
 
         // First, place the push constants
-        let mut pc_buffers = [None; 3];
         let mut pc_limits = [0u32; 3];
         for (flags, range) in push_constant_ranges {
-            for (limit, &(stage_bit, _, _)) in pc_limits.iter_mut().zip(&stage_infos) {
-                if flags.contains(stage_bit) {
+            for (limit, info) in pc_limits.iter_mut().zip(&stage_infos) {
+                if flags.contains(info.stage.into()) {
                     debug_assert_eq!(range.end % 4, 0);
                     *limit = (range.end / 4).max(*limit);
                 }
@@ -1125,30 +1141,11 @@ impl hal::device::Device<Backend> for Device {
             }
         }
 
-        for ((limit, ref mut buffer_index), &mut (_, stage, ref mut counters)) in pc_limits
-            .iter()
-            .zip(pc_buffers.iter_mut())
-            .zip(stage_infos.iter_mut())
-        {
+        for (limit, info) in pc_limits.iter().zip(stage_infos.iter_mut()) {
             // handle the push constant buffer assignment and shader overrides
             if *limit != 0 {
-                let index = counters.buffers;
-                **buffer_index = Some(index);
-                counters.buffers += 1;
-
-                res_overrides.insert(
-                    msl::ResourceBindingLocation {
-                        stage,
-                        desc_set: PUSH_CONSTANTS_DESC_SET,
-                        binding: PUSH_CONSTANTS_DESC_BINDING,
-                    },
-                    msl::ResourceBinding {
-                        buffer_id: index as _,
-                        texture_id: !0,
-                        sampler_id: !0,
-                        count: 0,
-                    },
-                );
+                info.push_constant_buffer = Some(info.counters.buffers);
+                info.counters.buffers += 1;
             }
         }
 
@@ -1157,24 +1154,25 @@ impl hal::device::Device<Backend> for Device {
             // remember where the resources for this set start at each shader stage
             let mut dynamic_buffers = Vec::new();
             let offsets = n::MultiStageResourceCounters {
-                vs: stage_infos[0].2.clone(),
-                ps: stage_infos[1].2.clone(),
-                cs: stage_infos[2].2.clone(),
+                vs: stage_infos[0].counters.clone(),
+                ps: stage_infos[1].counters.clone(),
+                cs: stage_infos[2].counters.clone(),
             };
             match *set_layout {
                 n::DescriptorSetLayout::Emulated {
                     layouts: ref desc_layouts,
                     ref immutable_samplers,
-                    total: _,
+                    ..
                 } => {
-                    for (&binding, data) in immutable_samplers.iter() {
+                    #[cfg(feature = "cross")]
+                    for (&binding, immutable_sampler) in immutable_samplers.iter() {
                         //TODO: array support?
-                        const_samplers.insert(
-                            msl::SamplerLocation {
+                        cross_const_samplers.insert(
+                            spirv_cross::msl::SamplerLocation {
                                 desc_set: set_index as u32,
                                 binding,
                             },
-                            data.clone(),
+                            immutable_sampler.cross_data.clone(),
                         );
                     }
                     for layout in desc_layouts.iter() {
@@ -1184,94 +1182,80 @@ impl hal::device::Device<Backend> for Device {
                         {
                             dynamic_buffers.alloc().init(n::MultiStageData {
                                 vs: if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
-                                    stage_infos[0].2.buffers
+                                    stage_infos[0].counters.buffers
                                 } else {
                                     !0
                                 },
                                 ps: if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                                    stage_infos[1].2.buffers
+                                    stage_infos[1].counters.buffers
                                 } else {
                                     !0
                                 },
                                 cs: if layout.stages.contains(pso::ShaderStageFlags::COMPUTE) {
-                                    stage_infos[2].2.buffers
+                                    stage_infos[2].counters.buffers
                                 } else {
                                     !0
                                 },
                             });
                         }
-                        for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
-                            if !layout.stages.contains(stage_bit) {
+                        for info in stage_infos.iter_mut() {
+                            if !layout.stages.contains(info.stage.into()) {
                                 continue;
                             }
-                            let res = msl::ResourceBinding {
-                                buffer_id: if layout.content.contains(n::DescriptorContent::BUFFER)
-                                {
-                                    counters.buffers as _
+                            let target = naga::back::msl::BindTarget {
+                                buffer: if layout.content.contains(n::DescriptorContent::BUFFER) {
+                                    Some(info.counters.buffers as _)
                                 } else {
-                                    !0
+                                    None
                                 },
-                                texture_id: if layout
+                                texture: if layout.content.contains(n::DescriptorContent::TEXTURE) {
+                                    Some(info.counters.textures as _)
+                                } else {
+                                    None
+                                },
+                                sampler: if layout
                                     .content
-                                    .contains(n::DescriptorContent::TEXTURE)
+                                    .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
                                 {
-                                    counters.textures as _
+                                    let immutable_sampler = &immutable_samplers[&layout.binding];
+                                    let handle = inline_samplers.len()
+                                        as naga::back::msl::InlineSamplerIndex;
+                                    inline_samplers.push(immutable_sampler.data.clone());
+                                    Some(naga::back::msl::BindSamplerTarget::Inline(handle))
+                                } else if layout.content.contains(n::DescriptorContent::SAMPLER) {
+                                    Some(naga::back::msl::BindSamplerTarget::Resource(
+                                        info.counters.samplers as _,
+                                    ))
                                 } else {
-                                    !0
+                                    None
                                 },
-                                sampler_id: if layout
-                                    .content
-                                    .contains(n::DescriptorContent::SAMPLER)
-                                {
-                                    counters.samplers as _
-                                } else {
-                                    !0
-                                },
-                                count: 0,
+                                mutable: layout.content.contains(n::DescriptorContent::WRITABLE),
                             };
-                            counters.add(layout.content);
+                            info.counters.add(layout.content);
                             if layout.array_index == 0 {
-                                let location = msl::ResourceBindingLocation {
-                                    stage,
-                                    desc_set: set_index as _,
+                                let source = naga::back::msl::BindSource {
+                                    stage: info.stage,
+                                    group: set_index as _,
                                     binding: layout.binding,
                                 };
-                                res_overrides.insert(location, res);
+                                binding_map.insert(source, target);
                             }
                         }
                     }
                 }
                 n::DescriptorSetLayout::ArgumentBuffer {
-                    ref bindings,
+                    bindings: _,
                     stage_flags,
                     ..
                 } => {
-                    for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
-                        let has_stage = stage_flags.contains(stage_bit);
-                        res_overrides.insert(
-                            msl::ResourceBindingLocation {
-                                stage,
-                                desc_set: set_index as _,
-                                binding: msl::ARGUMENT_BUFFER_BINDING,
-                            },
-                            msl::ResourceBinding {
-                                buffer_id: if has_stage { counters.buffers } else { !0 },
-                                texture_id: !0,
-                                sampler_id: !0,
-                                count: 0,
-                            },
-                        );
-                        if has_stage {
-                            res_overrides.extend(bindings.iter().map(|(&binding, arg)| {
-                                let key = msl::ResourceBindingLocation {
-                                    stage,
-                                    desc_set: set_index as _,
-                                    binding,
-                                };
-                                (key, arg.res.clone())
-                            }));
-                            counters.buffers += 1;
+                    for info in stage_infos.iter_mut() {
+                        if !stage_flags.contains(info.stage.into()) {
+                            continue;
                         }
+                        //TODO: mark `bindings` as belonging to the argument buffer
+                        argument_buffer_bindings
+                            .insert((info.stage, set_index as u32), info.counters.buffers);
+                        info.counters.buffers += 1;
                     }
                 }
             }
@@ -1283,122 +1267,270 @@ impl hal::device::Device<Backend> for Device {
         }
 
         // Finally, make sure we fit the limits
-        for &(_, _, ref counters) in stage_infos.iter() {
-            assert!(counters.buffers <= self.shared.private_caps.max_buffers_per_stage);
-            assert!(counters.textures <= self.shared.private_caps.max_textures_per_stage);
-            assert!(counters.samplers <= self.shared.private_caps.max_samplers_per_stage);
+        for info in stage_infos.iter() {
+            assert!(info.counters.buffers <= self.shared.private_caps.max_buffers_per_stage);
+            assert!(info.counters.textures <= self.shared.private_caps.max_textures_per_stage);
+            assert!(info.counters.samplers <= self.shared.private_caps.max_samplers_per_stage);
         }
 
-        #[cfg(feature = "naga")]
-        let naga_options = {
-            use naga::back::msl;
-            fn res_index(id: u32) -> Option<u8> {
-                if id == !0 {
-                    None
-                } else {
-                    Some(id as _)
-                }
+        #[cfg(feature = "cross")]
+        let spirv_cross_options = {
+            use spirv_cross::msl;
+            const PUSH_CONSTANTS_DESC_SET: u32 = !0;
+            const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
+
+            let mut compiler_options = msl::CompilerOptions::default();
+            compiler_options.version = match self.shared.private_caps.msl_version {
+                MTLLanguageVersion::V1_0 => msl::Version::V1_0,
+                MTLLanguageVersion::V1_1 => msl::Version::V1_1,
+                MTLLanguageVersion::V1_2 => msl::Version::V1_2,
+                MTLLanguageVersion::V2_0 => msl::Version::V2_0,
+                MTLLanguageVersion::V2_1 => msl::Version::V2_1,
+                MTLLanguageVersion::V2_2 => msl::Version::V2_2,
+                MTLLanguageVersion::V2_3 => msl::Version::V2_3,
+            };
+            compiler_options.enable_point_size_builtin = false;
+            compiler_options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
+            // populate resource overrides
+            for (source, target) in binding_map.iter() {
+                compiler_options.resource_binding_overrides.insert(
+                    msl::ResourceBindingLocation {
+                        stage: conv::map_naga_stage_to_cross(source.stage),
+                        desc_set: source.group,
+                        binding: source.binding,
+                    },
+                    msl::ResourceBinding {
+                        buffer_id: target.buffer.map_or(!0, |id| id as u32),
+                        texture_id: target.texture.map_or(!0, |id| id as u32),
+                        sampler_id: match target.sampler {
+                            Some(naga::back::msl::BindSamplerTarget::Resource(id)) => id as u32,
+                            _ => !0,
+                        },
+                        count: 0,
+                    },
+                );
             }
-            msl::Options {
-                lang_version: match self.shared.private_caps.msl_version {
-                    MTLLanguageVersion::V1_0 => (1, 0),
-                    MTLLanguageVersion::V1_1 => (1, 1),
-                    MTLLanguageVersion::V1_2 => (1, 2),
-                    MTLLanguageVersion::V2_0 => (2, 0),
-                    MTLLanguageVersion::V2_1 => (2, 1),
-                    MTLLanguageVersion::V2_2 => (2, 2),
-                    MTLLanguageVersion::V2_3 => (2, 3),
-                },
-                spirv_cross_compatibility: true,
-                binding_map: res_overrides
-                    .iter()
-                    .map(|(loc, binding)| {
-                        let source = msl::BindSource {
-                            stage: match loc.stage {
-                                spirv::ExecutionModel::Vertex => naga::ShaderStage::Vertex,
-                                spirv::ExecutionModel::Fragment => naga::ShaderStage::Fragment,
-                                spirv::ExecutionModel::GlCompute => naga::ShaderStage::Compute,
-                                other => panic!("Unexpected stage: {:?}", other),
-                            },
-                            group: loc.desc_set,
-                            binding: loc.binding,
-                        };
-                        let target = msl::BindTarget {
-                            buffer: res_index(binding.buffer_id),
-                            texture: res_index(binding.texture_id),
-                            sampler: res_index(binding.sampler_id),
-                            mutable: false, //TODO
-                        };
-                        (source, target)
-                    })
-                    .collect(),
+            // argument buffers
+            for ((stage, desc_set), buffer_id) in argument_buffer_bindings {
+                compiler_options.resource_binding_overrides.insert(
+                    msl::ResourceBindingLocation {
+                        stage: conv::map_naga_stage_to_cross(stage),
+                        desc_set,
+                        binding: msl::ARGUMENT_BUFFER_BINDING,
+                    },
+                    msl::ResourceBinding {
+                        buffer_id,
+                        texture_id: !0,
+                        sampler_id: !0,
+                        count: 0,
+                    },
+                );
+                //TODO: assign argument buffer locations
             }
+            // push constants
+            for info in stage_infos.iter() {
+                let buffer_id = match info.push_constant_buffer {
+                    Some(id) => id,
+                    None => continue,
+                };
+                compiler_options.resource_binding_overrides.insert(
+                    msl::ResourceBindingLocation {
+                        stage: conv::map_naga_stage_to_cross(info.stage),
+                        desc_set: PUSH_CONSTANTS_DESC_SET,
+                        binding: PUSH_CONSTANTS_DESC_BINDING,
+                    },
+                    msl::ResourceBinding {
+                        buffer_id,
+                        texture_id: !0,
+                        sampler_id: !0,
+                        count: 0,
+                    },
+                );
+            }
+            // other properties
+            compiler_options.const_samplers = cross_const_samplers;
+            compiler_options.enable_argument_buffers = self.shared.private_caps.argument_buffers;
+            compiler_options.force_zero_initialized_variables = true;
+            compiler_options.force_native_arrays = true;
+
+            let mut compiler_options_point = compiler_options.clone();
+            compiler_options_point.enable_point_size_builtin = true;
+            compiler_options
         };
 
-        let mut shader_compiler_options = msl::CompilerOptions::default();
-        shader_compiler_options.version = match self.shared.private_caps.msl_version {
-            MTLLanguageVersion::V1_0 => msl::Version::V1_0,
-            MTLLanguageVersion::V1_1 => msl::Version::V1_1,
-            MTLLanguageVersion::V1_2 => msl::Version::V1_2,
-            MTLLanguageVersion::V2_0 => msl::Version::V2_0,
-            MTLLanguageVersion::V2_1 => msl::Version::V2_1,
-            MTLLanguageVersion::V2_2 => msl::Version::V2_2,
-            MTLLanguageVersion::V2_3 => msl::Version::V2_3,
+        let naga_options = naga::back::msl::Options {
+            lang_version: match self.shared.private_caps.msl_version {
+                MTLLanguageVersion::V1_0 => (1, 0),
+                MTLLanguageVersion::V1_1 => (1, 1),
+                MTLLanguageVersion::V1_2 => (1, 2),
+                MTLLanguageVersion::V2_0 => (2, 0),
+                MTLLanguageVersion::V2_1 => (2, 1),
+                MTLLanguageVersion::V2_2 => (2, 2),
+                MTLLanguageVersion::V2_3 => (2, 3),
+            },
+            binding_map,
+            inline_samplers,
+            spirv_cross_compatibility: cfg!(feature = "cross"),
+            fake_missing_bindings: false,
+            push_constants_map: naga::back::msl::PushConstantsMap {
+                vs_buffer: stage_infos[0]
+                    .push_constant_buffer
+                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                fs_buffer: stage_infos[1]
+                    .push_constant_buffer
+                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                cs_buffer: stage_infos[2]
+                    .push_constant_buffer
+                    .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+            },
         };
-        shader_compiler_options.enable_point_size_builtin = false;
-        shader_compiler_options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
-        shader_compiler_options.resource_binding_overrides = res_overrides;
-        shader_compiler_options.const_samplers = const_samplers;
-        shader_compiler_options.enable_argument_buffers = self.shared.private_caps.argument_buffers;
-        shader_compiler_options.force_zero_initialized_variables = true;
-        shader_compiler_options.force_native_arrays = true;
-        let mut shader_compiler_options_point = shader_compiler_options.clone();
-        shader_compiler_options_point.enable_point_size_builtin = true;
 
         Ok(n::PipelineLayout {
-            shader_compiler_options,
-            shader_compiler_options_point,
-            #[cfg(feature = "naga")]
+            #[cfg(feature = "cross")]
+            spirv_cross_options,
             naga_options,
             infos,
             total: n::MultiStageResourceCounters {
-                vs: stage_infos[0].2.clone(),
-                ps: stage_infos[1].2.clone(),
-                cs: stage_infos[2].2.clone(),
+                vs: stage_infos[0].counters.clone(),
+                ps: stage_infos[1].counters.clone(),
+                cs: stage_infos[2].counters.clone(),
             },
             push_constants: n::MultiStageData {
-                vs: pc_buffers[0].map(|buffer_index| n::PushConstantInfo {
-                    count: pc_limits[0],
-                    buffer_index,
-                }),
-                ps: pc_buffers[1].map(|buffer_index| n::PushConstantInfo {
-                    count: pc_limits[1],
-                    buffer_index,
-                }),
-                cs: pc_buffers[2].map(|buffer_index| n::PushConstantInfo {
-                    count: pc_limits[2],
-                    buffer_index,
-                }),
+                vs: stage_infos[0]
+                    .push_constant_buffer
+                    .map(|buffer_index| n::PushConstantInfo {
+                        count: pc_limits[0],
+                        buffer_index,
+                    }),
+                ps: stage_infos[1]
+                    .push_constant_buffer
+                    .map(|buffer_index| n::PushConstantInfo {
+                        count: pc_limits[1],
+                        buffer_index,
+                    }),
+                cs: stage_infos[2]
+                    .push_constant_buffer
+                    .map(|buffer_index| n::PushConstantInfo {
+                        count: pc_limits[2],
+                        buffer_index,
+                    }),
             },
             total_push_constants: pc_limits[0].max(pc_limits[1]).max(pc_limits[2]),
         })
     }
 
+    #[cfg(not(feature = "pipeline-cache"))]
     unsafe fn create_pipeline_cache(
         &self,
         _data: Option<&[u8]>,
     ) -> Result<n::PipelineCache, d::OutOfMemory> {
-        Ok(n::PipelineCache {
-            modules: FastStorageMap::default(),
-        })
+        Ok(())
     }
 
+    #[cfg(feature = "pipeline-cache")]
+    unsafe fn create_pipeline_cache(
+        &self,
+        data: Option<&[u8]>,
+    ) -> Result<n::PipelineCache, d::OutOfMemory> {
+        let device = self.shared.device.lock();
+
+        let create_binary_archive = |data: &[u8]| {
+            if self.shared.private_caps.supports_binary_archives {
+                let descriptor = metal::BinaryArchiveDescriptor::new();
+
+                // We need to keep the temp file alive so that it doesn't get deleted until after a
+                // binary archive has been created.
+                let _temp_file = if !data.is_empty() {
+                    // It would be nice to use a `data:text/plain;base64` url here and just pass in a
+                    // base64-encoded version of the data, but metal validation doesn't like that:
+                    // -[MTLDebugDevice newBinaryArchiveWithDescriptor:error:]:1046: failed assertion `url, if not nil, must be a file URL.'
+
+                    let temp_file = tempfile::NamedTempFile::new().unwrap();
+                    temp_file.as_file().write_all(&data).unwrap();
+
+                    let url = metal::URL::new_with_string(&format!(
+                        "file://{}",
+                        temp_file.path().display()
+                    ));
+                    descriptor.set_url(&url);
+
+                    Some(temp_file)
+                } else {
+                    None
+                };
+
+                Ok(Some(pipeline_cache::BinaryArchive {
+                    inner: device
+                        .new_binary_archive_with_descriptor(&descriptor)
+                        .map_err(|_| d::OutOfMemory::Device)?,
+                    is_empty: AtomicBool::new(data.is_empty()),
+                }))
+            } else {
+                Ok(None)
+            }
+        };
+
+        if let Some(data) = data.filter(|data| !data.is_empty()) {
+            let pipeline_cache: pipeline_cache::SerializablePipelineCache =
+                bincode::deserialize(data).unwrap();
+
+            Ok(n::PipelineCache {
+                binary_archive: create_binary_archive(&pipeline_cache.binary_archive)?,
+                spv_to_msl: pipeline_cache::load_spv_to_msl_cache(pipeline_cache.spv_to_msl),
+            })
+        } else {
+            Ok(n::PipelineCache {
+                binary_archive: create_binary_archive(&[])?,
+                spv_to_msl: Default::default(),
+            })
+        }
+    }
+
+    #[cfg(not(feature = "pipeline-cache"))]
     unsafe fn get_pipeline_cache_data(
         &self,
         _cache: &n::PipelineCache,
     ) -> Result<Vec<u8>, d::OutOfMemory> {
-        //empty
         Ok(Vec::new())
+    }
+
+    #[cfg(feature = "pipeline-cache")]
+    unsafe fn get_pipeline_cache_data(
+        &self,
+        cache: &n::PipelineCache,
+    ) -> Result<Vec<u8>, d::OutOfMemory> {
+        let binary_archive = || {
+            let binary_archive = match cache.binary_archive {
+                Some(ref binary_archive) => binary_archive,
+                None => return Ok(Vec::new()),
+            };
+
+            // Without this, we get an extremely vague "Serialization of binaries to file failed"
+            // error when serializing an empty binary archive.
+            if binary_archive.is_empty.load(Ordering::Relaxed) {
+                return Ok(Vec::new());
+            }
+
+            let temp_path = tempfile::NamedTempFile::new().unwrap().into_temp_path();
+            let tmp_file_url =
+                metal::URL::new_with_string(&format!("file://{}", temp_path.display()));
+
+            binary_archive
+                .inner
+                .serialize_to_url(&tmp_file_url)
+                .unwrap();
+
+            let bytes = std::fs::read(&temp_path).unwrap();
+            Ok(bytes)
+        };
+
+        Ok(
+            bincode::serialize(&pipeline_cache::SerializablePipelineCache {
+                binary_archive: &binary_archive()?,
+                spv_to_msl: pipeline_cache::serialize_spv_to_msl_cache(&cache.spv_to_msl),
+            })
+            .unwrap(),
+        )
     }
 
     unsafe fn destroy_pipeline_cache(&self, _cache: n::PipelineCache) {
@@ -1407,43 +1539,13 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn merge_pipeline_caches<'a, I>(
         &self,
-        target: &mut n::PipelineCache,
-        sources: I,
+        _target: &mut n::PipelineCache,
+        _sources: I,
     ) -> Result<(), d::OutOfMemory>
     where
         I: Iterator<Item = &'a n::PipelineCache>,
     {
-        //TODO: reduce the locking here
-        let mut dst = target.modules.whole_write();
-        for source in sources {
-            let src = source.modules.whole_write();
-            for (key, value) in src.iter() {
-                let storage = dst
-                    .entry(key.clone())
-                    .or_insert_with(FastStorageMap::default);
-                let mut dst_module = storage.whole_write();
-                let src_module = value.whole_write();
-                for (key_module, value_module) in src_module.iter() {
-                    match dst_module.entry(key_module.clone()) {
-                        Entry::Vacant(em) => {
-                            em.insert(value_module.clone());
-                        }
-                        Entry::Occupied(em) => {
-                            if em.get().library.as_ptr() != value_module.library.as_ptr()
-                                || em.get().entry_point_map != value_module.entry_point_map
-                            {
-                                warn!(
-                                    "Merged module don't match, target: {:?}, source: {:?}",
-                                    em.get(),
-                                    value_module
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+        warn!("`merge_pipeline_caches` is not currently implemented on the Metal backend.");
         Ok(())
     }
 
@@ -1452,7 +1554,9 @@ impl hal::device::Device<Backend> for Device {
         pipeline_desc: &pso::GraphicsPipelineDesc<'a, Backend>,
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        debug!("create_graphics_pipeline {:#?}", pipeline_desc);
+        profiling::scope!("create_graphics_pipeline");
+        trace!("create_graphics_pipeline {:#?}", pipeline_desc);
+
         let pipeline = metal::RenderPipelineDescriptor::new();
         let pipeline_layout = &pipeline_desc.layout;
         let (rp_attachments, subpass) = {
@@ -1520,7 +1624,7 @@ impl hal::device::Device<Backend> for Device {
             pipeline_layout,
             primitive_class,
             cache,
-            ShaderStage::Vertex,
+            naga::ShaderStage::Vertex,
         )?;
         pipeline.set_vertex_function(Some(&vs_function));
 
@@ -1533,7 +1637,7 @@ impl hal::device::Device<Backend> for Device {
                     pipeline_layout,
                     primitive_class,
                     cache,
-                    ShaderStage::Fragment,
+                    naga::ShaderStage::Fragment,
                 )?;
                 fs_function = fun;
                 pipeline.set_fragment_function(Some(&fs_function));
@@ -1744,7 +1848,16 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_label(name);
         }
 
-        device
+        profiling::scope!("Metal::new_render_pipeline_state");
+
+        #[cfg(feature = "pipeline-cache")]
+        if let Some(binary_archive) = pipeline_cache::pipeline_cache_to_binary_archive(cache) {
+            pipeline.set_binary_archives(&[&binary_archive.inner]);
+        }
+
+        let pipeline_state = device
+            // Replace this with `new_render_pipeline_state_with_fail_on_binary_archive_miss`
+            // to debug that the cache is actually working.
             .new_render_pipeline_state(&pipeline)
             .map(|raw| n::GraphicsPipeline {
                 vs_lib,
@@ -1764,7 +1877,21 @@ impl hal::device::Device<Backend> for Device {
             .map_err(|err| {
                 error!("PSO creation failed: {}", err);
                 pso::CreationError::Other
-            })
+            })?;
+
+        // We need to add the pipline descriptor to the binary archive after creating the
+        // pipeline, otherwise `new_render_pipeline_state_with_fail_on_binary_archive_miss`
+        // succeeds when it shouldn't.
+        #[cfg(feature = "pipeline-cache")]
+        if let Some(binary_archive) = pipeline_cache::pipeline_cache_to_binary_archive(cache) {
+            binary_archive
+                .inner
+                .add_render_pipeline_functions_with_descriptor(&pipeline)
+                .unwrap();
+            binary_archive.is_empty.store(false, Ordering::Relaxed);
+        }
+
+        Ok(pipeline_state)
     }
 
     unsafe fn create_compute_pipeline<'a>(
@@ -1772,7 +1899,8 @@ impl hal::device::Device<Backend> for Device {
         pipeline_desc: &pso::ComputePipelineDesc<'a, Backend>,
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
-        debug!("create_compute_pipeline {:?}", pipeline_desc);
+        profiling::scope!("create_compute_pipeline");
+        trace!("create_compute_pipeline {:?}", pipeline_desc);
         let pipeline = metal::ComputePipelineDescriptor::new();
 
         let (cs_lib, cs_function, work_group_size, _) = self.load_shader(
@@ -1780,14 +1908,22 @@ impl hal::device::Device<Backend> for Device {
             &pipeline_desc.layout,
             MTLPrimitiveTopologyClass::Unspecified,
             cache,
-            ShaderStage::Compute,
+            naga::ShaderStage::Compute,
         )?;
         pipeline.set_compute_function(Some(&cs_function));
         if let Some(name) = pipeline_desc.label {
             pipeline.set_label(name);
         }
 
-        self.shared
+        profiling::scope!("Metal::new_compute_pipeline_state");
+
+        #[cfg(feature = "pipeline-cache")]
+        if let Some(binary_archive) = pipeline_cache::pipeline_cache_to_binary_archive(cache) {
+            pipeline.set_binary_archives(&[&binary_archive.inner]);
+        }
+
+        let pipeline_state = self
+            .shared
             .device
             .lock()
             .new_compute_pipeline_state(&pipeline)
@@ -1800,7 +1936,20 @@ impl hal::device::Device<Backend> for Device {
             .map_err(|err| {
                 error!("PSO creation failed: {}", err);
                 pso::CreationError::Other
-            })
+            })?;
+
+        // We need to add the pipline descriptor to the binary archive after creating the
+        // pipeline, see `create_graphics_pipeline`.
+        #[cfg(feature = "pipeline-cache")]
+        if let Some(binary_archive) = pipeline_cache::pipeline_cache_to_binary_archive(cache) {
+            binary_archive
+                .inner
+                .add_compute_pipeline_functions_with_descriptor(&pipeline)
+                .unwrap();
+            binary_archive.is_empty.store(false, Ordering::Relaxed)
+        }
+
+        Ok(pipeline_state)
     }
 
     unsafe fn create_framebuffer<I>(
@@ -1816,62 +1965,61 @@ impl hal::device::Device<Backend> for Device {
         &self,
         raw_data: &[u32],
     ) -> Result<n::ShaderModule, d::ShaderError> {
-        //TODO: we can probably at least parse here and save the `Ast`
+        profiling::scope!("create_shader_module");
         Ok(n::ShaderModule {
+            prefer_naga: self.always_prefer_naga,
+            #[cfg(feature = "cross")]
             spv: raw_data.to_vec(),
-            #[cfg(all(feature = "naga", not(feature = "naga-parse")))]
-            naga: None,
-            #[cfg(feature = "naga-parse")]
+            #[cfg(feature = "pipeline-cache")]
+            spv_hash: fxhash::hash64(raw_data),
             naga: {
-                let parser =
-                    naga::front::spv::Parser::new(raw_data.iter().cloned(), &Default::default());
-                match parser.parse() {
-                    Ok(module) => match naga::proc::Validator::new().validate(&module) {
-                        Ok(()) => Some(module),
-                        Err(e) => {
-                            warn!("Naga validation failed: {:?}", e);
-                            None
+                let options = naga::front::spv::Options {
+                    adjust_coordinate_space: !self.features.contains(hal::Features::NDC_Y_UP),
+                    strict_capabilities: true,
+                    flow_graph_dump_prefix: None,
+                };
+                let parse_result = {
+                    profiling::scope!("naga::spv::parse");
+                    let parser = naga::front::spv::Parser::new(raw_data.iter().cloned(), &options);
+                    parser.parse()
+                };
+                match parse_result {
+                    Ok(module) => {
+                        debug!("Naga module {:#?}", module);
+                        match naga::valid::Validator::new(naga::valid::ValidationFlags::empty())
+                            .validate(&module)
+                        {
+                            Ok(info) => Ok(d::NagaShader { module, info }),
+                            Err(e) => Err(format!("Naga validation: {:?}", e)),
                         }
-                    },
-                    Err(e) => {
-                        warn!("Naga parsing failed: {:?}", e);
-                        None
                     }
+                    Err(e) => Err(format!("Naga parsing: {:?}", e)),
                 }
             },
         })
     }
 
-    #[cfg(feature = "naga")]
     unsafe fn create_shader_module_from_naga(
         &self,
-        module: naga::Module,
-    ) -> Result<n::ShaderModule, (d::ShaderError, naga::Module)> {
-        use naga::back::spv;
+        shader: d::NagaShader,
+    ) -> Result<n::ShaderModule, (d::ShaderError, d::NagaShader)> {
+        profiling::scope!("create_shader_module_from_naga");
 
-        let mut flags = spv::WriterFlags::empty();
-        if cfg!(debug_assertions) {
-            flags |= spv::WriterFlags::DEBUG;
-        }
-        let caps = [
-            spv::Capability::Shader,
-            spv::Capability::Matrix,
-            spv::Capability::Sampled1D,
-            spv::Capability::Image1D,
-            spv::Capability::DerivativeControl,
-            //TODO: fill out the rest
-        ]
-        .iter()
-        .cloned()
-        .collect();
+        #[cfg(any(feature = "pipeline-cache", feature = "cross"))]
+        let spv = match naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options)
+        {
+            Ok(spv) => spv,
+            Err(e) => return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader)),
+        };
 
-        match spv::write_vec(&module, flags, caps) {
-            Ok(spv) => Ok(n::ShaderModule {
-                spv,
-                naga: Some(module),
-            }),
-            Err(e) => Err((d::ShaderError::CompilationFailed(format!("{}", e)), module)),
-        }
+        Ok(n::ShaderModule {
+            prefer_naga: true,
+            #[cfg(feature = "pipeline-cache")]
+            spv_hash: fxhash::hash64(&spv),
+            #[cfg(feature = "cross")]
+            spv,
+            naga: Ok(shader),
+        })
     }
 
     unsafe fn create_sampler(
@@ -1879,11 +2027,13 @@ impl hal::device::Device<Backend> for Device {
         info: &image::SamplerDesc,
     ) -> Result<n::Sampler, d::AllocationError> {
         Ok(n::Sampler {
-            raw: match self.make_sampler_descriptor(&info) {
+            raw: match self.make_sampler_descriptor(info) {
                 Some(ref descriptor) => Some(self.shared.device.lock().new_sampler(descriptor)),
                 None => None,
             },
-            data: Self::make_sampler_data(&info),
+            data: conv::map_sampler_data_to_naga(info),
+            #[cfg(feature = "cross")]
+            cross_data: conv::map_sampler_data_to_cross(info),
         })
     }
 
@@ -2084,29 +2234,45 @@ impl hal::device::Device<Backend> for Device {
                 stage_flags |= desc.stage_flags;
                 let content = n::DescriptorContent::from(desc.ty);
                 let usage = n::ArgumentArray::describe_usage(desc.ty);
-                let res = msl::ResourceBinding {
-                    buffer_id: if content.contains(n::DescriptorContent::BUFFER) {
-                        arguments.push(metal::MTLDataType::Pointer, desc.count, usage) as u32
+                let bind_target = naga::back::msl::BindTarget {
+                    buffer: if content.contains(n::DescriptorContent::BUFFER) {
+                        Some(
+                            arguments.push(metal::MTLDataType::Pointer, desc.count, usage)
+                                as naga::back::msl::Slot,
+                        )
                     } else {
-                        !0
+                        None
                     },
-                    texture_id: if content.contains(n::DescriptorContent::TEXTURE) {
-                        arguments.push(metal::MTLDataType::Texture, desc.count, usage) as u32
+                    texture: if content.contains(n::DescriptorContent::TEXTURE) {
+                        Some(
+                            arguments.push(metal::MTLDataType::Texture, desc.count, usage)
+                                as naga::back::msl::Slot,
+                        )
                     } else {
-                        !0
+                        None
                     },
-                    sampler_id: if content.contains(n::DescriptorContent::SAMPLER) {
-                        arguments.push(metal::MTLDataType::Sampler, desc.count, usage) as u32
+                    sampler: if content.contains(n::DescriptorContent::SAMPLER) {
+                        let slot = arguments.push(metal::MTLDataType::Sampler, desc.count, usage);
+                        Some(naga::back::msl::BindSamplerTarget::Resource(
+                            slot as naga::back::msl::Slot,
+                        ))
                     } else {
-                        !0
+                        None
                     },
-                    count: 0,
+                    mutable: content.contains(n::DescriptorContent::WRITABLE),
                 };
-                let res_offset = res.buffer_id.min(res.texture_id).min(res.sampler_id);
+                let res_offset = bind_target
+                    .buffer
+                    .or(bind_target.texture)
+                    .or(bind_target.sampler.as_ref().and_then(|bst| match *bst {
+                        naga::back::msl::BindSamplerTarget::Resource(slot) => Some(slot),
+                        naga::back::msl::BindSamplerTarget::Inline(_) => None,
+                    }))
+                    .unwrap() as u32;
                 bindings.insert(
                     desc.binding,
                     n::ArgumentLayout {
-                        res,
+                        bind_target,
                         res_offset,
                         count: desc.count,
                         usage,
@@ -2126,7 +2292,7 @@ impl hal::device::Device<Backend> for Device {
             })
         } else {
             struct TempSampler {
-                data: msl::SamplerData,
+                data: n::ImmutableSampler,
                 binding: pso::DescriptorBinding,
                 array_index: pso::DescriptorArrayIndex,
             }
@@ -2139,6 +2305,7 @@ impl hal::device::Device<Backend> for Device {
                 let mut content = n::DescriptorContent::from(slb.ty);
                 total.add_many(content, slb.count as _);
 
+                #[cfg_attr(not(feature = "cross"), allow(unused_variables))]
                 if slb.immutable_samplers {
                     tmp_samplers.extend(
                         immutable_sampler_iter
@@ -2146,7 +2313,11 @@ impl hal::device::Device<Backend> for Device {
                             .take(slb.count)
                             .enumerate()
                             .map(|(array_index, sm)| TempSampler {
-                                data: sm.data.clone(),
+                                data: n::ImmutableSampler {
+                                    data: sm.data.clone(),
+                                    #[cfg(feature = "cross")]
+                                    cross_data: sm.cross_data.clone(),
+                                },
                                 binding: slb.binding,
                                 array_index,
                             }),
@@ -2371,6 +2542,7 @@ impl hal::device::Device<Backend> for Device {
         memory_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
+        profiling::scope!("allocate_memory");
         let (storage, cache) = MemoryTypes::describe(memory_type.0);
         let device = self.shared.device.lock();
         debug!("allocate_memory type {:?} of size {}", memory_type, size);
@@ -2400,6 +2572,7 @@ impl hal::device::Device<Backend> for Device {
     }
 
     unsafe fn free_memory(&self, memory: n::Memory) {
+        profiling::scope!("free_memory");
         debug!("free_memory of size {}", memory.size);
         if let n::MemoryHeap::Public(_, ref cpu_buffer) = memory.heap {
             debug!("\tbacked by cpu buffer {:?}", cpu_buffer.as_ptr());
@@ -2410,6 +2583,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         size: u64,
         usage: buffer::Usage,
+        _sparse: memory::SparseFlags,
     ) -> Result<n::Buffer, buffer::CreationError> {
         debug!("create_buffer of size {} and usage {:?}", size, usage);
         Ok(n::Buffer::Unbound {
@@ -2466,6 +2640,7 @@ impl hal::device::Device<Backend> for Device {
         offset: u64,
         buffer: &mut n::Buffer,
     ) -> Result<(), d::BindError> {
+        profiling::scope!("bind_buffer_memory");
         let (size, name) = match buffer {
             n::Buffer::Unbound { size, name, .. } => (*size, name),
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
@@ -2607,8 +2782,10 @@ impl hal::device::Device<Backend> for Device {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
+        _sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
     ) -> Result<n::Image, image::CreationError> {
+        profiling::scope!("create_image");
         debug!(
             "create_image {:?} with {} mips of {:?} {:?} and usage {:?} with {:?}",
             kind, mip_levels, format, tiling, usage, view_caps
@@ -2797,6 +2974,7 @@ impl hal::device::Device<Backend> for Device {
         offset: u64,
         image: &mut n::Image,
     ) -> Result<(), d::BindError> {
+        profiling::scope!("bind_image_memory");
         let like = {
             let (descriptor, mip_sizes, name) = match image.like {
                 n::ImageLike::Unbound {
@@ -2865,8 +3043,11 @@ impl hal::device::Device<Backend> for Device {
         kind: image::ViewKind,
         format: format::Format,
         swizzle: format::Swizzle,
+        _usage: image::Usage,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewCreationError> {
+        profiling::scope!("create_image_view");
+
         let mtl_format = match self
             .shared
             .private_caps
@@ -3202,6 +3383,23 @@ impl hal::device::Device<Backend> for Device {
         _name: &str,
     ) {
         // TODO
+    }
+
+    fn start_capture(&self) {
+        let device = self.shared.device.lock();
+        let shared_capture_manager = CaptureManager::shared();
+        let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device);
+        shared_capture_manager.set_default_capture_scope(&default_capture_scope);
+        shared_capture_manager.start_capture_with_scope(&default_capture_scope);
+        default_capture_scope.begin_scope();
+    }
+
+    fn stop_capture(&self) {
+        let shared_capture_manager = CaptureManager::shared();
+        if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
+            default_capture_scope.end_scope();
+        }
+        shared_capture_manager.stop_capture();
     }
 }
 

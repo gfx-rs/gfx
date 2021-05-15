@@ -1,9 +1,8 @@
 use crate::{
     command::{self, Command, CommandBuffer},
-    info, native as n, Backend,
+    info, native as n, Backend, FastHashMap,
 };
 
-use auxil::FastHashMap;
 use parking_lot::Mutex;
 use std::sync::Arc;
 

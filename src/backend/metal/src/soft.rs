@@ -3,7 +3,6 @@ use crate::{
     SamplerPtr, TexturePtr,
 };
 
-use auxil::ShaderStage;
 use hal;
 use metal;
 
@@ -19,6 +18,7 @@ pub trait Resources: Debug {
     type DepthStencil: Debug;
     type RenderPipeline: Debug;
     type ComputePipeline: Debug;
+    type Marker: Debug + AsRef<str>;
 }
 
 #[derive(Clone, Debug, Default)]
@@ -37,6 +37,7 @@ impl Resources for Own {
     type DepthStencil = metal::DepthStencilState;
     type RenderPipeline = metal::RenderPipelineState;
     type ComputePipeline = metal::ComputePipelineState;
+    type Marker = String;
 }
 
 #[derive(Debug)]
@@ -49,6 +50,7 @@ impl<'a> Resources for &'a Ref {
     type DepthStencil = &'a metal::DepthStencilStateRef;
     type RenderPipeline = &'a metal::RenderPipelineStateRef;
     type ComputePipeline = &'a metal::ComputePipelineStateRef;
+    type Marker = &'a str;
 }
 
 //TODO: Remove `Clone` from here, blocked by arguments of `quick_render` and
@@ -64,28 +66,28 @@ pub enum RenderCommand<R: Resources> {
     SetRasterizerState(RasterizerState),
     SetVisibilityResult(metal::MTLVisibilityResultMode, hal::buffer::Offset),
     BindBuffer {
-        stage: ShaderStage,
+        stage: naga::ShaderStage,
         index: ResourceIndex,
         buffer: BufferPtr,
         offset: hal::buffer::Offset,
     },
     BindBuffers {
-        stage: ShaderStage,
+        stage: naga::ShaderStage,
         index: ResourceIndex,
         buffers: R::BufferArray,
     },
     BindBufferData {
-        stage: ShaderStage,
+        stage: naga::ShaderStage,
         index: ResourceIndex,
         words: R::Data,
     },
     BindTextures {
-        stage: ShaderStage,
+        stage: naga::ShaderStage,
         index: ResourceIndex,
         textures: R::TextureArray,
     },
     BindSamplers {
-        stage: ShaderStage,
+        stage: naga::ShaderStage,
         index: ResourceIndex,
         samplers: R::SamplerArray,
     },
@@ -117,6 +119,13 @@ pub enum RenderCommand<R: Resources> {
         buffer: BufferPtr,
         offset: hal::buffer::Offset,
     },
+    InsertDebugMarker {
+        name: R::Marker,
+    },
+    PushDebugMarker {
+        name: R::Marker,
+    },
+    PopDebugGroup,
 }
 
 #[derive(Clone, Debug)]
@@ -319,6 +328,13 @@ impl Own {
                 buffer,
                 offset,
             },
+            InsertDebugMarker { name } => InsertDebugMarker {
+                name: name.to_owned(),
+            },
+            PushDebugMarker { name } => PushDebugMarker {
+                name: name.to_owned(),
+            },
+            PopDebugGroup => PopDebugGroup,
         }
     }
 
@@ -417,7 +433,10 @@ impl Own {
             | Draw { .. }
             | DrawIndexed { .. }
             | DrawIndirect { .. }
-            | DrawIndexedIndirect { .. } => {}
+            | DrawIndexedIndirect { .. }
+            | InsertDebugMarker { .. }
+            | PushDebugMarker { .. }
+            | PopDebugGroup => {}
         }
     }
 

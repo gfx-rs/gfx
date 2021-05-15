@@ -6,7 +6,7 @@ use hal::{
     pass, pso, window as w,
 };
 
-use std::{borrow::Borrow, ops::Range, sync::Arc};
+use std::{borrow::Borrow, fmt, ops::Range, sync::Arc};
 
 pub type TextureTarget = u32;
 pub type TextureFormat = u32;
@@ -40,15 +40,30 @@ pub enum Buffer {
     Bound {
         buffer: RawBuffer,
         range: Range<buffer::Offset>,
+        target: u32,
     },
+}
+
+pub(crate) struct BoundedBuffer {
+    pub raw: RawBuffer,
+    pub range: Range<buffer::Offset>,
+    pub target: u32,
 }
 
 impl Buffer {
     // Asserts that the buffer is bound and returns the raw gl buffer along with its sub-range.
-    pub(crate) fn as_bound(&self) -> (RawBuffer, Range<u64>) {
+    pub(crate) fn as_bound(&self) -> BoundedBuffer {
         match *self {
             Buffer::Unbound { .. } => panic!("Expected bound buffer!"),
-            Buffer::Bound { buffer, ref range } => (buffer, range.clone()),
+            Buffer::Bound {
+                buffer,
+                ref range,
+                target,
+            } => BoundedBuffer {
+                raw: buffer,
+                range: range.clone(),
+                target,
+            },
         }
     }
 }
@@ -276,12 +291,17 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
     }
 }
 
-#[derive(Debug)]
-pub enum ShaderModule {
-    Raw(Shader),
-    Spirv(Vec<u32>),
-    #[cfg(feature = "naga")]
-    Naga(naga::Module, Vec<u32>),
+pub struct ShaderModule {
+    pub(crate) prefer_naga: bool,
+    #[cfg(feature = "cross")]
+    pub(crate) spv: Vec<u32>,
+    pub(crate) naga: Option<hal::device::NagaShader>,
+}
+
+impl fmt::Debug for ShaderModule {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "ShaderModule()")
+    }
 }
 
 #[derive(Debug)]

@@ -35,8 +35,8 @@ mod window;
 
 use auxil::FastHashMap;
 use hal::{
-    adapter, format as f, image, memory, pso::PipelineStage, queue as q, Capabilities, Features,
-    Limits,
+    adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Limits,
+    PhysicalDeviceProperties,
 };
 use range_alloc::RangeAllocator;
 
@@ -49,6 +49,7 @@ use winapi::{
 };
 
 use std::{
+    borrow::{Borrow, BorrowMut},
     ffi::OsString,
     fmt,
     mem,
@@ -58,6 +59,7 @@ use std::{
 };
 
 use self::descriptors_cpu::DescriptorCpuPool;
+use crate::resource::Image;
 
 #[derive(Debug)]
 pub(crate) struct HeapProperties {
@@ -176,6 +178,9 @@ impl q::QueueFamily for QueueFamily {
             _ => unreachable!(),
         })
     }
+    fn supports_sparse_binding(&self) -> bool {
+        true
+    }
 }
 
 impl QueueFamily {
@@ -210,7 +215,7 @@ struct Workarounds {
 // most owning fields last.
 pub struct PhysicalDevice {
     features: Features,
-    limits: Limits,
+    properties: PhysicalDeviceProperties,
     format_properties: Arc<FormatProperties>,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
@@ -441,19 +446,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.features
     }
 
-    fn capabilities(&self) -> Capabilities {
-        use hal::DynamicStates as Ds;
-        Capabilities {
-            performance_caveats: hal::PerformanceCaveats::empty(),
-            dynamic_pipeline_states: Ds::VIEWPORT
-                | Ds::SCISSOR
-                | Ds::BLEND_COLOR
-                | Ds::STENCIL_REFERENCE,
-        }
-    }
-
-    fn limits(&self) -> Limits {
-        self.limits
+    fn properties(&self) -> PhysicalDeviceProperties {
+        self.properties
     }
 }
 
@@ -518,6 +512,155 @@ impl q::Queue<Backend> for Queue {
             .collect::<SmallVec<[_; 4]>>();
         self.raw
             .ExecuteCommandLists(lists.len() as _, lists.as_ptr());
+
+        if let Some(fence) = fence {
+            assert_eq!(winerror::S_OK, self.raw.Signal(fence.raw.as_mut_ptr(), 1));
+        }
+    }
+
+    unsafe fn bind_sparse<'a, Iw, Is, Ibi, Ib, Iii, Io, Ii>(
+        &mut self,
+        _wait_semaphores: Iw,
+        _signal_semaphores: Is,
+        _buffer_memory_binds: Ib,
+        _image_opaque_memory_binds: Io,
+        image_memory_binds: Ii,
+        device: &Device,
+        fence: Option<&resource::Fence>,
+    ) where
+        Ibi: Iterator<Item = &'a memory::SparseBind<&'a resource::Memory>>,
+        Ib: Iterator<Item = (&'a mut resource::Buffer, Ibi)>,
+        Iii: Iterator<Item = &'a memory::SparseImageBind<&'a resource::Memory>>,
+        Io: Iterator<Item = (&'a mut resource::Image, Ibi)>,
+        Ii: Iterator<Item = (&'a mut resource::Image, Iii)>,
+        Iw: Iterator<Item = &'a resource::Semaphore>,
+        Is: Iterator<Item = &'a resource::Semaphore>,
+    {
+        // Reset idle fence and event
+        // That's safe here due to exclusive access to the queue
+        self.idle_fence.signal(0);
+        synchapi::ResetEvent(self.idle_event.0);
+
+        // TODO: semaphores
+
+        for (image, binds) in image_memory_binds {
+            let image = image.borrow_mut();
+
+            let (bits, image_kind) = match image {
+                Image::Unbound(unbound) => (unbound.format.surface_desc().bits, unbound.kind),
+                Image::Bound(bound) => (bound.surface_type.desc().bits, bound.kind),
+            };
+            let block_size = match image_kind {
+                image::Kind::D1(_, _) => unimplemented!(),
+                image::Kind::D2(_, _, _, samples) => {
+                    image::get_tile_size(image::TileKind::Flat(samples), bits)
+                }
+                image::Kind::D3(_, _, _) => image::get_tile_size(image::TileKind::Volume, bits),
+            };
+
+            // TODO avoid allocations
+            let mut resource_coords = Vec::new();
+            let mut region_sizes = Vec::new();
+            let mut range_flags = Vec::new();
+            let mut heap_range_start_offsets = Vec::new();
+            let mut range_tile_counts = Vec::new();
+
+            let mut heap: *mut d3d12::ID3D12Heap = std::ptr::null_mut();
+            for bind in binds {
+                resource_coords.push(d3d12::D3D12_TILED_RESOURCE_COORDINATE {
+                    X: bind.offset.x as u32,
+                    Y: bind.offset.y as u32,
+                    Z: bind.offset.z as u32,
+                    Subresource: image.calc_subresource(
+                        bind.subresource.level as _,
+                        bind.subresource.layer as _,
+                        0,
+                    ),
+                });
+
+                // Increment one tile if the extent is not a multiple of the block size
+                // Accessing these IS unsafe, but that is also true of Vulkan as the documentation
+                // requires an extent multiple of the block size.
+                let tile_extents = (
+                    (bind.extent.width / block_size.0 as u32)
+                        + ((bind.extent.width % block_size.0 as u32) != 0) as u32,
+                    (bind.extent.height / block_size.1 as u32)
+                        + ((bind.extent.height % block_size.1 as u32) != 0) as u32,
+                    (bind.extent.depth / block_size.2 as u32)
+                        + ((bind.extent.depth % block_size.2 as u32) != 0) as u32,
+                );
+                let number_tiles = tile_extents.0 * tile_extents.1 * tile_extents.2;
+                region_sizes.push(d3d12::D3D12_TILE_REGION_SIZE {
+                    NumTiles: number_tiles,
+                    UseBox: 1,
+                    Width: tile_extents.0,
+                    Height: tile_extents.1 as u16,
+                    Depth: tile_extents.2 as u16,
+                });
+
+                if let Some((memory, memory_offset)) = bind.memory {
+                    // TODO multiple heap support
+                    // would involve multiple update tile mapping calls
+                    if heap.is_null() {
+                        heap = memory.borrow().heap.as_mut_ptr();
+                    } else if cfg!(debug_assertions) {
+                        debug_assert_eq!(heap, memory.borrow().heap.as_mut_ptr());
+                    }
+                    range_flags.push(d3d12::D3D12_TILE_RANGE_FLAG_NONE);
+                    heap_range_start_offsets.push(memory_offset as u32);
+                } else {
+                    range_flags.push(d3d12::D3D12_TILE_RANGE_FLAG_NULL);
+                    heap_range_start_offsets.push(0);
+                }
+                range_tile_counts.push(number_tiles);
+            }
+
+            match image {
+                Image::Bound(bound) => {
+                    self.raw.UpdateTileMappings(
+                        bound.resource.as_mut_ptr(),
+                        resource_coords.len() as u32,
+                        resource_coords.as_ptr(),
+                        region_sizes.as_ptr(),
+                        heap,
+                        range_flags.len() as u32,
+                        range_flags.as_ptr(),
+                        heap_range_start_offsets.as_ptr(),
+                        range_tile_counts.as_ptr(),
+                        d3d12::D3D12_TILE_MAPPING_FLAG_NONE,
+                    );
+                }
+                Image::Unbound(image_unbound) => {
+                    let mut resource = native::Resource::null();
+                    assert_eq!(
+                        winerror::S_OK,
+                        device.raw.clone().CreateReservedResource(
+                            &image_unbound.desc,
+                            d3d12::D3D12_RESOURCE_STATE_COMMON,
+                            std::ptr::null(),
+                            &d3d12::ID3D12Resource::uuidof(),
+                            resource.mut_void(),
+                        )
+                    );
+
+                    self.raw.UpdateTileMappings(
+                        resource.as_mut_ptr(),
+                        resource_coords.len() as u32,
+                        resource_coords.as_ptr(),
+                        region_sizes.as_ptr(),
+                        heap,
+                        range_flags.len() as u32,
+                        range_flags.as_ptr(),
+                        heap_range_start_offsets.as_ptr(),
+                        range_tile_counts.as_ptr(),
+                        d3d12::D3D12_TILE_MAPPING_FLAG_NONE,
+                    );
+
+                    device.bind_image_resource(resource, image, resource::Place::Swapchain {});
+                }
+            }
+        }
+        // TODO sparse buffers and opaque images iterated here
 
         if let Some(fence) = fence {
             assert_eq!(winerror::S_OK, self.raw.Signal(fence.raw.as_mut_ptr(), 1));
@@ -590,6 +733,7 @@ impl Shared {
 
 pub struct SamplerStorage {
     map: Mutex<FastHashMap<image::SamplerDesc, descriptors_cpu::Handle>>,
+    //TODO: respect the D3D12_REQ_SAMPLER_OBJECT_COUNT_PER_DEVICE limit
     pool: Mutex<DescriptorCpuPool>,
     heap: resource::DescriptorHeap,
     origins: RwLock<resource::DescriptorOrigins>,
@@ -1151,6 +1295,29 @@ impl hal::Instance<Backend> for Instance {
                 _ => unreachable!(),
             } as _;
 
+            let mut tiled_resource_features = Features::empty();
+            if features.TiledResourcesTier >= d3d12::D3D12_TILED_RESOURCES_TIER_1 {
+                tiled_resource_features |= Features::SPARSE_BINDING;
+                tiled_resource_features |= Features::SPARSE_RESIDENCY_IMAGE_2D;
+                tiled_resource_features |= Features::SPARSE_RESIDENCY_BUFFER;
+                tiled_resource_features |= Features::SPARSE_RESIDENCY_ALIASED;
+                tiled_resource_features |= Features::SPARSE_RESIDENCY_2_SAMPLES;
+                tiled_resource_features |= Features::SPARSE_RESIDENCY_4_SAMPLES;
+                tiled_resource_features |= Features::SPARSE_RESIDENCY_8_SAMPLES;
+                tiled_resource_features |= Features::SPARSE_RESIDENCY_16_SAMPLES;
+            }
+            if features.TiledResourcesTier >= d3d12::D3D12_TILED_RESOURCES_TIER_3 {
+                tiled_resource_features |= Features::SPARSE_RESIDENCY_IMAGE_3D;
+            }
+
+            let conservative_faster_features = if features.ConservativeRasterizationTier
+                == d3d12::D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED
+            {
+                Features::empty()
+            } else {
+                Features::CONSERVATIVE_RASTERIZATION
+            };
+
             let physical_device = PhysicalDevice {
                 library: Arc::clone(&self.library),
                 adapter,
@@ -1173,92 +1340,118 @@ impl hal::Instance<Backend> for Instance {
                     Features::MUTABLE_COMPARISON_SAMPLER |
                     Features::SAMPLER_ANISOTROPY |
                     Features::TEXTURE_DESCRIPTOR_ARRAY |
+                    Features::BUFFER_DESCRIPTOR_ARRAY |
                     Features::SAMPLER_MIRROR_CLAMP_EDGE |
                     Features::NDC_Y_UP |
                     Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING |
                     Features::SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING |
+                    Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING |
+                    Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING |
                     Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING |
                     Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING |
+                    Features::STORAGE_BUFFER_DESCRIPTOR_INDEXING |
+                    Features::UNIFORM_BUFFER_DESCRIPTOR_INDEXING |
                     Features::UNSIZED_DESCRIPTOR_ARRAY |
-                    Features::DRAW_INDIRECT_COUNT,
-                limits: Limits {
-                    //TODO: verify all of these not linked to constants
-                    max_bound_descriptor_sets: MAX_DESCRIPTOR_SETS as u16,
-                    max_descriptor_set_uniform_buffers_dynamic: 8,
-                    max_descriptor_set_storage_buffers_dynamic: 4,
-                    max_descriptor_set_sampled_images: full_heap_count,
-                    max_descriptor_set_storage_buffers: uav_limit,
-                    max_descriptor_set_storage_images: uav_limit,
-                    max_descriptor_set_uniform_buffers: full_heap_count,
-                    max_descriptor_set_samplers: d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE as _,
-                    max_per_stage_descriptor_sampled_images: match features.ResourceBindingTier {
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
-                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
-                        | _ => full_heap_count,
-                    } as _,
-                    max_per_stage_descriptor_samplers: match features.ResourceBindingTier {
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_2
-                        | d3d12::D3D12_RESOURCE_BINDING_TIER_3
-                        | _ => d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE
-                    } as _,
-                    max_per_stage_descriptor_storage_buffers: uav_limit,
-                    max_per_stage_descriptor_storage_images: uav_limit,
-                    max_per_stage_descriptor_uniform_buffers: match features.ResourceBindingTier {
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_1
-                        | d3d12::D3D12_RESOURCE_BINDING_TIER_2 => d3d12::D3D12_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT,
-                        d3d12::D3D12_RESOURCE_BINDING_TIER_3
-                        | _ => full_heap_count as _,
-                    } as _,
-                    max_uniform_buffer_range: (d3d12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16) as _,
-                    max_storage_buffer_range: !0,
-                    // Is actually 256, but need space for the descriptors in there, so leave at 128 to discourage explosions
-                    max_push_constants_size: 128,
-                    max_image_1d_size: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION as _,
-                    max_image_2d_size: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
-                    max_image_3d_size: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
-                    max_image_cube_size: d3d12::D3D12_REQ_TEXTURECUBE_DIMENSION as _,
-                    max_image_array_layers: d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
-                    max_texel_elements: 0,
-                    max_patch_size: 0,
-                    max_viewports: d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
-                    max_viewport_dimensions: [d3d12::D3D12_VIEWPORT_BOUNDS_MAX as _; 2],
-                    max_framebuffer_extent: hal::image::Extent { //TODO
-                        width: 4096,
-                        height: 4096,
-                        depth: 1,
+                    Features::DRAW_INDIRECT_COUNT |
+                    tiled_resource_features |
+                    conservative_faster_features,
+                properties: PhysicalDeviceProperties {
+                    limits: Limits {
+                        //TODO: verify all of these not linked to constants
+                        max_memory_allocation_count: !0,
+                        max_bound_descriptor_sets: MAX_DESCRIPTOR_SETS as u16,
+                        descriptor_limits: hal::DescriptorLimits {
+                            max_per_stage_descriptor_samplers: match features.ResourceBindingTier {
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 16,
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_2 | d3d12::D3D12_RESOURCE_BINDING_TIER_3 | _ => d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE,
+                            } as _,
+                            max_per_stage_descriptor_uniform_buffers: match features.ResourceBindingTier
+                            {
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_1 | d3d12::D3D12_RESOURCE_BINDING_TIER_2 => {
+                                    d3d12::D3D12_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT
+                                }
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_3 | _ => full_heap_count as _,
+                            } as _,
+                            max_per_stage_descriptor_storage_buffers: uav_limit,
+                            max_per_stage_descriptor_sampled_images: match features.ResourceBindingTier
+                            {
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_1 => 128,
+                                d3d12::D3D12_RESOURCE_BINDING_TIER_2
+                                | d3d12::D3D12_RESOURCE_BINDING_TIER_3
+                                | _ => full_heap_count,
+                            } as _,
+                            max_per_stage_descriptor_storage_images: uav_limit,
+                            max_per_stage_resources: !0,
+                            max_descriptor_set_samplers: d3d12::D3D12_MAX_SHADER_VISIBLE_SAMPLER_HEAP_SIZE as _,
+                            max_descriptor_set_uniform_buffers: full_heap_count,
+                            max_descriptor_set_uniform_buffers_dynamic: 8,
+                            max_descriptor_set_storage_buffers: uav_limit,
+                            max_descriptor_set_storage_buffers_dynamic: 4,
+                            max_descriptor_set_sampled_images: full_heap_count,
+                            max_descriptor_set_storage_images: uav_limit,
+                            ..hal::DescriptorLimits::default() // TODO
+                        },
+                        max_uniform_buffer_range: (d3d12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16)
+                            as _,
+                        max_storage_buffer_range: !0,
+                        // Is actually 256, but need space for the descriptors in there, so leave at 128 to discourage explosions
+                        max_push_constants_size: 128,
+                        max_image_1d_size: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION as _,
+                        max_image_2d_size: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
+                        max_image_3d_size: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
+                        max_image_cube_size: d3d12::D3D12_REQ_TEXTURECUBE_DIMENSION as _,
+                        max_image_array_layers: d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
+                        max_texel_elements: 0,
+                        max_patch_size: 0,
+                        max_viewports: d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
+                        max_viewport_dimensions: [d3d12::D3D12_VIEWPORT_BOUNDS_MAX as _; 2],
+                        max_framebuffer_extent: hal::image::Extent {
+                            width: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                            height: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                            depth: 1,
+                        },
+                        max_framebuffer_layers: 1,
+                        max_compute_work_group_count: [
+                            d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                            d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                            d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                        ],
+                        max_compute_work_group_invocations: d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
+                        max_compute_work_group_size: [
+                            d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
+                            d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
+                            d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
+                        ],
+                        max_vertex_input_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
+                        max_vertex_input_bindings: d3d12::D3D12_VS_INPUT_REGISTER_COUNT as _,
+                        max_vertex_input_attribute_offset: 255, // TODO
+                        max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
+                        max_vertex_output_components: d3d12::D3D12_VS_OUTPUT_REGISTER_COUNT as _,
+                        max_fragment_input_components: d3d12::D3D12_PS_INPUT_REGISTER_COUNT as _,
+                        max_fragment_output_attachments: d3d12::D3D12_PS_OUTPUT_REGISTER_COUNT as _,
+                        max_fragment_dual_source_attachments: 1,
+                        max_fragment_combined_output_resources: (d3d12::D3D12_PS_OUTPUT_REGISTER_COUNT + d3d12::D3D12_PS_CS_UAV_REGISTER_COUNT) as _,
+                        min_texel_buffer_offset_alignment: 1, // TODO
+                        min_uniform_buffer_offset_alignment: d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as _,
+                        min_storage_buffer_offset_alignment: 4, // TODO
+                        framebuffer_color_sample_counts: sample_count_mask,
+                        framebuffer_depth_sample_counts: sample_count_mask,
+                        framebuffer_stencil_sample_counts: sample_count_mask,
+                        max_color_attachments: d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
+                        buffer_image_granularity: 1,
+                        non_coherent_atom_size: 1, //TODO: confirm
+                        max_sampler_anisotropy: 16.,
+                        optimal_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
+                        optimal_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
+                        min_vertex_input_binding_stride_alignment: 1,
+                        ..Limits::default() //TODO
                     },
-                    max_compute_work_group_count: [
-                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                        d3d12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                    ],
-                    max_compute_work_group_invocations: d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
-                    max_compute_work_group_size: [
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
-                        d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
-                    ],
-                    max_vertex_input_attributes: d3d12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
-                    max_vertex_input_bindings: 31, //TODO
-                    max_vertex_input_attribute_offset: 255, // TODO
-                    max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
-                    max_vertex_output_components: 16, // TODO
-                    min_texel_buffer_offset_alignment: 1, // TODO
-                    min_uniform_buffer_offset_alignment: d3d12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT as _,
-                    min_storage_buffer_offset_alignment: 4, // TODO
-                    framebuffer_color_sample_counts: sample_count_mask,
-                    framebuffer_depth_sample_counts: sample_count_mask,
-                    framebuffer_stencil_sample_counts: sample_count_mask,
-                    max_color_attachments: d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
-                    buffer_image_granularity: 1,
-                    non_coherent_atom_size: 1, //TODO: confirm
-                    max_sampler_anisotropy: 16.,
-                    optimal_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
-                    optimal_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
-                    min_vertex_input_binding_stride_alignment: 1,
-                    .. Limits::default() //TODO
+                    dynamic_pipeline_states: hal::DynamicStates::VIEWPORT
+                        | hal::DynamicStates::SCISSOR
+                        | hal::DynamicStates::BLEND_CONSTANTS
+                        | hal::DynamicStates::STENCIL_REFERENCE,
+                    downlevel: hal::DownlevelProperties::all_enabled(),
+                    ..PhysicalDeviceProperties::default()
                 },
                 format_properties: Arc::new(FormatProperties::new(device)),
                 private_caps: PrivateCapabilities {
@@ -1466,7 +1659,8 @@ impl FormatProperties {
                     props.buffer_features |= f::BufferFeature::STORAGE_TEXEL;
                 }
                 if can_image {
-                    // Since read-only storage is exposed as SRV, we can guarantee read-only storage without checking D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD first.
+                    // Since read-only storage is exposed as SRV, we can guarantee read-only storage
+                    // without checking D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD first.
                     props.optimal_tiling |= f::ImageFeature::STORAGE;
 
                     if data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD != 0 {

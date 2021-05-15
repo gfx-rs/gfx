@@ -55,7 +55,7 @@ pub struct Device {
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     features: hal::Features,
     memory_properties: MemoryProperties,
-    internal: Arc<internal::Internal>,
+    pub(crate) internal: Arc<internal::Internal>,
 }
 
 impl fmt::Debug for Device {
@@ -83,10 +83,17 @@ impl Device {
         device1: Option<ComPtr<d3d11_1::ID3D11Device1>>,
         context: ComPtr<d3d11::ID3D11DeviceContext>,
         features: hal::Features,
+        downlevel: hal::DownlevelProperties,
         memory_properties: MemoryProperties,
+        feature_level: u32,
     ) -> Self {
         Device {
-            internal: Arc::new(internal::Internal::new(&device)),
+            internal: Arc::new(internal::Internal::new(
+                &device,
+                features,
+                feature_level,
+                downlevel,
+            )),
             raw: device,
             raw1: device1,
             context,
@@ -292,7 +299,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(vs) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::VERTEX,
+                String::from("Failed to create a vertex shader"),
+            ))
         }
     }
 
@@ -314,7 +324,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(ps) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::FRAGMENT,
+                String::from("Failed to create a pixel shader"),
+            ))
         }
     }
 
@@ -336,7 +349,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(gs) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::GEOMETRY,
+                String::from("Failed to create a geometry shader"),
+            ))
         }
     }
 
@@ -358,7 +374,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(hs) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::HULL,
+                String::from("Failed to create a hull shader"),
+            ))
         }
     }
 
@@ -380,7 +399,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(ds) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::DOMAIN,
+                String::from("Failed to create a domain shader"),
+            ))
         }
     }
 
@@ -402,7 +424,10 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(cs) })
         } else {
-            Err(pso::CreationError::Other)
+            Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::COMPUTE,
+                String::from("Failed to create a compute shader"),
+            ))
         }
     }
 
@@ -412,15 +437,21 @@ impl Device {
         source: &pso::EntryPoint<Backend>,
         layout: &PipelineLayout,
         features: &hal::Features,
+        device_feature_level: u32,
     ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, pso::CreationError> {
         // TODO: entrypoint stuff
         match *source.module {
-            ShaderModule::Dxbc(ref _shader) => {
-                error!("DXBC modules are not supported yet");
-                Err(pso::CreationError::Other)
-            }
+            ShaderModule::Dxbc(ref _shader) => Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::ALL,
+                String::from("DXBC modules are not supported yet"),
+            )),
             ShaderModule::Spirv(ref raw_data) => Ok(shader::compile_spirv_entrypoint(
-                raw_data, stage, source, layout, features,
+                raw_data,
+                stage,
+                source,
+                layout,
+                features,
+                device_feature_level,
             )?),
         }
     }
@@ -737,7 +768,17 @@ impl Device {
                     }
                 }
             }
-            _ => unimplemented!(),
+            image::ViewKind::D1
+            | image::ViewKind::D1Array
+            | image::ViewKind::D3
+            | image::ViewKind::Cube
+            | image::ViewKind::CubeArray => {
+                warn!(
+                    "3D and cube views are not supported for the image, kind: {:?}",
+                    info.kind
+                );
+                return Err(image::ViewCreationError::BadKind(info.view_kind));
+            }
         }
 
         let mut dsv = ptr::null_mut();
@@ -967,7 +1008,13 @@ impl device::Device<Backend> for Device {
         let features = &self.features;
         let build_shader =
             |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, Backend>>| match source {
-                Some(src) => Self::extract_entry_point(stage, src, desc.layout, features),
+                Some(src) => Self::extract_entry_point(
+                    stage,
+                    src,
+                    desc.layout,
+                    features,
+                    self.internal.device_feature_level,
+                ),
                 None => Ok(None),
             };
 
@@ -1075,7 +1122,13 @@ impl device::Device<Backend> for Device {
         let features = &self.features;
         let build_shader =
             |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, Backend>>| match source {
-                Some(src) => Self::extract_entry_point(stage, src, desc.layout, features),
+                Some(src) => Self::extract_entry_point(
+                    stage,
+                    src,
+                    desc.layout,
+                    features,
+                    self.internal.device_feature_level,
+                ),
                 None => Ok(None),
             };
 
@@ -1107,6 +1160,7 @@ impl device::Device<Backend> for Device {
         &self,
         size: u64,
         usage: buffer::Usage,
+        _sparse: memory::SparseFlags,
     ) -> Result<Buffer, buffer::CreationError> {
         use buffer::Usage;
 
@@ -1388,6 +1442,7 @@ impl device::Device<Backend> for Device {
         format: format::Format,
         _tiling: image::Tiling,
         usage: image::Usage,
+        _sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
     ) -> Result<Image, image::CreationError> {
         let surface_desc = format.base_format().0.desc();
@@ -1395,7 +1450,7 @@ impl device::Device<Backend> for Device {
         let ext = kind.extent();
         let size = (ext.width * ext.height * ext.depth) as u64 * bytes_per_texel as u64;
 
-        let bind = conv::map_image_usage(usage, surface_desc);
+        let bind = conv::map_image_usage(usage, surface_desc, self.internal.device_feature_level);
         debug!("{:b}", bind);
 
         Ok(Image {
@@ -1521,10 +1576,12 @@ impl device::Device<Backend> for Device {
                     Usage: usage,
                     BindFlags: bind,
                     CPUAccessFlags: cpu,
-                    MiscFlags: if image.view_caps.contains(image::ViewCapabilities::KIND_CUBE) {
-                        d3d11::D3D11_RESOURCE_MISC_TEXTURECUBE
-                    } else {
-                        0
+                    MiscFlags: {
+                        let mut flags = 0;
+                        if image.view_caps.contains(image::ViewCapabilities::KIND_CUBE) {
+                            flags |= d3d11::D3D11_RESOURCE_MISC_TEXTURECUBE;
+                        }
+                        flags
                     },
                 };
 
@@ -1573,7 +1630,11 @@ impl device::Device<Backend> for Device {
 
         let mut unordered_access_views = Vec::new();
 
-        if image.usage.contains(Usage::TRANSFER_DST) && !compressed && !depth {
+        if image.usage.contains(Usage::TRANSFER_DST)
+            && !compressed
+            && !depth
+            && self.internal.downlevel.storage_images
+        {
             for mip in 0..image.mip_levels {
                 let view = ViewInfo {
                     resource: resource,
@@ -1733,6 +1794,7 @@ impl device::Device<Backend> for Device {
         view_kind: image::ViewKind,
         format: format::Format,
         _swizzle: format::Swizzle,
+        usage: image::Usage,
         range: image::SubresourceRange,
     ) -> Result<ImageView, image::ViewCreationError> {
         let is_array = image.kind.num_layers() > 1;
@@ -1770,7 +1832,7 @@ impl device::Device<Backend> for Device {
                 range.level_start as _,
             ),
             format,
-            srv_handle: if image.usage.intersects(image::Usage::SAMPLED) {
+            srv_handle: if usage.intersects(image::Usage::SAMPLED) {
                 let srv = self.view_image_as_shader_resource(&srv_info)?;
 
                 if let Some(ref mut name) = debug_name {
@@ -1781,7 +1843,7 @@ impl device::Device<Backend> for Device {
             } else {
                 None
             },
-            rtv_handle: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
+            rtv_handle: if usage.contains(image::Usage::COLOR_ATTACHMENT) {
                 let rtv = self.view_image_as_render_target(&info)?;
 
                 if let Some(ref mut name) = debug_name {
@@ -1792,7 +1854,7 @@ impl device::Device<Backend> for Device {
             } else {
                 None
             },
-            uav_handle: if image.usage.contains(image::Usage::STORAGE) {
+            uav_handle: if usage.contains(image::Usage::STORAGE) {
                 let uav = self.view_image_as_unordered_access(&info)?;
 
                 if let Some(ref mut name) = debug_name {
@@ -1803,26 +1865,34 @@ impl device::Device<Backend> for Device {
             } else {
                 None
             },
-            dsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                let dsv = self.view_image_as_depth_stencil(&info, None)?;
+            dsv_handle: if usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
+                if let Some(dsv) = self.view_image_as_depth_stencil(&info, None).ok() {
+                    if let Some(ref mut name) = debug_name {
+                        set_debug_name_with_suffix(&dsv, name, " -- DSV");
+                    }
 
-                if let Some(ref mut name) = debug_name {
-                    set_debug_name_with_suffix(&dsv, name, " -- DSV");
+                    Some(dsv.into_raw())
+                } else {
+                    None
                 }
-
-                Some(dsv.into_raw())
             } else {
                 None
             },
-            rodsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                let rodsv =
-                    self.view_image_as_depth_stencil(&info, Some(image.format.is_stencil()))?;
+            rodsv_handle: if usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT)
+                && self.internal.downlevel.read_only_depth_stencil
+            {
+                if let Some(rodsv) = self
+                    .view_image_as_depth_stencil(&info, Some(image.format.is_stencil()))
+                    .ok()
+                {
+                    if let Some(ref mut name) = debug_name {
+                        set_debug_name_with_suffix(&rodsv, name, " -- DSV");
+                    }
 
-                if let Some(ref mut name) = debug_name {
-                    set_debug_name_with_suffix(&rodsv, name, " -- DSV");
+                    Some(rodsv.into_raw())
+                } else {
+                    None
                 }
-
-                Some(rodsv.into_raw())
             } else {
                 None
             },
@@ -2387,5 +2457,13 @@ impl device::Device<Backend> for Device {
 
     unsafe fn set_pipeline_layout_name(&self, _pipeline_layout: &mut PipelineLayout, _name: &str) {
         // TODO
+    }
+
+    fn start_capture(&self) {
+        //TODO
+    }
+
+    fn stop_capture(&self) {
+        //TODO
     }
 }

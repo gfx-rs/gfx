@@ -377,13 +377,24 @@ impl<B: Backend> RendererState<B> {
             self.framebuffer.get_frame_data(frame_idx);
 
         unsafe {
+            // Rendering
+            let (mut cmd_buffer, mut fence) = match command_buffers.pop() {
+                Some((cmd_buffer, fence)) => (cmd_buffer, fence),
+                None => (
+                    command_pool.allocate_one(command::Level::Primary),
+                    self.device.borrow().device.create_fence(true).unwrap(),
+                ),
+            };
+
+            self.device
+                .borrow()
+                .device
+                .wait_for_fence(&mut fence, u64::MAX)
+                .unwrap();
+            self.device.borrow().device.reset_fence(&mut fence).unwrap();
+            // cmd_buffer.reset(true);
             command_pool.reset(false);
 
-            // Rendering
-            let mut cmd_buffer = match command_buffers.pop() {
-                Some(cmd_buffer) => cmd_buffer,
-                None => command_pool.allocate_one(command::Level::Primary),
-            };
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
             cmd_buffer.begin_debug_marker("setup", 0);
             cmd_buffer.set_viewports(0, iter::once(self.viewport.clone()));
@@ -428,9 +439,9 @@ impl<B: Backend> RendererState<B> {
                 iter::once(&cmd_buffer),
                 iter::empty(),
                 iter::once(&*sem_image_present),
-                None,
+                Some(&mut fence),
             );
-            command_buffers.push(cmd_buffer);
+            command_buffers.push((cmd_buffer, fence));
 
             // present frame
             if let Err(_) = self.device.borrow_mut().queues.queues[0].present(
@@ -591,7 +602,7 @@ impl<B: Backend> AdapterState<B> {
 
     fn new_adapter(adapter: Adapter<B>) -> Self {
         let memory_types = adapter.physical_device.memory_properties().memory_types;
-        let limits = adapter.physical_device.limits();
+        let limits = adapter.physical_device.properties().limits;
         println!("{:?}", limits);
 
         AdapterState {
@@ -716,7 +727,9 @@ impl<B: Backend> BufferState<B> {
         {
             let device = &device_ptr.borrow().device;
 
-            buffer = device.create_buffer(upload_size as u64, usage).unwrap();
+            buffer = device
+                .create_buffer(upload_size as u64, usage, hal::memory::SparseFlags::empty())
+                .unwrap();
             let mem_req = device.get_buffer_requirements(&buffer);
 
             // A note about performance: Using CPU_VISIBLE memory is convenient because it can be
@@ -795,7 +808,9 @@ impl<B: Backend> BufferState<B> {
         let size: u64;
 
         {
-            buffer = device.create_buffer(upload_size, usage).unwrap();
+            buffer = device
+                .create_buffer(upload_size, usage, hal::memory::SparseFlags::empty())
+                .unwrap();
             let mem_reqs = device.get_buffer_requirements(&buffer);
 
             let upload_type = adapter
@@ -1022,6 +1037,7 @@ impl<B: Backend> ImageState<B> {
                 ColorFormat::SELF,
                 i::Tiling::Optimal,
                 i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+                hal::memory::SparseFlags::empty(),
                 i::ViewCapabilities::empty(),
             )
             .unwrap(); // TODO: usage
@@ -1047,6 +1063,7 @@ impl<B: Backend> ImageState<B> {
                 i::ViewKind::D2,
                 ColorFormat::SELF,
                 f::Swizzle::NO,
+                i::Usage::SAMPLED,
                 i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
                     ..Default::default()
@@ -1382,7 +1399,7 @@ impl SwapchainState {
 struct FramebufferState<B: Backend> {
     framebuffer: Option<B::Framebuffer>,
     command_pools: Option<Vec<B::CommandPool>>,
-    command_buffer_lists: Vec<Vec<B::CommandBuffer>>,
+    command_buffer_lists: Vec<Vec<(B::CommandBuffer, B::Fence)>>,
     present_semaphores: Option<Vec<B::Semaphore>>,
     device: Rc<RefCell<DeviceState<B>>>,
 }
@@ -1428,7 +1445,7 @@ impl<B: Backend> FramebufferState<B> {
     ) -> (
         &B::Framebuffer,
         &mut B::CommandPool,
-        &mut Vec<B::CommandBuffer>,
+        &mut Vec<(B::CommandBuffer, B::Fence)>,
         &mut B::Semaphore,
     ) {
         (
@@ -1445,8 +1462,9 @@ impl<B: Backend> Drop for FramebufferState<B> {
         let device = &self.device.borrow().device;
 
         unsafe {
-            device.destroy_framebuffer(self.framebuffer.take().unwrap());
-
+            if let Some(fb) = self.framebuffer.take() {
+                device.destroy_framebuffer(fb);
+            }
             for (mut command_pool, comamnd_buffer_list) in self
                 .command_pools
                 .take()
@@ -1454,7 +1472,10 @@ impl<B: Backend> Drop for FramebufferState<B> {
                 .into_iter()
                 .zip(self.command_buffer_lists.drain(..))
             {
-                command_pool.free(comamnd_buffer_list.into_iter());
+                command_pool.free(comamnd_buffer_list.into_iter().map(|(c, f)| {
+                    device.destroy_fence(f);
+                    c
+                }));
                 device.destroy_command_pool(command_pool);
             }
 
@@ -1558,6 +1579,7 @@ fn main() {
 )))]
 fn main() {
     println!(
-        "You need to enable the native API feature (vulkan/metal) in order to run the example"
+        "You need to enable the native API feature (vulkan/metal/dx11/dx12/gl) in order to run \
+        the example"
     );
 }

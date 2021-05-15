@@ -3,10 +3,10 @@ use crate::{
     info::LegacyFeatures,
     native as n,
     pool::{BufferMemory, CommandPool, OwnedBuffer},
-    state, Backend as B, GlContainer, GlContext, MemoryUsage, Share, Starc, MAX_TEXTURE_SLOTS,
+    state, Backend as B, FastHashMap, GlContainer, GlContext, MemoryUsage, Share, Starc,
+    MAX_TEXTURE_SLOTS,
 };
 
-use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
 use hal::{
     buffer, device as d,
     format::{Format, Swizzle},
@@ -17,19 +17,11 @@ use hal::{
 
 use glow::HasContext;
 use parking_lot::Mutex;
-use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
 use std::{ops::Range, slice, sync::Arc};
 
-/// Emit error during shader module creation. Used if we don't expect an error
-/// but might panic due to an exception in SPIRV-Cross.
-fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
-    let msg = match err {
-        SpirvErrorCode::CompilationError(msg) => msg,
-        SpirvErrorCode::Unhandled => "Unexpected error".into(),
-    };
-    d::ShaderError::CompilationFailed(msg)
-}
+#[cfg(feature = "cross")]
+type CrossAst = spirv_cross::spirv::Ast<spirv_cross::glsl::Target>;
 
 fn create_fbo_internal(
     share: &Starc<Share>,
@@ -37,10 +29,26 @@ fn create_fbo_internal(
     if share.private_caps.framebuffer {
         let gl = &share.context;
         let name = unsafe { gl.create_framebuffer() }.unwrap();
-        info!("\tCreated frame buffer {:?}", name);
+        log::info!("\tCreated frame buffer {:?}", name);
         Some(name)
     } else {
         None
+    }
+}
+
+struct CompilationContext<'a> {
+    layout: &'a n::PipelineLayout,
+    sampler_map: &'a mut n::SamplerBindMap,
+    name_binding_map: &'a mut FastHashMap<String, (n::BindingRegister, u8)>,
+}
+
+impl<'a> CompilationContext<'a> {
+    fn reborrow(&mut self) -> CompilationContext<'_> {
+        CompilationContext {
+            layout: self.layout,
+            sampler_map: self.sampler_map,
+            name_binding_map: self.name_binding_map,
+        }
     }
 }
 
@@ -49,6 +57,9 @@ fn create_fbo_internal(
 pub struct Device {
     pub(crate) share: Starc<Share>,
     features: hal::Features,
+    pub always_prefer_naga: bool,
+    #[cfg(feature = "cross")]
+    spv_options: naga::back::spv::Options,
 }
 
 impl Drop for Device {
@@ -63,26 +74,35 @@ impl Device {
         Device {
             share: share,
             features,
+            always_prefer_naga: false,
+            #[cfg(feature = "cross")]
+            spv_options: {
+                use naga::back::spv;
+                let mut flags = spv::WriterFlags::empty();
+                flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
+                flags.set(
+                    spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+                    !features.contains(hal::Features::NDC_Y_UP),
+                );
+                spv::Options {
+                    lang_version: (1, 0),
+                    flags,
+                    // doesn't matter since we send it through SPIRV-Cross
+                    capabilities: None,
+                }
+            },
         }
     }
 
     fn create_shader_module_raw(
-        &self,
+        gl: &GlContainer,
         shader: &str,
-        stage: ShaderStage,
+        stage: naga::ShaderStage,
     ) -> Result<n::Shader, d::ShaderError> {
-        let gl = &self.share.context;
-
-        let can_compute = self.share.limits.max_compute_work_group_count[0] != 0;
-        let can_tessellate = self.share.limits.max_patch_size != 0;
         let target = match stage {
-            ShaderStage::Vertex => glow::VERTEX_SHADER,
-            ShaderStage::Hull if can_tessellate => glow::TESS_CONTROL_SHADER,
-            ShaderStage::Domain if can_tessellate => glow::TESS_EVALUATION_SHADER,
-            ShaderStage::Geometry => glow::GEOMETRY_SHADER,
-            ShaderStage::Fragment => glow::FRAGMENT_SHADER,
-            ShaderStage::Compute if can_compute => glow::COMPUTE_SHADER,
-            _ => return Err(d::ShaderError::Unsupported),
+            naga::ShaderStage::Vertex => glow::VERTEX_SHADER,
+            naga::ShaderStage::Fragment => glow::FRAGMENT_SHADER,
+            naga::ShaderStage::Compute => glow::COMPUTE_SHADER,
         };
 
         let name = unsafe { gl.create_shader(target) }.unwrap();
@@ -90,16 +110,17 @@ impl Device {
             gl.shader_source(name, shader);
             gl.compile_shader(name);
         }
-        info!("\tCompiled shader {:?}", name);
-        if let Err(err) = self.share.check() {
-            panic!("Error compiling shader: {:?}", err);
+        log::info!("\tCompiled shader {:?}", name);
+        if cfg!(debug_assertions) {
+            let err = super::Error::from_error_code(unsafe { gl.get_error() });
+            assert_eq!(err, super::Error::NoError, "Error compiling shader");
         }
 
         let compiled_ok = unsafe { gl.get_shader_compile_status(name) };
         let log = unsafe { gl.get_shader_info_log(name) };
         if compiled_ok {
             if !log.is_empty() {
-                warn!("\tLog: {}", log);
+                log::warn!("\tLog: {}", log);
             }
             Ok(name)
         } else {
@@ -107,18 +128,9 @@ impl Device {
         }
     }
 
-    pub fn create_shader_module_from_source(
-        &self,
-        shader: &str,
-        stage: ShaderStage,
-    ) -> Result<n::ShaderModule, d::ShaderError> {
-        self.create_shader_module_raw(shader, stage)
-            .map(n::ShaderModule::Raw)
-    }
-
     fn create_shader_program(
         &self,
-        shaders: &[(ShaderStage, Option<&pso::EntryPoint<B>>)],
+        shaders: &[(naga::ShaderStage, Option<&pso::EntryPoint<B>>)],
         layout: &n::PipelineLayout,
     ) -> Result<(glow::Program, n::SamplerBindMap), pso::CreationError> {
         let gl = &self.share.context;
@@ -129,22 +141,26 @@ impl Device {
 
         let mut has_vertex_stage = false;
         let mut has_fragment_stage = false;
+        let mut context = CompilationContext {
+            layout,
+            sampler_map: &mut sampler_map,
+            name_binding_map: &mut name_binding_map,
+        };
 
         for &(stage, point_maybe) in shaders {
             if let Some(point) = point_maybe {
                 match stage {
-                    ShaderStage::Vertex => has_vertex_stage = true,
-                    ShaderStage::Fragment => has_fragment_stage = true,
-                    _ => (),
+                    naga::ShaderStage::Vertex => has_vertex_stage = true,
+                    naga::ShaderStage::Fragment => has_fragment_stage = true,
+                    naga::ShaderStage::Compute => (),
                 }
 
-                let shader = self.compile_shader(
-                    point,
-                    stage,
-                    layout,
-                    &mut sampler_map,
-                    &mut name_binding_map,
-                );
+                let shader = self
+                    .compile_shader(point, stage, context.reborrow())
+                    .map_err(|err| {
+                        let error = format!("{} shader compilation failed: {:?}", err, stage);
+                        pso::CreationError::ShaderCreationError(stage.into(), error)
+                    })?;
                 unsafe {
                     gl.attach_shader(program, shader);
                     gl.delete_shader(shader);
@@ -162,13 +178,16 @@ impl Device {
                 version = version,
                 shader_type = shader_type
             );
-            debug!(
+            log::debug!(
                 "Only vertex shader is present. Creating empty fragment shader:\n{}",
                 shader_src
             );
-            let shader = self
-                .create_shader_module_raw(&shader_src, ShaderStage::Fragment)
-                .unwrap();
+            let shader = Self::create_shader_module_raw(
+                &self.share.context,
+                &shader_src,
+                naga::ShaderStage::Fragment,
+            )
+            .unwrap();
             unsafe {
                 gl.attach_shader(program, shader);
                 gl.delete_shader(shader);
@@ -178,7 +197,7 @@ impl Device {
         unsafe {
             gl.link_program(program);
         }
-        info!("\tLinked program {:?}", program);
+        log::info!("\tLinked program {:?}", program);
         if let Err(err) = self.share.check() {
             panic!("Error linking program: {:?}", err);
         }
@@ -186,11 +205,14 @@ impl Device {
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let log = unsafe { gl.get_program_info_log(program) };
         if !linked_ok {
-            error!("\tLog: {}", log);
-            return Err(pso::CreationError::Other);
+            let error = format!("Program {:?} linking error:{}", program, log);
+            return Err(pso::CreationError::ShaderCreationError(
+                pso::ShaderStageFlags::GRAPHICS,
+                error,
+            ));
         }
         if !log.is_empty() {
-            warn!("\tLog: {}", log);
+            log::warn!("\tLog: {}", log);
         }
 
         if !self
@@ -202,10 +224,11 @@ impl Device {
                 gl.use_program(Some(program));
             }
             for (name, &(register, slot)) in name_binding_map.iter() {
+                log::trace!("Get binding {:?} from program {:?}", name, program);
                 match register {
                     n::BindingRegister::Textures => unsafe {
-                        let loc = gl.get_uniform_location(program, name);
-                        gl.uniform_1_i32(loc.as_ref(), slot as _);
+                        let loc = gl.get_uniform_location(program, name).unwrap();
+                        gl.uniform_1_i32(Some(&loc), slot as _);
                     },
                     n::BindingRegister::UniformBuffers => unsafe {
                         let index = gl.get_uniform_block_index(program, name).unwrap();
@@ -272,7 +295,13 @@ impl Device {
                 ref sub,
                 is_3d: false,
             } => unsafe {
-                gl.framebuffer_texture(point, attachment, Some(raw), sub.level_start as _);
+                gl.framebuffer_texture_2d(
+                    point,
+                    attachment,
+                    glow::TEXTURE_2D,
+                    Some(raw),
+                    sub.level_start as _,
+                );
             },
             n::ImageView::Texture {
                 target: _,
@@ -291,31 +320,33 @@ impl Device {
         }
     }
 
-    fn parse_spirv(&self, raw_data: &[u32]) -> Result<spirv::Ast<glsl::Target>, d::ShaderError> {
+    #[cfg(feature = "cross")]
+    fn parse_spirv_cross(&self, raw_data: &[u32]) -> Result<CrossAst, d::ShaderError> {
+        use spirv_cross::{spirv, ErrorCode as Ec};
         let module = spirv::Module::from_words(raw_data);
 
         spirv::Ast::parse(&module).map_err(|err| {
-            let msg = match err {
-                SpirvErrorCode::CompilationError(msg) => msg,
-                SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
-            };
-            d::ShaderError::CompilationFailed(msg)
+            d::ShaderError::CompilationFailed(match err {
+                Ec::CompilationError(msg) => msg,
+                Ec::Unhandled => "Unknown parsing error".into(),
+            })
         })
     }
 
-    fn set_push_const_layout(
-        &self,
-        _ast: &mut spirv::Ast<glsl::Target>,
-    ) -> Result<(), d::ShaderError> {
+    #[cfg(feature = "cross")]
+    fn set_push_const_layout(&self, _ast: &mut CrossAst) -> Result<(), d::ShaderError> {
         Ok(())
     }
 
-    fn translate_spirv(
+    #[cfg(feature = "cross")]
+    fn translate_spirv_cross(
         &self,
-        ast: &mut spirv::Ast<glsl::Target>,
-        stage: ShaderStage,
+        ast: &mut CrossAst,
+        stage: naga::ShaderStage,
         entry_point: &str,
     ) -> Result<String, d::ShaderError> {
+        use spirv_cross::{glsl, ErrorCode as Ec};
+
         let mut compile_options = glsl::CompilerOptions::default();
         // see version table at https://en.wikipedia.org/wiki/OpenGL_Shading_Language
         let is_embedded = self.share.info.shading_language.is_embedded;
@@ -352,33 +383,28 @@ impl Device {
         compile_options.force_zero_initialized_variables = true;
         compile_options.entry_point = Some((
             entry_point.to_string(),
-            match stage {
-                ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
-                ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
-                ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
-                _ => {
-                    return Err(d::ShaderError::CompilationFailed(
-                        "Unsupported execution model".into(),
-                    ));
-                }
-            },
+            conv::map_naga_stage_to_cross(stage),
         ));
-        debug!("SPIR-V options {:?}", compile_options);
+        log::debug!("SPIR-V options {:?}", compile_options);
 
-        ast.set_compiler_options(&compile_options)
-            .map_err(gen_unexpected_error)?;
+        ast.set_compiler_options(&compile_options).map_err(|err| {
+            d::ShaderError::CompilationFailed(match err {
+                Ec::CompilationError(msg) => msg,
+                Ec::Unhandled => "Unexpected error".into(),
+            })
+        })?;
         ast.compile().map_err(|err| {
-            let msg = match err {
-                SpirvErrorCode::CompilationError(msg) => msg,
-                SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-            };
-            d::ShaderError::CompilationFailed(msg)
+            d::ShaderError::CompilationFailed(match err {
+                Ec::CompilationError(msg) => msg,
+                Ec::Unhandled => "Unknown compile error".into(),
+            })
         })
     }
 
+    #[cfg(feature = "cross")]
     fn remap_bindings(
         &self,
-        ast: &mut spirv::Ast<glsl::Target>,
+        ast: &mut CrossAst,
         layout: &n::PipelineLayout,
         nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
     ) {
@@ -406,21 +432,22 @@ impl Device {
         );
     }
 
+    #[cfg(feature = "cross")]
     fn remap_binding(
         &self,
-        ast: &mut spirv::Ast<glsl::Target>,
-        all_res: &[spirv::Resource],
+        ast: &mut CrossAst,
+        all_res: &[spirv_cross::spirv::Resource],
         register: n::BindingRegister,
         layout: &n::PipelineLayout,
         nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
     ) {
+        use spirv_cross::spirv::Decoration;
+
         for res in all_res {
             let set = ast
-                .get_decoration(res.id, spirv::Decoration::DescriptorSet)
+                .get_decoration(res.id, Decoration::DescriptorSet)
                 .unwrap();
-            let binding = ast
-                .get_decoration(res.id, spirv::Decoration::Binding)
-                .unwrap();
+            let binding = ast.get_decoration(res.id, Decoration::Binding).unwrap();
             let set_info = &layout.sets[set as usize];
             let slot = set_info.bindings[binding as usize];
             assert!((slot as usize) < MAX_TEXTURE_SLOTS);
@@ -430,25 +457,25 @@ impl Device {
                 .legacy_features
                 .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
             {
-                ast.set_decoration(res.id, spirv::Decoration::Binding, slot as u32)
+                ast.set_decoration(res.id, Decoration::Binding, slot as u32)
                     .unwrap()
             } else {
-                ast.unset_decoration(res.id, spirv::Decoration::Binding)
-                    .unwrap();
+                ast.unset_decoration(res.id, Decoration::Binding).unwrap();
                 assert!(nb_map.insert(res.name.clone(), (register, slot)).is_none());
             }
-            ast.unset_decoration(res.id, spirv::Decoration::DescriptorSet)
+            ast.unset_decoration(res.id, Decoration::DescriptorSet)
                 .unwrap();
         }
     }
 
+    #[cfg(feature = "cross")]
     fn combine_separate_images_and_samplers(
         &self,
-        ast: &mut spirv::Ast<glsl::Target>,
-        sampler_map: &mut n::SamplerBindMap,
-        nb_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
-        layout: &n::PipelineLayout,
+        ast: &mut CrossAst,
+        context: CompilationContext,
     ) {
+        use spirv_cross::spirv::Decoration;
+
         let mut id_map =
             FastHashMap::<u32, (pso::DescriptorSetIndex, pso::DescriptorBinding)>::default();
         let res = ast.get_shader_resources().unwrap();
@@ -458,13 +485,13 @@ impl Device {
         for cis in ast.get_combined_image_samplers().unwrap() {
             let texture_slot = {
                 let &(set, binding) = id_map.get(&cis.image_id).unwrap();
-                layout.sets[set as usize].bindings[binding as usize]
+                context.layout.sets[set as usize].bindings[binding as usize]
             };
             let sampler_slot = {
                 let &(set, binding) = id_map.get(&cis.sampler_id).unwrap();
-                layout.sets[set as usize].bindings[binding as usize]
+                context.layout.sets[set as usize].bindings[binding as usize]
             };
-            sampler_map[texture_slot as usize] = Some(sampler_slot);
+            context.sampler_map[texture_slot as usize] = Some(sampler_slot);
 
             if self
                 .share
@@ -472,43 +499,33 @@ impl Device {
                 .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
             {
                 // if it was previously assigned, clear the binding of the image
-                let _ = ast.unset_decoration(cis.image_id, spirv::Decoration::Binding);
-                ast.set_decoration(
-                    cis.combined_id,
-                    spirv::Decoration::Binding,
-                    texture_slot as u32,
-                )
-                .unwrap()
+                let _ = ast.unset_decoration(cis.image_id, Decoration::Binding);
+                ast.set_decoration(cis.combined_id, Decoration::Binding, texture_slot as u32)
+                    .unwrap()
             } else {
                 let name = ast.get_name(cis.combined_id).unwrap();
-                ast.unset_decoration(cis.combined_id, spirv::Decoration::Binding)
+                ast.unset_decoration(cis.combined_id, Decoration::Binding)
                     .unwrap();
                 assert_eq!(
-                    nb_map.insert(name, (n::BindingRegister::Textures, texture_slot)),
+                    context
+                        .name_binding_map
+                        .insert(name, (n::BindingRegister::Textures, texture_slot)),
                     None
                 );
             }
-            ast.unset_decoration(cis.combined_id, spirv::Decoration::DescriptorSet)
+            ast.unset_decoration(cis.combined_id, Decoration::DescriptorSet)
                 .unwrap();
         }
     }
 
-    #[cfg(feature = "naga")]
     fn reflect_shader(
         module: &naga::Module,
-        entry_point: &(naga::ShaderStage, String),
-        texture_mapping: FastHashMap<String, naga::back::glsl::TextureMapping>,
-        sampler_map: &mut n::SamplerBindMap,
-        name_binding_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
-        layout: &n::PipelineLayout,
+        ep_info: &naga::valid::FunctionInfo,
+        reflection_info: naga::back::glsl::ReflectionInfo,
+        context: CompilationContext,
     ) {
-        let ep = &module.entry_points[entry_point];
-        for ((_, var), usage) in module
-            .global_variables
-            .iter()
-            .zip(ep.function.global_usage.iter())
-        {
-            if usage.is_empty() {
+        for (handle, var) in module.global_variables.iter() {
+            if ep_info[handle].is_empty() {
                 continue;
             }
             let register = match var.class {
@@ -518,134 +535,153 @@ impl Device {
             };
             //TODO: make Naga reflect all the names, not just textures
             let slot = match var.binding {
-                Some(naga::Binding::Resource { group, binding }) => {
-                    layout.sets[group as usize].bindings[binding as usize]
+                Some(ref br) => {
+                    context.layout.sets[br.group as usize].bindings[br.binding as usize]
                 }
                 ref other => panic!("Unexpected resource binding {:?}", other),
             };
-            name_binding_map.insert(var.name.clone().unwrap(), (register, slot));
+
+            let name = reflection_info.uniforms[&handle].clone();
+            log::debug!("Rebind buffer: {:?} -> {}", var.name.as_ref(), &name);
+            context.name_binding_map.insert(name, (register, slot));
         }
 
-        for (name, mapping) in texture_mapping {
+        for (name, mapping) in reflection_info.texture_mapping {
             let texture_linear_index = match module.global_variables[mapping.texture].binding {
-                Some(naga::Binding::Resource { group, binding }) => {
-                    layout.sets[group as usize].bindings[binding as usize]
+                Some(ref br) => {
+                    context.layout.sets[br.group as usize].bindings[br.binding as usize]
                 }
                 ref other => panic!("Unexpected texture binding {:?}", other),
             };
-            name_binding_map.insert(name, (n::BindingRegister::Textures, texture_linear_index));
+            context
+                .name_binding_map
+                .insert(name, (n::BindingRegister::Textures, texture_linear_index));
             if let Some(sampler_handle) = mapping.sampler {
                 let sampler_linear_index = match module.global_variables[sampler_handle].binding {
-                    Some(naga::Binding::Resource { group, binding }) => {
-                        layout.sets[group as usize].bindings[binding as usize]
+                    Some(ref br) => {
+                        context.layout.sets[br.group as usize].bindings[br.binding as usize]
                     }
                     ref other => panic!("Unexpected sampler binding {:?}", other),
                 };
-                sampler_map[texture_linear_index as usize] = Some(sampler_linear_index);
+                context.sampler_map[texture_linear_index as usize] = Some(sampler_linear_index);
             }
         }
     }
 
+    #[cfg(feature = "cross")]
     fn populate_id_map(
         &self,
-        ast: &spirv::Ast<glsl::Target>,
+        ast: &CrossAst,
         id_map: &mut FastHashMap<u32, (pso::DescriptorSetIndex, pso::DescriptorBinding)>,
-        all_res: &[spirv::Resource],
+        all_res: &[spirv_cross::spirv::Resource],
     ) {
+        use spirv_cross::spirv::Decoration;
         for res in all_res {
             let set = ast
-                .get_decoration(res.id, spirv::Decoration::DescriptorSet)
+                .get_decoration(res.id, Decoration::DescriptorSet)
                 .unwrap();
-            let binding = ast
-                .get_decoration(res.id, spirv::Decoration::Binding)
-                .unwrap();
+            let binding = ast.get_decoration(res.id, Decoration::Binding).unwrap();
             assert!(id_map.insert(res.id, (set as _, binding)).is_none())
+        }
+    }
+
+    fn compile_shader_library_naga(
+        gl: &GlContainer,
+        shader: &d::NagaShader,
+        options: &naga::back::glsl::Options,
+        context: CompilationContext,
+    ) -> Result<n::Shader, d::ShaderError> {
+        let mut output = String::new();
+        let mut writer =
+            naga::back::glsl::Writer::new(&mut output, &shader.module, &shader.info, options)
+                .map_err(|e| {
+                    log::warn!("Naga GLSL init: {}", e);
+                    d::ShaderError::CompilationFailed(format!("{:?}", e))
+                })?;
+
+        let entry_point_index = (&shader.module.entry_points)
+            .into_iter()
+            .position(|ep| ep.name == options.entry_point)
+            .ok_or(d::ShaderError::CompilationFailed(format!(
+                "Couldn't find entry point {}",
+                options.entry_point
+            )))?;
+
+        match writer.write() {
+            Ok(reflection_info) => {
+                Self::reflect_shader(
+                    &shader.module,
+                    shader.info.get_entry_point(entry_point_index),
+                    reflection_info,
+                    context,
+                );
+                log::debug!("Naga generated shader:\n{}", output);
+                Self::create_shader_module_raw(gl, &output, options.shader_stage)
+            }
+            Err(e) => {
+                log::warn!("Naga GLSL write: {}", e);
+                Err(d::ShaderError::CompilationFailed(format!("{:?}", e)))
+            }
         }
     }
 
     fn compile_shader(
         &self,
-        point: &pso::EntryPoint<B>,
-        stage: ShaderStage,
-        layout: &n::PipelineLayout,
-        sampler_map: &mut n::SamplerBindMap,
-        name_binding_map: &mut FastHashMap<String, (n::BindingRegister, u8)>,
-    ) -> n::Shader {
-        match *point.module {
-            n::ShaderModule::Raw(raw) => {
-                debug!("Can't remap bindings for raw shaders. Assuming they are already rebound.");
-                raw
-            }
-            n::ShaderModule::Spirv(ref spirv) => {
-                let mut ast = self.parse_spirv(spirv).unwrap();
-
-                spirv_cross_specialize_ast(&mut ast, &point.specialization).unwrap();
-                self.remap_bindings(&mut ast, layout, name_binding_map);
-                self.combine_separate_images_and_samplers(
-                    &mut ast,
-                    sampler_map,
-                    name_binding_map,
-                    layout,
-                );
-                self.set_push_const_layout(&mut ast).unwrap();
-
-                let glsl = self.translate_spirv(&mut ast, stage, point.entry).unwrap();
-                debug!("SPIRV-Cross generated shader:\n{}", glsl);
-                self.create_shader_module_raw(&glsl, stage).unwrap()
-            }
-            #[cfg(feature = "naga")]
-            n::ShaderModule::Naga(ref module, ref spirv) => {
-                use naga::back::glsl;
-
-                let options = glsl::Options {
-                    version: {
-                        let sl = &self.share.info.shading_language;
-                        let value = (sl.major * 100 + sl.minor * 10) as u16;
-                        if sl.is_embedded {
-                            glsl::Version::Embedded(value)
-                        } else {
-                            glsl::Version::Desktop(value)
-                        }
-                    },
-                    entry_point: (
-                        match stage {
-                            ShaderStage::Vertex => naga::ShaderStage::Vertex,
-                            ShaderStage::Fragment => naga::ShaderStage::Fragment,
-                            ShaderStage::Compute => naga::ShaderStage::Compute,
-                            _ => unreachable!(),
-                        },
-                        point.entry.to_string(),
-                    ),
-                };
-
-                let mut output = Vec::new();
-                let mut writer = glsl::Writer::new(&mut output, module, &options).unwrap();
-
-                match writer.write() {
-                    Ok(texture_mapping) => {
-                        Self::reflect_shader(
-                            module,
-                            &options.entry_point,
-                            texture_mapping,
-                            sampler_map,
-                            name_binding_map,
-                            layout,
-                        );
-                        let source = String::from_utf8(output).unwrap();
-                        debug!("Naga generated shader:\n{}", source);
-                        self.create_shader_module_raw(&source, stage).unwrap()
-                    }
-                    Err(e) => {
-                        warn!("Naga: {}", e);
-                        let fallback = pso::EntryPoint {
-                            module: &n::ShaderModule::Spirv(spirv.to_vec()),
-                            ..point.clone()
-                        };
-                        self.compile_shader(&fallback, stage, layout, sampler_map, name_binding_map)
-                    }
+        ep: &pso::EntryPoint<B>,
+        stage: naga::ShaderStage,
+        mut context: CompilationContext,
+    ) -> Result<n::Shader, d::ShaderError> {
+        let naga_options = naga::back::glsl::Options {
+            version: {
+                use naga::back::glsl::Version;
+                let sl = &self.share.info.shading_language;
+                let value = (sl.major * 100 + sl.minor * 10) as u16;
+                if sl.is_embedded {
+                    Version::Embedded(value)
+                } else {
+                    Version::Desktop(value)
                 }
+            },
+            shader_stage: stage,
+            entry_point: ep.entry.to_string(),
+        };
+
+        let mut result = Err(d::ShaderError::CompilationFailed(String::new()));
+        if ep.module.prefer_naga {
+            if let Some(ref shader) = ep.module.naga {
+                result = Self::compile_shader_library_naga(
+                    &self.share.context,
+                    shader,
+                    &naga_options,
+                    context.reborrow(),
+                );
             }
         }
+        #[cfg(feature = "cross")]
+        if result.is_err() {
+            let mut ast = self.parse_spirv_cross(&ep.module.spv).unwrap();
+            auxil::spirv_cross_specialize_ast(&mut ast, &ep.specialization).unwrap();
+            self.remap_bindings(&mut ast, context.layout, context.name_binding_map);
+            self.combine_separate_images_and_samplers(&mut ast, context.reborrow());
+            self.set_push_const_layout(&mut ast).unwrap();
+
+            let glsl = self
+                .translate_spirv_cross(&mut ast, stage, ep.entry)
+                .unwrap();
+            log::debug!("SPIRV-Cross generated shader:\n{}", glsl);
+            result = Self::create_shader_module_raw(&self.share.context, &glsl, stage);
+        }
+        if result.is_err() && !ep.module.prefer_naga {
+            if let Some(ref shader) = ep.module.naga {
+                result = Self::compile_shader_library_naga(
+                    &self.share.context,
+                    shader,
+                    &naga_options,
+                    context,
+                );
+            }
+        }
+        result
     }
 }
 
@@ -815,7 +851,7 @@ impl d::Device<B> for Device {
         flags: CommandPoolCreateFlags,
     ) -> Result<CommandPool, d::OutOfMemory> {
         let fbo = create_fbo_internal(&self.share);
-        let limits = self.share.limits.into();
+        let limits = self.share.public_caps.limits.into();
         let memory = if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
             BufferMemory::Individual {
                 storage: FastHashMap::default(),
@@ -855,7 +891,7 @@ impl d::Device<B> for Device {
         let subpasses = subpasses
             .map(|subpass| {
                 assert!(
-                    subpass.colors.len() <= self.share.limits.max_color_attachments,
+                    subpass.colors.len() <= self.share.public_caps.limits.max_color_attachments,
                     "Color attachment limit exceeded"
                 );
                 let color_attachments = subpass.colors.iter().map(|&(index, _)| index).collect();
@@ -950,51 +986,38 @@ impl d::Device<B> for Device {
         desc: &pso::GraphicsPipelineDesc<'a, B>,
         _cache: Option<&()>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        let (vertex_buffers, desc_attributes, input_assembler, vs, gs, hs, ds) =
-            match desc.primitive_assembler {
-                pso::PrimitiveAssemblerDesc::Vertex {
-                    buffers,
-                    attributes,
-                    ref input_assembler,
-                    ref vertex,
-                    ref tessellation,
-                    ref geometry,
-                } => {
-                    let (hs, ds) = if let Some(ts) = tessellation {
-                        (Some(&ts.0), Some(&ts.1))
-                    } else {
-                        (None, None)
-                    };
-
-                    let mut vertex_buffers = Vec::new();
-                    for vb in buffers {
-                        while vertex_buffers.len() <= vb.binding as usize {
-                            vertex_buffers.push(None);
-                        }
-                        vertex_buffers[vb.binding as usize] = Some(*vb);
-                    }
-
-                    (
-                        vertex_buffers,
-                        attributes,
-                        input_assembler,
-                        vertex,
-                        geometry,
-                        hs,
-                        ds,
-                    )
-                }
-                pso::PrimitiveAssemblerDesc::Mesh { .. } => {
+        let (vertex_buffers, desc_attributes, input_assembler, vs) = match desc.primitive_assembler
+        {
+            pso::PrimitiveAssemblerDesc::Vertex {
+                buffers,
+                attributes,
+                ref input_assembler,
+                ref vertex,
+                ref tessellation,
+                ref geometry,
+            } => {
+                if tessellation.is_some() || geometry.is_some() {
                     return Err(pso::CreationError::UnsupportedPipeline);
                 }
-            };
+
+                let mut vertex_buffers = Vec::new();
+                for vb in buffers {
+                    while vertex_buffers.len() <= vb.binding as usize {
+                        vertex_buffers.push(None);
+                    }
+                    vertex_buffers[vb.binding as usize] = Some(*vb);
+                }
+
+                (vertex_buffers, attributes, input_assembler, vertex)
+            }
+            pso::PrimitiveAssemblerDesc::Mesh { .. } => {
+                return Err(pso::CreationError::UnsupportedPipeline);
+            }
+        };
 
         let shaders = [
-            (ShaderStage::Vertex, Some(vs)),
-            (ShaderStage::Hull, hs),
-            (ShaderStage::Domain, ds),
-            (ShaderStage::Geometry, gs.as_ref()),
-            (ShaderStage::Fragment, desc.fragment.as_ref()),
+            (naga::ShaderStage::Vertex, Some(vs)),
+            (naga::ShaderStage::Fragment, desc.fragment.as_ref()),
         ];
         let (program, sampler_map) = self.create_shader_program(&shaders[..], &desc.layout)?;
 
@@ -1061,7 +1084,10 @@ impl d::Device<B> for Device {
         desc: &pso::ComputePipelineDesc<'a, B>,
         _cache: Option<&()>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
-        let shader = (ShaderStage::Compute, Some(&desc.shader));
+        if self.share.public_caps.limits.max_compute_work_group_count[0] == 0 {
+            return Err(pso::CreationError::UnsupportedPipeline);
+        }
+        let shader = (naga::ShaderStage::Compute, Some(&desc.shader));
         let (program, sampler_map) = self.create_shader_program(&[shader], &desc.layout)?;
         Ok(n::ComputePipeline {
             program,
@@ -1087,7 +1113,7 @@ impl d::Device<B> for Device {
 
             .map(|at| at.borrow().clone())
             .collect();
-        debug!("create_framebuffer {:?}", attachments);
+        log::debug!("create_framebuffer {:?}", attachments);
 
         let target = glow::DRAW_FRAMEBUFFER;
 
@@ -1158,36 +1184,54 @@ impl d::Device<B> for Device {
         &self,
         raw_data: &[u32],
     ) -> Result<n::ShaderModule, d::ShaderError> {
-        Ok(n::ShaderModule::Spirv(raw_data.into()))
+        Ok(n::ShaderModule {
+            prefer_naga: self.always_prefer_naga,
+            #[cfg(feature = "cross")]
+            spv: raw_data.to_vec(),
+            naga: {
+                let options = naga::front::spv::Options {
+                    adjust_coordinate_space: !self.features.contains(hal::Features::NDC_Y_UP),
+                    strict_capabilities: true,
+                    flow_graph_dump_prefix: None,
+                };
+                let parser = naga::front::spv::Parser::new(raw_data.iter().cloned(), &options);
+                match parser.parse() {
+                    Ok(module) => {
+                        log::debug!("Naga module {:#?}", module);
+                        match naga::valid::Validator::new(naga::valid::ValidationFlags::empty())
+                            .validate(&module)
+                        {
+                            Ok(info) => Some(d::NagaShader { module, info }),
+                            Err(e) => {
+                                log::warn!("Naga validation failed: {:?}", e);
+                                None
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("Naga parsing failed: {:?}", e);
+                        None
+                    }
+                }
+            },
+        })
     }
 
-    #[cfg(feature = "naga")]
     unsafe fn create_shader_module_from_naga(
         &self,
-        module: naga::Module,
-    ) -> Result<n::ShaderModule, (d::ShaderError, naga::Module)> {
-        use naga::back::spv;
-        let mut flags = spv::WriterFlags::empty();
-        if cfg!(debug_assertions) {
-            flags |= spv::WriterFlags::DEBUG;
-        }
-
-        let caps = [
-            spv::Capability::Shader,
-            spv::Capability::Matrix,
-            spv::Capability::Sampled1D,
-            spv::Capability::Image1D,
-            spv::Capability::DerivativeControl,
-            //TODO: fill out the rest
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        match spv::write_vec(&module, flags, caps) {
-            Ok(spv) => Ok(n::ShaderModule::Naga(module, spv)),
-            Err(e) => Err((d::ShaderError::CompilationFailed(format!("{}", e)), module)),
-        }
+        shader: d::NagaShader,
+    ) -> Result<n::ShaderModule, (d::ShaderError, d::NagaShader)> {
+        Ok(n::ShaderModule {
+            prefer_naga: true,
+            #[cfg(feature = "cross")]
+            spv: match naga::back::spv::write_vec(&shader.module, &shader.info, &self.spv_options) {
+                Ok(spv) => spv,
+                Err(e) => {
+                    return Err((d::ShaderError::CompilationFailed(format!("{}", e)), shader))
+                }
+            },
+            naga: Some(shader),
+        })
     }
 
     unsafe fn create_sampler(
@@ -1226,6 +1270,7 @@ impl d::Device<B> for Device {
         &self,
         size: u64,
         usage: buffer::Usage,
+        _sparse: memory::SparseFlags,
     ) -> Result<n::Buffer, buffer::CreationError> {
         if !self
             .share
@@ -1265,13 +1310,18 @@ impl d::Device<B> for Device {
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
         };
 
-        *buffer = n::Buffer::Bound {
-            buffer: memory
-                .buffer
-                .expect("Improper memory type used for buffer memory")
-                .0,
-            range: offset..offset + size,
-        };
+        match memory.buffer {
+            Some((raw, target)) => {
+                *buffer = n::Buffer::Bound {
+                    buffer: raw,
+                    range: offset..offset + size,
+                    target: target,
+                };
+            }
+            None => {
+                panic!("Improper memory type used for buffer memory");
+            }
+        }
 
         Ok(())
     }
@@ -1414,6 +1464,7 @@ impl d::Device<B> for Device {
         format: Format,
         _tiling: i::Tiling,
         usage: i::Usage,
+        _sparse: memory::SparseFlags,
         _view_caps: i::ViewCapabilities,
     ) -> Result<n::Image, i::CreationError> {
         let gl = &self.share.context;
@@ -1605,6 +1656,7 @@ impl d::Device<B> for Device {
         kind: i::ViewKind,
         view_format: Format,
         swizzle: Swizzle,
+        _usage: i::Usage,
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewCreationError> {
         assert_eq!(swizzle, Swizzle::NO);
@@ -1636,14 +1688,15 @@ impl d::Device<B> for Device {
                     Some(description) => {
                         let raw_view_format = description.tex_internal;
                         if format != raw_view_format {
-                            warn!(
+                            log::warn!(
                                 "View format {:?} is different from base {:?}",
-                                raw_view_format, format
+                                raw_view_format,
+                                format
                             );
                         }
                     }
                     None => {
-                        warn!("View format {:?} is not supported", view_format);
+                        log::warn!("View format {:?} is not supported", view_format);
                     }
                 }
                 Ok(n::ImageView::Texture {
@@ -1698,8 +1751,8 @@ impl d::Device<B> for Device {
             let binding_layout = &op.set.layout[layout_index];
             let binding = match descriptor {
                 pso::Descriptor::Buffer(buffer, ref sub) => {
-                    let (raw_buffer, buffer_range) = buffer.as_bound();
-                    let range = crate::resolve_sub_range(sub, buffer_range);
+                    let bounded_buffer = buffer.as_bound();
+                    let range = crate::resolve_sub_range(sub, bounded_buffer.range);
 
                     let register = match binding_layout.ty {
                         pso::DescriptorType::Buffer { ty, .. } => match ty {
@@ -1717,7 +1770,7 @@ impl d::Device<B> for Device {
 
                     n::DescSetBindings::Buffer {
                         register,
-                        buffer: raw_buffer,
+                        buffer: bounded_buffer.raw,
                         offset: range.start as i32,
                         size: (range.end - range.start) as i32,
                     }
@@ -1810,7 +1863,7 @@ impl d::Device<B> for Device {
         match *fence {
             n::Fence::Idle { signaled } => {
                 if !signaled {
-                    warn!("Fence ptr {:?} is not pending, waiting not possible", fence);
+                    log::warn!("Fence ptr {:?} is not pending, waiting not possible", fence);
                 }
                 Ok(signaled)
             }
@@ -1820,7 +1873,7 @@ impl d::Device<B> for Device {
                     glow::TIMEOUT_EXPIRED => Ok(false),
                     glow::WAIT_FAILED => {
                         if let Err(err) = self.share.check() {
-                            error!("Error when waiting on fence: {:?}", err);
+                            log::error!("Error when waiting on fence: {:?}", err);
                         }
                         Ok(false)
                     }
@@ -2067,5 +2120,13 @@ impl d::Device<B> for Device {
         _name: &str,
     ) {
         // TODO
+    }
+
+    fn start_capture(&self) {
+        //TODO
+    }
+
+    fn stop_capture(&self) {
+        //TODO
     }
 }

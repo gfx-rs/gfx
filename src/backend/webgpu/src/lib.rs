@@ -187,11 +187,7 @@ impl hal::adapter::PhysicalDevice<Backend> for PhysicalDevice {
         todo!()
     }
 
-    fn capabilities(&self) -> hal::Capabilities {
-        todo!()
-    }
-
-    fn limits(&self) -> hal::Limits {
+    fn properties(&self) -> hal::PhysicalDeviceProperties {
         todo!()
     }
 }
@@ -215,6 +211,10 @@ impl hal::queue::QueueFamily for QueueFamily {
 
     fn id(&self) -> QueueFamilyId {
         WEBGPU_QUEUE_FAMILY_ID
+    }
+
+    fn supports_sparse_binding(&self) -> bool {
+        false
     }
 }
 

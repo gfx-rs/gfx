@@ -117,7 +117,7 @@ impl Queue {
                 (glow::UNSIGNED_BYTE, glow::UNSIGNED_SHORT, glow::UNSIGNED_INT),
             C::Float => (glow::ZERO, glow::HALF_FLOAT, glow::FLOAT),
             C::Srgb => {
-                error!("Unsupported Srgb channel type");
+                log::error!("Unsupported Srgb channel type");
                 return
             }
         };
@@ -134,7 +134,7 @@ impl Queue {
             S::R32_G32_B32     => (3, fm32),
             S::R32_G32_B32_A32 => (4, fm32),
             _ => {
-                error!("Unsupported element type: {:?}", bel.elem.format.0);
+                log::error!("Unsupported element type: {:?}", bel.elem.format.0);
                 return
             }
         };
@@ -166,7 +166,7 @@ impl Queue {
             unsafe { gl.VertexAttribDivisor(slot as glow::types::GLuint,
                 bel.desc.rate as glow::types::GLuint) };
         } else if bel.desc.rate != 0 {
-            error!("Instanced arrays are not supported");
+            log::error!("Instanced arrays are not supported");
         }
     }
     */
@@ -274,12 +274,12 @@ impl Queue {
                             );
                         }
                     } else {
-                        error!(
+                        log::error!(
                             "Instanced draw calls with non-zero base instance are not supported"
                         );
                     }
                 } else {
-                    error!("Instanced draw calls are not supported");
+                    log::error!("Instanced draw calls are not supported");
                 }
             }
             com::Command::DrawIndexed {
@@ -315,7 +315,7 @@ impl Queue {
                             );
                         }
                     } else {
-                        error!("Base vertex with indexed drawing not supported");
+                        log::error!("Base vertex with indexed drawing not supported");
                     }
                 } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED) {
                     if base_vertex == 0 && instances.start == 0 {
@@ -342,12 +342,14 @@ impl Queue {
                             );
                         }
                     } else if instances.start == 0 {
-                        error!("Base vertex with instanced indexed drawing is not supported");
+                        log::error!("Base vertex with instanced indexed drawing is not supported");
                     } else if caveats
                         .contains(hal::PerformanceCaveats::BASE_VERTEX_INSTANCE_DRAWING)
                     {
                         //TODO: this is supposed to be a workaround, not an error
-                        error!("Instance bases with instanced indexed drawing is not supported");
+                        log::error!(
+                            "Instance bases with instanced indexed drawing is not supported"
+                        );
                     } else {
                         unsafe {
                             gl.draw_elements_instanced_base_vertex_base_instance(
@@ -362,7 +364,7 @@ impl Queue {
                         }
                     }
                 } else {
-                    error!("Instanced indexed drawing is not supported");
+                    log::error!("Instanced indexed drawing is not supported");
                 }
             }
             com::Command::Dispatch(count) => {
@@ -394,7 +396,10 @@ impl Queue {
 
                 let num_viewports = viewports.len();
                 assert_eq!(num_viewports, depth_ranges.len());
-                assert!(0 < num_viewports && num_viewports <= self.share.limits.max_viewports);
+                assert!(
+                    0 < num_viewports
+                        && num_viewports <= self.share.public_caps.limits.max_viewports
+                );
 
                 if num_viewports == 1 {
                     let view = viewports[0];
@@ -409,7 +414,7 @@ impl Queue {
                         if self.share.private_caps.depth_range_f64_precision {
                             gl.depth_range_f64(depth_range[0], depth_range[1]);
                         } else {
-                            debug!("Depth ranges with f64 precision are not supported, falling back to f32");
+                            log::trace!("Depth ranges with f64 precision are not supported, falling back to f32");
                             gl.depth_range_f32(depth_range[0] as f32, depth_range[1] as f32);
                         }
                     };
@@ -430,7 +435,9 @@ impl Queue {
                 let gl = &self.share.context;
                 let scissors = Self::get::<[i32; 4]>(data_buf, data_ptr);
                 let num_scissors = scissors.len();
-                assert!(0 < num_scissors && num_scissors <= self.share.limits.max_viewports);
+                assert!(
+                    0 < num_scissors && num_scissors <= self.share.public_caps.limits.max_viewports
+                );
 
                 if num_scissors == 1 {
                     let scissor = scissors[0];
@@ -559,7 +566,7 @@ impl Queue {
                 if self.share.private_caps.draw_buffers {
                     state::set_blend_slot(&self.share.context, slot, blend, &self.features);
                 } else {
-                    warn!("Draw buffers are not supported");
+                    log::warn!("Draw buffers are not supported");
                 }
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
@@ -601,7 +608,7 @@ impl Queue {
                 {
                     gl.vertex_attrib_divisor(location, rate);
                 } else if rate > 0 {
-                    error!("Binding attribute with instanced input rate is not supported");
+                    log::error!("Binding attribute with instanced input rate is not supported");
                 }
 
                 gl.enable_vertex_attrib_array(location);
@@ -611,19 +618,50 @@ impl Queue {
             com::Command::UnbindAttribute(ref attribute) => unsafe {
                 self.share.context.DisableVertexAttribArray(attribute.location);
             }*/
-            com::Command::CopyBufferToBuffer(src, dst, ref r) => unsafe {
+            com::Command::CopyBufferToBuffer {
+                src_buffer,
+                dst_buffer,
+                src_target: _,
+                dst_target,
+                data,
+            } => unsafe {
+                let is_index_buffer_only_element_dst =
+                    !self.share.private_caps.index_buffer_role_change
+                        && dst_target == glow::ELEMENT_ARRAY_BUFFER;
+
+                let copy_src_target = glow::COPY_READ_BUFFER;
+                // WebGL not allowed to copy data from other targets to element buffer and can't copy element data to other buffers
+                let copy_dst_target = if is_index_buffer_only_element_dst {
+                    glow::ELEMENT_ARRAY_BUFFER
+                } else {
+                    glow::COPY_WRITE_BUFFER
+                };
                 let gl = &self.share.context;
-                gl.bind_buffer(glow::COPY_READ_BUFFER, Some(src));
-                gl.bind_buffer(glow::COPY_WRITE_BUFFER, Some(dst));
-                gl.copy_buffer_sub_data(
-                    glow::COPY_READ_BUFFER,
-                    glow::COPY_WRITE_BUFFER,
-                    r.src as _,
-                    r.dst as _,
-                    r.size as _,
-                );
-                gl.bind_buffer(glow::COPY_READ_BUFFER, None);
-                gl.bind_buffer(glow::COPY_WRITE_BUFFER, None);
+
+                gl.bind_buffer(copy_src_target, Some(src_buffer));
+                gl.bind_buffer(copy_dst_target, Some(dst_buffer));
+
+                if is_index_buffer_only_element_dst {
+                    let mut buffer_data = vec![0; data.size as usize];
+                    gl.get_buffer_sub_data(copy_src_target, data.src as i32, &mut buffer_data);
+                    gl.buffer_sub_data_u8_slice(copy_dst_target, data.dst as i32, &buffer_data);
+                } else {
+                    gl.copy_buffer_sub_data(
+                        copy_src_target,
+                        copy_dst_target,
+                        data.src as _,
+                        data.dst as _,
+                        data.size as _,
+                    );
+                }
+
+                gl.bind_buffer(copy_src_target, None);
+
+                if is_index_buffer_only_element_dst {
+                    gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, self.state.index_buffer);
+                } else {
+                    gl.bind_buffer(copy_dst_target, None);
+                }
             },
             com::Command::CopyBufferToTexture {
                 src_buffer,
@@ -679,7 +717,7 @@ impl Queue {
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
             },
             com::Command::CopyBufferToRenderbuffer(..) => {
-                error!("CopyBufferToRenderbuffer is not implemented");
+                log::error!("CopyBufferToRenderbuffer is not implemented");
             }
             com::Command::CopyTextureToBuffer {
                 src_texture,
@@ -714,16 +752,16 @@ impl Queue {
                     }
                 } else {
                     //TODO: use FBO
-                    error!("CopyTextureToBuffer is not implemented on GLES");
+                    log::error!("CopyTextureToBuffer is not implemented on GLES");
                 }
             }
             com::Command::CopyRenderbufferToBuffer(..) => {
                 //TODO: use FBO
-                error!("CopyRenderbufferToBuffer is not implemented");
+                log::error!("CopyRenderbufferToBuffer is not implemented");
             }
             com::Command::CopyImageToTexture(..) => {
                 //TODO: use FBO
-                error!("CopyImageToTexture is not implemented");
+                log::error!("CopyImageToTexture is not implemented");
             }
             com::Command::CopyImageToRenderbuffer {
                 src_image,
@@ -832,7 +870,7 @@ impl Queue {
             if let Some(bind) = bind_opt {
             tex::bind_sampler(gl, bind, &sampler.info, &self.share.private_caps);
             }else {
-            error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
+            log::error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
             }
             }
             },
@@ -968,7 +1006,10 @@ impl Queue {
                 };
 
                 if let hal::pso::State::Static(w) = rasterizer.line_width {
-                    unsafe { gl.line_width(w) };
+                    if w != 1.0 {
+                        // Default value already 1.0
+                        unsafe { gl.line_width(w) };
+                    }
                 }
 
                 //TODO: this is not available in GLES
@@ -982,7 +1023,7 @@ impl Queue {
                     _ => unsafe { gl.disable(gl_offset) },
                 }
 
-                if !self.share.info.is_webgl() && !self.share.info.version.is_embedded {
+                if !self.share.info.version.is_embedded {
                     match false {
                         //TODO
                         true => unsafe { gl.enable(glow::MULTISAMPLE) },
@@ -1031,7 +1072,7 @@ impl Queue {
                     if slot.is_some() {
                         // TODO: the generator of these commands should coalesce identical masks to prevent this warning
                         //       as much as is possible.
-                        warn!("GLES and WebGL do not support per-target color masks. Falling back on global mask.");
+                        log::warn!("GLES and WebGL do not support per-target color masks. Falling back on global mask.");
                     }
                     self.share.context.color_mask(
                         mask.contains(Cm::RED) as _,
@@ -1100,6 +1141,7 @@ impl hal::queue::Queue<Backend> for Queue {
                     [cb.buf.offset as usize..(cb.buf.offset + cb.buf.size) as usize];
                 self.reset_state();
                 for com in commands {
+                    log::trace!("Execute command:{:?}", com);
                     self.process(com, &buffer.data);
                 }
             }

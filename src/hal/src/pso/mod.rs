@@ -21,6 +21,9 @@ pub enum CreationError {
     /// Unknown other error.
     #[error("Implementation specific error occurred")]
     Other,
+    /// Shader module creation error.
+    #[error("{0:?} shader creation failed: {1:}")]
+    ShaderCreationError(ShaderStageFlags, String),
     /// Unsupported pipeline on hardware or implementation. Example: mesh shaders on DirectX 11.
     #[error("Pipeline kind is not supported")]
     UnsupportedPipeline,
@@ -111,6 +114,17 @@ bitflags!(
         const ALL      = 0x7FFFFFFF;
     }
 );
+
+impl From<naga::ShaderStage> for ShaderStageFlags {
+    fn from(stage: naga::ShaderStage) -> Self {
+        use naga::ShaderStage as Ss;
+        match stage {
+            Ss::Vertex => Self::VERTEX,
+            Ss::Fragment => Self::FRAGMENT,
+            Ss::Compute => Self::COMPUTE,
+        }
+    }
+}
 
 /// Shader entry point.
 #[derive(Debug)]

@@ -397,6 +397,20 @@ pub enum WrapMode {
     MirrorClamp,
 }
 
+/// Specifies how the image texels in the filter kernel are reduced to a single value.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ReductionMode {
+    ///
+    WeightedAverage,
+    ///
+    /// Only valid if `Features::SAMPLER_FILTER_MINMAX` is enabled.
+    Minimum,
+    ///
+    /// Only valid if `Features::SAMPLER_FILTER_MINMAX` is enabled.
+    Maximum,
+}
+
 /// A wrapper for the LOD level of an image. Needed so that we can
 /// implement Eq and Hash for it.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
@@ -467,7 +481,6 @@ impl Into<[f32; 4]> for BorderColor {
 /// available that alter how the GPU goes from a coordinate in an image
 /// to producing an actual value from the texture, including filtering/
 /// scaling, wrap mode, etc.
-// TODO: document the details of sampling.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SamplerDesc {
@@ -477,6 +490,8 @@ pub struct SamplerDesc {
     pub mag_filter: Filter,
     /// Mip filter method to use.
     pub mip_filter: Filter,
+    /// Reduction mode over the filter.
+    pub reduction_mode: ReductionMode,
     /// Wrapping mode for each of the U, V, and W axis (S, T, and R in OpenGL
     /// speak).
     pub wrap_mode: (WrapMode, WrapMode, WrapMode),
@@ -506,6 +521,7 @@ impl SamplerDesc {
             min_filter: filter,
             mag_filter: filter,
             mip_filter: filter,
+            reduction_mode: ReductionMode::WeightedAverage,
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: Lod(0.0),
             lod_range: Lod::RANGE.clone(),
@@ -698,6 +714,49 @@ pub struct SubresourceFootprint {
     pub array_pitch: RawOffset,
     /// Byte distance between depth slices.
     pub depth_pitch: RawOffset,
+}
+
+/// The type of tile to check for with `get_tile_size`.
+#[derive(Debug)]
+pub enum TileKind {
+    /// A volume or 3D image tile kind.
+    Volume,
+    /// A flat or 2D image tile kind, with the number of samples for MSAA.
+    Flat(NumSamples),
+}
+
+// https://www.khronos.org/registry/vulkan/specs/1.2-extensions/html/vkspec.html#sparsememory-standard-shapes
+// https://docs.microsoft.com/en-us/windows/win32/direct3d11/texture2d-and-texture2darray-subresource-tiling
+/// Tile or block size for sparse binding
+pub fn get_tile_size(tile_kind: TileKind, texel_bits: u16) -> (u16, u16, u16) {
+    match tile_kind {
+        TileKind::Flat(samples) => {
+            let sizes = match texel_bits {
+                8 => (256, 256, 1),
+                16 => (256, 128, 1),
+                32 => (128, 128, 1),
+                64 => (128, 64, 1),
+                128 => (64, 64, 1),
+                _ => unimplemented!(),
+            };
+            match samples {
+                1 => sizes,
+                2 => (sizes.0 / 2, sizes.1, 1),
+                4 => (sizes.0 / 2, sizes.1 / 2, 1),
+                8 => (sizes.0 / 4, sizes.1 / 2, 1),
+                16 => (sizes.0 / 4, sizes.1 / 4, 1),
+                _ => unimplemented!(),
+            }
+        }
+        TileKind::Volume => match texel_bits {
+            8 => (64, 32, 32),
+            16 => (32, 32, 32),
+            32 => (32, 32, 16),
+            64 => (32, 16, 16),
+            128 => (16, 16, 16),
+            _ => unimplemented!(),
+        },
+    }
 }
 
 /// Description of a framebuffer attachment.

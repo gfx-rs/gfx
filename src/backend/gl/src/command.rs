@@ -55,6 +55,7 @@ impl BufferSlice {
 }
 
 ///
+// TODO: refactor variants to have named fields. A bare number is too ambiguous.
 #[derive(Debug)]
 pub enum Command {
     Dispatch(hal::WorkGroupCount),
@@ -101,7 +102,6 @@ pub enum Command {
     /// Clear the currently bound texture with the given color.
     ClearTexture([f32; 4]),
     FillBuffer(n::RawBuffer, Range<buffer::Offset>, u32),
-
     BindFramebuffer {
         target: FrameBufferTarget,
         framebuffer: n::RawFramebuffer,
@@ -115,7 +115,13 @@ pub enum Command {
     SetBlendSlot(ColorSlot, Option<pso::BlendState>),
     BindAttribute(n::AttributeDesc, n::RawBuffer, i32, u32),
     //UnbindAttribute(n::AttributeDesc),
-    CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
+    CopyBufferToBuffer {
+        src_buffer: n::RawBuffer,
+        dst_buffer: n::RawBuffer,
+        src_target: u32,
+        dst_target: u32,
+        data: command::BufferCopy,
+    },
     CopyBufferToTexture {
         src_buffer: n::RawBuffer,
         dst_texture: n::Texture,
@@ -146,17 +152,14 @@ pub enum Command {
         dst_format: n::TextureFormat,
         data: command::ImageCopy,
     },
-
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
     BindTexture(u32, n::Texture, n::TextureTarget),
     BindSampler(u32, n::Sampler),
     SetTextureSamplerSettings(u32, n::TextureTarget, image::SamplerDesc),
-
     SetColorMask(Option<DrawBuffer>, pso::ColorMask),
     SetDepthMask(bool),
     SetStencilMask(pso::StencilValue),
     SetStencilMaskSeparate(pso::Sided<pso::StencilValue>),
-
     MemoryBarrier(u32),
 }
 
@@ -490,7 +493,7 @@ impl CommandBuffer {
             let binding = attribute.binding as usize;
 
             if vertex_buffers.len() <= binding {
-                error!("No vertex buffer bound at {}", binding);
+                log::error!("No vertex buffer bound at {}", binding);
             }
 
             let (handle, range) = vertex_buffers[binding].as_ref().unwrap();
@@ -511,7 +514,7 @@ impl CommandBuffer {
                         desc.rate.as_uint() as u32,
                     ));
                 }
-                _ => error!("No vertex buffer description bound at {}", binding),
+                _ => log::error!("No vertex buffer description bound at {}", binding),
             }
         }
     }
@@ -662,7 +665,7 @@ impl CommandBuffer {
         J: Iterator<Item = command::DescriptorSetOffset>,
     {
         if let Some(_) = offsets.next() {
-            warn!("Dynamic offsets are not supported yet");
+            log::warn!("Dynamic offsets are not supported yet");
         }
 
         let mut dirty_textures = 0u32;
@@ -740,7 +743,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn reset(&mut self, _release_resources: bool) {
         if !self.individual_reset {
-            error!("Associated pool must allow individual resets.");
+            log::error!("Associated pool must allow individual resets.");
             return;
         }
 
@@ -793,10 +796,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn fill_buffer(&mut self, buffer: &n::Buffer, sub: buffer::SubRange, data: u32) {
-        let (raw_buffer, parent_range) = buffer.as_bound();
-        let range = crate::resolve_sub_range(&sub, parent_range);
+        let bounded_buffer = buffer.as_bound();
+        let range = crate::resolve_sub_range(&sub, bounded_buffer.range);
         self.data
-            .push_cmd(Command::FillBuffer(raw_buffer, range, data));
+            .push_cmd(Command::FillBuffer(bounded_buffer.raw, range, data));
     }
 
     unsafe fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: buffer::Offset, _data: &[u8]) {
@@ -992,7 +995,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: Iterator<Item = command::ImageBlit>,
     {
-        error!("Blit is not implemented");
+        log::error!("Blit is not implemented");
     }
 
     unsafe fn bind_index_buffer(
@@ -1001,10 +1004,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         sub: buffer::SubRange,
         ty: hal::IndexType,
     ) {
-        let (raw_buffer, parent_range) = buffer.as_bound();
+        let bounded_buffer = buffer.as_bound();
 
-        self.cache.index_type_range = Some((ty, crate::resolve_sub_range(&sub, parent_range)));
-        self.data.push_cmd(Command::BindIndexBuffer(raw_buffer));
+        self.cache.index_type_range =
+            Some((ty, crate::resolve_sub_range(&sub, bounded_buffer.range)));
+        self.data
+            .push_cmd(Command::BindIndexBuffer(bounded_buffer.raw));
     }
 
     unsafe fn bind_vertex_buffers<'a, T>(&mut self, first_binding: pso::BufferIndex, buffers: T)
@@ -1017,9 +1022,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 self.cache.vertex_buffers.resize(index + 1, None);
             }
 
-            let (raw_buffer, range) = buffer.as_bound();
-            self.cache.vertex_buffers[index] =
-                Some((raw_buffer, crate::resolve_sub_range(&sub, range)));
+            let bounded_buffer = buffer.as_bound();
+            self.cache.vertex_buffers[index] = Some((
+                bounded_buffer.raw,
+                crate::resolve_sub_range(&sub, bounded_buffer.range),
+            ));
         }
     }
 
@@ -1051,7 +1058,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         match len {
             0 => {
-                error!("Number of viewports can not be zero.");
+                log::error!("Number of viewports can not be zero.");
                 self.cache.error_state = true;
             }
             n if n + first_viewport as usize <= self.limits.max_viewports => {
@@ -1062,7 +1069,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 });
             }
             _ => {
-                error!("Number of viewports and first viewport index exceed the number of maximum viewports");
+                log::error!("Number of viewports and first viewport index exceed the number of maximum viewports");
                 self.cache.error_state = true;
             }
         }
@@ -1087,7 +1094,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         match len {
             0 => {
-                error!("Number of scissors can not be zero.");
+                log::error!("Number of scissors can not be zero.");
                 self.cache.error_state = true;
             }
             n if n + first_scissor as usize <= self.limits.max_viewports => {
@@ -1095,7 +1102,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     .push_cmd(Command::SetScissors(first_scissor, scissors_ptr));
             }
             _ => {
-                error!("Number of scissors and first scissor index exceed the maximum number of viewports");
+                log::error!("Number of scissors and first scissor index exceed the maximum number of viewports");
                 self.cache.error_state = true;
             }
         }
@@ -1143,7 +1150,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_depth_bounds(&mut self, _: Range<f32>) {
-        warn!("Depth bounds test is not supported");
+        log::warn!("Depth bounds test is not supported");
     }
 
     unsafe fn set_line_width(&mut self, _width: f32) {
@@ -1194,7 +1201,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         if let Some(ref rect) = pipeline.baked_states.scissor {
             self.set_scissors(0, iter::once(rect.clone()));
         }
-        if let Some(color) = pipeline.baked_states.blend_color {
+        if let Some(color) = pipeline.baked_states.blend_constants {
             self.set_blend_constants(color);
         }
         if let Some(ref bounds) = pipeline.baked_states.depth_bounds {
@@ -1257,9 +1264,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
-        let (raw_buffer, range) = buffer.as_bound();
-        self.data
-            .push_cmd(Command::DispatchIndirect(raw_buffer, range.start + offset));
+        let bounded_buffer = buffer.as_bound();
+        self.data.push_cmd(Command::DispatchIndirect(
+            bounded_buffer.raw,
+            bounded_buffer.range.start + offset,
+        ));
     }
 
     unsafe fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
@@ -1268,17 +1277,23 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         let old_size = self.data.buf.size;
 
-        let (src_raw, src_range) = src.as_bound();
-        let (dst_raw, dst_range) = dst.as_bound();
+        let src_bounded_buffer = src.as_bound();
+        let dst_bounded_buffer = dst.as_bound();
         for mut r in regions {
-            r.src += src_range.start;
-            r.dst += dst_range.start;
-            let cmd = Command::CopyBufferToBuffer(src_raw, dst_raw, r);
+            r.src += src_bounded_buffer.range.start;
+            r.dst += dst_bounded_buffer.range.start;
+            let cmd = Command::CopyBufferToBuffer {
+                src_buffer: src_bounded_buffer.raw,
+                dst_buffer: dst_bounded_buffer.raw,
+                src_target: src_bounded_buffer.target,
+                dst_target: dst_bounded_buffer.target,
+                data: r,
+            };
             self.data.push_cmd(cmd);
         }
 
         if self.data.buf.size == old_size {
-            error!("At least one region must be specified");
+            log::error!("At least one region must be specified");
         }
     }
 
@@ -1310,7 +1325,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         if self.data.buf.size == old_size {
-            error!("At least one region must be specified");
+            log::error!("At least one region must be specified");
         }
     }
 
@@ -1325,12 +1340,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         let old_size = self.data.buf.size;
 
-        let (src_raw, src_range) = src.as_bound();
+        let src_bounded_buffer = src.as_bound();
         for mut r in regions {
-            r.buffer_offset += src_range.start;
+            r.buffer_offset += src_bounded_buffer.range.start;
             let cmd = match dst.object_type {
                 n::ImageType::Renderbuffer { raw, .. } => {
-                    Command::CopyBufferToRenderbuffer(src_raw, raw, r)
+                    Command::CopyBufferToRenderbuffer(src_bounded_buffer.raw, raw, r)
                 }
                 n::ImageType::Texture {
                     raw,
@@ -1339,7 +1354,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     pixel_type,
                     ..
                 } => Command::CopyBufferToTexture {
-                    src_buffer: src_raw,
+                    src_buffer: src_bounded_buffer.raw,
                     dst_texture: raw,
                     texture_target: target,
                     texture_format: format,
@@ -1351,7 +1366,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         if self.data.buf.size == old_size {
-            error!("At least one region must be specified");
+            log::error!("At least one region must be specified");
         }
     }
 
@@ -1365,13 +1380,13 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: Iterator<Item = command::BufferImageCopy>,
     {
         let old_size = self.data.buf.size;
-        let (dst_raw, dst_range) = dst.as_bound();
+        let dst_bounded_buffer = dst.as_bound();
 
         for mut r in regions {
-            r.buffer_offset += dst_range.start;
+            r.buffer_offset += dst_bounded_buffer.range.start;
             let cmd = match src.object_type {
                 n::ImageType::Renderbuffer { raw, .. } => {
-                    Command::CopyRenderbufferToBuffer(raw, dst_raw, r)
+                    Command::CopyRenderbufferToBuffer(raw, dst_bounded_buffer.raw, r)
                 }
                 n::ImageType::Texture {
                     raw,
@@ -1384,7 +1399,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     texture_target: target,
                     texture_format: format,
                     pixel_type: pixel_type,
-                    dst_buffer: dst_raw,
+                    dst_buffer: dst_bounded_buffer.raw,
                     data: r,
                 },
             };
@@ -1392,7 +1407,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         if self.data.buf.size == old_size {
-            error!("At least one region must be specified");
+            log::error!("At least one region must be specified");
         }
     }
 
@@ -1421,7 +1436,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 });
             }
             None => {
-                warn!("No primitive bound. An active pipeline needs to be bound before calling `draw`.");
+                log::warn!("No primitive bound. An active pipeline needs to be bound before calling `draw`.");
                 self.cache.error_state = true;
             }
         }
@@ -1447,7 +1462,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         let (index_type, buffer_range) = match &self.cache.index_type_range {
             Some((index_type, buffer_range)) => (index_type, buffer_range),
             None => {
-                warn!("No index type bound. An index buffer needs to be bound before calling `draw_indexed`.");
+                log::warn!("No index type bound. An index buffer needs to be bound before calling `draw_indexed`.");
                 self.cache.error_state = true;
                 return;
             }
@@ -1476,7 +1491,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 });
             }
             None => {
-                warn!("No primitive bound. An active pipeline needs to be bound before calling `draw_indexed`.");
+                log::warn!("No primitive bound. An active pipeline needs to be bound before calling `draw_indexed`.");
                 self.cache.error_state = true;
             }
         }

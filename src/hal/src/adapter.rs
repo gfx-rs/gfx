@@ -11,7 +11,7 @@
 use crate::{
     device, format, image, memory,
     queue::{QueueGroup, QueuePriority},
-    Backend, Capabilities, Features, Limits,
+    Backend, Features, PhysicalDeviceProperties,
 };
 
 use std::{any::Any, fmt};
@@ -119,12 +119,9 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// used, as well as the actual platform underneath.
     fn features(&self) -> Features;
 
-    /// Returns the capabilities of this `PhysicalDevice`. Similarly to `Features`, they
+    /// Returns the properties of this `PhysicalDevice`. Similarly to `Features`, they
     // depend on the platform, but unlike features, these are immutable and can't be switched on.
-    fn capabilities(&self) -> Capabilities;
-
-    /// Returns the resource limits of this `PhysicalDevice`.
-    fn limits(&self) -> Limits;
+    fn properties(&self) -> PhysicalDeviceProperties;
 
     /// Check cache compatibility with the `PhysicalDevice`.
     fn is_valid_cache(&self, _cache: &[u8]) -> bool {

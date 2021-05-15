@@ -132,9 +132,7 @@ pub fn describe_format(format: Format) -> Option<FormatDescription> {
             4,
             Float,
         ),
-        Bgra8Unorm => {
-            FormatDescription::new(glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE, 4, Float)
-        }
+        Bgra8Unorm => FormatDescription::new(glow::BGRA, glow::BGRA, glow::UNSIGNED_BYTE, 4, Float),
         Bgra8Srgb => FormatDescription::new(
             glow::SRGB8_ALPHA8,
             glow::BGRA,
@@ -150,7 +148,7 @@ pub fn describe_format(format: Format) -> Option<FormatDescription> {
             Integer,
         ),
         R16Sint => FormatDescription::new(glow::R16I, glow::RED_INTEGER, glow::SHORT, 1, Integer),
-        R16Sfloat => FormatDescription::new(glow::R16, glow::RED, glow::HALF_FLOAT, 1, Float),
+        R16Sfloat => FormatDescription::new(glow::R16F, glow::RED, glow::HALF_FLOAT, 1, Float),
         R16Unorm => FormatDescription::new(glow::R16, glow::RED, glow::UNSIGNED_SHORT, 1, Float),
         Rg16Uint => FormatDescription::new(
             glow::RG16UI,
@@ -161,7 +159,7 @@ pub fn describe_format(format: Format) -> Option<FormatDescription> {
         ),
         Rg16Sint => FormatDescription::new(glow::RG16I, glow::RG_INTEGER, glow::SHORT, 2, Integer),
         Rg16Unorm => FormatDescription::new(glow::RG16, glow::RG, glow::UNSIGNED_SHORT, 2, Float),
-        Rg16Sfloat => FormatDescription::new(glow::RG16, glow::RG, glow::HALF_FLOAT, 2, Float),
+        Rg16Sfloat => FormatDescription::new(glow::RG16F, glow::RG, glow::HALF_FLOAT, 2, Float),
         Rgba16Uint => FormatDescription::new(
             glow::RGBA16UI,
             glow::RGBA_INTEGER,
@@ -173,7 +171,7 @@ pub fn describe_format(format: Format) -> Option<FormatDescription> {
             FormatDescription::new(glow::RGBA16I, glow::RGBA_INTEGER, glow::SHORT, 4, Integer)
         }
         Rgba16Sfloat => {
-            FormatDescription::new(glow::RGBA16, glow::RGBA, glow::HALF_FLOAT, 4, Float)
+            FormatDescription::new(glow::RGBA16F, glow::RGBA, glow::HALF_FLOAT, 4, Float)
         }
         Rgba16Unorm => {
             FormatDescription::new(glow::RGBA16, glow::RGBA, glow::UNSIGNED_SHORT, 4, Float)
@@ -255,4 +253,14 @@ pub fn describe_format(format: Format) -> Option<FormatDescription> {
 
         _ => return None,
     })
+}
+
+#[cfg(feature = "cross")]
+pub fn map_naga_stage_to_cross(stage: naga::ShaderStage) -> spirv_cross::spirv::ExecutionModel {
+    use spirv_cross::spirv::ExecutionModel as Em;
+    match stage {
+        naga::ShaderStage::Vertex => Em::Vertex,
+        naga::ShaderStage::Fragment => Em::Fragment,
+        naga::ShaderStage::Compute => Em::GlCompute,
+    }
 }

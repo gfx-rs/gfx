@@ -180,6 +180,7 @@ struct Renderer<B: hal::Backend> {
     framebuffer: ManuallyDrop<B::Framebuffer>,
     pipeline: ManuallyDrop<B::GraphicsPipeline>,
     pipeline_layout: ManuallyDrop<B::PipelineLayout>,
+    pipeline_cache: ManuallyDrop<B::PipelineCache>,
     desc_set: Option<B::DescriptorSet>,
     set_layout: ManuallyDrop<B::DescriptorSetLayout>,
     submission_complete_semaphores: Vec<B::Semaphore>,
@@ -213,7 +214,7 @@ where
         adapter: hal::adapter::Adapter<B>,
     ) -> Renderer<B> {
         let memory_types = adapter.physical_device.memory_properties().memory_types;
-        let limits = adapter.physical_device.limits();
+        let limits = adapter.physical_device.properties().limits;
 
         // Build a new device and associated command queues
         let family = adapter
@@ -223,10 +224,21 @@ where
                 surface.supports_queue_family(family) && family.queue_type().supports_graphics()
             })
             .expect("No queue family supports presentation");
+
+        let physical_device = &adapter.physical_device;
+        let sparsely_bound = physical_device
+            .features()
+            .contains(hal::Features::SPARSE_BINDING | hal::Features::SPARSE_RESIDENCY_IMAGE_2D);
         let mut gpu = unsafe {
-            adapter
-                .physical_device
-                .open(&[(family, &[1.0])], hal::Features::empty())
+            physical_device
+                .open(
+                    &[(family, &[1.0])],
+                    if sparsely_bound {
+                        hal::Features::SPARSE_BINDING | hal::Features::SPARSE_RESIDENCY_IMAGE_2D
+                    } else {
+                        hal::Features::empty()
+                    },
+                )
                 .unwrap()
         };
         let mut queue_group = gpu.queue_groups.pop().unwrap();
@@ -307,7 +319,14 @@ where
             * non_coherent_alignment;
 
         let mut vertex_buffer = ManuallyDrop::new(
-            unsafe { device.create_buffer(padded_buffer_len, buffer::Usage::VERTEX) }.unwrap(),
+            unsafe {
+                device.create_buffer(
+                    padded_buffer_len,
+                    buffer::Usage::VERTEX,
+                    m::SparseFlags::empty(),
+                )
+            }
+            .unwrap(),
         );
 
         let buffer_req = unsafe { device.get_buffer_requirements(&vertex_buffer) };
@@ -359,8 +378,14 @@ where
             * non_coherent_alignment;
 
         let mut image_upload_buffer = ManuallyDrop::new(
-            unsafe { device.create_buffer(padded_upload_size, buffer::Usage::TRANSFER_SRC) }
-                .unwrap(),
+            unsafe {
+                device.create_buffer(
+                    padded_upload_size,
+                    buffer::Usage::TRANSFER_SRC,
+                    m::SparseFlags::empty(),
+                )
+            }
+            .unwrap(),
         );
         let image_mem_reqs = unsafe { device.get_buffer_requirements(&image_upload_buffer) };
 
@@ -397,6 +422,11 @@ where
                     ColorFormat::SELF,
                     i::Tiling::Optimal,
                     i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+                    if sparsely_bound {
+                        m::SparseFlags::SPARSE_BINDING | m::SparseFlags::SPARSE_RESIDENCY
+                    } else {
+                        m::SparseFlags::empty()
+                    },
                     i::ViewCapabilities::empty(),
                 )
             }
@@ -417,7 +447,41 @@ where
             unsafe { device.allocate_memory(device_type, image_req.size) }.unwrap(),
         );
 
-        unsafe { device.bind_image_memory(&image_memory, 0, &mut image_logo) }.unwrap();
+        if sparsely_bound {
+            println!("Using sparse resource binding");
+            unsafe {
+                queue_group.queues[0].bind_sparse(
+                    std::iter::empty::<&B::Semaphore>(),
+                    std::iter::empty::<&B::Semaphore>(),
+                    std::iter::empty::<(
+                        &mut B::Buffer,
+                        std::iter::Empty<&hal::memory::SparseBind<&B::Memory>>,
+                    )>(),
+                    std::iter::empty(),
+                    std::iter::once((
+                        &mut *image_logo,
+                        std::iter::once(&hal::memory::SparseImageBind {
+                            subresource: hal::image::Subresource {
+                                aspects: hal::format::Aspects::COLOR,
+                                level: 0,
+                                layer: 0,
+                            },
+                            offset: hal::image::Offset::ZERO,
+                            extent: hal::image::Extent {
+                                width,
+                                height,
+                                depth: 1,
+                            },
+                            memory: Some((&*image_memory, 0)),
+                        }),
+                    )),
+                    &device,
+                    None,
+                );
+            }
+        } else {
+            unsafe { device.bind_image_memory(&image_memory, 0, &mut image_logo) }.unwrap();
+        }
         let image_srv = ManuallyDrop::new(
             unsafe {
                 device.create_image_view(
@@ -425,6 +489,7 @@ where
                     i::ViewKind::D2,
                     ColorFormat::SELF,
                     Swizzle::NO,
+                    i::Usage::SAMPLED,
                     i::SubresourceRange {
                         aspects: f::Aspects::COLOR,
                         ..Default::default()
@@ -644,6 +709,25 @@ where
             cmd_buffers.push(unsafe { cmd_pools[i].allocate_one(command::Level::Primary) });
         }
 
+        let pipeline_cache_path = "quad_pipeline_cache";
+
+        let previous_pipeline_cache_data = std::fs::read(pipeline_cache_path);
+
+        if let Err(error) = previous_pipeline_cache_data.as_ref() {
+            println!("Error loading the previous pipeline cache data: {}", error);
+        }
+
+        let pipeline_cache = ManuallyDrop::new(unsafe {
+            device
+                .create_pipeline_cache(
+                    previous_pipeline_cache_data
+                        .as_ref()
+                        .ok()
+                        .map(|vec| &vec[..]),
+                )
+                .expect("Can't create pipeline cache")
+        });
+
         let pipeline_layout = ManuallyDrop::new(
             unsafe { device.create_pipeline_layout(iter::once(&*set_layout), iter::empty()) }
                 .expect("Can't create pipeline layout"),
@@ -730,7 +814,7 @@ where
                     blend: Some(pso::BlendState::ALPHA),
                 });
 
-                unsafe { device.create_graphics_pipeline(&pipeline_desc, None) }
+                unsafe { device.create_graphics_pipeline(&pipeline_desc, Some(&pipeline_cache)) }
             };
 
             unsafe {
@@ -742,6 +826,16 @@ where
 
             ManuallyDrop::new(pipeline.unwrap())
         };
+
+        let pipeline_cache_data =
+            unsafe { device.get_pipeline_cache_data(&pipeline_cache).unwrap() };
+
+        std::fs::write(pipeline_cache_path, &pipeline_cache_data).unwrap();
+        log::info!(
+            "Wrote the pipeline cache to {} ({} bytes)",
+            pipeline_cache_path,
+            pipeline_cache_data.len()
+        );
 
         // Rendering setup
         let viewport = pso::Viewport {
@@ -768,6 +862,7 @@ where
             framebuffer,
             pipeline,
             pipeline_layout,
+            pipeline_cache,
             desc_set: Some(desc_set),
             set_layout,
             submission_complete_semaphores,
@@ -797,6 +892,7 @@ where
         self.viewport.rect.h = extent.height as _;
 
         unsafe {
+            self.device.wait_idle().unwrap();
             self.device
                 .destroy_framebuffer(ManuallyDrop::into_inner(ptr::read(&self.framebuffer)));
             self.framebuffer = ManuallyDrop::new(
@@ -965,6 +1061,8 @@ where
                 .destroy_pipeline_layout(ManuallyDrop::into_inner(ptr::read(
                     &self.pipeline_layout,
                 )));
+            self.device
+                .destroy_pipeline_cache(ManuallyDrop::into_inner(ptr::read(&self.pipeline_cache)));
             let surface = ManuallyDrop::into_inner(ptr::read(&self.surface));
             self.instance.destroy_surface(surface);
         }

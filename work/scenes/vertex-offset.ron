@@ -32,6 +32,7 @@
 			image: "image.color",
 			kind: D2,
 			format: Rgba32Uint,
+			usage: (bits: 0x15),
 			range: (
 				aspects: (bits: 1),
 				level_start: 0,

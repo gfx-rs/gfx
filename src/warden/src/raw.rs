@@ -102,6 +102,7 @@ pub enum Resource {
         format: hal::format::Format,
         #[serde(default)]
         swizzle: hal::format::Swizzle,
+        usage: hal::image::Usage,
         range: hal::image::SubresourceRange,
     },
     Sampler {

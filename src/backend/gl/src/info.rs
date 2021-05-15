@@ -1,14 +1,14 @@
 use crate::{Error, GlContainer, MAX_COLOR_ATTACHMENTS};
 use glow::HasContext;
-use hal::{Capabilities, DynamicStates, Features, Limits, PerformanceCaveats};
+use hal::{DynamicStates, Features, Limits, PerformanceCaveats, PhysicalDeviceProperties};
 use std::{collections::HashSet, fmt, str};
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Version {
-    pub is_embedded: bool,
     pub major: u32,
     pub minor: u32,
+    pub is_embedded: bool,
     pub revision: Option<u32>,
     pub vendor_info: String,
 }
@@ -17,9 +17,9 @@ impl Version {
     /// Create a new OpenGL version number
     pub fn new(major: u32, minor: u32, revision: Option<u32>, vendor_info: String) -> Self {
         Version {
-            is_embedded: false,
             major: major,
             minor: minor,
+            is_embedded: false,
             revision: revision,
             vendor_info,
         }
@@ -27,9 +27,9 @@ impl Version {
     /// Create a new OpenGL ES version number
     pub fn new_embedded(major: u32, minor: u32, vendor_info: String) -> Self {
         Version {
-            is_embedded: true,
             major,
             minor,
+            is_embedded: true,
             revision: None,
             vendor_info,
         }
@@ -55,28 +55,38 @@ impl Version {
     /// Note that this function is intentionally lenient in regards to parsing,
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
+    /// # Notes
+    /// `WebGL 2` version returned as `OpenGL ES 3.0`
     pub fn parse(mut src: &str) -> Result<Version, &str> {
-        // TODO: Parse version and optional vendor
         let webgl_sig = "WebGL ";
-        let is_webgl = src.contains(webgl_sig);
-        if is_webgl {
-            return Ok(Version {
-                is_embedded: true,
-                major: 2,
-                minor: 0,
-                revision: None,
-                vendor_info: "".to_string(),
-            });
-        }
+        // According to the WebGL specification
+        // VERSION	WebGL<space>1.0<space><vendor-specific information>
+        // SHADING_LANGUAGE_VERSION	WebGL<space>GLSL<space>ES<space>1.0<space><vendor-specific information>
+        let is_webgl = src.starts_with(webgl_sig);
+        let is_es = if is_webgl {
+            let pos = src.rfind(webgl_sig).unwrap_or(0);
+            src = &src[pos + webgl_sig.len()..];
+            true
+        } else {
+            let es_sig = " ES ";
+            match src.rfind(es_sig) {
+                Some(pos) => {
+                    src = &src[pos + es_sig.len()..];
+                    true
+                }
+                None => false,
+            }
+        };
 
-        let es_sig = " ES ";
-        let is_es = match src.rfind(es_sig) {
+        let glsl_es_sig = "GLSL ES ";
+        let is_glsl = match src.find(glsl_es_sig) {
             Some(pos) => {
-                src = &src[pos + es_sig.len()..];
+                src = &src[pos + glsl_es_sig.len()..];
                 true
             }
             None => false,
         };
+
         let (version, vendor_info) = match src.find(' ') {
             Some(i) => (&src[..i], src[i + 1..].to_string()),
             None => (src, String::new()),
@@ -94,13 +104,22 @@ impl Version {
             };
             trimmed.parse().ok()
         });
-        let revision = it.next().and_then(|s| s.parse().ok());
+        let revision = if is_webgl {
+            None
+        } else {
+            it.next().and_then(|s| s.parse().ok())
+        };
 
         match (major, minor, revision) {
             (Some(major), Some(minor), revision) => Ok(Version {
-                is_embedded: is_es,
-                major,
+                // Return WebGL 2.0 version as OpenGL ES 3.0
+                major: if is_webgl && !is_glsl {
+                    major + 1
+                } else {
+                    major
+                },
                 minor,
+                is_embedded: is_es,
                 revision,
                 vendor_info,
             }),
@@ -267,26 +286,24 @@ pub enum Requirement<'a> {
     Ext(&'a str),
 }
 
-const IS_WEBGL: bool = cfg!(target_arch = "wasm32");
-
 impl Info {
     fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
         let raw_version = get_string(gl, glow::VERSION).unwrap_or_default();
         let version = Version::parse(&raw_version).unwrap();
-        let raw_shader_version;
-        let shading_language = if IS_WEBGL {
-            Version::new_embedded(3, 0, String::from(""))
-        } else {
-            raw_shader_version = get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_default();
+        let shading_language = {
+            let raw_shader_version =
+                get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_default();
             Version::parse(&raw_shader_version).unwrap()
         };
 
         // TODO: Use separate path for WebGL extensions in `glow` somehow
         // Perhaps automatic fallback for NUM_EXTENSIONS to EXTENSIONS on native
-        let extensions = if IS_WEBGL {
+        let extensions = if crate::is_webgl() {
             HashSet::new()
-        } else if version >= Version::new(3, 0, None, String::from("")) {
+        } else if (version >= Version::new(3, 0, None, String::from("")))
+            || (version >= Version::new_embedded(3, 0, String::from("")))
+        {
             let num_exts = get_usize(gl, glow::NUM_EXTENSIONS).unwrap();
             (0..num_exts)
                 .map(|i| unsafe { gl.get_parameter_indexed_string(glow::EXTENSIONS, i as u32) })
@@ -315,7 +332,7 @@ impl Info {
 
     pub fn is_embedded_version_supported(&self, major: u32, minor: u32) -> bool {
         self.version.is_embedded
-            && self.version >= Version::new(major, minor, None, String::from(""))
+            && self.version >= Version::new_embedded(major, minor, String::from(""))
     }
 
     /// Returns `true` if the implementation supports the extension
@@ -339,9 +356,226 @@ impl Info {
             Ext(extension) => self.is_extension_supported(extension),
         })
     }
+}
 
-    pub fn is_webgl(&self) -> bool {
-        IS_WEBGL
+/// This structure checks whether a given image format is whitelisted to be used
+/// or not in the backend.
+///
+/// Unlike with Vulkan, OpenGL gives its users no easy way to query for valid
+/// image formats. Instead, it relies heavily on semantics, which are laid out
+/// in its specifications and function documentations.
+///
+/// This structure is intended to condense all of the supported formats into a
+/// single queryable location, acquired once when the adapter is created.
+#[derive(Debug)]
+pub enum TextureFormatFilter {
+    /// This filter names a set of allowed combinations. All combinations not
+    /// explicitly whitelisted will be reported as not available by the check
+    /// function.
+    Whitelist { whitelist: HashSet<(u32, u32, u32)> },
+    /// This filter is permissive, i.e. it reports all combinations as
+    /// available. Currently intended for use in the core profile.
+    Permissive,
+}
+impl TextureFormatFilter {
+    /// This is the fixed, spec-defined list of all triplets in the form
+    /// `(Internal Format, Format, Type)` that are supported by OpenGL ES 3 and
+    /// WebGL for image creation via the `glTexImage` family of functions.
+    ///
+    /// Combinations of these parameters other than the ones in this table are
+    /// not supported by the core specifications. Though that does not mean they
+    /// can't be used or can't work under any circumstance. What it does mean is
+    /// that using anything outside this list is relying on permissive drivers
+    /// to not trigger undefined behavior.
+    ///
+    /// This is a one to one copy of the tables provided to us in
+    /// [the documentation of `glTexImage2D`], which is the same table as the
+    /// for `glTexImage3D`. The contents of the table are copied pretty much
+    /// verbatim in order to facilitate maintenance.
+    ///
+    /// [the documentation of `glTexImage2D`]: https://www.khronos.org/registry/OpenGL-Refpages/es3/html/glTexImage2D.xhtml
+    const ES3_TABLE: &'static [(u32, u32, u32)] = &[
+        /* Taken from Table 1. Unsized Internal Formats. */
+        (glow::RGB, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::RGB, glow::RGB, glow::UNSIGNED_SHORT_5_6_5),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_SHORT_4_4_4_4),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_SHORT_5_5_5_1),
+        (
+            glow::LUMINANCE_ALPHA,
+            glow::LUMINANCE_ALPHA,
+            glow::UNSIGNED_BYTE,
+        ),
+        (glow::LUMINANCE, glow::LUMINANCE, glow::UNSIGNED_BYTE),
+        (glow::ALPHA, glow::ALPHA, glow::UNSIGNED_BYTE),
+        /* Taken from Table 2. Sized Internal Formats. */
+        (glow::R8, glow::RED, glow::UNSIGNED_BYTE),
+        (glow::R8_SNORM, glow::RED, glow::BYTE),
+        (glow::R16F, glow::RED, glow::HALF_FLOAT),
+        (glow::R16F, glow::RED, glow::FLOAT),
+        (glow::R32F, glow::RED, glow::FLOAT),
+        (glow::R8UI, glow::RED_INTEGER, glow::UNSIGNED_BYTE),
+        (glow::R8I, glow::RED_INTEGER, glow::BYTE),
+        (glow::R16UI, glow::RED_INTEGER, glow::UNSIGNED_SHORT),
+        (glow::R16I, glow::RED_INTEGER, glow::SHORT),
+        (glow::R32UI, glow::RED_INTEGER, glow::UNSIGNED_INT),
+        (glow::R32I, glow::RED_INTEGER, glow::INT),
+        (glow::RG8, glow::RG, glow::UNSIGNED_BYTE),
+        (glow::RG8_SNORM, glow::RG, glow::BYTE),
+        (glow::RG16F, glow::RG, glow::HALF_FLOAT),
+        (glow::RG16F, glow::RG, glow::FLOAT),
+        (glow::RG32F, glow::RG, glow::FLOAT),
+        (glow::RG8UI, glow::RG_INTEGER, glow::UNSIGNED_BYTE),
+        (glow::RG8I, glow::RG_INTEGER, glow::BYTE),
+        (glow::RG16UI, glow::RG_INTEGER, glow::UNSIGNED_SHORT),
+        (glow::RG16I, glow::RG_INTEGER, glow::SHORT),
+        (glow::RG32UI, glow::RG_INTEGER, glow::UNSIGNED_INT),
+        (glow::RG32I, glow::RG_INTEGER, glow::INT),
+        (glow::RGB8, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::SRGB8, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::RGB565, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::RGB565, glow::RGB, glow::UNSIGNED_SHORT_5_6_5),
+        (glow::RGB8_SNORM, glow::RGB, glow::BYTE),
+        (
+            glow::R11F_G11F_B10F,
+            glow::RGB,
+            glow::UNSIGNED_INT_10F_11F_11F_REV,
+        ),
+        (glow::R11F_G11F_B10F, glow::RGB, glow::HALF_FLOAT),
+        (glow::R11F_G11F_B10F, glow::RGB, glow::FLOAT),
+        (glow::RGB9_E5, glow::RGB, glow::UNSIGNED_INT_5_9_9_9_REV),
+        (glow::RGB9_E5, glow::RGB, glow::HALF_FLOAT),
+        (glow::RGB9_E5, glow::RGB, glow::FLOAT),
+        (glow::RGB16F, glow::RGB, glow::HALF_FLOAT),
+        (glow::RGB16F, glow::RGB, glow::FLOAT),
+        (glow::RGB32F, glow::RGB, glow::FLOAT),
+        (glow::RGB8UI, glow::RGB_INTEGER, glow::UNSIGNED_BYTE),
+        (glow::RGB8I, glow::RGB_INTEGER, glow::BYTE),
+        (glow::RGB16UI, glow::RGB_INTEGER, glow::UNSIGNED_SHORT),
+        (glow::RGB16I, glow::RGB_INTEGER, glow::SHORT),
+        (glow::RGB32UI, glow::RGB_INTEGER, glow::UNSIGNED_INT),
+        (glow::RGB32I, glow::RGB_INTEGER, glow::INT),
+        (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGBA8_SNORM, glow::RGBA, glow::BYTE),
+        (glow::RGB5_A1, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGB5_A1, glow::RGBA, glow::UNSIGNED_SHORT_5_5_5_1),
+        (glow::RGB5_A1, glow::RGBA, glow::UNSIGNED_INT_2_10_10_10_REV),
+        (glow::RGBA4, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGBA4, glow::RGBA, glow::UNSIGNED_SHORT_4_4_4_4),
+        (
+            glow::RGB10_A2,
+            glow::RGBA,
+            glow::UNSIGNED_INT_2_10_10_10_REV,
+        ),
+        (glow::RGBA16F, glow::RGBA, glow::HALF_FLOAT),
+        (glow::RGBA16F, glow::RGBA, glow::FLOAT),
+        (glow::RGBA32F, glow::RGBA, glow::FLOAT),
+        (glow::RGBA8UI, glow::RGBA_INTEGER, glow::UNSIGNED_BYTE),
+        (glow::RGBA8I, glow::RGBA_INTEGER, glow::BYTE),
+        (
+            glow::RGB10_A2UI,
+            glow::RGBA_INTEGER,
+            glow::UNSIGNED_INT_2_10_10_10_REV,
+        ),
+        (glow::RGBA16UI, glow::RGBA_INTEGER, glow::UNSIGNED_SHORT),
+        (glow::RGBA16I, glow::RGBA_INTEGER, glow::SHORT),
+        (glow::RGBA32I, glow::RGBA_INTEGER, glow::INT),
+        (glow::RGBA32UI, glow::RGBA_INTEGER, glow::UNSIGNED_INT),
+        (
+            glow::DEPTH_COMPONENT16,
+            glow::DEPTH_COMPONENT,
+            glow::UNSIGNED_SHORT,
+        ),
+        (
+            glow::DEPTH_COMPONENT16,
+            glow::DEPTH_COMPONENT,
+            glow::UNSIGNED_INT,
+        ),
+        (
+            glow::DEPTH_COMPONENT24,
+            glow::DEPTH_COMPONENT,
+            glow::UNSIGNED_INT,
+        ),
+        (glow::DEPTH_COMPONENT32F, glow::DEPTH_COMPONENT, glow::FLOAT),
+        (
+            glow::DEPTH24_STENCIL8,
+            glow::DEPTH_STENCIL,
+            glow::UNSIGNED_INT_24_8,
+        ),
+        (
+            glow::DEPTH32F_STENCIL8,
+            glow::DEPTH_STENCIL,
+            glow::FLOAT_32_UNSIGNED_INT_24_8_REV,
+        ),
+        (
+            glow::STENCIL_INDEX8,
+            glow::STENCIL_INDEX,
+            glow::UNSIGNED_BYTE,
+        ),
+    ];
+
+    /// Fixed list of format and type combinations supported by both OpenGL ES 1
+    /// and OpenGL ES 2. These values stayed the same between these two
+    /// versions, so we can just lump them together.
+    ///
+    /// This is a one to one copy of the tables provided to us in
+    /// [the documentation of `glTexImage2D`], which is the same table as the
+    /// for `glTexImage3D`. The contents of the table are copied pretty much
+    /// verbatim in order to facilitate maintenance.
+    ///
+    /// [the documentation of `glTexImage2D`]: https://khronos.org/registry/OpenGL-Refpages/es1.1/xhtml/
+    const ES1_ES2_TABLE: &'static [(u32, u32, u32)] = &[
+        (glow::ALPHA, glow::ALPHA, glow::UNSIGNED_BYTE),
+        (glow::RGB, glow::RGB, glow::UNSIGNED_BYTE),
+        (glow::RGB, glow::RGB, glow::UNSIGNED_SHORT_5_6_5),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_BYTE),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_SHORT_4_4_4_4),
+        (glow::RGBA, glow::RGBA, glow::UNSIGNED_SHORT_5_5_5_1),
+        (glow::LUMINANCE, glow::LUMINANCE, glow::UNSIGNED_BYTE),
+        (
+            glow::LUMINANCE_ALPHA,
+            glow::LUMINANCE_ALPHA,
+            glow::UNSIGNED_BYTE,
+        ),
+    ];
+
+    /// Creates a new filter for OpenGL ES 3.
+    fn new_es3() -> Self {
+        Self::Whitelist {
+            whitelist: {
+                let mut whitelist = HashSet::<(u32, u32, u32)>::default();
+                whitelist.extend(Self::ES3_TABLE);
+
+                whitelist
+            },
+        }
+    }
+
+    /// Creates a new filter for OpenGL ES 2 and OpenGL ES 1.
+    fn new_es1_es2() -> Self {
+        Self::Whitelist {
+            whitelist: {
+                let mut whitelist = HashSet::<(u32, u32, u32)>::default();
+                whitelist.extend(Self::ES1_ES2_TABLE);
+
+                whitelist
+            },
+        }
+    }
+
+    /// Creates a new, permissive filter.
+    fn new_permissive() -> Self {
+        Self::Permissive
+    }
+
+    /// This function checks whether a given format description is allowed by
+    /// this filter.
+    pub fn check(&self, internal_format: u32, format: u32, type_: u32) -> bool {
+        match self {
+            Self::Whitelist { whitelist } => whitelist.contains(&(internal_format, format, type_)),
+            Self::Permissive => true,
+        }
     }
 }
 
@@ -353,21 +587,21 @@ pub(crate) fn query_all(
     Info,
     Features,
     LegacyFeatures,
-    Limits,
-    Capabilities,
+    PhysicalDeviceProperties,
     PrivateCaps,
+    TextureFormatFilter,
 ) {
     use self::Requirement::*;
     let info = Info::get(gl);
     let max_texture_size = get_usize(gl, glow::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
     let max_samples = get_usize(gl, glow::MAX_SAMPLES).unwrap_or(8);
     let max_samples_mask = (max_samples * 2 - 1) as u8;
-    let max_texel_elements = if IS_WEBGL {
+    let max_texel_elements = if crate::is_webgl() {
         0
     } else {
         get_usize(gl, glow::MAX_TEXTURE_BUFFER_SIZE).unwrap_or(0)
     };
-    let min_storage_buffer_offset_alignment = if IS_WEBGL {
+    let min_storage_buffer_offset_alignment = if crate::is_webgl() {
         256
     } else {
         get_u64(gl, glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT).unwrap_or(256)
@@ -423,6 +657,9 @@ pub(crate) fn query_all(
     }
 
     let mut features = Features::NDC_Y_UP | Features::MUTABLE_COMPARISON_SAMPLER;
+    // TODO: Fill out downlevel features correctly.
+    let mut downlevel = hal::DownlevelProperties::all_enabled();
+    // TODO: Merge downlevel/legacy features?
     let mut legacy = LegacyFeatures::empty();
 
     if info.is_supported(&[
@@ -448,7 +685,8 @@ pub(crate) fn query_all(
     if info.is_supported(&[Core(4, 4), Ext("ARB_texture_mirror_clamp_to_edge")]) {
         features |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
     }
-    if info.is_supported(&[Core(4, 0), Es(3, 2), Ext("GL_EXT_draw_buffers2")]) && !info.is_webgl() {
+    if info.is_supported(&[Core(4, 0), Es(3, 2), Ext("GL_EXT_draw_buffers2")]) && !crate::is_webgl()
+    {
         features |= Features::INDEPENDENT_BLENDING;
     }
 
@@ -482,7 +720,12 @@ pub(crate) fn query_all(
     ]) {
         legacy |= LegacyFeatures::VERTEX_BASE;
     }
-    if info.is_supported(&[Core(3, 2), Ext("GL_ARB_framebuffer_sRGB")]) {
+    if info.is_supported(&[
+        Core(3, 1),
+        Es(3, 0),
+        Ext("GL_ARB_framebuffer_sRGB"),
+        Ext("GL_EXT_sRGB"),
+    ]) {
         legacy |= LegacyFeatures::SRGB_COLOR;
     }
     if info.is_supported(&[Core(3, 1), Es(3, 0), Ext("GL_ARB_uniform_buffer_object")]) {
@@ -512,9 +755,11 @@ pub(crate) fn query_all(
     if !info.is_supported(&[Core(4, 2)]) {
         performance_caveats |= PerformanceCaveats::BASE_VERTEX_INSTANCE_DRAWING;
     }
-    let capabilities = Capabilities {
+    let properties = PhysicalDeviceProperties {
+        limits,
         performance_caveats,
         dynamic_pipeline_states: DynamicStates::all(),
+        ..PhysicalDeviceProperties::default()
     };
 
     let buffer_storage = info.is_supported(&[
@@ -523,7 +768,7 @@ pub(crate) fn query_all(
         Ext("GL_EXT_buffer_storage"),
     ]);
     // See https://github.com/gfx-rs/gfx/issues/3453
-    let emulate_map = IS_WEBGL || !buffer_storage;
+    let emulate_map = crate::is_webgl() || !buffer_storage;
 
     let private = PrivateCaps {
         vertex_array: info.is_supported(&[Core(3, 0), Es(3, 0), Ext("GL_ARB_vertex_array_object")]),
@@ -531,13 +776,14 @@ pub(crate) fn query_all(
         framebuffer: info.is_supported(&[Core(3, 0), Es(2, 0), Ext("GL_ARB_framebuffer_object")]),
         // TODO && gl.GenFramebuffers.is_loaded(),
         framebuffer_texture: info.is_supported(&[Core(3, 0)]), //TODO: double check
-        index_buffer_role_change: !info.is_webgl(),
-        image_storage: info.is_supported(&[Core(4, 2), Ext("GL_ARB_texture_storage")]),
+        // `WebGL` Note: buffers bound to non ELEMENT_ARRAY_BUFFER targets can not be bound to ELEMENT_ARRAY_BUFFER target
+        index_buffer_role_change: info.is_supported(&[Core(2, 0), Es(2, 0)]) && !crate::is_webgl(),
+        image_storage: info.is_supported(&[Core(4, 2), Es(3, 0), Ext("GL_ARB_texture_storage")]),
         buffer_storage,
         clear_buffer: info.is_supported(&[Core(3, 0), Es(3, 0)]),
         program_interface: info.is_supported(&[Core(4, 3), Ext("GL_ARB_program_interface_query")]),
         frag_data_location: !info.version.is_embedded,
-        sync: !info.is_webgl() && info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]), // TODO
+        sync: info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]), // TODO
         emulate_map,
         depth_range_f64_precision: !info.version.is_embedded, // TODO
         draw_buffers: info.is_supported(&[Core(2, 0), Es(3, 0)]),
@@ -546,7 +792,20 @@ pub(crate) fn query_all(
         memory_barrier: info.is_supported(&[Core(4, 2), Es(3, 1)]),
     };
 
-    (info, features, legacy, limits, capabilities, private)
+    let filter = if info.is_supported(&[Es(3, 0)]) {
+        /* Use the OpenGL ES 3 format filter. */
+        TextureFormatFilter::new_es3()
+    } else if info.is_supported(&[Es(1, 0)]) {
+        /* Use the OpenGL ES 1 and OpenGL ES 2 format filter. */
+        TextureFormatFilter::new_es1_es2()
+    } else {
+        /* We're using the core specification. We can assume all of the
+         * combinations are valid, provided the OpenGL enums values are also
+         * valid for textures. */
+        TextureFormatFilter::new_permissive()
+    };
+
+    (info, features, legacy, properties, private, filter)
 }
 
 #[cfg(test)]
@@ -602,6 +861,23 @@ mod tests {
         assert_eq!(
             Version::parse("OpenGL ES GLSL ES 3.20"),
             Ok(Version::new_embedded(3, 2, String::new()))
+        );
+        assert_eq!(
+            // WebGL 2.0 should parse as OpenGL ES 3.0
+            Version::parse("WebGL 2.0 (OpenGL ES 3.0 Chromium)"),
+            Ok(Version::new_embedded(
+                3,
+                0,
+                "(OpenGL ES 3.0 Chromium)".to_string()
+            ))
+        );
+        assert_eq!(
+            Version::parse("WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)"),
+            Ok(Version::new_embedded(
+                3,
+                0,
+                "(OpenGL ES GLSL ES 3.0 Chromium)".to_string()
+            ))
         );
     }
 }

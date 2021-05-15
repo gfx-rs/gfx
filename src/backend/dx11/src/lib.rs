@@ -25,8 +25,7 @@ use crate::{debug::set_debug_name, device::DepthStencilState};
 use auxil::ShaderStage;
 use hal::{
     adapter, buffer, command, format, image, memory, pass, pso, query, queue, window, DrawCount,
-    IndexCount, IndexType, InstanceCount, Limits, TaskCount, VertexCount, VertexOffset,
-    WorkGroupCount,
+    IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
 };
 use range_alloc::RangeAllocator;
 use smallvec::SmallVec;
@@ -144,10 +143,28 @@ impl Instance {
     }
 }
 
+unsafe fn check_feature_support<T>(
+    device: &d3d11::ID3D11Device,
+    feature: d3d11::D3D11_FEATURE,
+) -> T {
+    let mut value = mem::zeroed::<T>();
+    let ret = device.CheckFeatureSupport(
+        feature,
+        &mut value as *mut _ as *mut _,
+        mem::size_of::<T>() as _,
+    );
+    assert_eq!(ret, winerror::S_OK);
+    value
+}
+
 fn get_features(
-    _device: ComPtr<d3d11::ID3D11Device>,
+    device: ComPtr<d3d11::ID3D11Device>,
     feature_level: d3dcommon::D3D_FEATURE_LEVEL,
-) -> hal::Features {
+) -> (
+    hal::Features,
+    hal::DownlevelProperties,
+    hal::PerformanceCaveats,
+) {
     let mut features = hal::Features::empty()
         | hal::Features::ROBUST_BUFFER_ACCESS // TODO: verify
         | hal::Features::INSTANCE_RATE
@@ -159,33 +176,59 @@ fn get_features(
         | hal::Features::DEPTH_CLAMP
         | hal::Features::NDC_Y_UP;
 
-    features.set(
-        hal::Features::TEXTURE_DESCRIPTOR_ARRAY
+    let mut downlevel = hal::DownlevelProperties::default();
+    let performance = hal::PerformanceCaveats::default();
+
+    if d3dcommon::D3D_FEATURE_LEVEL_9_1 <= feature_level
+        && feature_level < d3dcommon::D3D_FEATURE_LEVEL_9_3
+    {
+        let d3d9_features: d3d11::D3D11_FEATURE_DATA_D3D9_OPTIONS =
+            unsafe { check_feature_support(&device, d3d11::D3D11_FEATURE_D3D9_OPTIONS) };
+        downlevel.non_power_of_two_mipmapped_textures =
+            d3d9_features.FullNonPow2TextureSupport != 0;
+    }
+
+    if d3dcommon::D3D_FEATURE_LEVEL_10_0 <= feature_level
+        && feature_level < d3dcommon::D3D_FEATURE_LEVEL_11_0
+    {
+        let compute_support: d3d11::D3D11_FEATURE_DATA_D3D10_X_HARDWARE_OPTIONS = unsafe {
+            check_feature_support(&device, d3d11::D3D11_FEATURE_D3D10_X_HARDWARE_OPTIONS)
+        };
+        downlevel.compute_shaders =
+            compute_support.ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x != 0
+    }
+
+    if feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_0 {
+        features |= hal::Features::TEXTURE_DESCRIPTOR_ARRAY
             | hal::Features::FULL_DRAW_INDEX_U32
-            | hal::Features::GEOMETRY_SHADER,
-        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_0,
-    );
+            | hal::Features::GEOMETRY_SHADER;
+        downlevel.shader_model = hal::DownlevelShaderModel::ShaderModel4;
+        downlevel.non_power_of_two_mipmapped_textures = true;
+    }
 
-    features.set(
-        hal::Features::IMAGE_CUBE_ARRAY,
-        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_1,
-    );
+    if feature_level >= d3dcommon::D3D_FEATURE_LEVEL_10_1 {
+        features |= hal::Features::IMAGE_CUBE_ARRAY;
+    }
 
-    features.set(
-        hal::Features::VERTEX_STORES_AND_ATOMICS
+    if feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_0 {
+        features |= hal::Features::VERTEX_STORES_AND_ATOMICS
             | hal::Features::FRAGMENT_STORES_AND_ATOMICS
             | hal::Features::FORMAT_BC
             | hal::Features::TESSELLATION_SHADER
-            | hal::Features::DRAW_INDIRECT_FIRST_INSTANCE,
-        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_0,
-    );
+            | hal::Features::DRAW_INDIRECT_FIRST_INSTANCE;
 
-    features.set(
-        hal::Features::LOGIC_OP, // TODO: Optional at 10_0 -> 11_0
-        feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_1,
-    );
+        downlevel.compute_shaders = true;
+        downlevel.shader_model = hal::DownlevelShaderModel::ShaderModel5;
+        downlevel.storage_images = true;
+        downlevel.read_only_depth_stencil = true;
+        downlevel.device_local_image_copies = true;
+    }
 
-    features
+    if feature_level >= d3dcommon::D3D_FEATURE_LEVEL_11_1 {
+        features |= hal::Features::LOGIC_OP; // TODO: Optional at 10_0 -> 11_0
+    }
+
+    (features, downlevel, performance)
 }
 
 const MAX_PUSH_CONSTANT_SIZE: usize = 256;
@@ -215,7 +258,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
     };
 
     let max_image_uav = 2;
-    let max_buffer_uav = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize - max_image_uav;
+    let max_buffer_uav = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT - max_image_uav;
 
     let max_input_slots = match feature_level {
         d3dcommon::D3D_FEATURE_LEVEL_9_1
@@ -252,21 +295,48 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
 
     let max_constant_buffers = d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT - 1;
 
+    let (
+        max_compute_work_group_count_z,
+        max_compute_work_group_size_xy,
+        max_compute_work_group_size_z,
+    ) = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_10_0 | d3dcommon::D3D_FEATURE_LEVEL_10_1 => {
+            (1, d3d11::D3D11_CS_4_X_THREAD_GROUP_MAX_X, 1)
+        }
+        d3dcommon::D3D_FEATURE_LEVEL_11_0 | d3dcommon::D3D_FEATURE_LEVEL_11_1 => (
+            d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+            d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
+            d3d11::D3D11_CS_THREAD_GROUP_MAX_Z,
+        ),
+        _ => (0, 0, 0),
+    };
+
+    let max_compute_shared_memory_size = match feature_level {
+        d3dcommon::D3D_FEATURE_LEVEL_10_0 | d3dcommon::D3D_FEATURE_LEVEL_10_1 => 4096 * 4, // This doesn't have an equiv SM4 constant :\
+        d3dcommon::D3D_FEATURE_LEVEL_11_0 | d3dcommon::D3D_FEATURE_LEVEL_11_1 => {
+            d3d11::D3D11_CS_TGSM_REGISTER_COUNT * 4
+        }
+        _ => 0,
+    } as _;
+
     hal::Limits {
         max_image_1d_size: max_texture_uv_dimension,
         max_image_2d_size: max_texture_uv_dimension,
         max_image_3d_size: max_texture_w_dimension,
         max_image_cube_size: max_texture_cube_dimension,
         max_image_array_layers: max_texture_cube_dimension as _,
-        max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT as _,
-        // Leave top buffer for push constants
-        max_per_stage_descriptor_uniform_buffers: max_constant_buffers as _,
-        max_per_stage_descriptor_storage_buffers: max_buffer_uav,
-        max_per_stage_descriptor_storage_images: max_image_uav,
-        max_per_stage_descriptor_sampled_images:
-            d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
-        max_descriptor_set_uniform_buffers_dynamic: max_constant_buffers as _,
-        max_descriptor_set_storage_buffers_dynamic: 0, // TODO: Implement dynamic offsets for storage buffers
+        descriptor_limits: hal::DescriptorLimits {
+            max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT as _,
+            // Leave top buffer for push constants
+            max_per_stage_descriptor_uniform_buffers: max_constant_buffers as _,
+            max_per_stage_descriptor_storage_buffers: max_buffer_uav,
+            max_per_stage_descriptor_sampled_images:
+                d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
+            max_per_stage_descriptor_storage_images: max_image_uav,
+            max_descriptor_set_uniform_buffers_dynamic: max_constant_buffers as _,
+            max_descriptor_set_storage_buffers_dynamic: 0, // TODO: Implement dynamic offsets for storage buffers
+            ..hal::DescriptorLimits::default()             // TODO
+        },
         max_bound_descriptor_sets: pso::DescriptorSetIndex::MAX,
         max_texel_elements: max_texture_uv_dimension as _, //TODO
         max_patch_size: d3d11::D3D11_IA_PATCH_MAX_CONTROL_POINT_COUNT as _,
@@ -278,16 +348,17 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
             height: 4096,
             depth: 1,
         },
+        max_compute_shared_memory_size,
         max_compute_work_group_count: [
             d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
             d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-            d3d11::D3D11_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+            max_compute_work_group_count_z,
         ],
         max_compute_work_group_invocations: d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP as _,
         max_compute_work_group_size: [
-            d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
-            d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
-            d3d11::D3D11_CS_THREAD_GROUP_MAX_Z,
+            max_compute_work_group_size_xy,
+            max_compute_work_group_size_xy,
+            max_compute_work_group_size_z,
         ], // TODO
         max_vertex_input_attribute_offset: 255, // TODO
         max_vertex_input_attributes: max_input_slots,
@@ -304,7 +375,7 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
         max_color_attachments,
         buffer_image_granularity: 1,
         non_coherent_atom_size: 1, // TODO
-        max_sampler_anisotropy: 16.,
+        max_sampler_anisotropy: 16.0,
         optimal_buffer_copy_offset_alignment: 1, // TODO
         // buffer -> image and image -> buffer paths use compute shaders that, at maximum, read 4 pixels from the buffer
         // at a time, so need an alignment of at least 4.
@@ -441,9 +512,9 @@ impl hal::Instance<Backend> for Instance {
         match dxgi::get_dxgi_factory() {
             Ok((library_dxgi, factory, dxgi_version)) => {
                 info!("DXGI version: {:?}", dxgi_version);
-                let library_d3d11 = Arc::new(
-                    libloading::Library::new("d3d11.dll").map_err(|_| hal::UnsupportedBackend)?,
-                );
+                let library_d3d11 = Arc::new(unsafe {
+                    libloading::Library::new("d3d11.dll").map_err(|_| hal::UnsupportedBackend)?
+                });
                 Ok(Instance {
                     factory,
                     dxgi_version,
@@ -539,14 +610,25 @@ impl hal::Instance<Backend> for Instance {
 
             let info = dxgi::get_adapter_desc(&adapter, &device, self.dxgi_version);
             let limits = get_limits(feature_level);
-            let features = get_features(device.clone(), feature_level);
+            let (features, downlevel, performance_caveats) =
+                get_features(device.clone(), feature_level);
             let format_properties = get_format_properties(device.clone());
 
             let physical_device = PhysicalDevice {
                 adapter,
                 library_d3d11: Arc::clone(&self.library_d3d11),
                 features,
-                limits,
+                properties: hal::PhysicalDeviceProperties {
+                    limits,
+                    dynamic_pipeline_states: hal::DynamicStates::VIEWPORT
+                        | hal::DynamicStates::SCISSOR
+                        | hal::DynamicStates::BLEND_CONSTANTS
+                        | hal::DynamicStates::DEPTH_BOUNDS
+                        | hal::DynamicStates::STENCIL_REFERENCE,
+                    downlevel,
+                    performance_caveats,
+                    ..hal::PhysicalDeviceProperties::default()
+                },
                 memory_properties,
                 format_properties,
             };
@@ -584,7 +666,7 @@ pub struct PhysicalDevice {
     adapter: ComPtr<IDXGIAdapter>,
     library_d3d11: Arc<libloading::Library>,
     features: hal::Features,
-    limits: hal::Limits,
+    properties: hal::PhysicalDeviceProperties,
     memory_properties: adapter::MemoryProperties,
     format_properties: [format::Properties; format::NUM_FORMATS],
 }
@@ -666,7 +748,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let func: libloading::Symbol<CreateFun> =
             self.library_d3d11.get(b"D3D11CreateDevice").unwrap();
 
-        let (device, cxt) = {
+        let (device, cxt, feature_level) = {
             if !self.features().contains(requested_features) {
                 return Err(hal::device::CreationError::MissingFeature);
             }
@@ -734,7 +816,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 feature_level >> 8 & 0xF
             );
 
-            (ComPtr::from_raw(device), ComPtr::from_raw(cxt))
+            (
+                ComPtr::from_raw(device),
+                ComPtr::from_raw(cxt),
+                feature_level,
+            )
         };
 
         let device1 = device.cast::<d3d11_1::ID3D11Device1>().ok();
@@ -744,7 +830,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             device1,
             cxt,
             requested_features,
+            self.properties.downlevel,
             self.memory_properties.clone(),
+            feature_level,
         );
 
         // TODO: deferred context => 1 cxt/queue?
@@ -881,20 +969,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.features
     }
 
-    fn capabilities(&self) -> hal::Capabilities {
-        use hal::DynamicStates as Ds;
-        hal::Capabilities {
-            performance_caveats: hal::PerformanceCaveats::empty(),
-            dynamic_pipeline_states: Ds::VIEWPORT
-                | Ds::SCISSOR
-                | Ds::BLEND_COLOR
-                | Ds::DEPTH_BOUNDS
-                | Ds::STENCIL_REFERENCE,
-        }
-    }
-
-    fn limits(&self) -> Limits {
-        self.limits
+    fn properties(&self) -> hal::PhysicalDeviceProperties {
+        self.properties
     }
 }
 
@@ -1095,7 +1171,11 @@ impl window::PresentationSurface<Backend> for Surface {
                     render_target_views: Vec::new(),
                     debug_name: None,
                 },
-                bind: conv::map_image_usage(config.image_usage, config.format.surface_desc()),
+                bind: conv::map_image_usage(
+                    config.image_usage,
+                    config.format.surface_desc(),
+                    device.internal.device_feature_level,
+                ),
                 requirements: memory::Requirements {
                     size: 0,
                     alignment: 1,
@@ -1145,6 +1225,9 @@ impl queue::QueueFamily for QueueFamily {
     }
     fn id(&self) -> queue::QueueFamilyId {
         queue::QueueFamilyId(0)
+    }
+    fn supports_sparse_binding(&self) -> bool {
+        false
     }
 }
 
@@ -1301,9 +1384,7 @@ impl RenderPassCache {
                 let attachment = &self.attachments[id].view;
                 let ds_view = attachment.dsv_handle.unwrap();
 
-                let rods_view = attachment.rodsv_handle.unwrap();
-
-                (Some(ds_view), Some(rods_view))
+                (Some(ds_view), attachment.rodsv_handle)
             }
             None => (None, None),
         };
@@ -1605,7 +1686,7 @@ impl CommandBufferState {
             let blend_color = if let Some(ref pipeline) = self.graphics_pipeline {
                 pipeline
                     .baked_states
-                    .blend_color
+                    .blend_constants
                     .or(self.blend_factor)
                     .unwrap_or([0f32; 4])
             } else {
@@ -1958,7 +2039,7 @@ unsafe impl Sync for CommandBuffer {}
 
 impl CommandBuffer {
     fn create_deferred(
-        device: &d3d11::ID3D11Device,
+        device: ComPtr<d3d11::ID3D11Device>,
         device1: Option<&d3d11_1::ID3D11Device1>,
         internal: Arc<internal::Internal>,
     ) -> Self {
@@ -2401,13 +2482,17 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         let _scope = debug_scope!(&self.context, "BindGraphicsDescriptorSets");
 
         // TODO: find a better solution to invalidating old bindings..
-        let nulls = [ptr::null_mut(); d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize];
-        self.context.CSSetUnorderedAccessViews(
-            0,
-            d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT,
-            nulls.as_ptr(),
-            ptr::null_mut(),
-        );
+        if self.internal.downlevel.compute_shaders {
+            let cs_uavs = if self.internal.device_feature_level <= d3dcommon::D3D_FEATURE_LEVEL_11_0
+            {
+                1
+            } else {
+                d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT
+            };
+            let nulls = [ptr::null_mut(); d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize];
+            self.context
+                .CSSetUnorderedAccessViews(0, cs_uavs, nulls.as_ptr(), ptr::null_mut());
+        }
 
         let mut offset_iter = offsets;
 
@@ -2712,8 +2797,122 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn fill_buffer(&mut self, _buffer: &Buffer, _sub: buffer::SubRange, _data: u32) {
-        unimplemented!()
+    unsafe fn fill_buffer(&mut self, buffer: &Buffer, sub: buffer::SubRange, data: u32) {
+        let mut device: *mut d3d11::ID3D11Device = mem::zeroed();
+        self.context.GetDevice(&mut device as *mut _);
+        let device = ComPtr::from_raw(device);
+
+        assert_eq!(
+            sub.offset % 4,
+            0,
+            "Buffer sub range offset must be multiple of 4"
+        );
+        if let Some(size) = sub.size {
+            assert_eq!(size % 4, 0, "Buffer sub range size must be multiple of 4");
+        }
+
+        // TODO: expose this requirement to the user to enable avoiding the unaligned fill for
+        // performance
+        // FirstElement must be a multiple of 4 (since each element is 4 bytes and the
+        // offset needs to be a multiple of 16 bytes)
+        let element_offset = sub.offset as u32 / 4;
+        let num_elements = sub.size.unwrap_or(buffer.requirements.size) as u32 / 4;
+
+        fn up_align(x: u32, alignment: u32) -> u32 {
+            (x + alignment - 1) & !(alignment - 1)
+        }
+
+        let aligned_element_offset = up_align(element_offset, 4);
+        let unaligned_num_elements = (aligned_element_offset - element_offset).min(num_elements);
+        let aligned_num_elements = num_elements - unaligned_num_elements;
+
+        // Use ClearUnorderedAccessViewUint to fill from the 16 byte aligned offset
+        if aligned_num_elements > 0 {
+            let mut desc: d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC = mem::zeroed();
+            desc.Format = dxgiformat::DXGI_FORMAT_R32_TYPELESS;
+            desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_BUFFER;
+            *desc.u.Buffer_mut() = d3d11::D3D11_BUFFER_UAV {
+                FirstElement: aligned_element_offset,
+                NumElements: aligned_num_elements,
+                Flags: d3d11::D3D11_BUFFER_UAV_FLAG_RAW,
+            };
+
+            let mut uav: *mut d3d11::ID3D11UnorderedAccessView = ptr::null_mut();
+            let hr = device.CreateUnorderedAccessView(
+                buffer.internal.raw as *mut _,
+                &desc,
+                &mut uav as *mut *mut _ as *mut *mut _,
+            );
+
+            if !winerror::SUCCEEDED(hr) {
+                panic!("fill_buffer failed to make UAV failed: 0x{:x}", hr);
+            }
+
+            let uav = ComPtr::from_raw(uav);
+
+            self.context
+                .ClearUnorderedAccessViewUint(uav.as_raw(), &[data; 4]);
+        }
+
+        // If there is unaligned portion at the beginning of the sub region
+        // create a new buffer with the fill data to copy into this region
+        if unaligned_num_elements > 0 {
+            debug_assert!(
+                unaligned_num_elements < 4,
+                "The number of unaligned elements is {} but it should be less than 4",
+                unaligned_num_elements
+            );
+
+            let initial_data = [data; 4];
+
+            let initial_data = d3d11::D3D11_SUBRESOURCE_DATA {
+                pSysMem: initial_data.as_ptr() as *const _,
+                SysMemPitch: 0,
+                SysMemSlicePitch: 0,
+            };
+
+            // TODO: consider using a persistent buffer like the working_buffer
+            let desc = d3d11::D3D11_BUFFER_DESC {
+                ByteWidth: core::mem::size_of_val(&initial_data) as _,
+                Usage: d3d11::D3D11_USAGE_DEFAULT,
+                BindFlags: 0,
+                CPUAccessFlags: 0,
+                MiscFlags: 0,
+                StructureByteStride: 0,
+            };
+            let mut temp_buffer = ptr::null_mut::<d3d11::ID3D11Buffer>();
+
+            assert_eq!(
+                winerror::S_OK,
+                device.CreateBuffer(
+                    &desc,
+                    &initial_data,
+                    &mut temp_buffer as *mut *mut _ as *mut *mut _,
+                )
+            );
+
+            let temp_buffer = ComPtr::from_raw(temp_buffer);
+
+            let src_box = d3d11::D3D11_BOX {
+                left: 0,
+                top: 0,
+                front: 0,
+                right: (unaligned_num_elements * core::mem::size_of::<u32>() as u32) as _,
+                bottom: 1,
+                back: 1,
+            };
+
+            self.context.CopySubresourceRegion(
+                buffer.internal.raw as _,
+                0,
+                sub.offset as _, // offset in bytes
+                0,
+                0,
+                temp_buffer.as_raw() as _,
+                0,
+                &src_box,
+            );
+        }
     }
 
     unsafe fn update_buffer(&mut self, _buffer: &Buffer, _offset: buffer::Offset, _data: &[u8]) {
@@ -2729,7 +2928,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         for info in regions {
-            let dst_box = d3d11::D3D11_BOX {
+            let src_box = d3d11::D3D11_BOX {
                 left: info.src as _,
                 top: 0,
                 front: 0,
@@ -2746,7 +2945,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 0,
                 src.internal.raw as _,
                 0,
-                &dst_box,
+                &src_box,
             );
 
             if let Some(disjoint_cb) = dst.internal.disjoint_cb {
@@ -2758,7 +2957,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     0,
                     src.internal.raw as _,
                     0,
-                    &dst_box,
+                    &src_box,
                 );
             }
         }
@@ -3314,7 +3513,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
 
     unsafe fn allocate_one(&mut self, _level: command::Level) -> CommandBuffer {
         CommandBuffer::create_deferred(
-            &self.device,
+            self.device.clone(),
             self.device1.as_deref(),
             Arc::clone(&self.internal),
         )
@@ -3844,7 +4043,7 @@ impl DescriptorSetInfo {
         &self,
         stage: ShaderStage,
         binding_index: pso::DescriptorBinding,
-    ) -> (DescriptorContent, RegisterData<ResourceIndex>) {
+    ) -> Option<(DescriptorContent, RegisterData<ResourceIndex>)> {
         let mut res_offsets = self
             .registers
             .map_register(|info| info.res_index as DescriptorIndex)
@@ -3855,11 +4054,11 @@ impl DescriptorSetInfo {
             }
             let content = DescriptorContent::from(binding.ty);
             if binding.binding == binding_index {
-                return (content, res_offsets.map(|offset| *offset as ResourceIndex));
+                return Some((content, res_offsets.map(|offset| *offset as ResourceIndex)));
             }
             res_offsets.add_content_many(content, 1);
         }
-        panic!("Unable to find binding {:?}", binding_index);
+        None
     }
 
     fn find_uav_register(

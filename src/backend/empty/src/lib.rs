@@ -145,14 +145,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         hal::Features::empty()
     }
 
-    fn capabilities(&self) -> hal::Capabilities {
-        Default::default()
-    }
-
-    fn limits(&self) -> hal::Limits {
-        hal::Limits {
-            non_coherent_atom_size: 1,
-            optimal_buffer_copy_pitch_alignment: 1,
+    fn properties(&self) -> hal::PhysicalDeviceProperties {
+        hal::PhysicalDeviceProperties {
+            limits: hal::Limits {
+                non_coherent_atom_size: 1,
+                optimal_buffer_copy_pitch_alignment: 1,
+                ..Default::default()
+            },
             ..Default::default()
         }
     }
@@ -297,6 +296,7 @@ impl device::Device<Backend> for Device {
         &self,
         size: u64,
         _: hal::buffer::Usage,
+        _: hal::memory::SparseFlags,
     ) -> Result<Buffer, hal::buffer::CreationError> {
         Ok(Buffer::new(size))
     }
@@ -335,6 +335,7 @@ impl device::Device<Backend> for Device {
         _: format::Format,
         _: hal::image::Tiling,
         _: hal::image::Usage,
+        _: hal::memory::SparseFlags,
         _: hal::image::ViewCapabilities,
     ) -> Result<Image, hal::image::CreationError> {
         Ok(Image::new(kind))
@@ -367,6 +368,7 @@ impl device::Device<Backend> for Device {
         _: hal::image::ViewKind,
         _: format::Format,
         _: format::Swizzle,
+        _: hal::image::Usage,
         _: hal::image::SubresourceRange,
     ) -> Result<(), hal::image::ViewCreationError> {
         Ok(())
@@ -568,6 +570,14 @@ impl device::Device<Backend> for Device {
     unsafe fn wait_for_fence(&self, _: &(), _: u64) -> Result<bool, device::WaitError> {
         Ok(true)
     }
+
+    fn start_capture(&self) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
+
+    fn stop_capture(&self) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
 }
 
 #[derive(Debug)]
@@ -581,6 +591,9 @@ impl queue::QueueFamily for QueueFamily {
     }
     fn id(&self) -> queue::QueueFamilyId {
         QUEUE_FAMILY_ID
+    }
+    fn supports_sparse_binding(&self) -> bool {
+        true
     }
 }
 

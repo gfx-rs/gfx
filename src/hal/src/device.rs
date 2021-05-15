@@ -12,7 +12,7 @@
 //! and is used to actually do things.
 
 use crate::{
-    buffer, format, image,
+    buffer, format, image, memory,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -73,10 +73,6 @@ pub enum CreationError {
     /// Device initialization failed due to implementation specific errors.
     #[error("Implementation specific error occurred")]
     InitializationFailed,
-    /// At least one of the user requested extensions if not supported by the
-    /// physical device.
-    #[error("Requested extension is missing")]
-    MissingExtension,
     /// At least one of the user requested features if not supported by the
     /// physical device.
     ///
@@ -160,6 +156,15 @@ pub enum ShaderError {
 pub enum ShaderModuleDesc<'a> {
     /// SPIR-V word array.
     SpirV(&'a [u32]),
+}
+
+/// Naga shader module.
+#[allow(missing_debug_implementations)]
+pub struct NagaShader {
+    /// Shader module IR.
+    pub module: naga::Module,
+    /// Analysis information of the module.
+    pub info: naga::valid::ModuleInfo,
 }
 
 /// Logical device handle, responsible for creating and managing resources
@@ -354,9 +359,9 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Create a new shader module from the `naga` module.
     unsafe fn create_shader_module_from_naga(
         &self,
-        module: naga::Module,
-    ) -> Result<B::ShaderModule, (ShaderError, naga::Module)> {
-        Err((ShaderError::Unsupported, module))
+        shader: NagaShader,
+    ) -> Result<B::ShaderModule, (ShaderError, NagaShader)> {
+        Err((ShaderError::Unsupported, shader))
     }
 
     /// Destroy a shader module module
@@ -371,6 +376,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         size: u64,
         usage: buffer::Usage,
+        sparse: memory::SparseFlags,
     ) -> Result<B::Buffer, buffer::CreationError>;
 
     /// Get memory requirements for the buffer
@@ -414,6 +420,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
+        sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
     ) -> Result<B::Image, image::CreationError>;
 
@@ -463,6 +470,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         view_kind: image::ViewKind,
         format: format::Format,
         swizzle: format::Swizzle,
+        usage: image::Usage,
         range: image::SubresourceRange,
     ) -> Result<B::ImageView, image::ViewCreationError>;
 
@@ -562,7 +570,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// [queue submission][crate::queue::Queue::submit] command.
     ///
     /// Fences **can** be unsignaled on the host with
-    /// [`reset_fences`][Device::reset_fences].
+    /// [`reset_fence`][Device::reset_fence].
     ///
     /// Fences **can** be waited on by the host with the
     /// [`wait_for_fences`][Device::wait_for_fences] command.
@@ -720,4 +728,10 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Associate a name with a pipeline layout, for easier debugging in external tools or with
     /// validation layers that can print a friendly name when referring to objects in error messages
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut B::PipelineLayout, name: &str);
+
+    /// Starts frame capture.
+    fn start_capture(&self);
+
+    /// Stops frame capture.
+    fn stop_capture(&self);
 }

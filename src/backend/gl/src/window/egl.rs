@@ -30,7 +30,9 @@ pub struct Inner {
     display: egl::Display,
     config: egl::Config,
     context: egl::Context,
-    pbuffer: egl::Surface,
+    /// Dummy pbuffer (1x1).
+    /// Required for `eglMakeCurrent` on platforms that doesn't supports `EGL_KHR_surfaceless_context`.
+    pbuffer: Option<egl::Surface>,
     wl_display: Option<*mut raw::c_void>,
 }
 
@@ -65,13 +67,24 @@ type WlEglWindowResizeFun = unsafe extern "system" fn(
 
 type WlEglWindowDestroyFun = unsafe extern "system" fn(window: *const raw::c_void);
 
+#[cfg(target_os = "android")]
+extern "C" {
+    pub fn ANativeWindow_setBuffersGeometry(
+        window: *mut raw::c_void,
+        width: i32,
+        height: i32,
+        format: i32,
+    ) -> i32;
+}
+
 fn open_x_display() -> Option<(ptr::NonNull<raw::c_void>, libloading::Library)> {
     log::info!("Loading X11 library to get the current display");
-    let library = libloading::Library::new("libX11.so").ok()?;
-    let func: libloading::Symbol<XOpenDisplayFun> =
-        unsafe { library.get(b"XOpenDisplay").unwrap() };
-    let result = unsafe { func(ptr::null()) };
-    ptr::NonNull::new(result).map(|ptr| (ptr, library))
+    unsafe {
+        let library = libloading::Library::new("libX11.so").ok()?;
+        let func: libloading::Symbol<XOpenDisplayFun> = library.get(b"XOpenDisplay").unwrap();
+        let result = func(ptr::null());
+        ptr::NonNull::new(result).map(|ptr| (ptr, library))
+    }
 }
 
 fn test_wayland_display() -> Option<libloading::Library> {
@@ -79,14 +92,16 @@ fn test_wayland_display() -> Option<libloading::Library> {
      * is an active wayland display available.
      */
     log::info!("Loading Wayland library to get the current display");
-    let client_library = libloading::Library::new("libwayland-client.so").ok()?;
-    let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
-        unsafe { client_library.get(b"wl_display_connect").unwrap() };
-    let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> =
-        unsafe { client_library.get(b"wl_display_disconnect").unwrap() };
-    let display = ptr::NonNull::new(unsafe { wl_display_connect(ptr::null()) })?;
-    unsafe { wl_display_disconnect(display.as_ptr()) };
-    let library = libloading::Library::new("libwayland-egl.so").ok()?;
+    let library = unsafe {
+        let client_library = libloading::Library::new("libwayland-client.so").ok()?;
+        let wl_display_connect: libloading::Symbol<WlDisplayConnectFun> =
+            client_library.get(b"wl_display_connect").unwrap();
+        let wl_display_disconnect: libloading::Symbol<WlDisplayDisconnectFun> =
+            client_library.get(b"wl_display_disconnect").unwrap();
+        let display = ptr::NonNull::new(wl_display_connect(ptr::null()))?;
+        wl_display_disconnect(display.as_ptr());
+        libloading::Library::new("libwayland-egl.so").ok()?
+    };
     Some(library)
 }
 
@@ -191,13 +206,21 @@ impl Inner {
             }
         };
 
-        let pbuffer = {
+        // Testing if context can be binded without surface
+        // and creating dummy pbuffer surface if not.
+        let pbuffer = if version < (1, 5)
+            || !display_extensions.contains("EGL_KHR_surfaceless_context")
+        {
             let attributes = [egl::WIDTH, 1, egl::HEIGHT, 1, egl::NONE];
             egl.create_pbuffer_surface(display, config, &attributes)
+                .map(Some)
                 .map_err(|e| {
                     log::warn!("Error in create_pbuffer_surface: {:?}", e);
                     hal::UnsupportedBackend
                 })?
+        } else {
+            log::info!("EGL_KHR_surfaceless_context is present. No need to create a dummy pbuffer");
+            None
         };
 
         Ok(Self {
@@ -295,8 +318,8 @@ impl hal::Instance<crate::Backend> for Instance {
             .egl
             .make_current(
                 inner.display,
-                Some(inner.pbuffer),
-                Some(inner.pbuffer),
+                inner.pbuffer,
+                inner.pbuffer,
                 Some(inner.context),
             )
             .unwrap();
@@ -384,7 +407,7 @@ impl hal::Instance<crate::Backend> for Instance {
                 result
             }
             other => {
-                error!("Unsupported window: {:?}", other);
+                log::error!("Unsupported window: {:?}", other);
                 return Err(w::InitError::UnsupportedWindowHandle);
             }
         };
@@ -431,6 +454,21 @@ impl hal::Instance<crate::Backend> for Instance {
                 })
         }?;
 
+        #[cfg(target_os = "android")]
+        {
+            let format = inner
+                .egl
+                .get_config_attrib(inner.display, inner.config, egl::NATIVE_VISUAL_ID)
+                .unwrap();
+
+            let ret = ANativeWindow_setBuffersGeometry(native_window_ptr, 0, 0, format);
+
+            if ret != 0 {
+                log::error!("Error returned from ANativeWindow_setBuffersGeometry");
+                return Err(w::InitError::UnsupportedWindowHandle);
+            }
+        }
+
         Ok(Surface {
             egl: inner.egl.clone(),
             raw,
@@ -467,7 +505,7 @@ pub struct Surface {
     raw: egl::Surface,
     display: egl::Display,
     context: egl::Context,
-    pbuffer: egl::Surface,
+    pbuffer: Option<egl::Surface>,
     presentable: bool,
     wl_window: Option<*mut raw::c_void>,
     pub(crate) swapchain: Option<Swapchain>,
@@ -618,12 +656,7 @@ impl Surface {
         self.egl.swap_buffers(self.display, self.raw).unwrap();
 
         self.egl
-            .make_current(
-                self.display,
-                Some(self.pbuffer),
-                Some(self.pbuffer),
-                Some(self.context),
-            )
+            .make_current(self.display, self.pbuffer, self.pbuffer, Some(self.context))
             .unwrap();
 
         Ok(None)
