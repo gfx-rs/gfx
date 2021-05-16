@@ -1216,37 +1216,12 @@ impl d::Device<B> for super::Device {
         let is_cube = image
             .flags
             .intersects(vk::ImageCreateFlags::CUBE_COMPATIBLE);
-        let mut image_view_info;
-        let mut info = vk::ImageViewCreateInfo::builder()
-            .flags(vk::ImageViewCreateFlags::empty())
-            .image(image.raw)
-            .view_type(match conv::map_view_kind(kind, image.ty, is_cube) {
-                Some(ty) => ty,
-                None => return Err(image::ViewCreationError::BadKind(kind)),
-            })
-            .format(conv::map_format(format))
-            .components(conv::map_swizzle(swizzle))
-            .subresource_range(conv::map_subresource_range(&range));
+        let view_type = match conv::map_view_kind(kind, image.ty, is_cube) {
+            Some(ty) => ty,
+            None => return Err(image::ViewCreationError::BadKind(kind)),
+        };
 
-        if self.shared.image_view_usage {
-            image_view_info = vk::ImageViewUsageCreateInfo::builder()
-                .usage(conv::map_image_usage(usage))
-                .build();
-            info = info.push_next(&mut image_view_info);
-        }
-
-        let result = self.shared.raw.create_image_view(&info, None);
-
-        match result {
-            Ok(raw) => Ok(n::ImageView {
-                image: image.raw,
-                raw,
-                range,
-            }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
-            _ => unreachable!(),
-        }
+        self.image_view_from_raw(image.raw, view_type, format, swizzle, usage, range)
     }
 
     unsafe fn create_descriptor_pool<T>(
@@ -2029,6 +2004,45 @@ impl super::Device {
             .collect();
 
         Ok((swapchain, images))
+    }
+
+    pub unsafe fn image_view_from_raw(
+        &self,
+        raw_image: vk::Image,
+        view_type: vk::ImageViewType,
+        format: format::Format,
+        swizzle: format::Swizzle,
+        usage: image::Usage,
+        range: image::SubresourceRange,
+    ) -> Result<n::ImageView, image::ViewCreationError> {
+        let mut image_view_info;
+        let mut info = vk::ImageViewCreateInfo::builder()
+            .flags(vk::ImageViewCreateFlags::empty())
+            .image(raw_image)
+            .view_type(view_type)
+            .format(conv::map_format(format))
+            .components(conv::map_swizzle(swizzle))
+            .subresource_range(conv::map_subresource_range(&range));
+
+        if self.shared.image_view_usage {
+            image_view_info = vk::ImageViewUsageCreateInfo::builder()
+                .usage(conv::map_image_usage(usage))
+                .build();
+            info = info.push_next(&mut image_view_info);
+        }
+
+        let result = self.shared.raw.create_image_view(&info, None);
+
+        match result {
+            Ok(raw) => Ok(n::ImageView {
+                image: raw_image,
+                raw,
+                range,
+            }),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
+            _ => unreachable!(),
+        }
     }
 }
 

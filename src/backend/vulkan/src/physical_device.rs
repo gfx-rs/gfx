@@ -678,6 +678,189 @@ pub struct PhysicalDevice {
     available_features: Features,
 }
 
+impl PhysicalDevice {
+    /// # Safety
+    /// `raw_device` must be created from `self` (or from the inner raw handle)
+    /// `raw_device` must be created with `requested_features`
+    pub unsafe fn gpu_from_raw(
+        &self,
+        raw_device: ash::Device,
+        families: &[(&QueueFamily, &[queue::QueuePriority])],
+        requested_features: Features,
+    ) -> Result<adapter::Gpu<Backend>, CreationError> {
+        let enabled_extensions = self.enabled_extensions(requested_features)?;
+        Ok(self.inner_create_gpu(
+            raw_device,
+            true,
+            families,
+            requested_features,
+            enabled_extensions,
+        ))
+    }
+
+    unsafe fn inner_create_gpu(
+        &self,
+        device_raw: ash::Device,
+        handle_is_external: bool,
+        families: &[(&QueueFamily, &[queue::QueuePriority])],
+        requested_features: Features,
+        enabled_extensions: Vec<&CStr>,
+    ) -> adapter::Gpu<Backend> {
+        let valid_ash_memory_types = {
+            let mem_properties = self
+                .instance
+                .inner
+                .get_physical_device_memory_properties(self.handle);
+            mem_properties.memory_types[..mem_properties.memory_type_count as usize]
+                .iter()
+                .enumerate()
+                .fold(0, |u, (i, mem)| {
+                    if self.known_memory_flags.contains(mem.property_flags) {
+                        u | (1 << i)
+                    } else {
+                        u
+                    }
+                })
+        };
+
+        let supports_vulkan12_imageless_framebuffer = self
+            .device_features
+            .vulkan_1_2
+            .map_or(false, |features| features.imageless_framebuffer == vk::TRUE);
+
+        let swapchain_fn = Swapchain::new(&self.instance.inner, &device_raw);
+
+        let mesh_fn = if enabled_extensions.contains(&MeshShader::name()) {
+            Some(ExtensionFn::Extension(MeshShader::new(
+                &self.instance.inner,
+                &device_raw,
+            )))
+        } else {
+            None
+        };
+
+        let indirect_count_fn = if enabled_extensions.contains(&DrawIndirectCount::name()) {
+            Some(ExtensionFn::Extension(DrawIndirectCount::new(
+                &self.instance.inner,
+                &device_raw,
+            )))
+        } else if self.device_info.api_version() >= Version::V1_2 {
+            Some(ExtensionFn::Promoted)
+        } else {
+            None
+        };
+
+        #[cfg(feature = "naga")]
+        let naga_options = {
+            use naga::back::spv;
+            let capabilities = [
+                spv::Capability::Shader,
+                spv::Capability::Matrix,
+                spv::Capability::InputAttachment,
+                spv::Capability::Sampled1D,
+                spv::Capability::Image1D,
+                spv::Capability::SampledBuffer,
+                spv::Capability::ImageBuffer,
+                spv::Capability::ImageQuery,
+                spv::Capability::DerivativeControl,
+                //TODO: fill out the rest
+            ];
+            let mut flags = spv::WriterFlags::empty();
+            flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
+            flags.set(
+                spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+                !requested_features.contains(hal::Features::NDC_Y_UP),
+            );
+            spv::Options {
+                lang_version: (1, 0),
+                flags,
+                capabilities: Some(capabilities.iter().cloned().collect()),
+            }
+        };
+
+        let device = Device {
+            shared: Arc::new(RawDevice {
+                raw: device_raw,
+                handle_is_external,
+                features: requested_features,
+                instance: Arc::clone(&self.instance),
+                extension_fns: DeviceExtensionFunctions {
+                    mesh_shaders: mesh_fn,
+                    draw_indirect_count: indirect_count_fn,
+                },
+                flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
+                    || self
+                        .device_info
+                        .supports_extension(vk::KhrMaintenance1Fn::name()),
+                imageless_framebuffers: supports_vulkan12_imageless_framebuffer
+                    || self
+                        .device_info
+                        .supports_extension(vk::KhrImagelessFramebufferFn::name()),
+                image_view_usage: self.device_info.api_version() >= Version::V1_1
+                    || self
+                        .device_info
+                        .supports_extension(vk::KhrMaintenance2Fn::name()),
+                timestamp_period: self.device_info.properties.limits.timestamp_period,
+            }),
+            vendor_id: self.device_info.properties.vendor_id,
+            valid_ash_memory_types,
+            render_doc: Default::default(),
+            #[cfg(feature = "naga")]
+            naga_options,
+        };
+
+        let device_arc = Arc::clone(&device.shared);
+        let queue_groups = families
+            .iter()
+            .map(|&(family, ref priorities)| {
+                let mut family_raw =
+                    queue::QueueGroup::new(queue::QueueFamilyId(family.index as usize));
+                for id in 0..priorities.len() {
+                    let queue_raw = device_arc.raw.get_device_queue(family.index, id as _);
+                    family_raw.add_queue(Queue {
+                        raw: Arc::new(queue_raw),
+                        device: device_arc.clone(),
+                        swapchain_fn: swapchain_fn.clone(),
+                    });
+                }
+                family_raw
+            })
+            .collect();
+
+        adapter::Gpu {
+            device,
+            queue_groups,
+        }
+    }
+
+    fn enabled_extensions(
+        &self,
+        requested_features: Features,
+    ) -> Result<Vec<&'static CStr>, CreationError> {
+        use adapter::PhysicalDevice;
+
+        if !self.features().contains(requested_features) {
+            return Err(CreationError::MissingFeature);
+        }
+
+        let (supported_extensions, unsupported_extensions) = self
+            .device_info
+            .get_required_extensions(requested_features)
+            .iter()
+            .partition::<Vec<&CStr>, _>(|&&extension| {
+                self.device_info.supports_extension(extension)
+            });
+
+        if !unsupported_extensions.is_empty() {
+            warn!("Missing extensions: {:?}", unsupported_extensions);
+        }
+
+        debug!("Supported extensions: {:?}", supported_extensions);
+
+        Ok(supported_extensions)
+    }
+}
+
 pub(crate) fn load_adapter(
     instance: &Arc<RawInstance>,
     device: vk::PhysicalDevice,
@@ -777,44 +960,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             })
             .collect::<Vec<_>>();
 
-        if !self.features().contains(requested_features) {
-            return Err(CreationError::MissingFeature);
-        }
-
-        let enabled_extensions = {
-            let (supported_extensions, unsupported_extensions) = self
-                .device_info
-                .get_required_extensions(requested_features)
-                .iter()
-                .partition::<Vec<&CStr>, _>(|&&extension| {
-                    self.device_info.supports_extension(extension)
-                });
-
-            if !unsupported_extensions.is_empty() {
-                warn!("Missing extensions: {:?}", unsupported_extensions);
-            }
-
-            debug!("Supported extensions: {:?}", supported_extensions);
-
-            supported_extensions
-        };
-
-        let valid_ash_memory_types = {
-            let mem_properties = self
-                .instance
-                .inner
-                .get_physical_device_memory_properties(self.handle);
-            mem_properties.memory_types[..mem_properties.memory_type_count as usize]
-                .iter()
-                .enumerate()
-                .fold(0, |u, (i, mem)| {
-                    if self.known_memory_flags.contains(mem.property_flags) {
-                        u | (1 << i)
-                    } else {
-                        u
-                    }
-                })
-        };
+        let enabled_extensions = self.enabled_extensions(requested_features)?;
 
         let supports_vulkan12_imageless_framebuffer = self
             .device_features
@@ -867,108 +1013,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
-        let swapchain_fn = Swapchain::new(&self.instance.inner, &device_raw);
-
-        let mesh_fn = if enabled_extensions.contains(&MeshShader::name()) {
-            Some(ExtensionFn::Extension(MeshShader::new(
-                &self.instance.inner,
-                &device_raw,
-            )))
-        } else {
-            None
-        };
-
-        let indirect_count_fn = if enabled_extensions.contains(&DrawIndirectCount::name()) {
-            Some(ExtensionFn::Extension(DrawIndirectCount::new(
-                &self.instance.inner,
-                &device_raw,
-            )))
-        } else if self.device_info.api_version() >= Version::V1_2 {
-            Some(ExtensionFn::Promoted)
-        } else {
-            None
-        };
-
-        #[cfg(feature = "naga")]
-        let naga_options = {
-            use naga::back::spv;
-            let capabilities = [
-                spv::Capability::Shader,
-                spv::Capability::Matrix,
-                spv::Capability::InputAttachment,
-                spv::Capability::Sampled1D,
-                spv::Capability::Image1D,
-                spv::Capability::SampledBuffer,
-                spv::Capability::ImageBuffer,
-                spv::Capability::ImageQuery,
-                spv::Capability::DerivativeControl,
-                //TODO: fill out the rest
-            ];
-            let mut flags = spv::WriterFlags::empty();
-            flags.set(spv::WriterFlags::DEBUG, cfg!(debug_assertions));
-            flags.set(
-                spv::WriterFlags::ADJUST_COORDINATE_SPACE,
-                !requested_features.contains(hal::Features::NDC_Y_UP),
-            );
-            spv::Options {
-                lang_version: (1, 0),
-                flags,
-                capabilities: Some(capabilities.iter().cloned().collect()),
-            }
-        };
-
-        let device = Device {
-            shared: Arc::new(RawDevice {
-                raw: device_raw,
-                features: requested_features,
-                instance: Arc::clone(&self.instance),
-                extension_fns: DeviceExtensionFunctions {
-                    mesh_shaders: mesh_fn,
-                    draw_indirect_count: indirect_count_fn,
-                },
-                flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
-                    || self
-                        .device_info
-                        .supports_extension(vk::KhrMaintenance1Fn::name()),
-                imageless_framebuffers: supports_vulkan12_imageless_framebuffer
-                    || self
-                        .device_info
-                        .supports_extension(vk::KhrImagelessFramebufferFn::name()),
-                image_view_usage: self.device_info.api_version() >= Version::V1_1
-                    || self
-                        .device_info
-                        .supports_extension(vk::KhrMaintenance2Fn::name()),
-                timestamp_period: self.device_info.properties.limits.timestamp_period,
-            }),
-            vendor_id: self.device_info.properties.vendor_id,
-            valid_ash_memory_types,
-            render_doc: Default::default(),
-            #[cfg(feature = "naga")]
-            naga_options,
-        };
-
-        let device_arc = Arc::clone(&device.shared);
-        let queue_groups = families
-            .iter()
-            .map(|&(family, ref priorities)| {
-                let mut family_raw =
-                    queue::QueueGroup::new(queue::QueueFamilyId(family.index as usize));
-                for id in 0..priorities.len() {
-                    let queue_raw = device_arc.raw.get_device_queue(family.index, id as _);
-                    family_raw.add_queue(Queue {
-                        raw: Arc::new(queue_raw),
-                        device: device_arc.clone(),
-                        swapchain_fn: swapchain_fn.clone(),
-                    });
-                }
-                family_raw
-            })
-            .collect();
-
-        Ok(adapter::Gpu {
-            device,
-            queue_groups,
-        })
+        Ok(self.inner_create_gpu(
+            device_raw,
+            false,
+            families,
+            requested_features,
+            enabled_extensions,
+        ))
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
