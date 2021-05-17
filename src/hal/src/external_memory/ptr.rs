@@ -1,4 +1,4 @@
-use super::{ExternalMemoryType, ExternalMemory, ExternalMemoryTypeFlags};
+use super::{ExternalMemory, ExternalMemoryType, ExternalMemoryTypeFlags};
 
 /// Pointer to a host allocated memory
 #[derive(Debug)]
@@ -8,15 +8,10 @@ impl Ptr {
     pub fn as_raw_ptr(&self) -> *mut std::ffi::c_void {
         self.0
     }
-}/*
-impl From<*mut std::ffi::c_void> for Ptr {
-    fn from(ptr: *mut std::ffi::c_void) -> Self {
-        Self(ptr)
-    }
-}*/
+}
 impl<T> From<*mut T> for Ptr {
     fn from(ptr: *mut T) -> Self {
-        Self(unsafe{std::mem::transmute(ptr)})
+        Self(unsafe { std::mem::transmute(ptr) })
     }
 }
 impl std::ops::Deref for Ptr {
@@ -64,7 +59,9 @@ impl From<(ExternalMemoryPtrType, Ptr, u64)> for ExternalMemoryPtr {
     fn from(tuple: (ExternalMemoryPtrType, Ptr, u64)) -> Self {
         match tuple.0 {
             ExternalMemoryPtrType::HOST_ALLOCATION => Self::HOST_ALLOCATION(tuple.1, tuple.2),
-            ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY => Self::HOST_MAPPED_FOREIGN_MEMORY(tuple.1, tuple.2),
+            ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY => {
+                Self::HOST_MAPPED_FOREIGN_MEMORY(tuple.1, tuple.2)
+            }
         }
     }
 }
@@ -73,7 +70,9 @@ impl Into<(ExternalMemoryPtrType, Ptr, u64)> for ExternalMemoryPtr {
     fn into(self) -> (ExternalMemoryPtrType, Ptr, u64) {
         match self {
             Self::HOST_ALLOCATION(ptr, size) => (ExternalMemoryPtrType::HOST_ALLOCATION, ptr, size),
-            Self::HOST_MAPPED_FOREIGN_MEMORY(ptr, size) => (ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY, ptr, size),
+            Self::HOST_MAPPED_FOREIGN_MEMORY(ptr, size) => {
+                (ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY, ptr, size)
+            }
         }
     }
 }

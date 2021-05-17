@@ -88,16 +88,10 @@ impl From<(ExternalMemoryHandleType, Handle, u64)> for ExternalMemoryHandle {
 impl Into<(ExternalMemoryHandleType, Handle, u64)> for ExternalMemoryHandle {
     fn into(self) -> (ExternalMemoryHandleType, Handle, u64) {
         match self {
-            Self::OPAQUE_WIN32(handle, size) => {
-                (ExternalMemoryHandleType::OPAQUE_WIN32, handle, size)
-            }
-            Self::OPAQUE_WIN32_KMT(handle, size) => {
-                (ExternalMemoryHandleType::OPAQUE_WIN32_KMT, handle, size)
-            }
+            Self::OPAQUE_WIN32(handle, size) =>(ExternalMemoryHandleType::OPAQUE_WIN32, handle, size),
+            Self::OPAQUE_WIN32_KMT(handle, size) => (ExternalMemoryHandleType::OPAQUE_WIN32_KMT, handle, size),
             Self::D3D11_TEXTURE(handle) => (ExternalMemoryHandleType::D3D11_TEXTURE, handle, 0),
-            Self::D3D11_TEXTURE_KMT(handle) => {
-                (ExternalMemoryHandleType::D3D11_TEXTURE_KMT, handle, 0)
-            }
+            Self::D3D11_TEXTURE_KMT(handle) => (ExternalMemoryHandleType::D3D11_TEXTURE_KMT, handle, 0),
             Self::D3D12_HEAP(handle, size) => (ExternalMemoryHandleType::D3D12_HEAP, handle, size),
             Self::D3D12_RESOURCE(handle) => (ExternalMemoryHandleType::D3D12_RESOURCE, handle, 0),
         }

@@ -2164,14 +2164,18 @@ impl d::Device<B> for super::Device {
 
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
-            hal::external_memory::ExternalMemory::Ptr(external_memory_ptr)=>{
-                let external_memory_extension = match &self.shared.extension_fns.external_memory_host {
-                    Some(functor) => functor.unwrap_extension(),
-                    None => return Err(hal::external_memory::ExternalMemoryAllocateError::UnsupportedFeature)
-                };
+            hal::external_memory::ExternalMemory::Ptr(external_memory_ptr) => {
+                let external_memory_extension =
+                    match &self.shared.extension_fns.external_memory_host {
+                        Some(functor) => functor.unwrap_extension(),
+                        None => return Err(
+                            hal::external_memory::ExternalMemoryAllocateError::UnsupportedFeature,
+                        ),
+                    };
 
-                let (external_memory_ptr_type,ptr,size) = external_memory_ptr.into();
-                let vk_external_memory_type = conv::map_external_memory_handle_type(external_memory_ptr_type.into());
+                let (external_memory_ptr_type, ptr, size) = external_memory_ptr.into();
+                let vk_external_memory_type =
+                    conv::map_external_memory_handle_type(external_memory_ptr_type.into());
 
                 let mut import_memory_info = vk::ImportMemoryHostPointerInfoEXT::builder()
                     .handle_type(vk_external_memory_type)
@@ -2187,22 +2191,18 @@ impl d::Device<B> for super::Device {
             }
         };
 
-        let memory: n::Memory = match memory_result {
-            Ok(memory) => n::Memory { raw: memory },
+        match memory_result {
+            Ok(memory) => Ok(n::Memory { raw: memory }),
             Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => {
-                return Err(d::AllocationError::TooManyObjects.into())
+                Err(d::AllocationError::TooManyObjects.into())
             }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                return Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
-                return Err(hal::external_memory::ExternalMemoryAllocateError::InvalidExternalHandle);
+                Err(hal::external_memory::ExternalMemoryAllocateError::InvalidExternalHandle)
             }
-            Err(val) => unreachable!("Returned unexpected value: {}",val),
-        };
-
-        Ok(memory)
+            Err(val) => unreachable!("Returned unexpected value: {}", val),
+        }
     }
 
     #[cfg(unix)]
@@ -2310,37 +2310,42 @@ impl d::Device<B> for super::Device {
         let vk_memory_bits = match external_memory {
             #[cfg(unix)]
             hal::external_memory::ExternalMemory::Fd(external_memory_fd) => {
-                let external_memory_extension = match &self.shared.extension_fns.external_memory_fd
-                {
-                    Some(functor) => functor.unwrap_extension(),
-                    _ => {
-                        error!("External memory fd not supported");
-                        return Err(hal::external_memory::ExternalMemoryError::UnsupportedFeature);
-                    }
-                };
+                if external_memory_fd.get_type() == hal::external_memory::ExternalMemoryFdType::OPAQUE_FD {u32::MAX}
+                else {
+                    let external_memory_extension = match &self.shared.extension_fns.external_memory_fd
+                    {
+                        Some(functor) => functor.unwrap_extension(),
+                        _ => {
+                            error!("External memory fd not supported");
+                            return Err(hal::external_memory::ExternalMemoryError::UnsupportedFeature);
+                        }
+                    };
 
-                let vk_external_memory_type =
-                    conv::map_external_memory_handle_type(external_memory_fd.get_type().into());
+                    let vk_external_memory_type =
+                        conv::map_external_memory_handle_type(external_memory_fd.get_type().into());
 
-                use std::os::unix::io::AsRawFd;
-                let memory_handle_properties = match external_memory_extension
-                    .get_memory_fd_properties_khr(
-                        vk_external_memory_type,
-                        external_memory_fd.get_fd().as_raw_fd(),
-                    ) {
-                    Ok(memory_handle_properties) => memory_handle_properties,
-                    Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                        return Err(hal::external_memory::ExternalMemoryError::OutOfHostMemory)
+                    use std::os::unix::io::AsRawFd;
+                    match external_memory_extension
+                        .get_memory_fd_properties_khr(
+                            vk_external_memory_type,
+                            external_memory_fd.get_fd().as_raw_fd(),
+                        ) {
+                        Ok(memory_handle_properties) => memory_handle_properties.memory_type_bits,
+                        Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                            return Err(hal::external_memory::ExternalMemoryError::OutOfHostMemory)
+                        }
+                        Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
+                            error!("Failed to get memory fd properties");
+                            return Err(
+                                hal::external_memory::ExternalMemoryError::InvalidExternalHandle,
+                            );
+                        }
+                        err => {
+                            error!("Unexpected error: {:#?}", err);
+                            return Err(hal::external_memory::ExternalMemoryError::UnsupportedFeature);
+                        }
                     }
-                    Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
-                        error!("Failed to get memory fd properties");
-                        return Err(
-                            hal::external_memory::ExternalMemoryError::InvalidExternalHandle,
-                        );
-                    }
-                    _ => unreachable!(),
-                };
-                memory_handle_properties.memory_type_bits
+                }
             }
             #[cfg(windows)]
             hal::external_memory::ExternalMemory::Handle(external_memory_handle) => {

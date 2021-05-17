@@ -91,9 +91,9 @@ impl Into<(ExternalMemoryFdType, Fd, u64)> for ExternalMemoryFd {
         match self {
             Self::OPAQUE_FD(fd, size) => (ExternalMemoryFdType::OPAQUE_FD, fd, size),
             #[cfg(any(target_os = "linux", target_os = "android", doc))]
-            Self::DMA_BUF(fd, size) => (ExternalMemoryFdType::OPAQUE_FD, fd, size),
+            Self::DMA_BUF(fd, size) => (ExternalMemoryFdType::DMA_BUF, fd, size),
             #[cfg(any(target_os = "android", doc))]
-            Self::ANDROID_HARDWARE_BUFFER(fd, size) => (ExternalMemoryFdType::OPAQUE_FD, fd, size),
+            Self::ANDROID_HARDWARE_BUFFER(fd, size) => (ExternalMemoryFdType::ANDROID_HARDWARE_BUFFER, fd, size),
         }
     }
 }
