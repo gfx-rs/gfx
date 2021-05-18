@@ -942,6 +942,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }),
             vendor_id: self.device_info.properties.vendor_id,
             valid_ash_memory_types,
+            render_doc: Default::default(),
             #[cfg(feature = "naga")]
             naga_options,
         };

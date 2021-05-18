@@ -55,6 +55,7 @@ pub struct Device {
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     features: hal::Features,
     memory_properties: MemoryProperties,
+    render_doc: gfx_renderdoc::RenderDoc,
     pub(crate) internal: Arc<internal::Internal>,
 }
 
@@ -99,6 +100,7 @@ impl Device {
             context,
             features,
             memory_properties,
+            render_doc: Default::default(),
         }
     }
 
@@ -2460,10 +2462,16 @@ impl device::Device<Backend> for Device {
     }
 
     fn start_capture(&self) {
-        //TODO
+        unsafe {
+            self.render_doc
+                .start_frame_capture(self.raw.as_raw() as *mut _, ptr::null_mut())
+        }
     }
 
     fn stop_capture(&self) {
-        //TODO
+        unsafe {
+            self.render_doc
+                .end_frame_capture(self.raw.as_raw() as *mut _, ptr::null_mut())
+        }
     }
 }

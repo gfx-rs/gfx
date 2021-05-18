@@ -1893,29 +1893,15 @@ impl d::Device<B> for super::Device {
 
     fn start_capture(&self) {
         unsafe {
-            match self.shared.instance.render_doc_entry {
-                Ok(ref entry) => {
-                    entry.api.StartFrameCapture.unwrap()(
-                        self.shared.raw.handle().as_raw() as *mut _,
-                        ptr::null_mut(),
-                    );
-                }
-                Err(ref cause) => warn!("Could not start render doc frame capture: {}", cause),
-            };
+            self.render_doc
+                .start_frame_capture(self.shared.raw.handle().as_raw() as *mut _, ptr::null_mut())
         }
     }
 
     fn stop_capture(&self) {
         unsafe {
-            match self.shared.instance.render_doc_entry {
-                Ok(ref entry) => {
-                    entry.api.EndFrameCapture.unwrap()(
-                        self.shared.raw.handle().as_raw() as *mut _,
-                        ptr::null_mut(),
-                    );
-                }
-                Err(ref cause) => warn!("Could not stop render doc frame capture: {}", cause),
-            };
+            self.render_doc
+                .end_frame_capture(self.shared.raw.handle().as_raw() as *mut _, ptr::null_mut())
         }
     }
 }
