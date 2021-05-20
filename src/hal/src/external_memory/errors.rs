@@ -136,9 +136,9 @@ pub enum ExternalMemoryExportError {
     #[error("Out of host memory")]
     OutOfHostMemory,
 
-    /// Unsupported parameters.
-    #[error("Unsupported parameters")]
-    UnsupportedParameters,
+    /// Invalid external handle.
+    #[error("Invalid external handle")]
+    InvalidExternalHandle,
 
     /// Unsupported feature.
     #[error("Unsupported feature")]

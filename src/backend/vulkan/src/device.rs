@@ -2421,7 +2421,7 @@ impl d::Device<B> for super::Device {
                     }
                     _ => unreachable!(),
                 };
-                Ok((external_memory_type, fd.into()).try_into().unwrap())
+                Ok((external_memory_type, fd).try_into().unwrap())
             }
             #[cfg(windows)]
             hal::external_memory::PlatformMemoryType::Handle => {
@@ -2463,7 +2463,8 @@ impl d::Device<B> for super::Device {
                 Ok((external_memory_type, handle.into()).try_into().unwrap())
             }
             hal::external_memory::PlatformMemoryType::Ptr => {
-                unreachable!()
+                error!("Memory cannot be \"exported\" as host memory pointer. Use intead `Device::map_memory`.");
+                Err(hal::external_memory::ExternalMemoryExportError::InvalidExternalHandle)
             }
         }
     }

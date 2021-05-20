@@ -513,3 +513,26 @@ impl std::convert::TryFrom<(ExternalMemoryType, PlatformMemory)> for ExternalMem
         }
     }
 }
+
+#[cfg(unix)]
+impl std::convert::TryFrom<(ExternalMemoryType, Fd)> for ExternalMemory {
+    type Error = &'static str;
+    fn try_from(tuple: (ExternalMemoryType, Fd)) -> Result<Self, Self::Error> {
+        ExternalMemory::try_from((tuple.0,PlatformMemory::from(tuple.1)))
+    }
+}
+
+#[cfg(windows)]
+impl std::convert::TryFrom<(ExternalMemoryType, Handle)> for ExternalMemory {
+    type Error = &'static str;
+    fn try_from(tuple: (ExternalMemoryType, Handle)) -> Result<Self, Self::Error> {
+        ExternalMemory::try_from((tuple.0,PlatformMemory::from(tuple.1)))
+    }
+}
+
+impl std::convert::TryFrom<(ExternalMemoryType, Ptr)> for ExternalMemory {
+    type Error = &'static str;
+    fn try_from(tuple: (ExternalMemoryType, Ptr)) -> Result<Self, Self::Error> {
+        ExternalMemory::try_from((tuple.0,PlatformMemory::from(tuple.1)))
+    }
+}
