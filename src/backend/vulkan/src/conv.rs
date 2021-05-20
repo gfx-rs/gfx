@@ -626,62 +626,6 @@ pub fn map_vk_memory_heap_flags(flags: vk::MemoryHeapFlags) -> hal::memory::Heap
 
 use hal::external_memory;
 
-pub fn map_external_memory_handle_type(
-    external_memory_type: hal::external_memory::ExternalMemoryType,
-) -> vk::ExternalMemoryHandleTypeFlags {
-    match external_memory_type {
-        #[cfg(unix)]
-        external_memory::ExternalMemoryType::Fd(extenal_memory_fd_type) => {
-            match extenal_memory_fd_type {
-                external_memory::ExternalMemoryFdType::OPAQUE_FD => {
-                    vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD
-                }
-                #[cfg(any(target_os = "linux", target_os = "android"))]
-                external_memory::ExternalMemoryFdType::DMA_BUF => {
-                    vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT
-                }
-                #[cfg(target_os = "android")]
-                external_memory::ExternalMemoryFdType::ANDROID_HARDWARE_BUFFER => {
-                    vk::ExternalMemoryHandleTypeFlags::ANDROID_HARDWARE_BUFFER_ANDROID
-                }
-            }
-        }
-        #[cfg(windows)]
-        external_memory::ExternalMemoryType::Handle(extenal_memory_handle_type) => {
-            match extenal_memory_handle_type {
-                external_memory::ExternalMemoryHandleType::OPAQUE_WIN32 => {
-                    vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32
-                }
-                external_memory::ExternalMemoryHandleType::OPAQUE_WIN32_KMT => {
-                    vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KMT
-                }
-                external_memory::ExternalMemoryHandleType::D3D11_TEXTURE => {
-                    vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE
-                }
-                external_memory::ExternalMemoryHandleType::D3D11_TEXTURE_KMT => {
-                    vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT
-                }
-                external_memory::ExternalMemoryHandleType::D3D12_HEAP => {
-                    vk::ExternalMemoryHandleTypeFlags::D3D12_HEAP
-                }
-                external_memory::ExternalMemoryHandleType::D3D12_RESOURCE => {
-                    vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE
-                }
-            }
-        }
-        external_memory::ExternalMemoryType::Ptr(extenal_memory_ptr_type) => {
-            match extenal_memory_ptr_type {
-                external_memory::ExternalMemoryPtrType::HOST_ALLOCATION => {
-                    vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT
-                }
-                external_memory::ExternalMemoryPtrType::HOST_MAPPED_FOREIGN_MEMORY => {
-                    vk::ExternalMemoryHandleTypeFlags::HOST_MAPPED_FOREIGN_MEMORY_EXT
-                }
-            }
-        }
-    }
-}
-
 pub fn map_external_memory_handle_types(
     flags: external_memory::ExternalMemoryTypeFlags,
 ) -> vk::ExternalMemoryHandleTypeFlags {
@@ -779,28 +723,3 @@ pub fn map_vk_external_memory_handle_type_flags(
     }
     flags
 }
-/*
-pub fn map_external_memory_type(external_memory_type: external_memory::ExternalMemoryType)->vk::ExternalMemoryHandleTypeFlags {
-    match external_memory_type {
-        #[cfg(unix)]
-        external_memory::ExternalMemoryType::OpaqueFd=>vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD,
-        #[cfg(windows)]
-        external_memory::ExternalMemoryType::OpaqueWin32=>vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32,
-        #[cfg(windows)]
-        external_memory::ExternalMemoryType::OpaqueWin32Kmt=>vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KMT,
-        #[cfg(windows)]
-        external_memory::ExternalMemoryType::D3D11Texture=>vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE,
-        #[cfg(windows)]
-        external_memory::ExternalMemoryType::D3D11TextureKmt=>vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT,
-        #[cfg(windows)]
-        external_memory::ExternalMemoryType::D3D12Heap=>vk::ExternalMemoryHandleTypeFlags::D3D12_HEAP,
-        #[cfg(windows)]
-        external_memory::ExternalMemoryType::D3D12Resource=>vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE,
-        #[cfg(any(target_os = "linux",target_os = "android"))]
-        external_memory::ExternalMemoryType::DmaBuf=>vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT,
-        #[cfg(target_os = "android")]
-        external_memory::ExternalMemoryType::AndroidHardwareBuffer=>vk::ExternalMemoryHandleTypeFlags::ANDROID_HARDWARE_BUFFER_ANDROID,
-        external_memory::ExternalMemoryType::HostAllocation=>vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT,
-        external_memory::ExternalMemoryType::HostMappedForeignMemory=>vk::ExternalMemoryHandleTypeFlags::HOST_MAPPED_FOREIGN_MEMORY_EXT,
-    }
-}*/

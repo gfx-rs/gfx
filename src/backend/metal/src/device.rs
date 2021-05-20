@@ -393,9 +393,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn query_external_buffer_properties(
         &self,
-        usage: hal::buffer::Usage,
-        sparse: hal::memory::SparseFlags,
-        memory_type: hal::external_memory::ExternalMemoryType,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _memory_type: hal::external_memory::ExternalMemoryType,
     ) -> Result<
         hal::external_memory::ExternalBufferProperties,
         hal::external_memory::ExternalMemoryQueryError,
@@ -3563,61 +3563,44 @@ impl hal::device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn create_external_buffer(
+    unsafe fn create_allocate_external_buffer(
         &self,
-        external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
-        usage: hal::buffer::Usage,
-        sparse: hal::memory::SparseFlags,
-        size: u64,
-    ) -> Result<n::Buffer, hal::external_memory::ExternalBufferCreateError> {
-        unimplemented!()
-    }
-
-    unsafe fn allocate_exportable_memory(
-        &self,
-        external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
-        dedicated_allocation: Option<hal::external_memory::BufferOrImage<Backend>>,
-        mem_type: hal::MemoryTypeId,
-        size: u64,
-    ) -> Result<n::Memory, hal::external_memory::ExternalMemoryAllocateError> {
-        unimplemented!()
-    }
-
-    unsafe fn import_external_memory(
-        &self,
-        external_memory: hal::external_memory::ExternalMemory,
-        dedicated_allocation: Option<hal::external_memory::BufferOrImage<Backend>>,
-        mem_type: hal::MemoryTypeId,
-    ) -> Result<n::Memory, hal::external_memory::ExternalMemoryAllocateError> {
-        unimplemented!()
-    }
-
-    #[cfg(unix)]
-    unsafe fn export_memory_as_fd(
-        &self,
-        external_memory_type: hal::external_memory::ExternalMemoryFdType,
-        memory: &n::Memory,
-    ) -> Result<std::os::unix::io::RawFd, hal::external_memory::ExternalMemoryExportError> {
-        unimplemented!()
-    }
-
-    #[cfg(windows)]
-    unsafe fn export_memory_as_handle(
-        &self,
-        external_memory_type: hal::external_memory::ExternalMemoryHandleType,
-        memory: &n::Memory,
-    ) -> Result<std::os::windows::raw::HANDLE, hal::external_memory::ExternalMemoryExportError>
+        _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _mem_types: Vec<hal::MemoryTypeId>,
+        _size: u64,
+    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferCreateAllocateError>
     {
         unimplemented!()
     }
 
-    unsafe fn get_external_memory_mask(
+    unsafe fn import_external_buffer(
         &self,
-        external_memory: &hal::external_memory::ExternalMemory,
-    ) -> Result<u32, hal::external_memory::ExternalMemoryError> {
+        _external_memory: hal::external_memory::ExternalMemory,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _mem_types: Vec<hal::MemoryTypeId>,
+        _size: u64,
+    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferImportError> {
         unimplemented!()
     }
 
+    unsafe fn export_memory(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalMemoryType,
+        _memory: &n::Memory,
+    ) -> Result<hal::external_memory::ExternalMemory, hal::external_memory::ExternalMemoryExportError> {
+        unimplemented!()
+    }
+/*
+    unsafe fn get_external_memory_mask(
+        &self,
+        _external_memory: &hal::external_memory::ExternalMemory,
+    ) -> Result<u32, hal::external_memory::ExternalMemoryError> {
+        unimplemented!()
+    }
+*/
     fn start_capture(&self) {
         let device = self.shared.device.lock();
         let shared_capture_manager = CaptureManager::shared();

@@ -547,7 +547,7 @@ impl Instance {
                 debug_messenger,
                 get_physical_device_properties,
                 display,
-                render_doc_entry: unsafe { load_renderdoc_entrypoint() },
+                external_memory_capabilities
             }),
             extensions,
             entry,
@@ -815,6 +815,8 @@ struct DeviceExtensionFunctions {
     mesh_shaders: Option<ExtensionFn<MeshShader>>,
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
     display_control: Option<vk::ExtDisplayControlFn>,
+    // The extension does not have its own functions.
+    dedicated_allocation: bool,
     // The extension does not have its own functions.
     external_memory: bool,
     external_memory_host: Option<ExtensionFn<vk::ExtExternalMemoryHostFn>>,

@@ -12,7 +12,7 @@
 //! and is used to actually do things.
 
 use crate::{
-    buffer, display, external_memory format, image, memory,
+    buffer, display, external_memory, format, image, memory,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -736,65 +736,39 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         fence: &mut B::Fence,
     ) -> Result<(), display::control::DisplayControlError>;
 
-    /// Import external memory
-    unsafe fn import_memory_as_buffer(
-        &self,
-        adapter: &adapter::Adapter<B>,
-        external_memory: external_memory::ExternalMemoryHandle,
-        memory_properties: memory::Properties,
-        usage: buffer::Usage,
-        sparse: memory::SparseFlags)->Result<(B::Memory,B::Buffer),external_memory::ExternalMemoryImportError>;
-
-    /// Create a buffer that can be exported.
-    unsafe fn create_external_buffer(
+    /// Create external buffer
+    unsafe fn create_allocate_external_buffer(
         &self,
         external_memory_type_flags: external_memory::ExternalMemoryTypeFlags,
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
+        mem_types: Vec<MemoryTypeId>,
         size: u64,
-    ) -> Result<B::Buffer, external_memory::ExternalBufferCreateError>;
-
-    /// Allocate external memory
-    unsafe fn allocate_exportable_memory(
-        &self,
-        external_memory_types: external_memory::ExternalMemoryTypeFlags,
-        dedicated_allocation: Option<external_memory::BufferOrImage<B>>,
-        mem_type: MemoryTypeId,
-        size: u64,
-    ) -> Result<B::Memory, external_memory::ExternalMemoryAllocateError>;
+    ) -> Result<(B::Buffer, B::Memory), external_memory::ExternalBufferCreateAllocateError>;
 
     /// Import external memory
-    unsafe fn import_external_memory(
+    unsafe fn import_external_buffer(
         &self,
         external_memory: external_memory::ExternalMemory,
-        dedicated_allocation: Option<external_memory::BufferOrImage<B>>,
-        mem_type: MemoryTypeId,
-    ) -> Result<B::Memory, external_memory::ExternalMemoryAllocateError>;
+        usage: buffer::Usage,
+        sparse: memory::SparseFlags,
+        mem_types: Vec<MemoryTypeId>,
+        size: u64,
+    ) -> Result<(B::Buffer, B::Memory), external_memory::ExternalBufferImportError>;
 
-    #[cfg(any(unix))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-    /// Export memory as unix file descriptor
-    unsafe fn export_memory_as_fd(
+    /// Export memory as os type
+    unsafe fn export_memory(
         &self,
-        external_memory_type: external_memory::ExternalMemoryFdType,
+        external_memory_type: external_memory::ExternalMemoryType,
         memory: &B::Memory,
-    ) -> Result<std::os::unix::io::RawFd, external_memory::ExternalMemoryExportError>;
-
-    #[cfg(any(windows))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
-    /// Export memory as windows handle
-    unsafe fn export_memory_as_handle(
-        &self,
-        external_memory_type: external_memory::ExternalMemoryHandleType,
-        memory: &B::Memory,
-    ) -> Result<std::os::windows::raw::HANDLE, external_memory::ExternalMemoryExportError>;
-
+    ) -> Result<external_memory::ExternalMemory, external_memory::ExternalMemoryExportError>;
+/*
     /// Get memory mask for external handle
     unsafe fn get_external_memory_mask(
         &self,
         external_memory_handle: &external_memory::ExternalMemory,
     ) -> Result<u32, external_memory::ExternalMemoryError>;
-
+*/
     /// Starts frame capture.
     fn start_capture(&self);
 

@@ -1,7 +1,7 @@
 //! Structures and enums related to external memory errors
 
 use crate::buffer::CreationError;
-use crate::device::{AllocationError, OutOfMemory};
+use crate::device::{AllocationError,BindError, OutOfMemory};
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External memory import error
@@ -37,34 +37,70 @@ impl From<CreationError> for ExternalBufferCreateError {
     fn from(error: CreationError)->Self {Self::CreationError(error.into())}
 }
 */
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-/// External memory import error
-pub enum ExternalMemoryImportError {
-    /// Allocation error.
-    #[error(transparent)]
-    AllocationError(#[from] AllocationError),
 
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+/// External buffer create error
+pub enum ExternalBufferCreateAllocateError {
     /// Creation error.
     #[error(transparent)]
     CreationError(#[from] CreationError),
 
-    /// Invalid external handle.
-    #[error("Invalid external handle")]
-    InvalidExternalHandle,
+    /// Allocation error.
+    #[error(transparent)]
+    AllocationError(#[from] AllocationError),
 
-    /// Unsupported parameters.
-    #[error("Unsupported parameters")]
-    UnsupportedParameters,
+    /// Bind error.
+    #[error(transparent)]
+    BindError(#[from] BindError),
+
+    /// Invalid external handle.
+    #[error("The used external handle or the combination of them is invalid")]
+    InvalidExternalHandle,
 
     /// Unsupported feature.
     #[error("Unsupported feature")]
     UnsupportedFeature,
 }
-
-impl From<OutOfMemory> for ExternalMemoryImportError {
+/*
+impl From<OutOfMemory> for ExternalBufferCreateAllocateError {
     fn from(error: OutOfMemory) -> Self {
-        Self::AllocationError(error.into())
+        Self::CreationError(error.into())
     }
+}
+*/
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+/// External memory import error
+pub enum ExternalBufferImportError {
+    /// Out of either host or device memory.
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
+
+    /// Requested buffer usage is not supported.
+    ///
+    /// Older GL version don't support constant buffers or multiple usage flags.
+    #[error("Unsupported usage: {0:?}")]
+    UnsupportedUsage(crate::buffer::Usage),
+
+    /// Cannot create any more objects.
+    #[error("Too many objects")]
+    TooManyObjects,
+
+    /// Requested binding to memory that doesn't support the required operations.
+    #[error("Wrong memory")]
+    WrongMemory,
+
+    /// Requested binding to an invalid memory.
+    #[error("Requested range is outside the resource")]
+    OutOfBounds,
+
+    /// Invalid external handle.
+    #[error("Invalid external handle")]
+    InvalidExternalHandle,
+
+    /// Unsupported feature.
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]

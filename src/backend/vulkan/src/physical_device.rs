@@ -588,6 +588,7 @@ impl PhysicalDeviceInfo {
         }
 
         if requested_features.contains(Features::EXTERNAL_MEMORY) {
+            requested_extensions.push(vk::KhrDedicatedAllocationFn::name());
             requested_extensions.push(vk::KhrExternalMemoryFn::name());
             requested_extensions.push(vk::ExtExternalMemoryHostFn::name());
             #[cfg(window)]
@@ -780,6 +781,8 @@ impl PhysicalDevice {
             None
         };
 
+        let dedicated_allocation = enabled_extensions.contains(&vk::KhrDedicatedAllocationFn::name());
+
         let external_memory = enabled_extensions.contains(&vk::KhrExternalMemoryFn::name());
 
         let external_memory_host =
@@ -867,6 +870,7 @@ impl PhysicalDevice {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
                     display_control,
+                    dedicated_allocation: dedicated_allocation,
                     external_memory: external_memory,
                     external_memory_host: external_memory_host,
                     #[cfg(unix)]
@@ -1242,7 +1246,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let external_buffer_info = vk::PhysicalDeviceExternalBufferInfo::builder()
             .flags(conv::map_buffer_create_flags(sparse))
             .usage(conv::map_buffer_usage(usage))
-            .handle_type(conv::map_external_memory_handle_type(memory_type))
+            .handle_type(conv::map_external_memory_handle_types(memory_type.into()))
             .build();
         let vk_mem_properties = {
             let mut external_buffer_properties = vk::ExternalBufferProperties::builder().build();
