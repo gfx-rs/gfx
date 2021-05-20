@@ -742,7 +742,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         external_memory_type_flags: external_memory::ExternalMemoryTypeFlags,
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
-        mem_types: Vec<MemoryTypeId>,
+        type_mask: u32,
         size: u64,
     ) -> Result<(B::Buffer, B::Memory), external_memory::ExternalBufferCreateAllocateError>;
 
@@ -752,7 +752,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         external_memory: external_memory::ExternalMemory,
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
-        mem_types: Vec<MemoryTypeId>,
+        type_mask: u32,
         size: u64,
     ) -> Result<(B::Buffer, B::Memory), external_memory::ExternalBufferImportError>;
 

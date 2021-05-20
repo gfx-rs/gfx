@@ -2175,7 +2175,7 @@ impl d::Device<B> for Device {
         _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
-        _mem_type: Vec<hal::MemoryTypeId>,
+        _type_mask: u32,
         _size: u64,
     ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferCreateAllocateError>
     {
@@ -2187,7 +2187,7 @@ impl d::Device<B> for Device {
         _external_memory: hal::external_memory::ExternalMemory,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
-        _mem_types: Vec<hal::MemoryTypeId>,
+        _type_mask: u32,
         _size: u64,
     ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferImportError> {
         unimplemented!()

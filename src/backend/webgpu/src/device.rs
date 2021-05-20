@@ -547,7 +547,7 @@ impl hal::device::Device<Backend> for Device {
         _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
-        _mem_types: Vec<hal::MemoryTypeId>,
+        _type_mask: u32,
         _size: u64,
     ) -> Result<
         (
@@ -564,7 +564,7 @@ impl hal::device::Device<Backend> for Device {
         _external_memory: hal::external_memory::ExternalMemory,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
-        _mem_types: Vec<hal::MemoryTypeId>,
+        _type_mask: u32,
         _size: u64,
     ) -> Result<
         (

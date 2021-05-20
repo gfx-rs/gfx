@@ -1982,7 +1982,7 @@ impl d::Device<B> for super::Device {
         external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
         usage: hal::buffer::Usage,
         sparse: hal::memory::SparseFlags,
-        mem_types: Vec<hal::MemoryTypeId>,
+        type_mask: u32,
         size: u64,
     ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferCreateAllocateError>
     {
@@ -2030,8 +2030,9 @@ impl d::Device<B> for super::Device {
             };
 
         let buffer_req = self.get_buffer_requirements(&buffer);
-        let mem_type = match mem_types.into_iter().find_map(|mem_type|{if buffer_req.type_mask & (1 << mem_type.0) != 0 {Some(mem_type)}else{None}}) {
-            Some(mem_type)=>mem_type,
+
+        let mem_type = match (0..32).into_iter().find(|id|{buffer_req.type_mask & type_mask & (1 << id) != 0}) {
+            Some(id)=>id.into(),
             None=>unreachable!(),
         };
 
@@ -2098,7 +2099,7 @@ impl d::Device<B> for super::Device {
         external_memory: hal::external_memory::ExternalMemory,
         usage: hal::buffer::Usage,
         sparse: hal::memory::SparseFlags,
-        mem_types: Vec<hal::MemoryTypeId>,
+        type_mask: u32,
         size: u64,
     ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferImportError> {
         if !self.shared.extension_fns.external_memory {
@@ -2195,8 +2196,8 @@ impl d::Device<B> for super::Device {
                         }
                     };
 
-                    let mem_type = match mem_types.into_iter().find_map(|mem_type|{if buffer_req.type_mask & (1 << mem_type.0) & vk_memory_bits != 0 {Some(mem_type)}else{None}}) {
-                        Some(mem_type)=>mem_type,
+                    let mem_type = match (0..32).into_iter().find(|id|{buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0}) {
+                        Some(id)=>id.into(),
                         None=>unreachable!(),
                     };
 
@@ -2254,8 +2255,8 @@ impl d::Device<B> for super::Device {
                         memory_handle_properties.memory_type_bits
                     };
 
-                    let mem_type = match mem_types.into_iter().find_map(|mem_type|{if buffer_req.type_mask & (1 << mem_type.0) & vk_memory_bits != 0 {Some(mem_type)}else{None}}) {
-                        Some(mem_type)=>mem_type,
+                    let mem_type = match (0..32).into_iter().find(|id|{buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0}) {
+                        Some(id)=>id.into(),
                         None=>unreachable!(),
                     };
 
@@ -2311,8 +2312,8 @@ impl d::Device<B> for super::Device {
                         memory_ptr_properties.memory_type_bits
                     };
 
-                    let mem_type = match mem_types.into_iter().find_map(|mem_type|{if buffer_req.type_mask & (1 << mem_type.0) & vk_memory_bits != 0 {Some(mem_type)}else{None}}) {
-                        Some(mem_type)=>mem_type,
+                    let mem_type = match (0..32).into_iter().find(|id|{buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0}) {
+                        Some(id)=>id.into(),
                         None=>unreachable!(),
                     };
 
