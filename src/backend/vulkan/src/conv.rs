@@ -674,7 +674,7 @@ pub fn map_external_memory_handle_types(
     }
     vk_flags
 }
-
+/*
 pub fn map_vk_external_memory_handle_type_flags(
     vk_flags: vk::ExternalMemoryHandleTypeFlags,
 ) -> external_memory::ExternalMemoryTypeFlags {
@@ -722,4 +722,4 @@ pub fn map_vk_external_memory_handle_type_flags(
         flags |= external_memory::ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY;
     }
     flags
-}
+}*/

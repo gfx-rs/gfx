@@ -1243,10 +1243,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             Some(functor) => functor,
             _ => return Err(hal::external_memory::ExternalMemoryQueryError::UnsupportedFeature),
         };
+
+        let vk_external_memory_type = conv::map_external_memory_handle_types(memory_type.into());
+
         let external_buffer_info = vk::PhysicalDeviceExternalBufferInfo::builder()
             .flags(conv::map_buffer_create_flags(sparse))
             .usage(conv::map_buffer_usage(usage))
-            .handle_type(conv::map_external_memory_handle_types(memory_type.into()))
+            .handle_type(vk_external_memory_type)
             .build();
         let vk_mem_properties = {
             let mut external_buffer_properties = vk::ExternalBufferProperties::builder().build();
@@ -1269,15 +1272,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .external_memory_features
                 .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE),
             vk_mem_properties
-                .external_memory_features
-                .contains(vk::ExternalMemoryFeatureFlags::DEDICATED_ONLY),
-            memory_type,
-            conv::map_vk_external_memory_handle_type_flags(
-                vk_mem_properties.compatible_handle_types,
-            ),
-            conv::map_vk_external_memory_handle_type_flags(
-                vk_mem_properties.export_from_imported_handle_types,
-            ),
+                .export_from_imported_handle_types
+                .contains(vk_external_memory_type),
+            memory_type
         );
 
         Ok(hal::external_memory::ExternalBufferProperties::new(

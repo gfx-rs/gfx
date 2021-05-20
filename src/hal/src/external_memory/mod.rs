@@ -35,15 +35,15 @@ impl ExternalBufferProperties {
         }
     }
     /// Is the queried configuration exportable
-    pub fn get_queried_buffer_usage(&self) -> crate::buffer::Usage {
+    pub fn queried_buffer_usage(&self) -> crate::buffer::Usage {
         self.usage
     }
     /// Is the queried configuration importable
-    pub fn get_queried_buffer_sparse(&self) -> crate::memory::SparseFlags {
+    pub fn queried_buffer_sparse(&self) -> crate::memory::SparseFlags {
         self.sparse
     }
     /// Get external memory properties
-    pub fn get_external_memory_properties(&self) -> &ExternalMemoryProperties {
+    pub fn external_memory_properties(&self) -> &ExternalMemoryProperties {
         &self.external_memory_properties
     }
 }
@@ -64,28 +64,22 @@ impl std::ops::Deref for ExternalBufferProperties {
 pub struct ExternalMemoryProperties {
     exportable: bool,
     importable: bool,
-    dedicated_allocation: bool,
+    exportable_from_imported: bool,
     memory_type: ExternalMemoryType,
-    compatible_memory_types: ExternalMemoryTypeFlags,
-    export_from_imported_memory_types: ExternalMemoryTypeFlags,
 }
 impl ExternalMemoryProperties {
     /// Constructor
     pub fn new(
         exportable: bool,
         importable: bool,
-        dedicated_allocation: bool,
+        exportable_from_imported: bool,
         memory_type: ExternalMemoryType,
-        compatible_memory_types: ExternalMemoryTypeFlags,
-        export_from_imported_memory_types: ExternalMemoryTypeFlags,
     ) -> Self {
         Self {
             exportable,
             importable,
-            dedicated_allocation,
+            exportable_from_imported,
             memory_type,
-            compatible_memory_types,
-            export_from_imported_memory_types,
         }
     }
     /// Is the queried configuration exportable
@@ -97,20 +91,12 @@ impl ExternalMemoryProperties {
         self.importable
     }
     /// Does the queried configuration requires dedicated allocation
-    pub fn requires_dedicated_allocation(&self) -> bool {
-        self.dedicated_allocation
+    pub fn is_exportable_from_imported(&self) -> bool {
+        self.exportable_from_imported
     }
     /// Get the queried memory type
-    pub fn get_queried_memory_type(&self) -> ExternalMemoryType {
+    pub fn queried_memory_type(&self) -> ExternalMemoryType {
         self.memory_type
-    }
-    /// Get the external handle types compatible with the queried one
-    pub fn get_compatile_memory_types(&self) -> ExternalMemoryTypeFlags {
-        self.compatible_memory_types
-    }
-    /// Get the external handle types that can be exported from an imported memory using the queried external handle type
-    pub fn get_export_from_imported_memory_types(&self) -> ExternalMemoryTypeFlags {
-        self.export_from_imported_memory_types
     }
 }
 
