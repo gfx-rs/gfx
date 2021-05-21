@@ -2527,7 +2527,6 @@ impl d::Device<B> for super::Device {
         sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
         type_mask: u32,
-        size: u64,
     ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError> {
         if !self.shared.extension_fns.external_memory {
             return Err(hal::external_memory::ExternalImageImportError::UnsupportedFeature);

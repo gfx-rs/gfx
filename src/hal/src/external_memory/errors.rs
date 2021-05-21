@@ -4,7 +4,23 @@ use crate::device::OutOfMemory;
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External memory import error
-pub enum ExternalMemoryQueryError {
+pub enum ExternalBufferQueryError {
+    /// Unsupported feature.
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
+}
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+/// External memory import error
+pub enum ExternalImageQueryError {
+    /// Out of either host or device memory.
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
+
+    /// Requested image format not supported in combination with other parameters.
+    #[error("Format not supported")]
+    FormatNotSupported,
+
     /// Unsupported feature.
     #[error("Unsupported feature")]
     UnsupportedFeature,

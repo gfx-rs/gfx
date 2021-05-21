@@ -783,7 +783,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
         type_mask: u32,
-        size: u64,
     ) -> Result<(B::Image, B::Memory), external_memory::ExternalImageImportError>;
 
     /// Export memory as os type

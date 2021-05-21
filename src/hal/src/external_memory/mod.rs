@@ -14,58 +14,12 @@ pub enum BufferOrImage<'a, B: crate::Backend> {
     Image(&'a B::Image),
 }
 
-/// External buffer properties
-#[derive(Debug, PartialEq)]
-pub struct ExternalBufferProperties {
-    usage: crate::buffer::Usage,
-    sparse: crate::memory::SparseFlags,
-    external_memory_properties: ExternalMemoryProperties,
-}
-impl ExternalBufferProperties {
-    /// Constructor
-    pub fn new(
-        usage: crate::buffer::Usage,
-        sparse: crate::memory::SparseFlags,
-        external_memory_properties: ExternalMemoryProperties,
-    ) -> Self {
-        Self {
-            usage,
-            sparse,
-            external_memory_properties,
-        }
-    }
-    /// Is the queried configuration exportable
-    pub fn queried_buffer_usage(&self) -> crate::buffer::Usage {
-        self.usage
-    }
-    /// Is the queried configuration importable
-    pub fn queried_buffer_sparse(&self) -> crate::memory::SparseFlags {
-        self.sparse
-    }
-    /// Get external memory properties
-    pub fn external_memory_properties(&self) -> &ExternalMemoryProperties {
-        &self.external_memory_properties
-    }
-}
-impl AsRef<ExternalMemoryProperties> for ExternalBufferProperties {
-    fn as_ref(&self) -> &ExternalMemoryProperties {
-        &self.external_memory_properties
-    }
-}
-impl std::ops::Deref for ExternalBufferProperties {
-    type Target = ExternalMemoryProperties;
-    fn deref(&self) -> &Self::Target {
-        &self.external_memory_properties
-    }
-}
-
 /// External memory properties
 #[derive(Debug, PartialEq)]
 pub struct ExternalMemoryProperties {
     exportable: bool,
     importable: bool,
     exportable_from_imported: bool,
-    memory_type: ExternalMemoryType,
 }
 impl ExternalMemoryProperties {
     /// Constructor
@@ -73,13 +27,11 @@ impl ExternalMemoryProperties {
         exportable: bool,
         importable: bool,
         exportable_from_imported: bool,
-        memory_type: ExternalMemoryType,
     ) -> Self {
         Self {
             exportable,
             importable,
-            exportable_from_imported,
-            memory_type,
+            exportable_from_imported
         }
     }
     /// Is the queried configuration exportable
@@ -94,10 +46,16 @@ impl ExternalMemoryProperties {
     pub fn is_exportable_from_imported(&self) -> bool {
         self.exportable_from_imported
     }
-    /// Get the queried memory type
-    pub fn queried_memory_type(&self) -> ExternalMemoryType {
-        self.memory_type
+}
+impl Default for ExternalMemoryProperties {
+    fn default()->Self {
+        Self {
+            exportable: false,
+            importable: false,
+            exportable_from_imported: false
+        }
     }
+
 }
 
 bitflags!(

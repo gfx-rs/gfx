@@ -1258,15 +1258,15 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         sparse: hal::memory::SparseFlags,
         memory_type: hal::external_memory::ExternalMemoryType,
     ) -> Result<
-        hal::external_memory::ExternalBufferProperties,
-        hal::external_memory::ExternalMemoryQueryError,
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalBufferQueryError,
     > {
         let external_memory_capabilities_extension = match &self
             .instance
             .external_memory_capabilities
         {
             Some(functor) => functor,
-            _ => return Err(hal::external_memory::ExternalMemoryQueryError::UnsupportedFeature),
+            _ => return Err(hal::external_memory::ExternalBufferQueryError::UnsupportedFeature),
         };
 
         let vk_external_memory_type = conv::map_external_memory_handle_types(memory_type.into());
@@ -1299,14 +1299,84 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             vk_mem_properties
                 .export_from_imported_handle_types
                 .contains(vk_external_memory_type),
-            memory_type,
         );
 
-        Ok(hal::external_memory::ExternalBufferProperties::new(
-            usage,
-            sparse,
-            external_memory_properties,
-        ))
+        Ok(external_memory_properties)
+    }
+
+    fn query_external_image_properties(
+        &self,
+        format: format::Format,
+        dimensions: u8,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        view_caps: image::ViewCapabilities,
+        external_memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalImageQueryError,
+    > {
+        if self.instance.external_memory_capabilities.is_none()
+        {
+            return Err(hal::external_memory::ExternalImageQueryError::UnsupportedFeature);
+        }
+
+        use ash::version::InstanceV1_1;
+        let vk_external_memory_type =
+            conv::map_external_memory_handle_types(external_memory_type.into());
+        let mut external_image_format_info = vk::PhysicalDeviceExternalImageFormatInfo::builder().handle_type(vk_external_memory_type).build();
+        let image_format_info = vk::PhysicalDeviceImageFormatInfo2::builder()
+            .push_next(&mut external_image_format_info)
+            .format(conv::map_format(format))
+            .ty(match dimensions {
+                1 => vk::ImageType::TYPE_1D,
+                2 => vk::ImageType::TYPE_2D,
+                3 => vk::ImageType::TYPE_3D,
+                _ => panic!("Unexpected image dimensionality: {}", dimensions),
+            })
+            .tiling(conv::map_tiling(tiling))
+            .usage(conv::map_image_usage(usage))
+            .flags(conv::map_view_capabilities(view_caps))
+            .build();
+
+        let mut external_image_format_properties = vk::ExternalImageFormatProperties::builder().build();
+        let mut image_format_properties = vk::ImageFormatProperties2::builder().push_next(&mut external_image_format_properties).build();
+
+        match unsafe {
+            self.instance
+                .inner
+                .get_physical_device_image_format_properties2(
+                    self.handle,
+                    &image_format_info,
+                    &mut image_format_properties
+                )
+        }
+        {
+            Ok(_)=>{
+                let vk_mem_properties = external_image_format_properties.external_memory_properties;
+                let external_memory_properties = hal::external_memory::ExternalMemoryProperties::new(
+                    vk_mem_properties
+                        .external_memory_features
+                        .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE),
+                    vk_mem_properties
+                        .external_memory_features
+                        .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE),
+                    vk_mem_properties
+                        .export_from_imported_handle_types
+                        .contains(vk_external_memory_type),
+                );
+                Ok(external_memory_properties)
+            },
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device.into()),
+            Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED) => Err(hal::external_memory::ExternalImageQueryError::FormatNotSupported),
+            Err(err) => {
+                error!("Unexpected error: {:#?}", err);
+                return Err(
+                    hal::external_memory::ExternalImageQueryError::UnsupportedFeature,
+                );
+            }
+        }
     }
 
     fn features(&self) -> Features {

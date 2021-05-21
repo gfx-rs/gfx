@@ -9,7 +9,7 @@
 //! of that [backend][crate::Backend].
 
 use crate::{
-    device, display, format, image, memory,
+    buffer, device, display, external_memory, format, image, memory,
     queue::{QueueGroup, QueuePriority},
     Backend, Features, PhysicalDeviceProperties,
 };
@@ -118,12 +118,26 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Get external buffer properties
     fn query_external_buffer_properties(
         &self,
-        usage: crate::buffer::Usage,
-        sparse: crate::memory::SparseFlags,
-        memory_type: crate::external_memory::ExternalMemoryType,
+        usage: buffer::Usage,
+        sparse: memory::SparseFlags,
+        memory_type: external_memory::ExternalMemoryType,
     ) -> Result<
-        crate::external_memory::ExternalBufferProperties,
-        crate::external_memory::ExternalMemoryQueryError,
+        external_memory::ExternalMemoryProperties,
+        external_memory::ExternalBufferQueryError,
+    >;
+
+    /// Get external image properties
+    fn query_external_image_properties(
+        &self,
+        format: format::Format,
+        dimensions: u8,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        view_caps: image::ViewCapabilities,
+        external_memory_type: external_memory::ExternalMemoryType,
+    ) -> Result<
+        external_memory::ExternalMemoryProperties,
+        external_memory::ExternalImageQueryError,
     >;
 
     /// Returns the features of this `PhysicalDevice`. This usually depends on the graphics API being
