@@ -2034,7 +2034,7 @@ impl d::Device<B> for super::Device {
             .handle_types(vk_external_memory_types)
             .build();
 
-        let dedicated_allocation_info = if self.shared.extension_fns.dedicated_allocation {
+        let mut dedicated_allocation_info = if self.shared.extension_fns.dedicated_allocation {
             let dedicated_allocation_info = vk::MemoryDedicatedAllocateInfo::builder()
                 .buffer(buffer.raw)
                 .build();
@@ -2043,17 +2043,15 @@ impl d::Device<B> for super::Device {
             None
         };
 
-        if let Some(dedicated_allocation_info) = &dedicated_allocation_info {
-            export_memori_ai.p_next = std::mem::transmute::<
-                &vk::MemoryDedicatedAllocateInfo,
-                *const core::ffi::c_void,
-            >(dedicated_allocation_info);
+        let allocate_info = if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info
+        {
+            vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
+        } else {
+            vk::MemoryAllocateInfo::builder()
         }
-
-        let allocate_info = vk::MemoryAllocateInfo::builder()
-            .push_next(&mut export_memori_ai)
-            .allocation_size(buffer_req.size)
-            .memory_type_index(self.get_ash_memory_type_index(mem_type));
+        .push_next(&mut export_memori_ai)
+        .allocation_size(buffer_req.size)
+        .memory_type_index(self.get_ash_memory_type_index(mem_type));
 
         let result = self.shared.raw.allocate_memory(&allocate_info, None);
 
@@ -2381,6 +2379,468 @@ impl d::Device<B> for super::Device {
         }
 
         Ok((buffer, memory))
+    }
+    unsafe fn create_allocate_external_image(
+        &self,
+        external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        format: format::Format,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        sparse: memory::SparseFlags,
+        view_caps: image::ViewCapabilities,
+        type_mask: u32,
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageCreateAllocateError> {
+        let flags = conv::map_view_capabilities_sparse(sparse, view_caps);
+        let extent = conv::map_extent(kind.extent());
+        let array_layers = kind.num_layers();
+        let samples = kind.num_samples();
+        let image_type = match kind {
+            image::Kind::D1(..) => vk::ImageType::TYPE_1D,
+            image::Kind::D2(..) => vk::ImageType::TYPE_2D,
+            image::Kind::D3(..) => vk::ImageType::TYPE_3D,
+        };
+
+        //Note: this is a hack, we should expose this in the API instead
+        let layout = match tiling {
+            image::Tiling::Linear => vk::ImageLayout::PREINITIALIZED,
+            image::Tiling::Optimal => vk::ImageLayout::UNDEFINED,
+        };
+
+        let vk_external_memory_type =
+            conv::map_external_memory_handle_types(external_memory_types.into());
+
+        let mut external_memory_ci = vk::ExternalMemoryImageCreateInfo::builder()
+            .handle_types(vk_external_memory_type)
+            .build();
+
+        let info = vk::ImageCreateInfo::builder()
+            .push_next(&mut external_memory_ci)
+            .flags(flags)
+            .image_type(image_type)
+            .format(conv::map_format(format))
+            .extent(extent.clone())
+            .mip_levels(mip_levels as u32)
+            .array_layers(array_layers as u32)
+            .samples(conv::map_sample_count_flags(samples))
+            .tiling(conv::map_tiling(tiling))
+            .usage(conv::map_image_usage(usage))
+            .sharing_mode(vk::SharingMode::EXCLUSIVE) // TODO:
+            .initial_layout(layout);
+
+        let result = self.shared.raw.create_image(&info, None);
+
+        let mut image = match result {
+            Ok(raw) => n::Image {
+                raw,
+                ty: image_type,
+                flags,
+                extent,
+            },
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(d::OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                return Err(d::OutOfMemory::Device.into())
+            }
+            Err(val) => unreachable!("Returned unexpected value: {}", val),
+        };
+
+        let image_req = self.get_image_requirements(&image);
+
+        let mem_type = match (0..32)
+            .into_iter()
+            .find(|id| image_req.type_mask & type_mask & (1 << id) != 0)
+        {
+            Some(id) => id.into(),
+            None => unreachable!(),
+        };
+
+        let mut export_memori_ai = vk::ExportMemoryAllocateInfo::builder()
+            .handle_types(vk_external_memory_type)
+            .build();
+
+        let mut dedicated_allocation_info = if self.shared.extension_fns.dedicated_allocation {
+            let dedicated_allocation_info = vk::MemoryDedicatedAllocateInfo::builder()
+                .image(image.raw)
+                .build();
+            Some(dedicated_allocation_info)
+        } else {
+            None
+        };
+
+        let allocate_info = if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info
+        {
+            vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
+        } else {
+            vk::MemoryAllocateInfo::builder()
+        }
+        .push_next(&mut export_memori_ai)
+        .allocation_size(image_req.size)
+        .memory_type_index(self.get_ash_memory_type_index(mem_type));
+
+        let result = self.shared.raw.allocate_memory(&allocate_info, None);
+
+        let memory = match result {
+            Ok(memory) => n::Memory { raw: memory },
+            Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => {
+                self.destroy_image(image);
+                return Err(hal::external_memory::ExternalImageCreateAllocateError::TooManyObjects);
+            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                self.destroy_image(image);
+                return Err(d::OutOfMemory::Host.into());
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                self.destroy_image(image);
+                return Err(d::OutOfMemory::Device.into());
+            }
+            Err(val) => {
+                self.destroy_image(image);
+                unreachable!("Returned unexpected value: {}", val)
+            }
+        };
+
+        if let Err(err) = self.bind_image_memory(&memory, 0, &mut image) {
+            error!("Failed to `bind_image_memory`: {:#?}", err);
+            return Err(match err {
+                d::BindError::OutOfMemory(out_of_memory) => out_of_memory.into(),
+                d::BindError::WrongMemory => {
+                    hal::external_memory::ExternalImageCreateAllocateError::WrongMemory
+                }
+                d::BindError::OutOfBounds => {
+                    hal::external_memory::ExternalImageCreateAllocateError::OutOfBounds
+                }
+            });
+        }
+
+        Ok((image, memory))
+    }
+
+    unsafe fn import_external_image(
+        &self,
+        external_memory: hal::external_memory::ExternalMemory,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        format: format::Format,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        sparse: memory::SparseFlags,
+        view_caps: image::ViewCapabilities,
+        type_mask: u32,
+        size: u64,
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError> {
+        if !self.shared.extension_fns.external_memory {
+            return Err(hal::external_memory::ExternalImageImportError::UnsupportedFeature);
+        }
+
+        let flags = conv::map_view_capabilities_sparse(sparse, view_caps);
+        let extent = conv::map_extent(kind.extent());
+        let array_layers = kind.num_layers();
+        let samples = kind.num_samples();
+        let image_type = match kind {
+            image::Kind::D1(..) => vk::ImageType::TYPE_1D,
+            image::Kind::D2(..) => vk::ImageType::TYPE_2D,
+            image::Kind::D3(..) => vk::ImageType::TYPE_3D,
+        };
+
+        //Note: this is a hack, we should expose this in the API instead
+        let layout = match tiling {
+            image::Tiling::Linear => vk::ImageLayout::PREINITIALIZED,
+            image::Tiling::Optimal => vk::ImageLayout::UNDEFINED,
+        };
+        let (external_memory_type, platform_memory) = external_memory.into();
+
+        let vk_external_memory_type =
+            conv::map_external_memory_handle_types(external_memory_type.into());
+
+        let mut external_memory_ci = vk::ExternalMemoryImageCreateInfo::builder()
+            .handle_types(vk_external_memory_type)
+            .build();
+
+        let info = vk::ImageCreateInfo::builder()
+            .push_next(&mut external_memory_ci)
+            .flags(flags)
+            .image_type(image_type)
+            .format(conv::map_format(format))
+            .extent(extent.clone())
+            .mip_levels(mip_levels as u32)
+            .array_layers(array_layers as u32)
+            .samples(conv::map_sample_count_flags(samples))
+            .tiling(conv::map_tiling(tiling))
+            .usage(conv::map_image_usage(usage))
+            .sharing_mode(vk::SharingMode::EXCLUSIVE) // TODO:
+            .initial_layout(layout);
+
+        let result = self.shared.raw.create_image(&info, None);
+
+        let mut image = match result {
+            Ok(raw) => n::Image {
+                raw,
+                ty: image_type,
+                flags,
+                extent,
+            },
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(d::OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(d::OutOfMemory::Device.into()),
+            Err(val) => unreachable!("Returned unexpected value: {}", val),
+        };
+
+        let image_req = self.get_image_requirements(&image);
+
+        let dedicated_allocation_info = if self.shared.extension_fns.dedicated_allocation {
+            let dedicated_allocation_info = vk::MemoryDedicatedAllocateInfo::builder()
+                .image(image.raw)
+                .build();
+            Some(dedicated_allocation_info)
+        } else {
+            None
+        };
+
+        let result = match platform_memory {
+            #[cfg(unix)]
+            hal::external_memory::PlatformMemory::Fd(fd) => {
+                let external_memory_extension = match &self.shared.extension_fns.external_memory_fd
+                {
+                    Some(functor) => functor.unwrap_extension(),
+                    _ => {
+                        error!("External memory unix file descriptor extension not supported");
+                        return Err(
+                            hal::external_memory::ExternalImageImportError::UnsupportedFeature,
+                        );
+                    }
+                };
+
+                #[cfg(any(target_os = "linux", target_os = "android", doc))]
+                if !self.shared.extension_fns.external_memory_dma_buf
+                    && external_memory_type == hal::external_memory::ExternalMemoryType::DmaBuf
+                {
+                    error!("Export to dma buf not supported");
+                    return Err(
+                        hal::external_memory::ExternalImageImportError::UnsupportedFeature,
+                    );
+                }
+
+                let vk_memory_bits = if external_memory_type
+                    == hal::external_memory::ExternalMemoryType::OpaqueFd
+                {
+                    u32::MAX
+                } else {
+                    use std::os::unix::io::AsRawFd;
+                    match external_memory_extension
+                        .get_memory_fd_properties_khr(vk_external_memory_type, fd.as_raw_fd())
+                    {
+                        Ok(memory_handle_properties) => memory_handle_properties.memory_type_bits,
+                        Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                            return Err(d::OutOfMemory::Host.into())
+                        }
+                        Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
+                            error!("Failed to get memory fd properties");
+                            return Err(
+                                    hal::external_memory::ExternalImageImportError::InvalidExternalHandle,
+                                );
+                        }
+                        err => {
+                            error!("Unexpected error: {:#?}", err);
+                            return Err(
+                                hal::external_memory::ExternalImageImportError::UnsupportedFeature,
+                            );
+                        }
+                    }
+                };
+
+                let mem_type = match (0..32)
+                    .into_iter()
+                    .find(|id| image_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
+                {
+                    Some(id) => id.into(),
+                    None => unreachable!(),
+                };
+
+                let mut import_memory_info = vk::ImportMemoryFdInfoKHR::builder()
+                    .handle_type(vk_external_memory_type)
+                    .fd(*fd)
+                    .build();
+
+                if let Some(dedicated_allocation_info) = &dedicated_allocation_info {
+                    import_memory_info.p_next = std::mem::transmute::<
+                        &vk::MemoryDedicatedAllocateInfo,
+                        *const core::ffi::c_void,
+                    >(dedicated_allocation_info);
+                }
+
+                let allocate_info = vk::MemoryAllocateInfo::builder()
+                    .push_next(&mut import_memory_info)
+                    .allocation_size(image_req.size)
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
+
+                self.shared.raw.allocate_memory(&allocate_info, None)
+            }
+            #[cfg(windows)]
+            hal::external_memory::PlatformMemory::Handle(handle) => {
+                let external_memory_extension =
+                    match &self.shared.extension_fns.external_memory_win32 {
+                        Some(functor) => functor.unwrap_extension(),
+                        _ => {
+                            error!("External memory windows handle extension not supported");
+                            return Err(
+                                hal::external_memory::ExternalImageImportError::UnsupportedFeature,
+                            );
+                        }
+                    };
+
+                let vk_memory_bits = {
+                    use std::os::windows::io::AsRawHandle;
+                    let mut memory_handle_properties =
+                        vk::MemoryWin32HandlePropertiesKHR::builder().build();
+                    match external_memory_extension.get_memory_win32_handle_properties_khr(
+                        self.shared.raw.handle(),
+                        vk_external_memory_type,
+                        handle.as_raw_handle(),
+                        &mut memory_handle_properties,
+                    ) {
+                        vk::Result::SUCCESS => (),
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                            return Err(d::OutOfMemory::Host.into())
+                        }
+                        vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => return Err(
+                            hal::external_memory::ExternalImageImportError::InvalidExternalHandle,
+                        ),
+                        _ => unreachable!(),
+                    };
+                    memory_handle_properties.memory_type_bits
+                };
+
+                let mem_type = match (0..32)
+                    .into_iter()
+                    .find(|id| buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
+                {
+                    Some(id) => id.into(),
+                    None => unreachable!(),
+                };
+
+                let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::builder()
+                    .handle_type(vk_external_memory_type)
+                    .handle(*handle)
+                    .build();
+
+                if let Some(dedicated_allocation_info) = &dedicated_allocation_info {
+                    import_memory_info.p_next = std::mem::transmute::<
+                        &vk::MemoryDedicatedAllocateInfo,
+                        *const core::ffi::c_void,
+                    >(dedicated_allocation_info);
+                }
+
+                let allocate_info = vk::MemoryAllocateInfo::builder()
+                    .push_next(&mut import_memory_info)
+                    .allocation_size(buffer_req.size)
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
+
+                self.shared.raw.allocate_memory(&allocate_info, None)
+            }
+            hal::external_memory::PlatformMemory::Ptr(ptr) => {
+                let external_memory_extension =
+                    match &self.shared.extension_fns.external_memory_host {
+                        Some(functor) => functor.unwrap_extension(),
+                        _ => {
+                            error!("External memory host pointer extension not supported");
+                            return Err(
+                                hal::external_memory::ExternalImageImportError::UnsupportedFeature,
+                            );
+                        }
+                    };
+
+                let vk_memory_bits = {
+                    let mut memory_ptr_properties =
+                        vk::MemoryHostPointerPropertiesEXT::builder().build();
+                    match external_memory_extension.get_memory_host_pointer_properties_ext(
+                        self.shared.raw.handle(),
+                        vk_external_memory_type,
+                        ptr.as_raw_ptr(),
+                        &mut memory_ptr_properties,
+                    ) {
+                        vk::Result::SUCCESS => (),
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                            return Err(d::OutOfMemory::Host.into())
+                        }
+                        vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => return Err(
+                            hal::external_memory::ExternalImageImportError::InvalidExternalHandle,
+                        ),
+                        err => {
+                            error!("Unexpected error: {:#?}", err);
+                            return Err(
+                                hal::external_memory::ExternalImageImportError::UnsupportedFeature,
+                            );
+                        }
+                    };
+                    memory_ptr_properties.memory_type_bits
+                };
+
+                let mem_type = match (0..32)
+                    .into_iter()
+                    .find(|id| image_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
+                {
+                    Some(id) => id.into(),
+                    None => unreachable!(),
+                };
+
+                let mut import_memory_info = vk::ImportMemoryHostPointerInfoEXT::builder()
+                    .handle_type(vk_external_memory_type)
+                    .host_pointer(*ptr)
+                    .build();
+
+                if let Some(dedicated_allocation_info) = &dedicated_allocation_info {
+                    import_memory_info.p_next = std::mem::transmute::<
+                        &vk::MemoryDedicatedAllocateInfo,
+                        *const core::ffi::c_void,
+                    >(dedicated_allocation_info);
+                }
+
+                let info = vk::MemoryAllocateInfo::builder()
+                    .push_next(&mut import_memory_info)
+                    .allocation_size(image_req.size)
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
+
+                self.shared.raw.allocate_memory(&info, None)
+            }
+        };
+
+        let memory = match result {
+            Ok(memory) => n::Memory { raw: memory },
+            Err(err)=>{
+                self.destroy_image(image);
+                match err {
+                    vk::Result::ERROR_TOO_MANY_OBJECTS => {
+                        return Err(hal::external_memory::ExternalImageImportError::TooManyObjects)
+                    }
+                    vk::Result::ERROR_OUT_OF_HOST_MEMORY => return Err(d::OutOfMemory::Host.into()),
+                    vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                        return Err(d::OutOfMemory::Device.into())
+                    }
+                    vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => {
+                        return Err(hal::external_memory::ExternalImageImportError::InvalidExternalHandle)
+                    }
+                    val => unreachable!("Returned unexpected value: {}", val),
+                }
+            }
+
+        };
+
+        if let Err(err) = self.bind_image_memory(&memory, 0, &mut image) {
+            self.destroy_image(image);
+            self.free_memory(memory);
+            error!("Failed to `bind_image_memory`: {:#?}", err);
+            return Err(match err {
+                d::BindError::OutOfMemory(out_of_memory) => out_of_memory.into(),
+                d::BindError::WrongMemory => {
+                    hal::external_memory::ExternalImageImportError::WrongMemory
+                }
+                d::BindError::OutOfBounds => {
+                    hal::external_memory::ExternalImageImportError::OutOfBounds
+                }
+            });
+        }
+
+        Ok((image, memory))
     }
 
     unsafe fn export_memory(

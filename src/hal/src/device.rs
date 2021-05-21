@@ -736,7 +736,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         fence: &mut B::Fence,
     ) -> Result<(), display::control::DisplayControlError>;
 
-    /// Create external buffer
+
+    /// Create, allocate and bind an external buffer
     unsafe fn create_allocate_external_buffer(
         &self,
         external_memory_type_flags: external_memory::ExternalMemoryTypeFlags,
@@ -746,7 +747,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         size: u64,
     ) -> Result<(B::Buffer, B::Memory), external_memory::ExternalBufferCreateAllocateError>;
 
-    /// Import external memory
+    /// Import external memory as binded buffer and memory
     unsafe fn import_external_buffer(
         &self,
         external_memory: external_memory::ExternalMemory,
@@ -756,19 +757,42 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         size: u64,
     ) -> Result<(B::Buffer, B::Memory), external_memory::ExternalBufferImportError>;
 
+    /// Create, allocate and bind an external image
+    unsafe fn create_allocate_external_image(
+        &self,
+        external_memory_type_flags: external_memory::ExternalMemoryTypeFlags,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        format: format::Format,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        sparse: memory::SparseFlags,
+        view_caps: image::ViewCapabilities,
+        type_mask: u32,
+    ) -> Result<(B::Image, B::Memory), external_memory::ExternalImageCreateAllocateError>;
+
+    /// Import external memory as binded image and memory
+    unsafe fn import_external_image(
+        &self,
+        external_memory: external_memory::ExternalMemory,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        format: format::Format,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        sparse: memory::SparseFlags,
+        view_caps: image::ViewCapabilities,
+        type_mask: u32,
+        size: u64,
+    ) -> Result<(B::Image, B::Memory), external_memory::ExternalImageImportError>;
+
     /// Export memory as os type
     unsafe fn export_memory(
         &self,
         external_memory_type: external_memory::ExternalMemoryType,
         memory: &B::Memory,
     ) -> Result<external_memory::ExternalMemory, external_memory::ExternalMemoryExportError>;
-    /*
-        /// Get memory mask for external handle
-        unsafe fn get_external_memory_mask(
-            &self,
-            external_memory_handle: &external_memory::ExternalMemory,
-        ) -> Result<u32, external_memory::ExternalMemoryError>;
-    */
+
     /// Starts frame capture.
     fn start_capture(&self);
 

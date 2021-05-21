@@ -44,6 +44,41 @@ pub enum ExternalBufferCreateAllocateError {
     UnsupportedFeature,
 }
 
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+/// External image create error
+pub enum ExternalImageCreateAllocateError {
+    /// Out of either host or device memory.
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
+
+    /// Requested buffer usage is not supported.
+    ///
+    /// Older GL version don't support constant buffers or multiple usage flags.
+    #[error("Unsupported usage: {0:?}")]
+    UnsupportedUsage(crate::image::Usage),
+
+    /// Cannot create any more objects.
+    #[error("Too many objects")]
+    TooManyObjects,
+
+    /// Requested binding to memory that doesn't support the required operations.
+    #[error("Wrong memory")]
+    WrongMemory,
+
+    /// Requested binding to an invalid memory.
+    #[error("Requested range is outside the resource")]
+    OutOfBounds,
+
+    /// Invalid external handle.
+    #[error("The used external handle or the combination of them is invalid")]
+    InvalidExternalHandle,
+
+    /// Unsupported feature.
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
+}
+
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External memory import error
 pub enum ExternalBufferImportError {
@@ -56,6 +91,41 @@ pub enum ExternalBufferImportError {
     /// Older GL version don't support constant buffers or multiple usage flags.
     #[error("Unsupported usage: {0:?}")]
     UnsupportedUsage(crate::buffer::Usage),
+
+    /// Cannot create any more objects.
+    #[error("Too many objects")]
+    TooManyObjects,
+
+    /// Requested binding to memory that doesn't support the required operations.
+    #[error("Wrong memory")]
+    WrongMemory,
+
+    /// Requested binding to an invalid memory.
+    #[error("Requested range is outside the resource")]
+    OutOfBounds,
+
+    /// Invalid external handle.
+    #[error("Invalid external handle")]
+    InvalidExternalHandle,
+
+    /// Unsupported feature.
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
+}
+
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+/// External memory import error
+pub enum ExternalImageImportError {
+    /// Out of either host or device memory.
+    #[error(transparent)]
+    OutOfMemory(#[from] OutOfMemory),
+
+    /// Requested buffer usage is not supported.
+    ///
+    /// Older GL version don't support constant buffers or multiple usage flags.
+    #[error("Unsupported usage: {0:?}")]
+    UnsupportedUsage(crate::image::Usage),
 
     /// Cannot create any more objects.
     #[error("Too many objects")]

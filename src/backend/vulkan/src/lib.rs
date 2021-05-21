@@ -820,11 +820,13 @@ struct DeviceExtensionFunctions {
     // The extension does not have its own functions.
     external_memory: bool,
     external_memory_host: Option<ExtensionFn<vk::ExtExternalMemoryHostFn>>,
-    #[cfg(all(not(unix), windows))]
+    #[cfg(windows)]
     external_memory_win32: Option<ExtensionFn<vk::KhrExternalMemoryWin32Fn>>,
-    #[cfg(all(unix, not(windows)))]
+    #[cfg(unix)]
     external_memory_fd: Option<ExtensionFn<khr::ExternalMemoryFd>>,
-    #[cfg(all(unix, not(windows)))]
+    #[cfg(any(target_os="linux",target_os="android"))]
+    image_drm_format_modifier: Option<ExtensionFn<vk::ExtImageDrmFormatModifierFn>>,
+    #[cfg(unix)]
     // The extension does not have its own functions.
     external_memory_dma_buf: bool,
 }

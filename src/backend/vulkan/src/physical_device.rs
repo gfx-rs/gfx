@@ -816,6 +816,22 @@ impl PhysicalDevice {
         let external_memory_dma_buf =
             enabled_extensions.contains(&vk::ExtExternalMemoryDmaBufFn::name());
 
+        #[cfg(any(target_os="linux",target_os="android"))]
+        let image_drm_format_modifier =
+            if enabled_extensions.contains(&vk::ExtImageDrmFormatModifierFn::name()) {
+                Some(ExtensionFn::Extension(vk::ExtImageDrmFormatModifierFn::load(
+                    |name| {
+                        std::mem::transmute(
+                            self.instance
+                                .inner
+                                .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                        )
+                    },
+                )))
+            } else {
+                None
+            };
+
         #[cfg(windows)]
         let external_memory_win32 =
             if enabled_extensions.contains(&vk::KhrExternalMemoryWin32Fn::name()) {
@@ -880,6 +896,8 @@ impl PhysicalDevice {
                     external_memory_win32: external_memory_win32,
                     #[cfg(unix)]
                     external_memory_dma_buf: external_memory_dma_buf,
+                    #[cfg(any(target_os="linux",target_os="android"))]
+                    image_drm_format_modifier: image_drm_format_modifier,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
                     || self
