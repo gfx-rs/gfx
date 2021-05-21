@@ -597,6 +597,12 @@ impl PhysicalDeviceInfo {
             {
                 requested_extensions.push(vk::KhrExternalMemoryFdFn::name());
                 requested_extensions.push(vk::ExtExternalMemoryDmaBufFn::name());
+
+                requested_extensions.push(vk::KhrBindMemory2Fn::name());
+                requested_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+                requested_extensions.push(vk::KhrImageFormatListFn::name());
+                requested_extensions.push(vk::KhrSamplerYcbcrConversionFn::name());
+                requested_extensions.push(vk::ExtImageDrmFormatModifierFn::name());
             }
         }
         requested_extensions
