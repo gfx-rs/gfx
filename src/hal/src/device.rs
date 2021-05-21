@@ -762,13 +762,13 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         external_memory_type: external_memory::ExternalMemoryType,
         memory: &B::Memory,
     ) -> Result<external_memory::ExternalMemory, external_memory::ExternalMemoryExportError>;
-/*
-    /// Get memory mask for external handle
-    unsafe fn get_external_memory_mask(
-        &self,
-        external_memory_handle: &external_memory::ExternalMemory,
-    ) -> Result<u32, external_memory::ExternalMemoryError>;
-*/
+    /*
+        /// Get memory mask for external handle
+        unsafe fn get_external_memory_mask(
+            &self,
+            external_memory_handle: &external_memory::ExternalMemory,
+        ) -> Result<u32, external_memory::ExternalMemoryError>;
+    */
     /// Starts frame capture.
     fn start_capture(&self);
 

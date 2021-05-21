@@ -646,17 +646,11 @@ impl device::Device<Backend> for Device {
         &self,
         _external_memory_type: hal::external_memory::ExternalMemoryType,
         _memory: &<Backend as gfx_hal::Backend>::Memory,
-    ) -> Result<hal::external_memory::ExternalMemory, hal::external_memory::ExternalMemoryExportError> {
+    ) -> Result<hal::external_memory::ExternalMemory, hal::external_memory::ExternalMemoryExportError>
+    {
         unimplemented!()
     }
-/*
-    unsafe fn get_external_memory_mask(
-        &self,
-        _external_memory: &hal::external_memory::ExternalMemory,
-    ) -> Result<u32, hal::external_memory::ExternalMemoryError> {
-        unimplemented!()
-    }
-*/
+
     unsafe fn reset_fence(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {
         Ok(())
     }

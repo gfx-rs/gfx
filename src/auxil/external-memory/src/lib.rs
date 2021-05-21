@@ -1,40 +1,32 @@
-#[cfg(any(unix))]
-#[cfg_attr(feature = "unstable", doc(cfg(unix)))]
+#[cfg(any(unix, doc))]
 mod fd;
-#[cfg(any(unix))]
-#[cfg_attr(feature = "unstable", doc(cfg(unix)))]
+#[cfg(any(unix, doc))]
 pub use fd::*;
 
-#[cfg(any(windows))]
-#[cfg_attr(feature = "unstable", doc(cfg(windows)))]
+#[cfg(any(windows, doc))]
 mod handle;
-#[cfg(any(windows))]
-#[cfg_attr(feature = "unstable", doc(cfg(windows)))]
+#[cfg(any(windows, doc))]
 pub use handle::*;
 
 mod ptr;
 pub use ptr::*;
 
 pub enum PlatformMemory {
-    #[cfg(any(unix))]
-    #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
+    #[cfg(any(unix, doc))]
     Fd(Fd),
-    #[cfg(any(windows))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
+    #[cfg(any(windows, doc))]
     Handle(Handle),
     Ptr(Ptr),
 }
 
-#[cfg(any(unix))]
-#[cfg_attr(feature = "unstable", doc(cfg(unix)))]
+#[cfg(unix)]
 impl From<Fd> for PlatformMemory {
     fn from(fd: Fd) -> Self {
         Self::Fd(fd)
     }
 }
 
-#[cfg(any(windows))]
-#[cfg_attr(feature = "unstable", doc(cfg(windows)))]
+#[cfg(windows)]
 impl From<Handle> for PlatformMemory {
     fn from(handle: Handle) -> Self {
         Self::Handle(handle)
@@ -48,11 +40,9 @@ impl From<Ptr> for PlatformMemory {
 }
 
 pub enum PlatformMemoryType {
-    #[cfg(any(unix))]
-    #[cfg_attr(feature = "unstable", doc(cfg(unix)))]
+    #[cfg(any(unix, doc))]
     Fd,
-    #[cfg(any(windows))]
-    #[cfg_attr(feature = "unstable", doc(cfg(windows)))]
+    #[cfg(any(windows, doc))]
     Handle,
     Ptr,
 }

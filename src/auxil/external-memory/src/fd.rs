@@ -6,6 +6,7 @@ impl From<i32> for Fd {
         Self(fd)
     }
 }
+#[cfg(unix)]
 impl std::os::unix::io::AsRawFd for Fd {
     fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
         self.0

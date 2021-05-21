@@ -9,8 +9,8 @@ use hal::{
     device::{CreationError, OutOfMemory},
     display, format, image,
     pso::PatchSize,
-    queue, DescriptorLimits, DownlevelProperties, DynamicStates, Features, Limits,
-    PhysicalDeviceProperties,
+    queue, DescriptorLimits, DownlevelProperties, DynamicStates, ExternalMemoryLimits, Features,
+    Limits, PhysicalDeviceProperties,
 };
 
 use std::{ffi::CStr, fmt, mem, ptr, sync::Arc};
@@ -781,7 +781,8 @@ impl PhysicalDevice {
             None
         };
 
-        let dedicated_allocation = enabled_extensions.contains(&vk::KhrDedicatedAllocationFn::name());
+        let dedicated_allocation =
+            enabled_extensions.contains(&vk::KhrDedicatedAllocationFn::name());
 
         let external_memory = enabled_extensions.contains(&vk::KhrExternalMemoryFn::name());
 
@@ -1274,7 +1275,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             vk_mem_properties
                 .export_from_imported_handle_types
                 .contains(vk_external_memory_type),
-            memory_type
+            memory_type,
         );
 
         Ok(hal::external_memory::ExternalBufferProperties::new(
@@ -1403,6 +1404,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let mut descriptor_indexing_capabilities = hal::DescriptorIndexingProperties::default();
         let mut mesh_shader_capabilities = hal::MeshShaderProperties::default();
         let mut sampler_reduction_capabilities = hal::SamplerReductionProperties::default();
+        let mut external_memory_limits = hal::ExternalMemoryLimits::default();
 
         if let Some(get_physical_device_properties) =
             self.instance.get_physical_device_properties.as_ref()
@@ -1412,6 +1414,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             let mut mesh_shader_properties = vk::PhysicalDeviceMeshShaderPropertiesNV::builder();
             let mut sampler_reduction_properties =
                 vk::PhysicalDeviceSamplerFilterMinmaxProperties::builder();
+            let mut memory_host_properties =
+                vk::PhysicalDeviceExternalMemoryHostPropertiesEXT::builder();
 
             unsafe {
                 get_physical_device_properties.get_physical_device_properties2_khr(
@@ -1420,6 +1424,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         .push_next(&mut descriptor_indexing_properties)
                         .push_next(&mut mesh_shader_properties)
                         .push_next(&mut sampler_reduction_properties)
+                        .push_next(&mut memory_host_properties)
                         .build() as *mut _,
                 );
             }
@@ -1478,6 +1483,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     .filter_minmax_image_component_mapping
                     == vk::TRUE,
             };
+
+            external_memory_limits = ExternalMemoryLimits {
+                min_imported_host_pointer_alignment: memory_host_properties
+                    .min_imported_host_pointer_alignment,
+            };
         }
 
         PhysicalDeviceProperties {
@@ -1488,6 +1498,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             performance_caveats: Default::default(),
             dynamic_pipeline_states: DynamicStates::all(),
             downlevel: DownlevelProperties::all_enabled(),
+            external_memory_limits: external_memory_limits,
         }
     }
 
