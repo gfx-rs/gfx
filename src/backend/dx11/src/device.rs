@@ -2508,6 +2508,36 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
+    unsafe fn create_allocate_external_image(
+        &self,
+        _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        _kind: image::Kind,
+        _mip_levels: image::Level,
+        _format: format::Format,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _sparse: memory::SparseFlags,
+        _view_caps: image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(Image, Memory), hal::external_memory::ExternalImageCreateAllocateError> {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_image(
+        &self,
+        _external_memory: hal::external_memory::ExternalMemory,
+        _kind: image::Kind,
+        _mip_levels: image::Level,
+        _format: format::Format,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _sparse: memory::SparseFlags,
+        _view_caps: image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(Image, Memory), hal::external_memory::ExternalImageImportError> {
+        unimplemented!()
+    }
+
     unsafe fn export_memory(
         &self,
         _external_memory_type: hal::external_memory::ExternalMemoryType,

@@ -448,8 +448,23 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _sparse: hal::memory::SparseFlags,
         _memory_type: hal::external_memory::ExternalMemoryType,
     ) -> Result<
-        hal::external_memory::ExternalBufferProperties,
-        hal::external_memory::ExternalMemoryQueryError,
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalBufferQueryError,
+    > {
+        unimplemented!()
+    }
+
+    fn query_external_image_properties(
+        &self,
+        _format: hal::format::Format,
+        _dimensions: u8,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _view_caps: hal::image::ViewCapabilities,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalImageQueryError,
     > {
         unimplemented!()
     }

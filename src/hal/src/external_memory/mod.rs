@@ -7,11 +7,11 @@ pub use external_memory::*;
 
 /// Buffer or image
 #[derive(Debug)]
-pub enum BufferOrImage<'a, B: crate::Backend> {
+pub enum Resource<B: crate::Backend> {
     /// Buffer
-    Buffer(&'a B::Buffer),
+    Buffer(B::Buffer),
     /// Image
-    Image(&'a B::Image),
+    Image(B::Image),
 }
 
 /// External memory properties

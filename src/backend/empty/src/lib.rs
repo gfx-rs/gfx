@@ -150,8 +150,23 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _sparse: hal::memory::SparseFlags,
         _memory_type: hal::external_memory::ExternalMemoryType,
     ) -> Result<
-        hal::external_memory::ExternalBufferProperties,
-        hal::external_memory::ExternalMemoryQueryError,
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalBufferQueryError,
+    > {
+        unimplemented!()
+    }
+
+    fn query_external_image_properties(
+        &self,
+        _format: hal::format::Format,
+        _dimensions: u8,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _view_caps: hal::image::ViewCapabilities,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalImageQueryError,
     > {
         unimplemented!()
     }
@@ -639,6 +654,37 @@ impl device::Device<Backend> for Device {
         ),
         hal::external_memory::ExternalBufferImportError,
     > {
+        unimplemented!()
+    }
+
+    unsafe fn create_allocate_external_image(
+        &self,
+        _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        _kind: hal::image::Kind,
+        _num_levels: hal::image::Level,
+        _format: hal::format::Format,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _view_caps: hal::image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(<Backend as gfx_hal::Backend>::Image, <Backend as gfx_hal::Backend>::Memory), hal::external_memory::ExternalImageCreateAllocateError>
+    {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_image(
+        &self,
+        _external_memory: hal::external_memory::ExternalMemory,
+        _kind: hal::image::Kind,
+        _num_levels: hal::image::Level,
+        _format: hal::format::Format,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _view_caps: hal::image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(<Backend as gfx_hal::Backend>::Image, <Backend as gfx_hal::Backend>::Memory), hal::external_memory::ExternalImageImportError> {
         unimplemented!()
     }
 

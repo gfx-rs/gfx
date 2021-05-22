@@ -2711,7 +2711,7 @@ impl d::Device<B> for super::Device {
 
                 let mem_type = match (0..32)
                     .into_iter()
-                    .find(|id| buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
+                    .find(|id| image_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
                     None => unreachable!(),
@@ -2731,7 +2731,7 @@ impl d::Device<B> for super::Device {
 
                 let allocate_info = vk::MemoryAllocateInfo::builder()
                     .push_next(&mut import_memory_info)
-                    .allocation_size(buffer_req.size)
+                    .allocation_size(image_req.size)
                     .memory_type_index(self.get_ash_memory_type_index(mem_type));
 
                 self.shared.raw.allocate_memory(&allocate_info, None)
