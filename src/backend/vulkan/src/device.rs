@@ -1,5 +1,9 @@
 use arrayvec::ArrayVec;
-use ash::{extensions::khr, version::DeviceV1_0, vk::{self, Handle}};
+use ash::{
+    extensions::khr,
+    version::DeviceV1_0,
+    vk::{self, Handle},
+};
 use inplace_it::inplace_or_alloc_from_iter;
 use smallvec::SmallVec;
 
@@ -1192,11 +1196,16 @@ impl d::Device<B> for super::Device {
             image::Kind::D3(..) => vk::ImageType::TYPE_3D,
         };
 
+        // store raw image id
+        let mut instance_guard = xr::INSTANCE.lock().unwrap();
+        let openxr_instance = instance_guard.as_mut().unwrap();
+        openxr_instance.add_raw_image(raw_image);
+
         let image = n::Image {
-                raw: vk_image,
-                ty: image_type,
-                flags,
-                extent: conv::map_extent(kind.extent()),
+            raw: vk_image,
+            ty: image_type,
+            flags,
+            extent: conv::map_extent(kind.extent()),
         };
 
         Ok(image)
@@ -1821,6 +1830,15 @@ impl d::Device<B> for super::Device {
     }
 
     unsafe fn destroy_image(&self, image: n::Image) {
+        #[cfg(feature = "use-openxr")]
+        if xr::in_use() {
+            let instance_guard = xr::INSTANCE.lock().unwrap();
+            let openxr_instance = instance_guard.as_ref().unwrap();
+            if openxr_instance.contains_raw_image(image.raw.as_raw()) {
+                return;
+            }
+        }
+
         self.shared.raw.destroy_image(image.raw, None);
     }
 

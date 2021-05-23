@@ -7,6 +7,9 @@ use std::{
 
 #[cfg(feature = "use-openxr")]
 use once_cell::sync::Lazy;
+#[cfg(feature = "use-openxr")]
+use std::collections::HashMap;
+
 use std::sync::atomic::AtomicBool;
 
 use crate::{conv, native};
@@ -24,6 +27,9 @@ pub(crate) struct Instance {
     frame_stream: Option<openxr::FrameStream<openxr::Vulkan>>,
     space: Option<openxr::Space>,
     // FIXME add field for all -validations state, that'd track separate parts
+
+    // swapchain raw images
+    raw_images: HashMap<u64, bool>,
 }
 
 #[cfg(feature = "use-openxr")]
@@ -97,6 +103,7 @@ impl OpenXR {
             session: None,
             frame_waiter: None,
             frame_stream: None,
+            raw_images: HashMap::new(),
         });
 
         Ok(OpenXR {})
@@ -113,7 +120,7 @@ impl OpenXR {
         let openxr_instance = instance_guard.as_mut().unwrap();
 
         (
-            openxr_instance.session.as_ref().unwrap().clone(),
+            openxr_instance.session.take().unwrap().clone(),
             openxr_instance.frame_waiter.take().unwrap(),
             openxr_instance.frame_stream.take().unwrap(),
             openxr_instance.space.take().unwrap(),
@@ -262,6 +269,14 @@ impl Instance {
 
         println!("Session created!");
     }
+
+    pub(crate) fn add_raw_image(&mut self, raw_image_id: u64) {
+        self.raw_images.insert(raw_image_id, true);
+    }
+
+    pub(crate) fn contains_raw_image(&self, raw_image_id: u64) -> bool {
+        self.raw_images.contains_key(&raw_image_id)
+    }
 }
 
 macro_rules! cstr {
@@ -271,7 +286,7 @@ macro_rules! cstr {
 }
 
 macro_rules! openxr_extensions {
-    ($(($extension: ident, $string: tt, $idx: tt)),*) => {
+    ($(($extension: ident, $string: tt, $idx: tt),)*) => {
         $(
             const $extension: &CStr = cstr!($string);
         )*
@@ -306,6 +321,7 @@ macro_rules! openxr_extensions {
     }
 }
 
+// a list of possible extensions - last number is just ITEM ^2, can keep increasing
 #[cfg(feature = "use-openxr")]
 openxr_extensions! {
     (VK_KHR_SWAPCHAIN, "VK_KHR_swapchain", 0),
@@ -326,5 +342,5 @@ openxr_extensions! {
     (VK_KHR_EXTERNAL_FENCE_FD, "VK_KHR_external_fence_fd", 16384),
     (VK_KHR_EXTERNAL_SEMAPHORE, "VK_KHR_external_semaphore", 32768),
     (VK_KHR_EXTERNAL_SEMAPHORE_FD, "VK_KHR_external_semaphore_fd", 65536),
-    (VK_KHR_GET_MEMORY_REQUIREMENTS2, "VK_KHR_get_memory_requirements2", 131072)
+    (VK_KHR_GET_MEMORY_REQUIREMENTS2, "VK_KHR_get_memory_requirements2", 131072),
 }
