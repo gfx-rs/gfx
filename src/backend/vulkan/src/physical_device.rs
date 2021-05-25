@@ -1307,17 +1307,28 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             external_buffer_properties.external_memory_properties
         };
 
-        let external_memory_properties = external_memory::ExternalMemoryProperties::new(
-            vk_mem_properties
-                .external_memory_features
-                .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE),
-            vk_mem_properties
-                .external_memory_features
-                .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE),
-            vk_mem_properties
-                .export_from_imported_handle_types
-                .contains(vk_external_memory_type),
-        );
+        let mut external_memory_properties = external_memory::ExternalMemoryProperties::empty();
+        if vk_mem_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE)
+        {
+            external_memory_properties |= external_memory::ExternalMemoryProperties::EXPORTABLE;
+        }
+
+        if vk_mem_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE)
+        {
+            external_memory_properties |= external_memory::ExternalMemoryProperties::IMPORTABLE;
+        }
+
+        if vk_mem_properties
+            .export_from_imported_handle_types
+            .contains(vk_external_memory_type)
+        {
+            external_memory_properties |=
+                external_memory::ExternalMemoryProperties::EXPORTABLE_FROM_IMPORTED;
+        }
 
         external_memory_properties
     }
@@ -1375,17 +1386,32 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         } {
             Ok(_) => {
                 let vk_mem_properties = external_image_format_properties.external_memory_properties;
-                let external_memory_properties = external_memory::ExternalMemoryProperties::new(
-                    vk_mem_properties
-                        .external_memory_features
-                        .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE),
-                    vk_mem_properties
-                        .external_memory_features
-                        .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE),
-                    vk_mem_properties
-                        .export_from_imported_handle_types
-                        .contains(vk_external_memory_type),
-                );
+
+                let mut external_memory_properties =
+                    external_memory::ExternalMemoryProperties::empty();
+                if vk_mem_properties
+                    .external_memory_features
+                    .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE)
+                {
+                    external_memory_properties |=
+                        external_memory::ExternalMemoryProperties::EXPORTABLE;
+                }
+
+                if vk_mem_properties
+                    .external_memory_features
+                    .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE)
+                {
+                    external_memory_properties |=
+                        external_memory::ExternalMemoryProperties::IMPORTABLE;
+                }
+
+                if vk_mem_properties
+                    .export_from_imported_handle_types
+                    .contains(vk_external_memory_type)
+                {
+                    external_memory_properties |=
+                        external_memory::ExternalMemoryProperties::EXPORTABLE_FROM_IMPORTED;
+                }
                 Ok(external_memory_properties)
             }
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host.into()),
