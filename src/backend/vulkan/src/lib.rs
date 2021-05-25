@@ -75,7 +75,7 @@ pub struct RawInstance {
     debug_messenger: Option<DebugMessenger>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
     display: Option<khr::Display>,
-    external_memory_capabilities: Option<vk::KhrExternalMemoryCapabilitiesFn>,
+    external_memory_capabilities: Option<ExtensionFn<vk::KhrExternalMemoryCapabilitiesFn>>,
 }
 
 pub enum DebugMessenger {
@@ -501,16 +501,22 @@ impl Instance {
             .find(|&&ext| ext == khr::Display::name())
             .map(|_| khr::Display::new(&entry, &instance));
 
-        let external_memory_capabilities = extensions
-            .iter()
-            .find(|&&ext| ext == vk::KhrExternalMemoryCapabilitiesFn::name())
-            .map(|_| {
-                vk::KhrExternalMemoryCapabilitiesFn::load(|name| unsafe {
-                    std::mem::transmute(
-                        entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
-                    )
+        let external_memory_capabilities = if driver_api_version >= Version::V1_1 {
+            Some(ExtensionFn::Promoted)
+        } else {
+            extensions
+                .iter()
+                .find(|&&ext| ext == vk::KhrExternalMemoryCapabilitiesFn::name())
+                .map(|_| {
+                    ExtensionFn::Extension(vk::KhrExternalMemoryCapabilitiesFn::load(
+                        |name| unsafe {
+                            std::mem::transmute(
+                                entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
+                            )
+                        },
+                    ))
                 })
-            });
+        };
 
         #[allow(deprecated)] // `DebugReport`
         let debug_messenger = {
@@ -819,19 +825,19 @@ struct DeviceExtensionFunctions {
     display_control: Option<vk::ExtDisplayControlFn>,
     memory_requirements2: Option<ExtensionFn<vk::KhrGetMemoryRequirements2Fn>>,
     // The extension does not have its own functions.
-    dedicated_allocation: bool,
+    dedicated_allocation: Option<ExtensionFn<()>>,
     // The extension does not have its own functions.
-    external_memory: bool,
-    external_memory_host: Option<ExtensionFn<vk::ExtExternalMemoryHostFn>>,
+    external_memory: Option<ExtensionFn<()>>,
+    external_memory_host: Option<vk::ExtExternalMemoryHostFn>,
     #[cfg(windows)]
-    external_memory_win32: Option<ExtensionFn<vk::KhrExternalMemoryWin32Fn>>,
+    external_memory_win32: Option<vk::KhrExternalMemoryWin32Fn>,
     #[cfg(unix)]
-    external_memory_fd: Option<ExtensionFn<khr::ExternalMemoryFd>>,
+    external_memory_fd: Option<khr::ExternalMemoryFd>,
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    image_drm_format_modifier: Option<ExtensionFn<vk::ExtImageDrmFormatModifierFn>>,
+    image_drm_format_modifier: Option<vk::ExtImageDrmFormatModifierFn>,
     #[cfg(unix)]
     // The extension does not have its own functions.
-    external_memory_dma_buf: bool,
+    external_memory_dma_buf: Option<()>,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.

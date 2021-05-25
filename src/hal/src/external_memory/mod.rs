@@ -30,47 +30,6 @@ bitflags!(
     }
 );
 
-/*
-
-#[derive(Debug, PartialEq)]
-pub struct ExternalMemoryProperties {
-    exportable: bool,
-    importable: bool,
-    exportable_from_imported: bool,
-}
-impl ExternalMemoryProperties {
-    /// Constructor
-    pub fn new(exportable: bool, importable: bool, exportable_from_imported: bool) -> Self {
-        Self {
-            exportable,
-            importable,
-            exportable_from_imported,
-        }
-    }
-    /// Is the queried configuration exportable
-    pub fn is_exportable(&self) -> bool {
-        self.exportable
-    }
-    /// Is the queried configuration importable
-    pub fn is_importable(&self) -> bool {
-        self.importable
-    }
-    /// Does the queried configuration requires dedicated allocation
-    pub fn is_exportable_from_imported(&self) -> bool {
-        self.exportable_from_imported
-    }
-}
-impl Default for ExternalMemoryProperties {
-    fn default() -> Self {
-        Self {
-            exportable: false,
-            importable: false,
-            exportable_from_imported: false,
-        }
-    }
-}
-*/
-
 bitflags!(
     /// External memory type flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -357,8 +316,8 @@ impl ExternalMemory {
     }
 
     /// Create external memory from memory type and platform memory.
-    pub fn from_platform(ty: ExternalMemoryType, pm: PlatformMemory) -> Result<Self, &'static str>{
-        match (ty,pm) {
+    pub fn from_platform(ty: ExternalMemoryType, pm: PlatformMemory) -> Result<Self, &'static str> {
+        match (ty, pm) {
             #[cfg(unix)]
             (ExternalMemoryType::OpaqueFd, PlatformMemory::Fd(fd)) => Ok(Self::OpaqueFd(fd)),
             #[cfg(windows)]
@@ -442,31 +401,6 @@ impl From<ExternalMemory> for (ExternalMemoryType, PlatformMemory) {
         }
     }
 }
-
-/*
-#[cfg(unix)]
-impl std::convert::TryFrom<(ExternalMemoryType, Fd)> for ExternalMemory {
-    type Error = &'static str;
-    fn try_from(tuple: (ExternalMemoryType, Fd)) -> Result<Self, Self::Error> {
-        ExternalMemory::try_from((tuple.0, PlatformMemory::from(tuple.1)))
-    }
-}
-
-#[cfg(windows)]
-impl std::convert::TryFrom<(ExternalMemoryType, Handle)> for ExternalMemory {
-    type Error = &'static str;
-    fn try_from(tuple: (ExternalMemoryType, Handle)) -> Result<Self, Self::Error> {
-        ExternalMemory::try_from((tuple.0, PlatformMemory::from(tuple.1)))
-    }
-}
-
-impl std::convert::TryFrom<(ExternalMemoryType, Ptr)> for ExternalMemory {
-    type Error = &'static str;
-    fn try_from(tuple: (ExternalMemoryType, Ptr)) -> Result<Self, Self::Error> {
-        ExternalMemory::try_from((tuple.0, PlatformMemory::from(tuple.1)))
-    }
-}
-*/
 
 bitflags::bitflags! {
     /// Possible usages for an image.
