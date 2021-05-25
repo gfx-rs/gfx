@@ -2812,7 +2812,6 @@ impl d::Device<B> for super::Device {
         memory: &n::Memory,
     ) -> Result<hal::external_memory::ExternalMemory, hal::external_memory::ExternalMemoryExportError>
     {
-        use std::convert::TryInto;
         // Safety checks
         if self.shared.instance.external_memory_capabilities.is_none() {
             panic!("External memory not supported");
@@ -2858,7 +2857,7 @@ impl d::Device<B> for super::Device {
                         );
                     }
                 };
-                Ok((external_memory_type, fd).try_into().unwrap())
+                Ok(hal::external_memory::ExternalMemory::from_platform(external_memory_type,fd.into()).unwrap())
             }
             #[cfg(windows)]
             hal::external_memory::PlatformMemoryType::Handle => {

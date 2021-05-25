@@ -355,51 +355,10 @@ impl ExternalMemory {
             _ => None,
         }
     }
-}
 
-impl From<ExternalMemory> for (ExternalMemoryType, PlatformMemory) {
-    fn from(external_memory: ExternalMemory) -> (ExternalMemoryType, PlatformMemory) {
-        match external_memory {
-            #[cfg(unix)]
-            ExternalMemory::OpaqueFd(fd) => (ExternalMemoryType::OpaqueFd, fd.into()),
-            #[cfg(windows)]
-            ExternalMemory::OpaqueWin32(handle) => (ExternalMemoryType::OpaqueWin32, handle.into()),
-            #[cfg(windows)]
-            ExternalMemory::OpaqueWin32Kmt(handle) => {
-                (ExternalMemoryType::OpaqueWin32Kmt, handle.into())
-            }
-            #[cfg(windows)]
-            ExternalMemory::D3D11Texture(handle) => {
-                (ExternalMemoryType::D3D11Texture, handle.into())
-            }
-            #[cfg(windows)]
-            ExternalMemory::D3D11TextureKmt(handle) => {
-                (ExternalMemoryType::D3D11TextureKmt, handle.into())
-            }
-            #[cfg(windows)]
-            ExternalMemory::D3D12Heap(handle) => (ExternalMemoryType::D3D12Heap, handle.into()),
-            #[cfg(windows)]
-            ExternalMemory::D3D12Resource(handle) => {
-                (ExternalMemoryType::D3D12Resource, handle.into())
-            }
-            #[cfg(any(target_os = "linux", target_os = "android"))]
-            ExternalMemory::DmaBuf(fd) => (ExternalMemoryType::DmaBuf, fd.into()),
-            #[cfg(target_os = "android")]
-            ExternalMemory::AndroidHardwareBuffer(fd) => {
-                (ExternalMemoryType::AndroidHardwareBuffer, fd.into())
-            }
-            ExternalMemory::HostAllocation(ptr) => (ExternalMemoryType::HostAllocation, ptr.into()),
-            ExternalMemory::HostMappedForeignMemory(ptr) => {
-                (ExternalMemoryType::HostMappedForeignMemory, ptr.into())
-            }
-        }
-    }
-}
-
-impl std::convert::TryFrom<(ExternalMemoryType, PlatformMemory)> for ExternalMemory {
-    type Error = &'static str;
-    fn try_from(tuple: (ExternalMemoryType, PlatformMemory)) -> Result<Self, Self::Error> {
-        match tuple {
+    /// Create external memory from memory type and platform memory.
+    pub fn from_platform(ty: ExternalMemoryType, pm: PlatformMemory) -> Result<Self, &'static str>{
+        match (ty,pm) {
             #[cfg(unix)]
             (ExternalMemoryType::OpaqueFd, PlatformMemory::Fd(fd)) => Ok(Self::OpaqueFd(fd)),
             #[cfg(windows)]
@@ -445,6 +404,46 @@ impl std::convert::TryFrom<(ExternalMemoryType, PlatformMemory)> for ExternalMem
     }
 }
 
+impl From<ExternalMemory> for (ExternalMemoryType, PlatformMemory) {
+    fn from(external_memory: ExternalMemory) -> (ExternalMemoryType, PlatformMemory) {
+        match external_memory {
+            #[cfg(unix)]
+            ExternalMemory::OpaqueFd(fd) => (ExternalMemoryType::OpaqueFd, fd.into()),
+            #[cfg(windows)]
+            ExternalMemory::OpaqueWin32(handle) => (ExternalMemoryType::OpaqueWin32, handle.into()),
+            #[cfg(windows)]
+            ExternalMemory::OpaqueWin32Kmt(handle) => {
+                (ExternalMemoryType::OpaqueWin32Kmt, handle.into())
+            }
+            #[cfg(windows)]
+            ExternalMemory::D3D11Texture(handle) => {
+                (ExternalMemoryType::D3D11Texture, handle.into())
+            }
+            #[cfg(windows)]
+            ExternalMemory::D3D11TextureKmt(handle) => {
+                (ExternalMemoryType::D3D11TextureKmt, handle.into())
+            }
+            #[cfg(windows)]
+            ExternalMemory::D3D12Heap(handle) => (ExternalMemoryType::D3D12Heap, handle.into()),
+            #[cfg(windows)]
+            ExternalMemory::D3D12Resource(handle) => {
+                (ExternalMemoryType::D3D12Resource, handle.into())
+            }
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            ExternalMemory::DmaBuf(fd) => (ExternalMemoryType::DmaBuf, fd.into()),
+            #[cfg(target_os = "android")]
+            ExternalMemory::AndroidHardwareBuffer(fd) => {
+                (ExternalMemoryType::AndroidHardwareBuffer, fd.into())
+            }
+            ExternalMemory::HostAllocation(ptr) => (ExternalMemoryType::HostAllocation, ptr.into()),
+            ExternalMemory::HostMappedForeignMemory(ptr) => {
+                (ExternalMemoryType::HostMappedForeignMemory, ptr.into())
+            }
+        }
+    }
+}
+
+/*
 #[cfg(unix)]
 impl std::convert::TryFrom<(ExternalMemoryType, Fd)> for ExternalMemory {
     type Error = &'static str;
@@ -467,6 +466,7 @@ impl std::convert::TryFrom<(ExternalMemoryType, Ptr)> for ExternalMemory {
         ExternalMemory::try_from((tuple.0, PlatformMemory::from(tuple.1)))
     }
 }
+*/
 
 bitflags::bitflags! {
     /// Possible usages for an image.
