@@ -7,7 +7,7 @@ use ash::{
 use hal::{
     adapter,
     device::{CreationError, OutOfMemory},
-    display, format, image,
+    display, external_memory, format, image,
     pso::PatchSize,
     queue, DescriptorLimits, DownlevelProperties, DynamicStates, ExternalMemoryLimits, Features,
     Limits, PhysicalDeviceProperties,
@@ -1252,21 +1252,21 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn query_external_buffer_properties(
+    fn external_buffer_properties(
         &self,
         usage: hal::buffer::Usage,
         sparse: hal::memory::SparseFlags,
-        memory_type: hal::external_memory::ExternalMemoryType,
+        memory_type: external_memory::ExternalMemoryType,
     ) -> Result<
-        hal::external_memory::ExternalMemoryProperties,
-        hal::external_memory::ExternalBufferQueryError,
+        external_memory::ExternalMemoryProperties,
+        external_memory::ExternalBufferQueryError,
     > {
-        let external_memory_capabilities_extension = match &self
+        let external_memory_capabilities_extension = match self
             .instance
             .external_memory_capabilities
         {
-            Some(functor) => functor,
-            _ => return Err(hal::external_memory::ExternalBufferQueryError::UnsupportedFeature),
+            Some(ref functor) => functor,
+            _ => return Err(external_memory::ExternalBufferQueryError::UnsupportedFeature),
         };
 
         let vk_external_memory_type = conv::map_external_memory_handle_types(memory_type.into());
@@ -1289,7 +1289,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             external_buffer_properties.external_memory_properties
         };
 
-        let external_memory_properties = hal::external_memory::ExternalMemoryProperties::new(
+        let external_memory_properties = external_memory::ExternalMemoryProperties::new(
             vk_mem_properties
                 .external_memory_features
                 .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE),
@@ -1304,21 +1304,21 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         Ok(external_memory_properties)
     }
 
-    fn query_external_image_properties(
+    fn external_image_properties(
         &self,
         format: format::Format,
         dimensions: u8,
         tiling: image::Tiling,
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
-        external_memory_type: hal::external_memory::ExternalMemoryType,
+        external_memory_type: external_memory::ExternalMemoryType,
     ) -> Result<
-        hal::external_memory::ExternalMemoryProperties,
-        hal::external_memory::ExternalImageQueryError,
+        external_memory::ExternalMemoryProperties,
+        external_memory::ExternalImageQueryError,
     > {
         if self.instance.external_memory_capabilities.is_none()
         {
-            return Err(hal::external_memory::ExternalImageQueryError::UnsupportedFeature);
+            return Err(external_memory::ExternalImageQueryError::UnsupportedFeature);
         }
 
         use ash::version::InstanceV1_1;
@@ -1354,7 +1354,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         {
             Ok(_)=>{
                 let vk_mem_properties = external_image_format_properties.external_memory_properties;
-                let external_memory_properties = hal::external_memory::ExternalMemoryProperties::new(
+                let external_memory_properties = external_memory::ExternalMemoryProperties::new(
                     vk_mem_properties
                         .external_memory_features
                         .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE),
@@ -1369,14 +1369,54 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             },
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device.into()),
-            Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED) => Err(hal::external_memory::ExternalImageQueryError::FormatNotSupported),
+            Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED) => Err(external_memory::ExternalImageQueryError::FormatNotSupported),
             Err(err) => {
                 error!("Unexpected error: {:#?}", err);
                 return Err(
-                    hal::external_memory::ExternalImageQueryError::UnsupportedFeature,
+                    external_memory::ExternalImageQueryError::UnsupportedFeature,
                 );
             }
         }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    /// Get drm format properties of a image created using `yet to be written create image using drm format modifier`.
+    unsafe fn external_image_drm_format_properties(
+        &self,
+        format: format::Format,
+    ) -> Result<Vec<external_memory::DrmFormatProperties>,external_memory::ExternalImageDrmFormatQueryError> {
+        use ash::version::InstanceV1_1;
+
+        let mut drm_format_properties = vk::DrmFormatModifierPropertiesListEXT::builder().build();
+        let mut vk_format_properties = vk::FormatProperties2::builder()
+        .push_next(&mut drm_format_properties)
+        .build();
+
+        self.instance.inner.get_physical_device_format_properties2(self.handle,conv::map_format(format),&mut vk_format_properties);
+
+
+        let format_modifiers = Vec::from_raw_parts(
+            drm_format_properties.p_drm_format_modifier_properties,
+            drm_format_properties.drm_format_modifier_count as usize,
+            drm_format_properties.drm_format_modifier_count as usize
+        );
+
+
+        Ok(format_modifiers.into_iter().filter_map(|format_modifier_properties|{
+            let format_modifier = external_memory::DrmModifier::from(format_modifier_properties.drm_format_modifier);
+            if let external_memory::DrmModifier::Unrecognized(value) = format_modifier {
+                error!("Unrecognized drm format modifier: {:#?}",value);
+                None
+            }
+            else {
+                Some(external_memory::DrmFormatProperties {
+                    drm_modifier: format_modifier,
+                    plane_count: format_modifier_properties.drm_format_modifier_plane_count,
+                    valid_usages: conv::map_vk_external_memory_handle_type_flags(format_modifier_properties.drm_format_modifier_tiling_features)
+                })
+            }
+
+        }).collect())
     }
 
     fn features(&self) -> Features {

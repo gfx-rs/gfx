@@ -442,7 +442,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.memory_properties.clone()
     }
 
-    fn query_external_buffer_properties(
+    fn external_buffer_properties(
         &self,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
@@ -454,7 +454,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         unimplemented!()
     }
 
-    fn query_external_image_properties(
+    fn external_image_properties(
         &self,
         _format: hal::format::Format,
         _dimensions: u8,

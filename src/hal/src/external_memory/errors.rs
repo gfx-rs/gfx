@@ -27,6 +27,16 @@ pub enum ExternalImageQueryError {
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
+/// External image drm format query error
+pub enum ExternalImageDrmFormatQueryError {
+    /// Unsupported feature.
+    #[error("Unsupported feature")]
+    UnsupportedFeature,
+}
+
+
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External buffer create error
 pub enum ExternalBufferCreateAllocateError {
     /// Out of either host or device memory.

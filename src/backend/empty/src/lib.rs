@@ -144,7 +144,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn query_external_buffer_properties(
+    fn external_buffer_properties(
         &self,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
@@ -156,7 +156,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         unimplemented!()
     }
 
-    fn query_external_image_properties(
+    fn external_image_properties(
         &self,
         _format: hal::format::Format,
         _dimensions: u8,
@@ -168,6 +168,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         hal::external_memory::ExternalMemoryProperties,
         hal::external_memory::ExternalImageQueryError,
     > {
+        unimplemented!()
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    unsafe fn external_image_drm_format_properties(
+        &self,
+        _format: format::Format,
+    ) -> Result<Vec<hal::external_memory::DrmFormatProperties>,hal::external_memory::ExternalImageDrmFormatQueryError> {
         unimplemented!()
     }
 

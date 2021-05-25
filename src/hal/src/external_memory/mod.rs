@@ -5,6 +5,9 @@ pub use errors::*;
 
 pub use external_memory::*;
 
+#[cfg(any(target_os="linux",target_os="android"))]
+pub use drm_fourcc::*;
+
 /// Buffer or image
 #[derive(Debug)]
 pub enum Resource<B: crate::Backend> {
@@ -104,7 +107,7 @@ bitflags!(
         #[cfg(any(target_os = "linux",target_os = "android",doc))]
         /// This is supported on Linux or Android only.
         /// Is a file descriptor for a Linux dma_buf.
-        /// It owns a reference to the underlying memory resource represented by its Vulkan memory object.
+        /// It owns a reference to the underlying memory resource represented by its memory object.
         const DMA_BUF = (1 << 7);
         #[cfg(any(target_os = "android",doc))]
         /// This is supported on Android only.
@@ -453,4 +456,48 @@ impl std::convert::TryFrom<(ExternalMemoryType, Ptr)> for ExternalMemory {
     fn try_from(tuple: (ExternalMemoryType, Ptr)) -> Result<Self, Self::Error> {
         ExternalMemory::try_from((tuple.0, PlatformMemory::from(tuple.1)))
     }
+}
+
+bitflags::bitflags!{
+    /// Possible usages for an image.
+    pub struct ImageUsage: u32 {
+        /// Format can be used for sampled images (SAMPLED_IMAGE and COMBINED_IMAGE_SAMPLER descriptor types).
+        const SAMPLED_IMAGE = (1 << 0);
+        /// Format can be used for storage images (STORAGE_IMAGE descriptor type).
+        const STORAGE_IMAGE = (1 << 1);
+        /// Format supports atomic operations in case it is used for storage images.
+        const STORAGE_IMAGE_ATOMIC = (1 << 2);
+        /// Format can be used for uniform texel buffers (TBOs).
+        const UNIFORM_TEXEL_BUFFER = (1 << 3);
+        /// Format can be used for storage texel buffers (IBOs).
+        const STORAGE_TEXEL_BUFFER = (1 << 4);
+        /// Format supports atomic operations in case it is used for storage texel buffers.
+        const STORAGE_TEXEL_BUFFER_ATOMIC = (1 << 5);
+        /// Format can be used for vertex buffers (VBOs).
+        const VERTEX_BUFFER = (1 << 6);
+        /// Format can be used for color attachment images.
+        const COLOR_ATTACHMENT = (1 << 7);
+        /// Format supports blending in case it is used for color attachment images.
+        const COLOR_ATTACHMENT_BLEND = (1 << 8);
+        /// Format can be used for depth/stencil attachment images.
+        const DEPTH_STENCIL_ATTACHMENT = (1 << 9);
+        /// Format can be used as the source image of blits with vkCmdBlitImage.
+        const BLIT_SRC = (1 << 10);
+        /// Format can be used as the destination image of blits with vkCmdBlitImage.
+        const BLIT_DST = (1 << 11);
+        /// Format can be filtered with VK_FILTER_LINEAR when being sampled
+        const SAMPLED_IMAGE_FILTER_LINEAR = (1 << 12);
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+#[derive(Debug)]
+/// Drm format properties
+pub struct DrmFormatProperties {
+    /// Drm format modifier.
+    pub drm_modifier: DrmModifier,
+    /// Number of memory planes each image crated with `drm_modifier` has.
+    pub plane_count: u32,
+    /// Valid image usage with the `drm_modifier`.
+    pub valid_usages: ImageUsage
 }

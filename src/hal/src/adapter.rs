@@ -116,7 +116,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     fn memory_properties(&self) -> MemoryProperties;
 
     /// Get external buffer properties
-    fn query_external_buffer_properties(
+    fn external_buffer_properties(
         &self,
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
@@ -127,7 +127,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     >;
 
     /// Get external image properties
-    fn query_external_image_properties(
+    fn external_image_properties(
         &self,
         format: format::Format,
         dimensions: u8,
@@ -139,6 +139,13 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         external_memory::ExternalMemoryProperties,
         external_memory::ExternalImageQueryError,
     >;
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    /// Fetch details for a particular image format.
+    unsafe fn external_image_drm_format_properties(
+        &self,
+        format: format::Format,
+    ) -> Result<Vec<external_memory::DrmFormatProperties>,external_memory::ExternalImageDrmFormatQueryError>;
 
     /// Returns the features of this `PhysicalDevice`. This usually depends on the graphics API being
     /// used, as well as the actual platform underneath.

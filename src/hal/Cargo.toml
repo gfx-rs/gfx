@@ -28,3 +28,6 @@ external_memory = { path = "../auxil/external-memory", version = "0.0.1", packag
 
 [dev-dependencies]
 gfx-backend-empty = { path = "../backend/empty", version = "0.8" }
+
+[target.'cfg(any(target_os = "linux",target_os = "android"))'.dependencies]
+drm-fourcc = "2.1.1"

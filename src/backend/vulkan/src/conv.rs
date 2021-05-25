@@ -674,52 +674,47 @@ pub fn map_external_memory_handle_types(
     }
     vk_flags
 }
-/*
-pub fn map_vk_external_memory_handle_type_flags(
-    vk_flags: vk::ExternalMemoryHandleTypeFlags,
-) -> external_memory::ExternalMemoryTypeFlags {
-    let mut flags = hal::external_memory::ExternalMemoryTypeFlags::empty();
-    #[cfg(unix)]
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD) {
-        flags |= external_memory::ExternalMemoryTypeFlags::OPAQUE_FD;
+
+pub fn map_vk_external_memory_handle_type_flags(vk_image_usage: vk::FormatFeatureFlags)->external_memory::ImageUsage {
+    let mut image_usage = external_memory::ImageUsage::empty();
+    if vk_image_usage.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE) {
+        image_usage |= external_memory::ImageUsage::SAMPLED_IMAGE;
     }
-    #[cfg(windows)]
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32) {
-        flags |= external_memory::ExternalMemoryTypeFlags::OPAQUE_WIN32;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::STORAGE_IMAGE) {
+        image_usage |= external_memory::ImageUsage::STORAGE_IMAGE;
     }
-    #[cfg(windows)]
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32_KMT) {
-        flags |= external_memory::ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::STORAGE_IMAGE_ATOMIC) {
+        image_usage |= external_memory::ImageUsage::STORAGE_IMAGE_ATOMIC;
     }
-    #[cfg(windows)]
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE) {
-        flags |= external_memory::ExternalMemoryTypeFlags::D3D11_TEXTURE;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::UNIFORM_TEXEL_BUFFER) {
+        image_usage |= external_memory::ImageUsage::UNIFORM_TEXEL_BUFFER;
     }
-    #[cfg(windows)]
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::D3D11_TEXTURE_KMT) {
-        flags |= external_memory::ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::STORAGE_TEXEL_BUFFER) {
+        image_usage |= external_memory::ImageUsage::STORAGE_TEXEL_BUFFER;
     }
-    #[cfg(windows)]
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::D3D12_HEAP) {
-        flags |= external_memory::ExternalMemoryTypeFlags::D3D12_HEAP;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::STORAGE_TEXEL_BUFFER_ATOMIC) {
+        image_usage |= external_memory::ImageUsage::STORAGE_TEXEL_BUFFER_ATOMIC;
     }
-    #[cfg(windows)]
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::D3D12_RESOURCE) {
-        flags |= external_memory::ExternalMemoryTypeFlags::D3D12_RESOURCE;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::VERTEX_BUFFER) {
+        image_usage |= external_memory::ImageUsage::VERTEX_BUFFER;
     }
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT) {
-        flags |= external_memory::ExternalMemoryTypeFlags::DMA_BUF;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT) {
+        image_usage |= external_memory::ImageUsage::COLOR_ATTACHMENT;
     }
-    #[cfg(target_os = "android")]
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::ANDROID_HARDWARE_BUFFER_ANDROID) {
-        flags |= external_memory::ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND) {
+        image_usage |= external_memory::ImageUsage::COLOR_ATTACHMENT_BLEND;
     }
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::HOST_ALLOCATION_EXT) {
-        flags |= external_memory::ExternalMemoryTypeFlags::HOST_ALLOCATION;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT) {
+        image_usage |= external_memory::ImageUsage::DEPTH_STENCIL_ATTACHMENT;
     }
-    if vk_flags.contains(vk::ExternalMemoryHandleTypeFlags::HOST_MAPPED_FOREIGN_MEMORY_EXT) {
-        flags |= external_memory::ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY;
+    if vk_image_usage.contains(vk::FormatFeatureFlags::BLIT_SRC) {
+        image_usage |= external_memory::ImageUsage::BLIT_SRC;
     }
-    flags
-}*/
+    if vk_image_usage.contains(vk::FormatFeatureFlags::BLIT_DST) {
+        image_usage |= external_memory::ImageUsage::BLIT_DST;
+    }
+    if vk_image_usage.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR) {
+        image_usage |= external_memory::ImageUsage::SAMPLED_IMAGE_FILTER_LINEAR;
+    }
+    image_usage
+}

@@ -391,7 +391,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn query_external_buffer_properties(
+    fn external_buffer_properties(
         &self,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
