@@ -673,8 +673,13 @@ impl device::Device<Backend> for Device {
         _sparse: hal::memory::SparseFlags,
         _view_caps: hal::image::ViewCapabilities,
         _type_mask: u32,
-    ) -> Result<(<Backend as gfx_hal::Backend>::Image, <Backend as gfx_hal::Backend>::Memory), hal::external_memory::ExternalImageCreateAllocateError>
-    {
+    ) -> Result<
+        (
+            <Backend as gfx_hal::Backend>::Image,
+            <Backend as gfx_hal::Backend>::Memory,
+        ),
+        hal::external_memory::ExternalImageCreateAllocateError,
+    > {
         unimplemented!()
     }
 
@@ -689,7 +694,13 @@ impl device::Device<Backend> for Device {
         _sparse: hal::memory::SparseFlags,
         _view_caps: hal::image::ViewCapabilities,
         _type_mask: u32,
-    ) -> Result<(<Backend as gfx_hal::Backend>::Image, <Backend as gfx_hal::Backend>::Memory), hal::external_memory::ExternalImageImportError> {
+    ) -> Result<
+        (
+            <Backend as gfx_hal::Backend>::Image,
+            <Backend as gfx_hal::Backend>::Memory,
+        ),
+        hal::external_memory::ExternalImageImportError,
+    > {
         unimplemented!()
     }
 

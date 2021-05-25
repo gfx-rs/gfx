@@ -2,7 +2,6 @@
 
 use crate::device::OutOfMemory;
 
-
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External memory import error
 pub enum ExternalImageQueryError {
@@ -14,7 +13,6 @@ pub enum ExternalImageQueryError {
     #[error("Format not supported")]
     FormatNotSupported,
 }
-
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External buffer create error
@@ -45,7 +43,6 @@ pub enum ExternalBufferCreateAllocateError {
     #[error("The used external handle or the combination of them is invalid")]
     InvalidExternalHandle,
 }
-
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External image create error
@@ -110,7 +107,6 @@ pub enum ExternalBufferImportError {
     #[error("Unsupported external handle")]
     UnsupportedExternalHandle,
 }
-
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External memory import error

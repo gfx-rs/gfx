@@ -121,7 +121,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
         memory_type: external_memory::ExternalMemoryType,
-    ) ->external_memory::ExternalMemoryProperties;
+    ) -> external_memory::ExternalMemoryProperties;
 
     /// Get external image properties
     fn external_image_properties(
@@ -132,10 +132,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
         external_memory_type: external_memory::ExternalMemoryType,
-    ) -> Result<
-        external_memory::ExternalMemoryProperties,
-        external_memory::ExternalImageQueryError,
-    >;
+    ) -> Result<external_memory::ExternalMemoryProperties, external_memory::ExternalImageQueryError>;
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
     /// Fetch details for a particular image format.

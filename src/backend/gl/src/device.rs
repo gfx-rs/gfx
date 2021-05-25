@@ -2204,8 +2204,7 @@ impl d::Device<B> for Device {
         _sparse: memory::SparseFlags,
         _view_caps: i::ViewCapabilities,
         _type_mask: u32,
-    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageCreateAllocateError>
-    {
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageCreateAllocateError> {
         unimplemented!()
     }
 

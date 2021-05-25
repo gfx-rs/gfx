@@ -591,10 +591,10 @@ impl PhysicalDeviceInfo {
         }
 
         if requested_features.contains(Features::EXTERNAL_MEMORY) {
-            if self.api_version() < Version::V1_1{
+            if self.api_version() < Version::V1_1 {
                 requested_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
                 requested_extensions.push(vk::KhrExternalMemoryFn::name());
-                requested_extensions.push(vk::KhrGetMemoryRequirements2Fn::name());// TODO Functions should be added because they are useful
+                requested_extensions.push(vk::KhrGetMemoryRequirements2Fn::name()); // TODO Functions should be added because they are useful
                 requested_extensions.push(vk::KhrDedicatedAllocationFn::name());
             }
 
@@ -797,15 +797,15 @@ impl PhysicalDevice {
 
         let memory_requirements2 =
             if enabled_extensions.contains(&vk::KhrGetMemoryRequirements2Fn::name()) {
-                Some(ExtensionFn::Extension(vk::KhrGetMemoryRequirements2Fn::load(
-                    |name| {
+                Some(ExtensionFn::Extension(
+                    vk::KhrGetMemoryRequirements2Fn::load(|name| {
                         std::mem::transmute(
                             self.instance
                                 .inner
                                 .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
                         )
-                    },
-                )))
+                    }),
+                ))
             } else {
                 None
             };
@@ -845,18 +845,18 @@ impl PhysicalDevice {
         let external_memory_dma_buf =
             enabled_extensions.contains(&vk::ExtExternalMemoryDmaBufFn::name());
 
-        #[cfg(any(target_os="linux",target_os="android"))]
+        #[cfg(any(target_os = "linux", target_os = "android"))]
         let image_drm_format_modifier =
             if enabled_extensions.contains(&vk::ExtImageDrmFormatModifierFn::name()) {
-                Some(ExtensionFn::Extension(vk::ExtImageDrmFormatModifierFn::load(
-                    |name| {
+                Some(ExtensionFn::Extension(
+                    vk::ExtImageDrmFormatModifierFn::load(|name| {
                         std::mem::transmute(
                             self.instance
                                 .inner
                                 .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
                         )
-                    },
-                )))
+                    }),
+                ))
             } else {
                 None
             };
@@ -918,16 +918,16 @@ impl PhysicalDevice {
                     display_control,
                     memory_requirements2: memory_requirements2,
                     dedicated_allocation: dedicated_allocation,
-                    external_memory: external_memory,
-                    external_memory_host: external_memory_host,
+                    external_memory,
+                    external_memory_host,
                     #[cfg(unix)]
-                    external_memory_fd: external_memory_fd,
+                    external_memory_fd,
                     #[cfg(windows)]
-                    external_memory_win32: external_memory_win32,
+                    external_memory_win32,
                     #[cfg(unix)]
-                    external_memory_dma_buf: external_memory_dma_buf,
-                    #[cfg(any(target_os="linux",target_os="android"))]
-                    image_drm_format_modifier: image_drm_format_modifier,
+                    external_memory_dma_buf,
+                    #[cfg(any(target_os = "linux", target_os = "android"))]
+                    image_drm_format_modifier,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
                     || self
@@ -1282,7 +1282,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         sparse: hal::memory::SparseFlags,
         memory_type: external_memory::ExternalMemoryType,
     ) -> external_memory::ExternalMemoryProperties {
-        let external_memory_capabilities_extension = self.instance.external_memory_capabilities.as_ref().expect("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");
+        let external_memory_capabilities_extension =
+            self.instance.external_memory_capabilities.as_ref().expect(
+                "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled",
+            );
 
         let vk_external_memory_type = conv::map_external_memory_handle_types(memory_type.into());
 
@@ -1327,19 +1330,20 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
         external_memory_type: external_memory::ExternalMemoryType,
-    ) -> Result<
-        external_memory::ExternalMemoryProperties,
-        external_memory::ExternalImageQueryError,
-    > {
-        if self.instance.external_memory_capabilities.is_none()
-        {
-            panic!("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");
+    ) -> Result<external_memory::ExternalMemoryProperties, external_memory::ExternalImageQueryError>
+    {
+        if self.instance.external_memory_capabilities.is_none() {
+            panic!(
+                "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled"
+            );
         }
 
         use ash::version::InstanceV1_1;
         let vk_external_memory_type =
             conv::map_external_memory_handle_types(external_memory_type.into());
-        let mut external_image_format_info = vk::PhysicalDeviceExternalImageFormatInfo::builder().handle_type(vk_external_memory_type).build();
+        let mut external_image_format_info = vk::PhysicalDeviceExternalImageFormatInfo::builder()
+            .handle_type(vk_external_memory_type)
+            .build();
         let image_format_info = vk::PhysicalDeviceImageFormatInfo2::builder()
             .push_next(&mut external_image_format_info)
             .format(conv::map_format(format))
@@ -1354,8 +1358,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .flags(conv::map_view_capabilities(view_caps))
             .build();
 
-        let mut external_image_format_properties = vk::ExternalImageFormatProperties::builder().build();
-        let mut image_format_properties = vk::ImageFormatProperties2::builder().push_next(&mut external_image_format_properties).build();
+        let mut external_image_format_properties =
+            vk::ExternalImageFormatProperties::builder().build();
+        let mut image_format_properties = vk::ImageFormatProperties2::builder()
+            .push_next(&mut external_image_format_properties)
+            .build();
 
         match unsafe {
             self.instance
@@ -1363,11 +1370,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .get_physical_device_image_format_properties2(
                     self.handle,
                     &image_format_info,
-                    &mut image_format_properties
+                    &mut image_format_properties,
                 )
-        }
-        {
-            Ok(_)=>{
+        } {
+            Ok(_) => {
                 let vk_mem_properties = external_image_format_properties.external_memory_properties;
                 let external_memory_properties = external_memory::ExternalMemoryProperties::new(
                     vk_mem_properties
@@ -1381,10 +1387,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         .contains(vk_external_memory_type),
                 );
                 Ok(external_memory_properties)
-            },
+            }
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device.into()),
-            Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED) => Err(external_memory::ExternalImageQueryError::FormatNotSupported),
+            Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED) => {
+                Err(external_memory::ExternalImageQueryError::FormatNotSupported)
+            }
             Err(err) => {
                 panic!("Unexpected error: {:#?}", err);
             }
@@ -1401,34 +1409,41 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         let mut drm_format_properties = vk::DrmFormatModifierPropertiesListEXT::builder().build();
         let mut vk_format_properties = vk::FormatProperties2::builder()
-        .push_next(&mut drm_format_properties)
-        .build();
+            .push_next(&mut drm_format_properties)
+            .build();
 
-        self.instance.inner.get_physical_device_format_properties2(self.handle,conv::map_format(format),&mut vk_format_properties);
-
+        self.instance.inner.get_physical_device_format_properties2(
+            self.handle,
+            conv::map_format(format),
+            &mut vk_format_properties,
+        );
 
         let format_modifiers = Vec::from_raw_parts(
             drm_format_properties.p_drm_format_modifier_properties,
             drm_format_properties.drm_format_modifier_count as usize,
-            drm_format_properties.drm_format_modifier_count as usize
+            drm_format_properties.drm_format_modifier_count as usize,
         );
 
-
-        format_modifiers.into_iter().filter_map(|format_modifier_properties|{
-            let format_modifier = external_memory::DrmModifier::from(format_modifier_properties.drm_format_modifier);
-            if let external_memory::DrmModifier::Unrecognized(value) = format_modifier {
-                error!("Unrecognized drm format modifier: {:#?}",value);
-                None
-            }
-            else {
-                Some(external_memory::DrmFormatProperties {
-                    drm_modifier: format_modifier,
-                    plane_count: format_modifier_properties.drm_format_modifier_plane_count,
-                    valid_usages: conv::map_vk_external_memory_handle_type_flags(format_modifier_properties.drm_format_modifier_tiling_features)
-                })
-            }
-
-        }).collect()
+        format_modifiers
+            .into_iter()
+            .filter_map(|format_modifier_properties| {
+                let format_modifier = external_memory::DrmModifier::from(
+                    format_modifier_properties.drm_format_modifier,
+                );
+                if let external_memory::DrmModifier::Unrecognized(value) = format_modifier {
+                    error!("Unrecognized drm format modifier: {:#?}", value);
+                    None
+                } else {
+                    Some(external_memory::DrmFormatProperties {
+                        drm_modifier: format_modifier,
+                        plane_count: format_modifier_properties.drm_format_modifier_plane_count,
+                        valid_usages: conv::map_vk_external_memory_handle_type_flags(
+                            format_modifier_properties.drm_format_modifier_tiling_features,
+                        ),
+                    })
+                }
+            })
+            .collect()
     }
 
     fn features(&self) -> Features {
@@ -1644,7 +1659,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             performance_caveats: Default::default(),
             dynamic_pipeline_states: DynamicStates::all(),
             downlevel: DownlevelProperties::all_enabled(),
-            external_memory_limits: external_memory_limits,
+            external_memory_limits,
         }
     }
 

@@ -5,7 +5,7 @@ pub use errors::*;
 
 pub use external_memory::*;
 
-#[cfg(any(target_os="linux",target_os="android"))]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 pub use drm_fourcc::*;
 
 /// Buffer or image
@@ -26,15 +26,11 @@ pub struct ExternalMemoryProperties {
 }
 impl ExternalMemoryProperties {
     /// Constructor
-    pub fn new(
-        exportable: bool,
-        importable: bool,
-        exportable_from_imported: bool,
-    ) -> Self {
+    pub fn new(exportable: bool, importable: bool, exportable_from_imported: bool) -> Self {
         Self {
             exportable,
             importable,
-            exportable_from_imported
+            exportable_from_imported,
         }
     }
     /// Is the queried configuration exportable
@@ -51,14 +47,13 @@ impl ExternalMemoryProperties {
     }
 }
 impl Default for ExternalMemoryProperties {
-    fn default()->Self {
+    fn default() -> Self {
         Self {
             exportable: false,
             importable: false,
-            exportable_from_imported: false
+            exportable_from_imported: false,
         }
     }
-
 }
 
 bitflags!(
@@ -458,7 +453,7 @@ impl std::convert::TryFrom<(ExternalMemoryType, Ptr)> for ExternalMemory {
     }
 }
 
-bitflags::bitflags!{
+bitflags::bitflags! {
     /// Possible usages for an image.
     pub struct ImageUsage: u32 {
         /// Format can be used for sampled images (SAMPLED_IMAGE and COMBINED_IMAGE_SAMPLER descriptor types).
@@ -499,5 +494,5 @@ pub struct DrmFormatProperties {
     /// Number of memory planes each image crated with `drm_modifier` has.
     pub plane_count: u32,
     /// Valid image usage with the `drm_modifier`.
-    pub valid_usages: ImageUsage
+    pub valid_usages: ImageUsage,
 }

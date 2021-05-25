@@ -1986,7 +1986,11 @@ impl d::Device<B> for super::Device {
         size: u64,
     ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferCreateAllocateError>
     {
-        if !self.shared.extension_fns.external_memory {panic!("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");}
+        if !self.shared.extension_fns.external_memory {
+            panic!(
+                "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled"
+            );
+        }
 
         let vk_external_memory_types =
             conv::map_external_memory_handle_types(external_memory_types);
@@ -2092,7 +2096,9 @@ impl d::Device<B> for super::Device {
         size: u64,
     ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferImportError> {
         if !self.shared.extension_fns.external_memory {
-            panic!("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");
+            panic!(
+                "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled"
+            );
         }
 
         let (external_memory_type, platform_memory) = external_memory.into();
@@ -2187,15 +2193,15 @@ impl d::Device<B> for super::Device {
                     .fd(*fd)
                     .build();
 
-                let allocate_info = if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info
-                {
-                    vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
-                } else {
-                    vk::MemoryAllocateInfo::builder()
-                }
-                .push_next(&mut import_memory_info)
-                .allocation_size(buffer_req.size)
-                .memory_type_index(self.get_ash_memory_type_index(mem_type));
+                let allocate_info =
+                    if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info {
+                        vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
+                    } else {
+                        vk::MemoryAllocateInfo::builder()
+                    }
+                    .push_next(&mut import_memory_info)
+                    .allocation_size(buffer_req.size)
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
 
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
@@ -2238,15 +2244,15 @@ impl d::Device<B> for super::Device {
                     .handle(*handle)
                     .build();
 
-                let allocate_info = if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info
-                {
-                    vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
-                } else {
-                    vk::MemoryAllocateInfo::builder()
-                }
-                .push_next(&mut import_memory_info)
-                .allocation_size(buffer_req.size)
-                .memory_type_index(self.get_ash_memory_type_index(mem_type));
+                let allocate_info =
+                    if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info {
+                        vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
+                    } else {
+                        vk::MemoryAllocateInfo::builder()
+                    }
+                    .push_next(&mut import_memory_info)
+                    .allocation_size(buffer_req.size)
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
 
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
@@ -2289,15 +2295,15 @@ impl d::Device<B> for super::Device {
                     .host_pointer(*ptr)
                     .build();
 
-                let allocate_info = if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info
-                {
-                    vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
-                } else {
-                    vk::MemoryAllocateInfo::builder()
-                }
-                .push_next(&mut import_memory_info)
-                .allocation_size(buffer_req.size)
-                .memory_type_index(self.get_ash_memory_type_index(mem_type));
+                let allocate_info =
+                    if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info {
+                        vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
+                    } else {
+                        vk::MemoryAllocateInfo::builder()
+                    }
+                    .push_next(&mut import_memory_info)
+                    .allocation_size(buffer_req.size)
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
 
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
@@ -2305,7 +2311,7 @@ impl d::Device<B> for super::Device {
 
         let memory = match result {
             Ok(memory) => n::Memory { raw: memory },
-            Err(err)=>{
+            Err(err) => {
                 self.destroy_buffer(buffer);
                 match err {
                     vk::Result::ERROR_TOO_MANY_OBJECTS => {
@@ -2316,14 +2322,18 @@ impl d::Device<B> for super::Device {
                         return Err(d::OutOfMemory::Device.into())
                     }
                     vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => {
-                        return Err(hal::external_memory::ExternalBufferImportError::InvalidExternalHandle)
+                        return Err(
+                            hal::external_memory::ExternalBufferImportError::InvalidExternalHandle,
+                        )
                     }
                     unexpected_error => {
-                        panic!("Unexpected error on `allocate_memory`: {:#?}", unexpected_error);
+                        panic!(
+                            "Unexpected error on `allocate_memory`: {:#?}",
+                            unexpected_error
+                        );
                     }
                 }
             }
-
         };
 
         if let Err(err) = self.bind_buffer_memory(&memory, 0, &mut buffer) {
@@ -2402,7 +2412,10 @@ impl d::Device<B> for super::Device {
                 return Err(d::OutOfMemory::Device.into())
             }
             Err(unexpected_error) => {
-                panic!("Unexpected error on `create_image`: {:#?}", unexpected_error);
+                panic!(
+                    "Unexpected error on `create_image`: {:#?}",
+                    unexpected_error
+                );
             }
         };
 
@@ -2441,11 +2454,13 @@ impl d::Device<B> for super::Device {
 
         let memory = match self.shared.raw.allocate_memory(&allocate_info, None) {
             Ok(memory) => n::Memory { raw: memory },
-            Err(err)=>{
+            Err(err) => {
                 self.destroy_image(image);
                 match err {
                     vk::Result::ERROR_TOO_MANY_OBJECTS => {
-                        return Err(hal::external_memory::ExternalImageCreateAllocateError::TooManyObjects);
+                        return Err(
+                            hal::external_memory::ExternalImageCreateAllocateError::TooManyObjects,
+                        );
                     }
                     vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
                         return Err(d::OutOfMemory::Host.into());
@@ -2458,7 +2473,6 @@ impl d::Device<B> for super::Device {
                     }
                 }
             }
-
         };
 
         if let Err(err) = self.bind_image_memory(&memory, 0, &mut image) {
@@ -2490,7 +2504,9 @@ impl d::Device<B> for super::Device {
         type_mask: u32,
     ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError> {
         if !self.shared.extension_fns.external_memory {
-            panic!("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");
+            panic!(
+                "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled"
+            );
         }
 
         let flags = conv::map_view_capabilities_sparse(sparse, view_caps);
@@ -2539,9 +2555,14 @@ impl d::Device<B> for super::Device {
                 extent,
             },
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(d::OutOfMemory::Device.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                return Err(d::OutOfMemory::Device.into())
+            }
             Err(unexpected_error) => {
-                panic!("Unexpected error on `create_image`: {:#?}", unexpected_error);
+                panic!(
+                    "Unexpected error on `create_image`: {:#?}",
+                    unexpected_error
+                );
             }
         };
 
@@ -2591,7 +2612,10 @@ impl d::Device<B> for super::Device {
                                 );
                         }
                         unexpected_error => {
-                            panic!("Unexpected error on `get_memory_fd_properties_khr`: {:#?}", unexpected_error);
+                            panic!(
+                                "Unexpected error on `get_memory_fd_properties_khr`: {:#?}",
+                                unexpected_error
+                            );
                         }
                     }
                 };
@@ -2609,30 +2633,33 @@ impl d::Device<B> for super::Device {
                     .fd(*fd)
                     .build();
 
-                let allocate_info = if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info
-                {
-                    vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
-                } else {
-                    vk::MemoryAllocateInfo::builder()
-                }
-                .push_next(&mut import_memory_info)
-                .allocation_size(image_req.size)
-                .memory_type_index(self.get_ash_memory_type_index(mem_type));
+                let allocate_info =
+                    if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info {
+                        vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
+                    } else {
+                        vk::MemoryAllocateInfo::builder()
+                    }
+                    .push_next(&mut import_memory_info)
+                    .allocation_size(image_req.size)
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
 
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
             #[cfg(windows)]
             hal::external_memory::PlatformMemory::Handle(handle) => {
-                let external_memory_extension =
-                    match self.shared.extension_fns.external_memory_win32 {
-                        Some(ref functor) => functor.unwrap_extension(),
-                        _ => {
-                            error!("External memory windows handle extension not supported");
-                            return Err(
+                let external_memory_extension = match self
+                    .shared
+                    .extension_fns
+                    .external_memory_win32
+                {
+                    Some(ref functor) => functor.unwrap_extension(),
+                    _ => {
+                        error!("External memory windows handle extension not supported");
+                        return Err(
                                 hal::external_memory::ExternalImageImportError::UnsupportedExternalHandle,
                             );
-                        }
-                    };
+                    }
+                };
 
                 let vk_memory_bits = {
                     use std::os::windows::io::AsRawHandle;
@@ -2669,15 +2696,15 @@ impl d::Device<B> for super::Device {
                     .handle(*handle)
                     .build();
 
-                let allocate_info = if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info
-                {
-                    vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
-                } else {
-                    vk::MemoryAllocateInfo::builder()
-                }
-                .push_next(&mut import_memory_info)
-                .allocation_size(image_req.size)
-                .memory_type_index(self.get_ash_memory_type_index(mem_type));
+                let allocate_info =
+                    if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info {
+                        vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
+                    } else {
+                        vk::MemoryAllocateInfo::builder()
+                    }
+                    .push_next(&mut import_memory_info)
+                    .allocation_size(image_req.size)
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
 
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
@@ -2720,15 +2747,15 @@ impl d::Device<B> for super::Device {
                     .host_pointer(*ptr)
                     .build();
 
-                let allocate_info = if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info
-                {
-                    vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
-                } else {
-                    vk::MemoryAllocateInfo::builder()
-                }
-                .push_next(&mut import_memory_info)
-                .allocation_size(image_req.size)
-                .memory_type_index(self.get_ash_memory_type_index(mem_type));
+                let allocate_info =
+                    if let Some(dedicated_allocation_info) = &mut dedicated_allocation_info {
+                        vk::MemoryAllocateInfo::builder().push_next(dedicated_allocation_info)
+                    } else {
+                        vk::MemoryAllocateInfo::builder()
+                    }
+                    .push_next(&mut import_memory_info)
+                    .allocation_size(image_req.size)
+                    .memory_type_index(self.get_ash_memory_type_index(mem_type));
 
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
@@ -2736,7 +2763,7 @@ impl d::Device<B> for super::Device {
 
         let memory = match result {
             Ok(memory) => n::Memory { raw: memory },
-            Err(err)=>{
+            Err(err) => {
                 self.destroy_image(image);
                 match err {
                     vk::Result::ERROR_TOO_MANY_OBJECTS => {
@@ -2747,10 +2774,15 @@ impl d::Device<B> for super::Device {
                         return Err(d::OutOfMemory::Device.into())
                     }
                     vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => {
-                        return Err(hal::external_memory::ExternalImageImportError::InvalidExternalHandle)
+                        return Err(
+                            hal::external_memory::ExternalImageImportError::InvalidExternalHandle,
+                        )
                     }
                     unexpected_error => {
-                        panic!("Unexpected error on `allocate_memory`: {:#?}", unexpected_error);
+                        panic!(
+                            "Unexpected error on `allocate_memory`: {:#?}",
+                            unexpected_error
+                        );
                     }
                 }
             }
@@ -2792,8 +2824,7 @@ impl d::Device<B> for super::Device {
         match platform_memory_type {
             #[cfg(unix)]
             hal::external_memory::PlatformMemoryType::Fd => {
-                let external_memory_extension = match self.shared.extension_fns.external_memory_fd
-                {
+                let external_memory_extension = match self.shared.extension_fns.external_memory_fd {
                     Some(ref functor) => functor.unwrap_extension(),
                     _ => {
                         error!("External memory fd not supported");
@@ -2821,7 +2852,10 @@ impl d::Device<B> for super::Device {
                         )
                     }
                     unexpected_error => {
-                        panic!("Unexpected error on `get_memory_fd`: {:#?}", unexpected_error);
+                        panic!(
+                            "Unexpected error on `get_memory_fd`: {:#?}",
+                            unexpected_error
+                        );
                     }
                 };
                 Ok((external_memory_type, fd).try_into().unwrap())
@@ -2853,7 +2887,10 @@ impl d::Device<B> for super::Device {
                         )
                     }
                     unexpected_error => {
-                        panic!("Unexpected error on `get_memory_win32_handle_khr`: {:#?}", unexpected_error);
+                        panic!(
+                            "Unexpected error on `get_memory_win32_handle_khr`: {:#?}",
+                            unexpected_error
+                        );
                     }
                 }
                 let handle = hal::external_memory::Handle::from(handle);

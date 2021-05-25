@@ -827,7 +827,7 @@ struct DeviceExtensionFunctions {
     external_memory_win32: Option<ExtensionFn<vk::KhrExternalMemoryWin32Fn>>,
     #[cfg(unix)]
     external_memory_fd: Option<ExtensionFn<khr::ExternalMemoryFd>>,
-    #[cfg(any(target_os="linux",target_os="android"))]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     image_drm_format_modifier: Option<ExtensionFn<vk::ExtImageDrmFormatModifierFn>>,
     #[cfg(unix)]
     // The extension does not have its own functions.
