@@ -674,10 +674,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
         _memory_type: hal::external_memory::ExternalMemoryType,
-    ) -> Result<
-        hal::external_memory::ExternalMemoryProperties,
-        hal::external_memory::ExternalBufferQueryError,
-    > {
+    ) -> hal::external_memory::ExternalMemoryProperties {
         unimplemented!()
     }
 
@@ -700,7 +697,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn external_image_drm_format_properties(
         &self,
         _format: hal::format::Format,
-    ) -> Result<Vec<hal::external_memory::DrmFormatProperties>,hal::external_memory::ExternalImageDrmFormatQueryError> {
+    ) -> Vec<hal::external_memory::DrmFormatProperties> {
         unimplemented!()
     }
 

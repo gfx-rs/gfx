@@ -2,13 +2,6 @@
 
 use crate::device::OutOfMemory;
 
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-/// External memory import error
-pub enum ExternalBufferQueryError {
-    /// Unsupported feature.
-    #[error("Unsupported feature")]
-    UnsupportedFeature,
-}
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
 /// External memory import error
@@ -20,20 +13,7 @@ pub enum ExternalImageQueryError {
     /// Requested image format not supported in combination with other parameters.
     #[error("Format not supported")]
     FormatNotSupported,
-
-    /// Unsupported feature.
-    #[error("Unsupported feature")]
-    UnsupportedFeature,
 }
-
-#[derive(Clone, Debug, PartialEq, thiserror::Error)]
-/// External image drm format query error
-pub enum ExternalImageDrmFormatQueryError {
-    /// Unsupported feature.
-    #[error("Unsupported feature")]
-    UnsupportedFeature,
-}
-
 
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -64,10 +44,6 @@ pub enum ExternalBufferCreateAllocateError {
     /// Invalid external handle.
     #[error("The used external handle or the combination of them is invalid")]
     InvalidExternalHandle,
-
-    /// Unsupported feature.
-    #[error("Unsupported feature")]
-    UnsupportedFeature,
 }
 
 
@@ -99,10 +75,6 @@ pub enum ExternalImageCreateAllocateError {
     /// Invalid external handle.
     #[error("The used external handle or the combination of them is invalid")]
     InvalidExternalHandle,
-
-    /// Unsupported feature.
-    #[error("Unsupported feature")]
-    UnsupportedFeature,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -134,9 +106,9 @@ pub enum ExternalBufferImportError {
     #[error("Invalid external handle")]
     InvalidExternalHandle,
 
-    /// Unsupported feature.
-    #[error("Unsupported feature")]
-    UnsupportedFeature,
+    /// Unsupported external handle.
+    #[error("Unsupported external handle")]
+    UnsupportedExternalHandle,
 }
 
 
@@ -169,9 +141,9 @@ pub enum ExternalImageImportError {
     #[error("Invalid external handle")]
     InvalidExternalHandle,
 
-    /// Unsupported feature.
-    #[error("Unsupported feature")]
-    UnsupportedFeature,
+    /// Unsupported external handle.
+    #[error("Unsupported external handle")]
+    UnsupportedExternalHandle,
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -189,7 +161,7 @@ pub enum ExternalMemoryExportError {
     #[error("Invalid external handle")]
     InvalidExternalHandle,
 
-    /// Unsupported feature.
-    #[error("Unsupported feature")]
-    UnsupportedFeature,
+    /// Unsupported external handle.
+    #[error("Unsupported external handle")]
+    UnsupportedExternalHandle,
 }

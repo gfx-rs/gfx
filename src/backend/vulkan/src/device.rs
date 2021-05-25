@@ -1986,11 +1986,7 @@ impl d::Device<B> for super::Device {
         size: u64,
     ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferCreateAllocateError>
     {
-        if !self.shared.extension_fns.external_memory {
-            return Err(
-                hal::external_memory::ExternalBufferCreateAllocateError::UnsupportedFeature,
-            );
-        }
+        if !self.shared.extension_fns.external_memory {panic!("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");}
 
         let vk_external_memory_types =
             conv::map_external_memory_handle_types(external_memory_types);
@@ -2096,7 +2092,7 @@ impl d::Device<B> for super::Device {
         size: u64,
     ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferImportError> {
         if !self.shared.extension_fns.external_memory {
-            return Err(hal::external_memory::ExternalBufferImportError::UnsupportedFeature);
+            panic!("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");
         }
 
         let (external_memory_type, platform_memory) = external_memory.into();
@@ -2141,16 +2137,7 @@ impl d::Device<B> for super::Device {
         let result = match platform_memory {
             #[cfg(unix)]
             hal::external_memory::PlatformMemory::Fd(fd) => {
-                let external_memory_extension = match self.shared.extension_fns.external_memory_fd
-                {
-                    Some(ref functor) => functor.unwrap_extension(),
-                    _ => {
-                        error!("External memory unix file descriptor extension not supported");
-                        return Err(
-                            hal::external_memory::ExternalBufferImportError::UnsupportedFeature,
-                        );
-                    }
-                };
+                let external_memory_extension = self.shared.extension_fns.external_memory_fd.as_ref().expect("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled").unwrap_extension();
 
                 #[cfg(any(target_os = "linux", target_os = "android", doc))]
                 if !self.shared.extension_fns.external_memory_dma_buf
@@ -2158,7 +2145,7 @@ impl d::Device<B> for super::Device {
                 {
                     error!("Export to dma buf not supported");
                     return Err(
-                        hal::external_memory::ExternalBufferImportError::UnsupportedFeature,
+                        hal::external_memory::ExternalBufferImportError::UnsupportedExternalHandle,
                     );
                 }
 
@@ -2182,10 +2169,7 @@ impl d::Device<B> for super::Device {
                                 );
                         }
                         err => {
-                            error!("Unexpected error: {:#?}", err);
-                            return Err(
-                                hal::external_memory::ExternalBufferImportError::UnsupportedFeature,
-                            );
+                            panic!("Unexpected error: {:#?}", err);
                         }
                     }
                 };
@@ -2217,16 +2201,7 @@ impl d::Device<B> for super::Device {
             }
             #[cfg(windows)]
             hal::external_memory::PlatformMemory::Handle(handle) => {
-                let external_memory_extension =
-                    match self.shared.extension_fns.external_memory_win32 {
-                        Some(ref functor) => functor.unwrap_extension(),
-                        _ => {
-                            error!("External memory windows handle extension not supported");
-                            return Err(
-                                hal::external_memory::ExternalBufferImportError::UnsupportedFeature,
-                            );
-                        }
-                    };
+                let external_memory_extension = self.shared.extension_fns.external_memory_win32.as_ref().expect("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled").unwrap_extension();
 
                 let vk_memory_bits = {
                     use std::os::windows::io::AsRawHandle;
@@ -2276,16 +2251,7 @@ impl d::Device<B> for super::Device {
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
             hal::external_memory::PlatformMemory::Ptr(ptr) => {
-                let external_memory_extension =
-                    match self.shared.extension_fns.external_memory_host {
-                        Some(ref functor) => functor.unwrap_extension(),
-                        _ => {
-                            error!("External memory host pointer extension not supported");
-                            return Err(
-                                hal::external_memory::ExternalBufferImportError::UnsupportedFeature,
-                            );
-                        }
-                    };
+                let external_memory_extension = self.shared.extension_fns.external_memory_host.as_ref().expect("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled").unwrap_extension();
 
                 let vk_memory_bits = {
                     let mut memory_ptr_properties =
@@ -2304,10 +2270,7 @@ impl d::Device<B> for super::Device {
                             hal::external_memory::ExternalBufferImportError::InvalidExternalHandle,
                         ),
                         err => {
-                            error!("Unexpected error: {:#?}", err);
-                            return Err(
-                                hal::external_memory::ExternalBufferImportError::UnsupportedFeature,
-                            );
+                            panic!("Unexpected error: {:#?}", err);
                         }
                     };
                     memory_ptr_properties.memory_type_bits
@@ -2356,10 +2319,7 @@ impl d::Device<B> for super::Device {
                         return Err(hal::external_memory::ExternalBufferImportError::InvalidExternalHandle)
                     }
                     unexpected_error => {
-                        error!("Unexpected error on `allocate_memory`: {:#?}", unexpected_error);
-                        return Err(
-                            hal::external_memory::ExternalBufferImportError::UnsupportedFeature,
-                        );
+                        panic!("Unexpected error on `allocate_memory`: {:#?}", unexpected_error);
                     }
                 }
             }
@@ -2442,10 +2402,7 @@ impl d::Device<B> for super::Device {
                 return Err(d::OutOfMemory::Device.into())
             }
             Err(unexpected_error) => {
-                error!("Unexpected error on `create_image`: {:#?}", unexpected_error);
-                return Err(
-                    hal::external_memory::ExternalImageCreateAllocateError::UnsupportedFeature,
-                );
+                panic!("Unexpected error on `create_image`: {:#?}", unexpected_error);
             }
         };
 
@@ -2497,10 +2454,7 @@ impl d::Device<B> for super::Device {
                         return Err(d::OutOfMemory::Device.into());
                     }
                     unexpected_error => {
-                        error!("Unexpected error: {:#?}", unexpected_error);
-                        return Err(
-                            hal::external_memory::ExternalImageCreateAllocateError::UnsupportedFeature,
-                        );
+                        panic!("Unexpected error: {:#?}", unexpected_error);
                     }
                 }
             }
@@ -2536,7 +2490,7 @@ impl d::Device<B> for super::Device {
         type_mask: u32,
     ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError> {
         if !self.shared.extension_fns.external_memory {
-            return Err(hal::external_memory::ExternalImageImportError::UnsupportedFeature);
+            panic!("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");
         }
 
         let flags = conv::map_view_capabilities_sparse(sparse, view_caps);
@@ -2587,10 +2541,7 @@ impl d::Device<B> for super::Device {
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(d::OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(d::OutOfMemory::Device.into()),
             Err(unexpected_error) => {
-                error!("Unexpected error on `create_image`: {:#?}", unexpected_error);
-                return Err(
-                    hal::external_memory::ExternalImageImportError::UnsupportedFeature,
-                );
+                panic!("Unexpected error on `create_image`: {:#?}", unexpected_error);
             }
         };
 
@@ -2608,16 +2559,7 @@ impl d::Device<B> for super::Device {
         let result = match platform_memory {
             #[cfg(unix)]
             hal::external_memory::PlatformMemory::Fd(fd) => {
-                let external_memory_extension = match self.shared.extension_fns.external_memory_fd
-                {
-                    Some(ref functor) => functor.unwrap_extension(),
-                    _ => {
-                        error!("External memory unix file descriptor extension not supported");
-                        return Err(
-                            hal::external_memory::ExternalImageImportError::UnsupportedFeature,
-                        );
-                    }
-                };
+                let external_memory_extension = self.shared.extension_fns.external_memory_fd.as_ref().expect("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled").unwrap_extension();
 
                 #[cfg(any(target_os = "linux", target_os = "android", doc))]
                 if !self.shared.extension_fns.external_memory_dma_buf
@@ -2625,7 +2567,7 @@ impl d::Device<B> for super::Device {
                 {
                     error!("Export to dma buf not supported");
                     return Err(
-                        hal::external_memory::ExternalImageImportError::UnsupportedFeature,
+                        hal::external_memory::ExternalImageImportError::UnsupportedExternalHandle,
                     );
                 }
 
@@ -2649,10 +2591,7 @@ impl d::Device<B> for super::Device {
                                 );
                         }
                         unexpected_error => {
-                            error!("Unexpected error on `get_memory_fd_properties_khr`: {:#?}", unexpected_error);
-                            return Err(
-                                hal::external_memory::ExternalImageImportError::UnsupportedFeature,
-                            );
+                            panic!("Unexpected error on `get_memory_fd_properties_khr`: {:#?}", unexpected_error);
                         }
                     }
                 };
@@ -2690,7 +2629,7 @@ impl d::Device<B> for super::Device {
                         _ => {
                             error!("External memory windows handle extension not supported");
                             return Err(
-                                hal::external_memory::ExternalImageImportError::UnsupportedFeature,
+                                hal::external_memory::ExternalImageImportError::UnsupportedExternalHandle,
                             );
                         }
                     };
@@ -2743,16 +2682,7 @@ impl d::Device<B> for super::Device {
                 self.shared.raw.allocate_memory(&allocate_info, None)
             }
             hal::external_memory::PlatformMemory::Ptr(ptr) => {
-                let external_memory_extension =
-                    match self.shared.extension_fns.external_memory_host {
-                        Some(ref functor) => functor.unwrap_extension(),
-                        _ => {
-                            error!("External memory host pointer extension not supported");
-                            return Err(
-                                hal::external_memory::ExternalImageImportError::UnsupportedFeature,
-                            );
-                        }
-                    };
+                let external_memory_extension = self.shared.extension_fns.external_memory_host.as_ref().expect("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled").unwrap_extension();
 
                 let vk_memory_bits = {
                     let mut memory_ptr_properties =
@@ -2771,10 +2701,7 @@ impl d::Device<B> for super::Device {
                             hal::external_memory::ExternalImageImportError::InvalidExternalHandle,
                         ),
                         unexpected_error => {
-                            error!("Unexpected error on `get_memory_host_pointer_properties_ext`: {:#?}", unexpected_error);
-                            return Err(
-                                hal::external_memory::ExternalImageImportError::UnsupportedFeature,
-                            );
+                            panic!("Unexpected error on `get_memory_host_pointer_properties_ext`: {:#?}", unexpected_error);
                         }
                     };
                     memory_ptr_properties.memory_type_bits
@@ -2823,10 +2750,7 @@ impl d::Device<B> for super::Device {
                         return Err(hal::external_memory::ExternalImageImportError::InvalidExternalHandle)
                     }
                     unexpected_error => {
-                        error!("Unexpected error on `allocate_memory`: {:#?}", unexpected_error);
-                        return Err(
-                            hal::external_memory::ExternalImageImportError::UnsupportedFeature,
-                        );
+                        panic!("Unexpected error on `allocate_memory`: {:#?}", unexpected_error);
                     }
                 }
             }
@@ -2859,8 +2783,7 @@ impl d::Device<B> for super::Device {
         use std::convert::TryInto;
         // Safety checks
         if self.shared.instance.external_memory_capabilities.is_none() {
-            error!("External memory not supported");
-            return Err(hal::external_memory::ExternalMemoryExportError::UnsupportedFeature);
+            panic!("External memory not supported");
         };
 
         let platform_memory_type: hal::external_memory::PlatformMemoryType =
@@ -2875,7 +2798,7 @@ impl d::Device<B> for super::Device {
                     _ => {
                         error!("External memory fd not supported");
                         return Err(
-                            hal::external_memory::ExternalMemoryExportError::UnsupportedFeature,
+                            hal::external_memory::ExternalMemoryExportError::UnsupportedExternalHandle,
                         );
                     }
                 };
@@ -2898,26 +2821,14 @@ impl d::Device<B> for super::Device {
                         )
                     }
                     unexpected_error => {
-                        error!("Unexpected error on `get_memory_fd`: {:#?}", unexpected_error);
-                        return Err(
-                            hal::external_memory::ExternalMemoryExportError::UnsupportedFeature,
-                        );
+                        panic!("Unexpected error on `get_memory_fd`: {:#?}", unexpected_error);
                     }
                 };
                 Ok((external_memory_type, fd).try_into().unwrap())
             }
             #[cfg(windows)]
             hal::external_memory::PlatformMemoryType::Handle => {
-                let external_memory_extension =
-                    match self.shared.extension_fns.external_memory_win32 {
-                        Some(ref functor) => functor.unwrap_extension(),
-                        _ => {
-                            error!("External memory handle not supported");
-                            return Err(
-                                hal::external_memory::ExternalMemoryExportError::UnsupportedFeature,
-                            );
-                        }
-                    };
+                let external_memory_extension = self.shared.extension_fns.external_memory_win32.as_ref().expect("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled").unwrap_extension();
 
                 let memory_get_info = vk::MemoryGetWin32HandleInfoKHR::builder()
                     .memory(memory.raw)
@@ -2942,10 +2853,7 @@ impl d::Device<B> for super::Device {
                         )
                     }
                     unexpected_error => {
-                        error!("Unexpected error on `get_memory_win32_handle_khr`: {:#?}", unexpected_error);
-                        return Err(
-                            hal::external_memory::ExternalMemoryExportError::UnsupportedFeature,
-                        );
+                        panic!("Unexpected error on `get_memory_win32_handle_khr`: {:#?}", unexpected_error);
                     }
                 }
                 let handle = hal::external_memory::Handle::from(handle);

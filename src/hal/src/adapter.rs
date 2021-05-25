@@ -121,10 +121,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
         memory_type: external_memory::ExternalMemoryType,
-    ) -> Result<
-        external_memory::ExternalMemoryProperties,
-        external_memory::ExternalBufferQueryError,
-    >;
+    ) ->external_memory::ExternalMemoryProperties;
 
     /// Get external image properties
     fn external_image_properties(
@@ -145,7 +142,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn external_image_drm_format_properties(
         &self,
         format: format::Format,
-    ) -> Result<Vec<external_memory::DrmFormatProperties>,external_memory::ExternalImageDrmFormatQueryError>;
+    ) -> Vec<external_memory::DrmFormatProperties>;
 
     /// Returns the features of this `PhysicalDevice`. This usually depends on the graphics API being
     /// used, as well as the actual platform underneath.

@@ -447,10 +447,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
         _memory_type: hal::external_memory::ExternalMemoryType,
-    ) -> Result<
-        hal::external_memory::ExternalMemoryProperties,
-        hal::external_memory::ExternalBufferQueryError,
-    > {
+    ) -> hal::external_memory::ExternalMemoryProperties {
         unimplemented!()
     }
 

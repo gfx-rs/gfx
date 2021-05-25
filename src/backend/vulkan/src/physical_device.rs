@@ -1281,17 +1281,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         usage: hal::buffer::Usage,
         sparse: hal::memory::SparseFlags,
         memory_type: external_memory::ExternalMemoryType,
-    ) -> Result<
-        external_memory::ExternalMemoryProperties,
-        external_memory::ExternalBufferQueryError,
-    > {
-        let external_memory_capabilities_extension = match self
-            .instance
-            .external_memory_capabilities
-        {
-            Some(ref functor) => functor,
-            _ => return Err(external_memory::ExternalBufferQueryError::UnsupportedFeature),
-        };
+    ) -> external_memory::ExternalMemoryProperties {
+        let external_memory_capabilities_extension = self.instance.external_memory_capabilities.as_ref().expect("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");
 
         let vk_external_memory_type = conv::map_external_memory_handle_types(memory_type.into());
 
@@ -1325,7 +1316,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .contains(vk_external_memory_type),
         );
 
-        Ok(external_memory_properties)
+        external_memory_properties
     }
 
     fn external_image_properties(
@@ -1342,7 +1333,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     > {
         if self.instance.external_memory_capabilities.is_none()
         {
-            return Err(external_memory::ExternalImageQueryError::UnsupportedFeature);
+            panic!("This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled");
         }
 
         use ash::version::InstanceV1_1;
@@ -1395,10 +1386,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device.into()),
             Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED) => Err(external_memory::ExternalImageQueryError::FormatNotSupported),
             Err(err) => {
-                error!("Unexpected error: {:#?}", err);
-                return Err(
-                    external_memory::ExternalImageQueryError::UnsupportedFeature,
-                );
+                panic!("Unexpected error: {:#?}", err);
             }
         }
     }
@@ -1408,7 +1396,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn external_image_drm_format_properties(
         &self,
         format: format::Format,
-    ) -> Result<Vec<external_memory::DrmFormatProperties>,external_memory::ExternalImageDrmFormatQueryError> {
+    ) -> Vec<external_memory::DrmFormatProperties> {
         use ash::version::InstanceV1_1;
 
         let mut drm_format_properties = vk::DrmFormatModifierPropertiesListEXT::builder().build();
@@ -1426,7 +1414,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         );
 
 
-        Ok(format_modifiers.into_iter().filter_map(|format_modifier_properties|{
+        format_modifiers.into_iter().filter_map(|format_modifier_properties|{
             let format_modifier = external_memory::DrmModifier::from(format_modifier_properties.drm_format_modifier);
             if let external_memory::DrmModifier::Unrecognized(value) = format_modifier {
                 error!("Unrecognized drm format modifier: {:#?}",value);
@@ -1440,7 +1428,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 })
             }
 
-        }).collect())
+        }).collect()
     }
 
     fn features(&self) -> Features {
