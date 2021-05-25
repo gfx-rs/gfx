@@ -2893,7 +2893,7 @@ impl d::Device<B> for super::Device {
                     }
                 }
                 let handle = hal::external_memory::Handle::from(handle);
-                Ok((external_memory_type, handle).try_into().unwrap())
+                Ok(hal::external_memory::ExternalMemory::from_platform(external_memory_type,handle.into()).unwrap())
             }
             hal::external_memory::PlatformMemoryType::Ptr => {
                 error!("Memory cannot be \"exported\" as host memory pointer. Use intead `Device::map_memory`.");
