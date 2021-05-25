@@ -394,7 +394,9 @@ impl Instance {
         extensions.push(vk::ExtDisplaySurfaceCounterFn::name());
         extensions.push(khr::Display::name());
 
-        extensions.push(vk::KhrExternalMemoryCapabilitiesFn::name());
+        if driver_api_version < Version::V1_1 {
+            extensions.push(vk::KhrExternalMemoryCapabilitiesFn::name());
+        }
 
         // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
         if driver_api_version == Version::V1_0 {
@@ -815,6 +817,7 @@ struct DeviceExtensionFunctions {
     mesh_shaders: Option<ExtensionFn<MeshShader>>,
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
     display_control: Option<vk::ExtDisplayControlFn>,
+    memory_requirements2: Option<ExtensionFn<vk::KhrGetMemoryRequirements2Fn>>,
     // The extension does not have its own functions.
     dedicated_allocation: bool,
     // The extension does not have its own functions.

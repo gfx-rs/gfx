@@ -2141,9 +2141,9 @@ impl d::Device<B> for super::Device {
         let result = match platform_memory {
             #[cfg(unix)]
             hal::external_memory::PlatformMemory::Fd(fd) => {
-                let external_memory_extension = match &self.shared.extension_fns.external_memory_fd
+                let external_memory_extension = match self.shared.extension_fns.external_memory_fd
                 {
-                    Some(functor) => functor.unwrap_extension(),
+                    Some(ref functor) => functor.unwrap_extension(),
                     _ => {
                         error!("External memory unix file descriptor extension not supported");
                         return Err(
@@ -2218,8 +2218,8 @@ impl d::Device<B> for super::Device {
             #[cfg(windows)]
             hal::external_memory::PlatformMemory::Handle(handle) => {
                 let external_memory_extension =
-                    match &self.shared.extension_fns.external_memory_win32 {
-                        Some(functor) => functor.unwrap_extension(),
+                    match self.shared.extension_fns.external_memory_win32 {
+                        Some(ref functor) => functor.unwrap_extension(),
                         _ => {
                             error!("External memory windows handle extension not supported");
                             return Err(
@@ -2277,8 +2277,8 @@ impl d::Device<B> for super::Device {
             }
             hal::external_memory::PlatformMemory::Ptr(ptr) => {
                 let external_memory_extension =
-                    match &self.shared.extension_fns.external_memory_host {
-                        Some(functor) => functor.unwrap_extension(),
+                    match self.shared.extension_fns.external_memory_host {
+                        Some(ref functor) => functor.unwrap_extension(),
                         _ => {
                             error!("External memory host pointer extension not supported");
                             return Err(
@@ -2608,9 +2608,9 @@ impl d::Device<B> for super::Device {
         let result = match platform_memory {
             #[cfg(unix)]
             hal::external_memory::PlatformMemory::Fd(fd) => {
-                let external_memory_extension = match &self.shared.extension_fns.external_memory_fd
+                let external_memory_extension = match self.shared.extension_fns.external_memory_fd
                 {
-                    Some(functor) => functor.unwrap_extension(),
+                    Some(ref functor) => functor.unwrap_extension(),
                     _ => {
                         error!("External memory unix file descriptor extension not supported");
                         return Err(
@@ -2685,8 +2685,8 @@ impl d::Device<B> for super::Device {
             #[cfg(windows)]
             hal::external_memory::PlatformMemory::Handle(handle) => {
                 let external_memory_extension =
-                    match &self.shared.extension_fns.external_memory_win32 {
-                        Some(functor) => functor.unwrap_extension(),
+                    match self.shared.extension_fns.external_memory_win32 {
+                        Some(ref functor) => functor.unwrap_extension(),
                         _ => {
                             error!("External memory windows handle extension not supported");
                             return Err(
@@ -2744,8 +2744,8 @@ impl d::Device<B> for super::Device {
             }
             hal::external_memory::PlatformMemory::Ptr(ptr) => {
                 let external_memory_extension =
-                    match &self.shared.extension_fns.external_memory_host {
-                        Some(functor) => functor.unwrap_extension(),
+                    match self.shared.extension_fns.external_memory_host {
+                        Some(ref functor) => functor.unwrap_extension(),
                         _ => {
                             error!("External memory host pointer extension not supported");
                             return Err(
@@ -2869,9 +2869,9 @@ impl d::Device<B> for super::Device {
         match platform_memory_type {
             #[cfg(unix)]
             hal::external_memory::PlatformMemoryType::Fd => {
-                let external_memory_extension = match &self.shared.extension_fns.external_memory_fd
+                let external_memory_extension = match self.shared.extension_fns.external_memory_fd
                 {
-                    Some(functor) => functor.unwrap_extension(),
+                    Some(ref functor) => functor.unwrap_extension(),
                     _ => {
                         error!("External memory fd not supported");
                         return Err(
@@ -2909,8 +2909,8 @@ impl d::Device<B> for super::Device {
             #[cfg(windows)]
             hal::external_memory::PlatformMemoryType::Handle => {
                 let external_memory_extension =
-                    match &self.shared.extension_fns.external_memory_win32 {
-                        Some(functor) => functor.unwrap_extension(),
+                    match self.shared.extension_fns.external_memory_win32 {
+                        Some(ref functor) => functor.unwrap_extension(),
                         _ => {
                             error!("External memory handle not supported");
                             return Err(

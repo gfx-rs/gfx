@@ -248,8 +248,7 @@ impl PhysicalDeviceFeatures {
             | Features::MUTABLE_COMPARISON_SAMPLER
             | Features::MUTABLE_UNNORMALIZED_SAMPLER
             | Features::TEXTURE_DESCRIPTOR_ARRAY
-            | Features::BUFFER_DESCRIPTOR_ARRAY
-            | Features::EXTERNAL_MEMORY;
+            | Features::BUFFER_DESCRIPTOR_ARRAY;
 
         if self.core.robust_buffer_access != 0 {
             bits |= Features::ROBUST_BUFFER_ACCESS;
@@ -440,6 +439,10 @@ impl PhysicalDeviceFeatures {
             bits |= Features::CONSERVATIVE_RASTERIZATION
         }
 
+        if info.supports_extension(vk::ExtConservativeRasterizationFn::name()) {
+            bits |= Features::EXTERNAL_MEMORY
+        }
+
         if let Some(ref vulkan_1_2) = self.vulkan_1_2 {
             if vulkan_1_2.shader_sampled_image_array_non_uniform_indexing != 0 {
                 bits |= Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING;
@@ -588,8 +591,13 @@ impl PhysicalDeviceInfo {
         }
 
         if requested_features.contains(Features::EXTERNAL_MEMORY) {
-            requested_extensions.push(vk::KhrDedicatedAllocationFn::name());
-            requested_extensions.push(vk::KhrExternalMemoryFn::name());
+            if self.api_version() < Version::V1_1{
+                requested_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+                requested_extensions.push(vk::KhrExternalMemoryFn::name());
+                requested_extensions.push(vk::KhrGetMemoryRequirements2Fn::name());// TODO Functions should be added because they are useful
+                requested_extensions.push(vk::KhrDedicatedAllocationFn::name());
+            }
+
             requested_extensions.push(vk::ExtExternalMemoryHostFn::name());
             #[cfg(window)]
             requested_extensions.push(vk::KhrExternalMemoryWin32Fn::name());
@@ -599,7 +607,7 @@ impl PhysicalDeviceInfo {
                 requested_extensions.push(vk::ExtExternalMemoryDmaBufFn::name());
 
                 requested_extensions.push(vk::KhrBindMemory2Fn::name());
-                requested_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+
                 requested_extensions.push(vk::KhrImageFormatListFn::name());
                 requested_extensions.push(vk::KhrSamplerYcbcrConversionFn::name());
                 requested_extensions.push(vk::ExtImageDrmFormatModifierFn::name());
@@ -787,6 +795,21 @@ impl PhysicalDevice {
             None
         };
 
+        let memory_requirements2 =
+            if enabled_extensions.contains(&vk::KhrGetMemoryRequirements2Fn::name()) {
+                Some(ExtensionFn::Extension(vk::KhrGetMemoryRequirements2Fn::load(
+                    |name| {
+                        std::mem::transmute(
+                            self.instance
+                                .inner
+                                .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                        )
+                    },
+                )))
+            } else {
+                None
+            };
+
         let dedicated_allocation =
             enabled_extensions.contains(&vk::KhrDedicatedAllocationFn::name());
 
@@ -893,6 +916,7 @@ impl PhysicalDevice {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
                     display_control,
+                    memory_requirements2: memory_requirements2,
                     dedicated_allocation: dedicated_allocation,
                     external_memory: external_memory,
                     external_memory_host: external_memory_host,
