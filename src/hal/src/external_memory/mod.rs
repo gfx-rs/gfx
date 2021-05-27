@@ -214,10 +214,10 @@ pub enum ExternalMemory {
     #[cfg(windows)]
     /// Tmp. Size is ignored
     D3D12Resource(Handle),
-    #[cfg(any(target_os = "linux", target_os = "android", doc))]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     /// Tmp
     DmaBuf(Fd),
-    #[cfg(any(target_os = "android", doc))]
+    #[cfg(any(target_os = "android"))]
     /// Tmp
     AndroidHardwareBuffer(Fd),
     /// Tmp

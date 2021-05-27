@@ -396,9 +396,21 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
         _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> hal::external_memory::ExternalBufferProperties {
+        unimplemented!()
+    }
+
+    fn external_image_properties(
+        &self,
+        _format: hal::format::Format,
+        _dimensions: u8,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _view_caps: hal::image::ViewCapabilities,
+        _memory_type: hal::external_memory::ExternalMemoryType,
     ) -> Result<
-        hal::external_memory::ExternalBufferProperties,
-        hal::external_memory::ExternalMemoryQueryError,
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalImageQueryError,
     > {
         unimplemented!()
     }
@@ -3585,6 +3597,36 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferImportError> {
         unimplemented!()
     }
+
+
+    unsafe fn create_allocate_external_image(
+        &self,
+        _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        _kind: image::Kind,
+        _num_levels: image::Level,
+        _format: Format,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _sparse: memory::SparseFlags,
+        _view_caps: image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageCreateAllocateError> {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_image(
+        &self,
+        _external_memory: hal::external_memory::ExternalMemory,
+        _kind: image::Kind,
+        _num_levels: image::Level,
+        _format: Format,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _sparse: memory::SparseFlags,
+        _view_caps: image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError> {
+        un
 
     unsafe fn export_memory(
         &self,
