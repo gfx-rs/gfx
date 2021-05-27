@@ -3625,8 +3625,10 @@ impl hal::device::Device<Backend> for Device {
         _sparse: memory::SparseFlags,
         _view_caps: image::ViewCapabilities,
         _type_mask: u32,
-    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError> {
-        un
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError>
+    {
+        unimplemented!()
+    }
 
     unsafe fn export_memory(
         &self,
