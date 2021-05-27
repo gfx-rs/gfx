@@ -396,7 +396,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
         _memory_type: hal::external_memory::ExternalMemoryType,
-    ) -> hal::external_memory::ExternalBufferProperties {
+    ) -> hal::external_memory::ExternalMemoryProperties {
         unimplemented!()
     }
 
@@ -3604,7 +3604,7 @@ impl hal::device::Device<Backend> for Device {
         _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
         _kind: image::Kind,
         _num_levels: image::Level,
-        _format: Format,
+        _format: hal::format::Format,
         _tiling: image::Tiling,
         _usage: image::Usage,
         _sparse: memory::SparseFlags,
@@ -3619,7 +3619,7 @@ impl hal::device::Device<Backend> for Device {
         _external_memory: hal::external_memory::ExternalMemory,
         _kind: image::Kind,
         _num_levels: image::Level,
-        _format: Format,
+        _format: hal::format::Format,
         _tiling: image::Tiling,
         _usage: image::Usage,
         _sparse: memory::SparseFlags,
