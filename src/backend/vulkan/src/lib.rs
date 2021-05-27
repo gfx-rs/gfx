@@ -834,10 +834,10 @@ struct DeviceExtensionFunctions {
     #[cfg(unix)]
     external_memory_fd: Option<khr::ExternalMemoryFd>,
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    image_drm_format_modifier: Option<vk::ExtImageDrmFormatModifierFn>,
-    #[cfg(unix)]
     // The extension does not have its own functions.
     external_memory_dma_buf: Option<()>,
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    image_drm_format_modifier: Option<vk::ExtImageDrmFormatModifierFn>,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.
