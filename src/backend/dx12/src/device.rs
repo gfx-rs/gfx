@@ -3802,11 +3802,17 @@ impl d::Device<B> for Device {
     }
 
     fn start_capture(&self) {
-        //TODO
+        unsafe {
+            self.render_doc
+                .start_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+        }
     }
 
     fn stop_capture(&self) {
-        //TODO
+        unsafe {
+            self.render_doc
+                .end_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+        }
     }
 }
 

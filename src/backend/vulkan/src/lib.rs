@@ -28,6 +28,8 @@ extern crate objc;
 
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::Entry;
+#[cfg(feature = "use-rtld-next")]
+type Entry = ash::EntryCustom<()>;
 use ash::{
     extensions::{ext, khr, nv::MeshShader},
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
@@ -53,9 +55,6 @@ use std::{
     thread, unreachable,
 };
 
-#[cfg(feature = "use-rtld-next")]
-use ash::EntryCustom;
-
 mod command;
 mod conv;
 mod device;
@@ -72,10 +71,10 @@ const ROUGH_MAX_ATTACHMENT_COUNT: usize = 5;
 
 pub struct RawInstance {
     inner: ash::Instance,
+    handle_is_external: bool,
     debug_messenger: Option<DebugMessenger>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
     display: Option<khr::Display>,
-    pub render_doc_entry: Result<RenderDocEntry, String>,
 }
 
 pub enum DebugMessenger {
@@ -97,7 +96,10 @@ impl Drop for RawInstance {
                 }
                 None => {}
             }
-            self.inner.destroy_instance(None);
+
+            if !self.handle_is_external {
+                self.inner.destroy_instance(None);
+            }
         }
     }
 }
@@ -147,27 +149,13 @@ impl Into<Version> for u32 {
     }
 }
 
-#[repr(C)]
-pub struct RenderDocEntry {
-    api: renderdoc_sys::RENDERDOC_API_1_4_1,
-    lib: libloading::Library,
-}
-
-unsafe impl Send for RenderDocEntry {}
-
-unsafe impl Sync for RenderDocEntry {}
-
 pub struct Instance {
     pub raw: Arc<RawInstance>,
 
     /// Supported extensions of this instance.
     pub extensions: Vec<&'static CStr>,
 
-    #[cfg(not(feature = "use-rtld-next"))]
     pub entry: Entry,
-
-    #[cfg(feature = "use-rtld-next")]
-    pub entry: EntryCustom<()>,
 }
 
 impl fmt::Debug for Instance {
@@ -353,62 +341,11 @@ unsafe extern "system" fn debug_report_callback(
     vk::FALSE
 }
 
-impl hal::Instance<Backend> for Instance {
-    fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
-        #[cfg(not(feature = "use-rtld-next"))]
-        let entry = match unsafe { Entry::new() } {
-            Ok(entry) => entry,
-            Err(err) => {
-                info!("Missing Vulkan entry points: {:?}", err);
-                return Err(hal::UnsupportedBackend);
-            }
-        };
-
-        #[cfg(feature = "use-rtld-next")]
-        let entry = EntryCustom::new_custom((), |_, name| unsafe {
-            libc::dlsym(libc::RTLD_NEXT, name.as_ptr())
-        });
-
-        let driver_api_version = match entry.try_enumerate_instance_version() {
-            // Vulkan 1.1+
-            Ok(Some(version)) => version.into(),
-
-            // Vulkan 1.0
-            Ok(None) => Version::V1_0,
-
-            // Ignore out of memory since it's unlikely to happen and `Instance::create` doesn't have a way to express it in the return value.
-            Err(err) if err == vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                warn!("vkEnumerateInstanceVersion returned VK_ERROR_OUT_OF_HOST_MEMORY");
-                return Err(hal::UnsupportedBackend);
-            }
-
-            Err(_) => unreachable!(),
-        };
-
-        let app_name = CString::new(name).unwrap();
-        let app_info = vk::ApplicationInfo::builder()
-            .application_name(app_name.as_c_str())
-            .application_version(version)
-            .engine_name(CStr::from_bytes_with_nul(b"gfx-rs\0").unwrap())
-            .engine_version(1)
-            .api_version({
-                // Pick the latest API version available, but don't go later than the SDK version used by `gfx_backend_vulkan`.
-                cmp::min(driver_api_version, {
-                    // This is the max Vulkan API version supported by `gfx_backend_vulkan`.
-                    //
-                    // If we want to increment this, there are some things that must be done first:
-                    //  - Audit the behavioral differences between the previous and new API versions.
-                    //  - Audit all extensions used by this backend:
-                    //    - If any were promoted in the new API version and the behavior has changed, we must handle the new behavior in addition to the old behavior.
-                    //    - If any were obsoleted in the new API version, we must implement a fallback for the new API version
-                    //    - If any are non-KHR-vendored, we must ensure the new behavior is still correct (since backwards-compatibility is not guaranteed).
-                    //
-                    // TODO: This should be replaced by `vk::HEADER_VERSION_COMPLETE` (added in `ash@6f488cd`) and this comment moved to either `README.md` or `Cargo.toml`.
-                    Version::V1_2
-                })
-                .into()
-            });
-
+impl Instance {
+    pub fn required_extensions(
+        entry: &Entry,
+        driver_api_version: Version,
+    ) -> Result<Vec<&'static CStr>, hal::UnsupportedBackend> {
         let instance_extensions = entry
             .enumerate_instance_extension_properties()
             .map_err(|e| {
@@ -416,70 +353,113 @@ impl hal::Instance<Backend> for Instance {
                 hal::UnsupportedBackend
             })?;
 
+        // Check our extensions against the available extensions
+        let mut extensions: Vec<&'static CStr> = Vec::new();
+        extensions.push(khr::Surface::name());
+
+        // Platform-specific WSI extensions
+        if cfg!(all(
+            unix,
+            not(target_os = "android"),
+            not(target_os = "macos")
+        )) {
+            extensions.push(khr::XlibSurface::name());
+            extensions.push(khr::XcbSurface::name());
+            extensions.push(khr::WaylandSurface::name());
+        }
+        if cfg!(target_os = "android") {
+            extensions.push(khr::AndroidSurface::name());
+        }
+        if cfg!(target_os = "windows") {
+            extensions.push(khr::Win32Surface::name());
+        }
+        if cfg!(target_os = "macos") {
+            extensions.push(ash::extensions::mvk::MacOSSurface::name());
+        }
+
+        extensions.push(ext::DebugUtils::name());
+        if cfg!(debug_assertions) {
+            #[allow(deprecated)]
+            extensions.push(ext::DebugReport::name());
+        }
+
+        extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+
+        // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
+        if driver_api_version == Version::V1_0 {
+            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
+        }
+
+        extensions.push(khr::Display::name());
+
+        // Only keep available extensions.
+        extensions.retain(|&ext| {
+            if instance_extensions
+                .iter()
+                .find(|inst_ext| unsafe { CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext })
+                .is_some()
+            {
+                true
+            } else {
+                info!("Unable to find extension: {}", ext.to_string_lossy());
+                false
+            }
+        });
+        Ok(extensions)
+    }
+
+    pub fn required_layers(entry: &Entry) -> Result<Vec<&'static CStr>, hal::UnsupportedBackend> {
         let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
             info!("Unable to enumerate instance layers: {:?}", e);
             hal::UnsupportedBackend
         })?;
 
-        // Check our extensions against the available extensions
-        let extensions = {
-            let mut extensions: Vec<&'static CStr> = Vec::new();
-            extensions.push(khr::Surface::name());
+        // Check requested layers against the available layers
+        let mut layers: Vec<&'static CStr> = Vec::new();
+        if cfg!(debug_assertions) {
+            layers.push(CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap());
+        }
 
-            // Platform-specific WSI extensions
-            if cfg!(all(
-                unix,
-                not(target_os = "android"),
-                not(target_os = "macos")
-            )) {
-                extensions.push(khr::XlibSurface::name());
-                extensions.push(khr::XcbSurface::name());
-                extensions.push(khr::WaylandSurface::name());
+        // Only keep available layers.
+        layers.retain(|&layer| {
+            if instance_layers
+                .iter()
+                .find(|inst_layer| unsafe {
+                    CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer
+                })
+                .is_some()
+            {
+                true
+            } else {
+                warn!("Unable to find layer: {}", layer.to_string_lossy());
+                false
             }
-            if cfg!(target_os = "android") {
-                extensions.push(khr::AndroidSurface::name());
-            }
-            if cfg!(target_os = "windows") {
-                extensions.push(khr::Win32Surface::name());
-            }
-            if cfg!(target_os = "macos") {
-                extensions.push(ash::extensions::mvk::MacOSSurface::name());
-            }
+        });
+        Ok(layers)
+    }
 
-            extensions.push(ext::DebugUtils::name());
-            if cfg!(debug_assertions) {
-                #[allow(deprecated)]
-                extensions.push(ext::DebugReport::name());
-            }
+    /// # Safety
+    /// `raw_instance` must be created using at least the extensions provided by `Instance::required_extensions()`
+    /// and the layers provided by `Instance::required_extensions()`.
+    /// `driver_api_version` must match the version used to create `raw_instance`.
+    /// `extensions` must match the extensions used to create `raw_instance`.
+    /// `raw_instance` must be manually destroyed *after* gfx-hal Instance has been dropped.
+    pub unsafe fn from_raw(
+        entry: Entry,
+        raw_instance: ash::Instance,
+        driver_api_version: Version,
+        extensions: Vec<&'static CStr>,
+    ) -> Result<Self, hal::UnsupportedBackend> {
+        Instance::inner_create(entry, raw_instance, true, driver_api_version, extensions)
+    }
 
-            extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
-
-            // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
-            if driver_api_version == Version::V1_0 {
-                extensions.push(vk::KhrStorageBufferStorageClassFn::name());
-            }
-
-            extensions.push(vk::ExtDisplaySurfaceCounterFn::name());
-            extensions.push(khr::Display::name());
-
-            // Only keep available extensions.
-            extensions.retain(|&ext| {
-                if instance_extensions
-                    .iter()
-                    .find(|inst_ext| unsafe {
-                        CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext
-                    })
-                    .is_some()
-                {
-                    true
-                } else {
-                    info!("Unable to find extension: {}", ext.to_string_lossy());
-                    false
-                }
-            });
-            extensions
-        };
-
+    fn inner_create(
+        entry: Entry,
+        instance: ash::Instance,
+        handle_is_external: bool,
+        driver_api_version: Version,
+        extensions: Vec<&'static CStr>,
+    ) -> Result<Self, hal::UnsupportedBackend> {
         if driver_api_version == Version::V1_0
             && !extensions.contains(&vk::KhrStorageBufferStorageClassFn::name())
         {
@@ -487,52 +467,12 @@ impl hal::Instance<Backend> for Instance {
             return Err(hal::UnsupportedBackend);
         }
 
-        // Check requested layers against the available layers
-        let layers = {
-            let mut layers: Vec<&'static CStr> = Vec::new();
-            if cfg!(debug_assertions) {
-                layers.push(CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap());
-            }
-
-            // Only keep available layers.
-            layers.retain(|&layer| {
-                if instance_layers
-                    .iter()
-                    .find(|inst_layer| unsafe {
-                        CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer
-                    })
-                    .is_some()
-                {
-                    true
-                } else {
-                    warn!("Unable to find layer: {}", layer.to_string_lossy());
-                    false
-                }
-            });
-            layers
-        };
-
-        let instance = {
-            let str_pointers = layers
-                .iter()
-                .chain(extensions.iter())
-                .map(|&s| {
-                    // Safe because `layers` and `extensions` entries have static lifetime.
-                    s.as_ptr()
-                })
-                .collect::<Vec<_>>();
-
-            let create_info = vk::InstanceCreateInfo::builder()
-                .flags(vk::InstanceCreateFlags::empty())
-                .application_info(&app_info)
-                .enabled_layer_names(&str_pointers[..layers.len()])
-                .enabled_extension_names(&str_pointers[layers.len()..]);
-
-            unsafe { entry.create_instance(&create_info, None) }.map_err(|e| {
-                warn!("Unable to create Vulkan instance: {:?}", e);
+        let instance_extensions = entry
+            .enumerate_instance_extension_properties()
+            .map_err(|e| {
+                info!("Unable to enumerate instance extensions: {:?}", e);
                 hal::UnsupportedBackend
-            })?
-        };
+            })?;
 
         let get_physical_device_properties = extensions
             .iter()
@@ -583,14 +523,109 @@ impl hal::Instance<Backend> for Instance {
         Ok(Instance {
             raw: Arc::new(RawInstance {
                 inner: instance,
+                handle_is_external,
                 debug_messenger,
                 get_physical_device_properties,
-                display,
-                render_doc_entry: unsafe { load_renderdoc_entrypoint() },
+                display
             }),
             extensions,
             entry,
         })
+    }
+
+    /// # Safety
+    /// `raw_physical_device` must be created from `self` (or from the inner raw handle)
+    pub unsafe fn adapter_from_raw(
+        &self,
+        raw_physical_device: vk::PhysicalDevice,
+    ) -> adapter::Adapter<Backend> {
+        physical_device::load_adapter(&self.raw, raw_physical_device)
+    }
+}
+
+impl hal::Instance<Backend> for Instance {
+    fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
+        #[cfg(not(feature = "use-rtld-next"))]
+        let entry = match unsafe { Entry::new() } {
+            Ok(entry) => entry,
+            Err(err) => {
+                info!("Missing Vulkan entry points: {:?}", err);
+                return Err(hal::UnsupportedBackend);
+            }
+        };
+
+        #[cfg(feature = "use-rtld-next")]
+        let entry = Entry::new_custom((), |_, name| unsafe {
+            libc::dlsym(libc::RTLD_NEXT, name.as_ptr())
+        });
+
+        let driver_api_version = match entry.try_enumerate_instance_version() {
+            // Vulkan 1.1+
+            Ok(Some(version)) => version.into(),
+
+            // Vulkan 1.0
+            Ok(None) => Version::V1_0,
+
+            // Ignore out of memory since it's unlikely to happen and `Instance::create` doesn't have a way to express it in the return value.
+            Err(err) if err == vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                warn!("vkEnumerateInstanceVersion returned VK_ERROR_OUT_OF_HOST_MEMORY");
+                return Err(hal::UnsupportedBackend);
+            }
+
+            Err(_) => unreachable!(),
+        };
+
+        let app_name = CString::new(name).unwrap();
+        let app_info = vk::ApplicationInfo::builder()
+            .application_name(app_name.as_c_str())
+            .application_version(version)
+            .engine_name(CStr::from_bytes_with_nul(b"gfx-rs\0").unwrap())
+            .engine_version(1)
+            .api_version({
+                // Pick the latest API version available, but don't go later than the SDK version used by `gfx_backend_vulkan`.
+                cmp::min(driver_api_version, {
+                    // This is the max Vulkan API version supported by `gfx_backend_vulkan`.
+                    //
+                    // If we want to increment this, there are some things that must be done first:
+                    //  - Audit the behavioral differences between the previous and new API versions.
+                    //  - Audit all extensions used by this backend:
+                    //    - If any were promoted in the new API version and the behavior has changed, we must handle the new behavior in addition to the old behavior.
+                    //    - If any were obsoleted in the new API version, we must implement a fallback for the new API version
+                    //    - If any are non-KHR-vendored, we must ensure the new behavior is still correct (since backwards-compatibility is not guaranteed).
+                    //
+                    // TODO: This should be replaced by `vk::HEADER_VERSION_COMPLETE` (added in `ash@6f488cd`) and this comment moved to either `README.md` or `Cargo.toml`.
+                    Version::V1_2
+                })
+                .into()
+            });
+
+        let extensions = Instance::required_extensions(&entry, driver_api_version)?;
+
+        let layers = Instance::required_layers(&entry)?;
+
+        let instance = {
+            let str_pointers = layers
+                .iter()
+                .chain(extensions.iter())
+                .map(|&s| {
+                    // Safe because `layers` and `extensions` entries have static lifetime.
+                    s.as_ptr()
+                })
+                .collect::<Vec<_>>();
+
+            let create_info = vk::InstanceCreateInfo::builder()
+                .flags(vk::InstanceCreateFlags::empty())
+                .application_info(&app_info)
+                .enabled_layer_names(&str_pointers[..layers.len()])
+                .enabled_extension_names(&str_pointers[layers.len()..]);
+
+            unsafe { entry.create_instance(&create_info, None) }.map_err(|e| {
+                warn!("Unable to create Vulkan instance: {:?}", e);
+                hal::UnsupportedBackend
+            })?
+        };
+
+        Instance::inner_create(entry, instance, false, driver_api_version, extensions)
     }
 
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
@@ -742,51 +777,6 @@ impl hal::Instance<Backend> for Instance {
     }
 }
 
-unsafe fn load_renderdoc_entrypoint() -> Result<RenderDocEntry, String> {
-    if !cfg!(debug_assertions) {
-        return Err("RenderDoc support is only enabled with 'debug_assertions'".into());
-    }
-
-    type GetApiFn = unsafe extern "C" fn(version: u32, out: *mut *mut std::ffi::c_void) -> i32;
-
-    #[cfg(windows)]
-    let renderdoc_filename = "renderdoc.dll";
-    #[cfg(all(unix, not(target_os = "android")))]
-    let renderdoc_filename = "librenderdoc.so";
-    #[cfg(target_os = "android")]
-    let renderdoc_filename = "libVkLayer_GLES_RenderDoc.so";
-
-    let renderdoc_lib = libloading::Library::new(renderdoc_filename).map_err(|e| {
-        format!(
-            "Unable to load renderdoc library '{}': {:?}",
-            renderdoc_filename, e
-        )
-    })?;
-
-    let get_api: libloading::Symbol<GetApiFn> =
-        renderdoc_lib.get(b"RENDERDOC_GetAPI\0").map_err(|e| {
-            format!(
-                "Unable to get RENDERDOC_GetAPI from renderdoc library '{}': {:?}",
-                renderdoc_filename, e
-            )
-        })?;
-    let mut obj = std::ptr::null_mut();
-    match get_api(10401, &mut obj) {
-        1 => Ok(RenderDocEntry {
-            api: *(obj as *mut renderdoc_sys::RENDERDOC_API_1_4_1),
-            lib: renderdoc_lib,
-        }),
-        return_value => Err(format!(
-            "Unable to get API from renderdoc library '{}': {}",
-            renderdoc_filename, return_value
-        )),
-    }
-    .map_err(|error| {
-        warn!("Error loading renderdoc library: {}", error);
-        error
-    })
-}
-
 #[derive(Debug, Clone)]
 pub struct QueueFamily {
     properties: vk::QueueFamilyProperties,
@@ -839,6 +829,7 @@ impl<T> ExtensionFn<T> {
 #[doc(hidden)]
 pub struct RawDevice {
     raw: ash::Device,
+    handle_is_external: bool,
     features: Features,
     instance: Arc<RawInstance>,
     extension_fns: DeviceExtensionFunctions,
@@ -858,8 +849,10 @@ impl fmt::Debug for RawDevice {
 }
 impl Drop for RawDevice {
     fn drop(&mut self) {
-        unsafe {
-            self.raw.destroy_device(None);
+        if !self.handle_is_external {
+            unsafe {
+                self.raw.destroy_device(None);
+            }
         }
     }
 }
@@ -1169,6 +1162,7 @@ pub struct Device {
     shared: Arc<RawDevice>,
     vendor_id: u32,
     valid_ash_memory_types: u32,
+    render_doc: gfx_renderdoc::RenderDoc,
     #[cfg(feature = "naga")]
     naga_options: naga::back::spv::Options,
 }
