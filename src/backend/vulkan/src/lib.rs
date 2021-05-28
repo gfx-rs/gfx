@@ -720,25 +720,7 @@ impl hal::Instance<Backend> for Instance {
                 return Err(display::DisplayPlaneSurfaceError::UnsupportedFeature);
             }
         };
-        /*
-                if !display_plane.display_mode.display.info.plane_reorder_possible && display_plane.plane.z_index != plane_stack_index
-                {
-                    error!("Requested plane on a different z index while plane reordering is unsupported on the selected Display");
-                    return Err(hal::display::DisplayPlaneSurfaceError::UnsupportedParameters);
-                }
 
-                if !display_plane.display_mode.display.info.supported_transforms.contains(&transformation)
-                {
-                    error!("Requested an unsupported transformation on the selected Display");
-                    return Err(hal::display::DisplayPlaneSurfaceError::UnsupportedParameters);
-                }
-
-                if !display_plane.supported_alpha.contains(&alpha)
-                {
-                    error!("Requested an unsupported alpha on the selected Display");
-                    return Err(hal::display::DisplayPlaneSurfaceError::UnsupportedParameters);
-                }
-        */
         let vk_surface_transform_flags = conv::map_surface_transform_flags(transformation.into());
 
         let display_surface_ci = {
@@ -753,16 +735,16 @@ impl hal::Instance<Backend> for Instance {
                 .transform(vk_surface_transform_flags);
 
             match alpha {
-                hal::display::DisplayPlaneAlpha::OPAQUE => {
+                hal::display::DisplayPlaneAlpha::Opaque => {
                     builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE)
                 }
-                hal::display::DisplayPlaneAlpha::GLOBAL(value) => builder
+                hal::display::DisplayPlaneAlpha::Global(value) => builder
                     .alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::GLOBAL)
                     .global_alpha(value),
-                hal::display::DisplayPlaneAlpha::PER_PIXEL => {
+                hal::display::DisplayPlaneAlpha::PerPixel => {
                     builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL)
                 }
-                hal::display::DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED => {
+                hal::display::DisplayPlaneAlpha::PerPixelPremultiplied => {
                     builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED)
                 }
             }

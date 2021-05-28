@@ -1646,25 +1646,25 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .supported_alpha
             .contains(ash::vk::DisplayPlaneAlphaFlagsKHR::OPAQUE)
         {
-            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::OPAQUE);
+            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::Opaque);
         }
         if display_plane_capabilities
             .supported_alpha
             .contains(ash::vk::DisplayPlaneAlphaFlagsKHR::GLOBAL)
         {
-            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::GLOBAL(1.0));
+            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::Global(1.0));
         }
         if display_plane_capabilities
             .supported_alpha
             .contains(ash::vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL)
         {
-            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::PER_PIXEL);
+            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::PerPixel);
         }
         if display_plane_capabilities
             .supported_alpha
             .contains(ash::vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED)
         {
-            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED);
+            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::PerPixelPremultiplied);
         }
 
         Ok(display::DisplayPlane {

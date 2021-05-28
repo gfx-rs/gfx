@@ -119,10 +119,10 @@ bitflags! {
 impl From<DisplayPlaneAlpha> for DisplayPlaneAlphaFlags {
     fn from(display_plane_alpha: DisplayPlaneAlpha) -> Self {
         match display_plane_alpha {
-            DisplayPlaneAlpha::OPAQUE => Self::OPAQUE,
-            DisplayPlaneAlpha::GLOBAL(_) => Self::GLOBAL,
-            DisplayPlaneAlpha::PER_PIXEL => Self::PER_PIXEL,
-            DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED => Self::PER_PIXEL_PREMULTIPLIED,
+            DisplayPlaneAlpha::Opaque => Self::OPAQUE,
+            DisplayPlaneAlpha::Global(_) => Self::GLOBAL,
+            DisplayPlaneAlpha::PerPixel => Self::PER_PIXEL,
+            DisplayPlaneAlpha::PerPixelPremultiplied => Self::PER_PIXEL_PREMULTIPLIED,
         }
     }
 }
@@ -134,34 +134,18 @@ Alpha mode used in display surface creation
 #[allow(non_camel_case_types)]
 pub enum DisplayPlaneAlpha {
     /// Specifies that the source image will be treated as opaque
-    OPAQUE,
+    Opaque,
     /// Specifies that the provided global alpha value will be applied to all pixels in the source image.
-    GLOBAL(f32),
+    Global(f32),
     /// Specifies that the alpha value will be determined by the alpha channel of the source image’s pixels. If the source format contains no alpha values, no blending will be applied. The source alpha values are not premultiplied into the source image’s other color channels.
-    PER_PIXEL,
+    PerPixel,
     /// Equivalent to PerPixel, except the source alpha values are assumed to be premultiplied into the source image’s other color channels.
-    PER_PIXEL_PREMULTIPLIED,
+    PerPixelPremultiplied,
 }
 
 impl Default for DisplayPlaneAlpha {
     fn default() -> Self {
-        Self::OPAQUE
-    }
-}
-
-// This implementation is done to ignore differences on the value in DisplayPlaneAlpha::Global
-impl PartialEq for DisplayPlaneAlpha {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (DisplayPlaneAlpha::OPAQUE, DisplayPlaneAlpha::OPAQUE) => true,
-            (DisplayPlaneAlpha::GLOBAL(_), DisplayPlaneAlpha::GLOBAL(_)) => true,
-            (DisplayPlaneAlpha::PER_PIXEL, DisplayPlaneAlpha::PER_PIXEL) => true,
-            (
-                DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED,
-                DisplayPlaneAlpha::PER_PIXEL_PREMULTIPLIED,
-            ) => true,
-            _ => false,
-        }
+        Self::Opaque
     }
 }
 
