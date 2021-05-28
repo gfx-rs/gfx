@@ -343,4 +343,7 @@ openxr_extensions! {
     (VK_KHR_EXTERNAL_SEMAPHORE, "VK_KHR_external_semaphore", 32768),
     (VK_KHR_EXTERNAL_SEMAPHORE_FD, "VK_KHR_external_semaphore_fd", 65536),
     (VK_KHR_GET_MEMORY_REQUIREMENTS2, "VK_KHR_get_memory_requirements2", 131072),
+    (VK_KHR_EXTERNAL_MEMORY_WIN32, "VK_KHR_external_memory_win32", 262144), // 2**18
+    (VK_KHR_EXTERNAL_FENCE_WIN32, "VK_KHR_external_fence_win32", 524288), // 2**19
+    (VK_KHR_EXTERNAL_SEMAPHORE_WIN32, "VK_KHR_external_semaphore_win32", 1048576),
 }
