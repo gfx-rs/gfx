@@ -212,28 +212,56 @@ impl Instance {
     }
 
     pub(crate) fn add_required_instance_extensions(&self, extensions: &mut Vec<&CStr>) {
+        let mut failed_extensions = Vec::new();
+
         for ext in &self.required_instance_extension_properties {
             if !extensions.iter().any(|&e| e == ext.as_c_str()) {
-                println!("ADD INSTANCE EXTENSION! {:?}", ext);
-                extensions.push(
-                    OpenXRExtension::from_c_string(ext)
-                        .expect("Unknown wgpu/OpenXR extension, add to openxr_extensions! macro")
-                        .to_c_str(),
-                ); // FIXME wrap error more nicely - test it with removing some extension
+                match OpenXRExtension::from_c_string(ext) {
+                    Ok(ext) => {
+                        println!("Adding an instance extension {:?}", ext);
+                        extensions.push(ext.to_c_str())
+                    }
+                    Err(_) => failed_extensions.push(ext.as_c_str()),
+                }
             }
+        }
+
+        if failed_extensions.len() > 0 {
+            for extension in failed_extensions {
+                println!(
+                    "(Xrbevy) doesn't recognize a required extension: {:?}",
+                    extension
+                );
+            }
+
+            panic!("Unknown xrbevy instance extensions detected. Please submit an issue");
         }
     }
 
     pub(crate) fn add_required_device_extensions(&self, extensions: &mut Vec<&CStr>) {
+        let mut failed_extensions = Vec::new();
+
         for ext in &self.required_device_extension_properties {
             if !extensions.iter().any(|&e| e == ext.as_c_str()) {
-                println!("ADD DEVICE EXTENSION! {:?}", ext);
-                extensions.push(
-                    OpenXRExtension::from_c_string(ext)
-                        .expect("Unknown wgpu/OpenXR extension, add to openxr_extensions! macro")
-                        .to_c_str(),
-                ); // FIXME same as above
+                match OpenXRExtension::from_c_string(ext) {
+                    Ok(ext) => {
+                        println!("Adding a device extension {:?}", ext);
+                        extensions.push(ext.to_c_str())
+                    }
+                    Err(_) => failed_extensions.push(ext.as_c_str()),
+                }
             }
+        }
+
+        if failed_extensions.len() > 0 {
+            for extension in failed_extensions {
+                println!(
+                    "(Xrbevy) doesn't recognize a required extension: {:?}",
+                    extension
+                );
+            }
+
+            panic!("Unknown xrbevy device extensions detected. Please submit an issue");
         }
     }
 
