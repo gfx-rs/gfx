@@ -375,4 +375,6 @@ openxr_extensions! {
     (VK_KHR_EXTERNAL_FENCE_WIN32, "VK_KHR_external_fence_win32", 524288), // 2**19
     (VK_KHR_EXTERNAL_SEMAPHORE_WIN32, "VK_KHR_external_semaphore_win32", 1048576),
     (VK_NV_EXTERNAL_MEMORY_CAPABILITIES, "VK_NV_external_memory_capabilities", 2097152),
+    (VK_KHR_WIN32_KEYED_MUTEX, "VK_KHR_win32_keyed_mutex", 4194304),
+    (VK_EXT_DEBUG_MARKER, "VK_EXT_debug_marker", 8388608), // 2**23
 }
