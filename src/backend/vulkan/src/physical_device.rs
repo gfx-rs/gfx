@@ -833,7 +833,7 @@ impl PhysicalDevice {
         }
     }
 
-    fn enabled_extensions(
+    pub fn enabled_extensions(
         &self,
         requested_features: Features,
     ) -> Result<Vec<&'static CStr>, CreationError> {
