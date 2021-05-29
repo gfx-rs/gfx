@@ -1011,7 +1011,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         _display: &'a display::DisplayMode<crate::Backend>,
         _plane: &'a display::Plane,
-    ) -> Result<display::DisplayPlane<'a, crate::Backend>, display::DisplayError> {
+    ) -> Result<display::DisplayPlane<'a, crate::Backend>, hal::device::OutOfMemory> {
         unimplemented!();
     }
 }

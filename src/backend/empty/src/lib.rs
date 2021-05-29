@@ -185,7 +185,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         _display: &'a display::DisplayMode<Backend>,
         _plane: &'a display::Plane,
-    ) -> Result<display::DisplayPlane<'a, Backend>, display::DisplayError> {
+    ) -> Result<display::DisplayPlane<'a, Backend>, device::OutOfMemory> {
         unimplemented!();
     }
 }

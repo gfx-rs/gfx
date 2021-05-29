@@ -1579,14 +1579,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         display_mode: &'a display::DisplayMode<Backend>,
         plane: &'a display::Plane,
-    ) -> Result<display::DisplayPlane<'a, Backend>, display::DisplayError> {
-        let display_extension = match &self.instance.display {
-            Some(display_extension) => display_extension,
-            None => {
-                error!("Direct display feature not supported");
-                return Err(display::DisplayError::UnsupportedFeature);
-            }
-        };
+    ) -> Result<display::DisplayPlane<'a, Backend>, OutOfMemory> {
+        let display_extension = self.instance.display.as_ref().unwrap();
 
         let display_plane_capabilities = match display_extension.get_display_plane_capabilities(
             self.handle,

@@ -250,8 +250,8 @@ fn main() {
                 .create_display_plane_surface(
                     &display_plane,                      //Display plane
                     plane.z_index,                       //Z plane index
-                    display::SurfaceTransform::IDENTITY, //Surface transformation
-                    display::DisplayPlaneAlpha::OPAQUE,  //Opacity
+                    display::SurfaceTransform::Identity, //Surface transformation
+                    display::DisplayPlaneAlpha::Opaque,  //Opacity
                     display_plane.max_dst_extent,        //Image extent
                 )
                 .expect("Failed to create a surface!")

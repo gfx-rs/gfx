@@ -176,7 +176,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         display: &'a display::DisplayMode<B>,
         plane: &'a display::Plane,
-    ) -> Result<display::DisplayPlane<'a, B>, display::DisplayError>;
+    ) -> Result<display::DisplayPlane<'a, B>, device::OutOfMemory>;
 }
 
 /// The type of a physical graphics device

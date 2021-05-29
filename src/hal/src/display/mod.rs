@@ -37,15 +37,15 @@ bitflags! {
 impl From<SurfaceTransform> for SurfaceTransformFlags {
     fn from(surface_transformation: SurfaceTransform) -> Self {
         match surface_transformation {
-            SurfaceTransform::IDENTITY => Self::IDENTITY,
-            SurfaceTransform::ROTATE_90 => Self::ROTATE_90,
-            SurfaceTransform::ROTATE_180 => Self::ROTATE_180,
-            SurfaceTransform::ROTATE_270 => Self::ROTATE_270,
-            SurfaceTransform::HORIZONTAL_MIRROR => Self::HORIZONTAL_MIRROR,
-            SurfaceTransform::HORIZONTAL_MIRROR_ROTATE_90 => Self::HORIZONTAL_MIRROR_ROTATE_90,
-            SurfaceTransform::HORIZONTAL_MIRROR_ROTATE_180 => Self::HORIZONTAL_MIRROR_ROTATE_180,
-            SurfaceTransform::HORIZONTAL_MIRROR_ROTATE_270 => Self::HORIZONTAL_MIRROR_ROTATE_270,
-            SurfaceTransform::INHERIT => Self::INHERIT,
+            SurfaceTransform::Identity => Self::IDENTITY,
+            SurfaceTransform::Rotate90 => Self::ROTATE_90,
+            SurfaceTransform::Rotate180 => Self::ROTATE_180,
+            SurfaceTransform::Rotate270 => Self::ROTATE_270,
+            SurfaceTransform::HorizontalMirror => Self::HORIZONTAL_MIRROR,
+            SurfaceTransform::HorizontalMirrorRotate90 => Self::HORIZONTAL_MIRROR_ROTATE_90,
+            SurfaceTransform::HorizontalMirrorRotate180 => Self::HORIZONTAL_MIRROR_ROTATE_180,
+            SurfaceTransform::HorizontalMirrorRotate270 => Self::HORIZONTAL_MIRROR_ROTATE_270,
+            SurfaceTransform::Inherit => Self::INHERIT,
         }
     }
 }
@@ -57,27 +57,27 @@ List of the hardware display transformations
 */
 pub enum SurfaceTransform {
     /// Specify that image content is presented without being transformed.
-    IDENTITY,
+    Identity,
     /// Specify that image content is rotated 90 degrees clockwise.
-    ROTATE_90,
+    Rotate90,
     /// Specify that image content is rotated 180 degrees clockwise.
-    ROTATE_180,
+    Rotate180,
     /// Specify that image content is rotated 270 degrees clockwise.
-    ROTATE_270,
+    Rotate270,
     /// Specify that image content is mirrored horizontally.
-    HORIZONTAL_MIRROR,
+    HorizontalMirror,
     /// Specify that image content is mirrored horizontally, then rotated 90 degrees clockwise.
-    HORIZONTAL_MIRROR_ROTATE_90,
+    HorizontalMirrorRotate90,
     /// Specify that image content is mirrored horizontally, then rotated 180 degrees clockwise.
-    HORIZONTAL_MIRROR_ROTATE_180,
+    HorizontalMirrorRotate180,
     /// Specify that image content is mirrored horizontally, then rotated 270 degrees clockwise.
-    HORIZONTAL_MIRROR_ROTATE_270,
+    HorizontalMirrorRotate270,
     /// Specify that the presentation transform is not specified, and is instead determined by platform-specific considerations and mechanisms outside Vulkan.
-    INHERIT,
+    Inherit,
 }
 impl Default for SurfaceTransform {
     fn default() -> Self {
-        Self::IDENTITY
+        Self::Identity
     }
 }
 
@@ -183,9 +183,6 @@ pub enum DisplayPlaneSurfaceError {
     /// Out of either host or device memory.
     #[error(transparent)]
     OutOfMemory(#[from] crate::device::OutOfMemory),
-    /// Unsupported resolution and refresh rate combination
-    #[error("Unsupported parameters used")]
-    UnsupportedParameters,
 
     /// Unsupported feature
     #[error("Unsupported feature")]
