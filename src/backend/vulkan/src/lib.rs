@@ -73,7 +73,7 @@ pub struct RawInstance {
     inner: ash::Instance,
     handle_is_external: bool,
     debug_messenger: Option<DebugMessenger>,
-    get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
+    get_physical_device_properties: Option<ExtensionFn<vk::KhrGetPhysicalDeviceProperties2Fn>>,
     display: Option<khr::Display>,
     external_memory_capabilities: Option<ExtensionFn<vk::KhrExternalMemoryCapabilitiesFn>>,
 }
@@ -485,16 +485,20 @@ impl Instance {
                 hal::UnsupportedBackend
             })?;
 
-        let get_physical_device_properties = extensions
+        let get_physical_device_properties = if driver_api_version >= Version::V1_1 {
+            Some(ExtensionFn::Promoted)
+        } else {
+            extensions
             .iter()
             .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
             .map(|_| {
-                vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| unsafe {
+                ExtensionFn::Extension(vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| unsafe {
                     std::mem::transmute(
                         entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
                     )
-                })
-            });
+                }))
+            })
+        };
 
         let display = extensions
             .iter()

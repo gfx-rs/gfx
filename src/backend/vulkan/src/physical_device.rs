@@ -679,10 +679,21 @@ impl PhysicalDeviceInfo {
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
-            unsafe {
-                get_device_properties
-                    .get_physical_device_features2_khr(device, &mut features2 as *mut _);
+            match get_device_properties {
+                ExtensionFn::Promoted=>{
+                    use ash::version::InstanceV1_1;
+                    unsafe {
+                        instance.inner.get_physical_device_features2(device, &mut features2 );
+                    }
+                }
+                ExtensionFn::Extension(get_device_properties)=>{
+                    unsafe {
+                        get_device_properties
+                            .get_physical_device_features2_khr(device, &mut features2 as *mut _);
+                    }
+                }
             }
+
             features2.features
         } else {
             unsafe { instance.inner.get_physical_device_features(device) }
@@ -1683,16 +1694,26 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             let mut memory_host_properties =
                 vk::PhysicalDeviceExternalMemoryHostPropertiesEXT::builder();
 
-            unsafe {
-                get_physical_device_properties.get_physical_device_properties2_khr(
-                    self.handle,
-                    &mut vk::PhysicalDeviceProperties2::builder()
+            let mut physical_device_properties2 = vk::PhysicalDeviceProperties2::builder()
                         .push_next(&mut descriptor_indexing_properties)
                         .push_next(&mut mesh_shader_properties)
                         .push_next(&mut sampler_reduction_properties)
                         .push_next(&mut memory_host_properties)
-                        .build() as *mut _,
-                );
+                        .build();
+
+            match get_physical_device_properties {
+                ExtensionFn::Promoted=>{
+                    use ash::version::InstanceV1_1;
+                    unsafe {
+                        self.instance.inner.get_physical_device_properties2(self.handle, &mut physical_device_properties2 );
+                    }
+                }
+                ExtensionFn::Extension(get_physical_device_properties)=>{
+                    unsafe {
+                        get_physical_device_properties
+                            .get_physical_device_properties2_khr(self.handle,&mut physical_device_properties2);
+                    }
+                }
             }
 
             descriptor_indexing_capabilities = hal::DescriptorIndexingProperties {
