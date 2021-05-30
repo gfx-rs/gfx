@@ -592,7 +592,7 @@ impl hal::Instance<Backend> for Instance {
                 devices = vec![vk_physical_device];
             }
             #[cfg(not(feature = "use-openxr"))]
-            panic!("Meh");
+            unimplemented!("This code path should not trigger");
         } else {
             devices = match unsafe { self.raw.inner.enumerate_physical_devices() } {
                 Ok(devices) => devices,

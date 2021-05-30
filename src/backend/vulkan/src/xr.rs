@@ -56,7 +56,14 @@ pub enum Error {
 #[cfg(feature = "use-openxr")]
 impl OpenXR {
     pub fn configure(instance: openxr::Instance) -> Result<OpenXR, Error> {
-        let _instance_props = instance.properties().unwrap();
+        let instance_props = instance.properties().unwrap();
+        println!(
+            "OpenXR instance: runtime={:?}, version={}.{}.{}",
+            instance_props.runtime_name,
+            instance_props.runtime_version.major(),
+            instance_props.runtime_version.minor(),
+            instance_props.runtime_version.patch()
+        );
 
         let system = instance
             .system(openxr::FormFactor::HEAD_MOUNTED_DISPLAY)
@@ -66,38 +73,13 @@ impl OpenXR {
             .graphics_requirements::<openxr::Vulkan>(system)
             .unwrap();
 
-        let required_device_extension_properties = instance
-            .vulkan_device_extensions(system)
-            .unwrap()
-            .split(' ')
-            .map(|x| CString::new(x).unwrap())
-            .collect::<Vec<_>>();
-
-        let required_instance_extension_properties = instance
-            .vulkan_instance_extensions(system)
-            .unwrap()
-            .split(' ')
-            .map(|x| CString::new(x).unwrap())
-            .collect::<Vec<_>>();
-
         INSTANCE_SET.store(true, Ordering::SeqCst);
-
-        /*
-        println!(
-            "REQUIRED INSTANCE EXTENSIONS {:#?}",
-            required_instance_extension_properties
-        );
-        println!(
-            "REQUIRED DEVICE EXTENSIONS {:#?}",
-            required_device_extension_properties
-        );
-        */
 
         *INSTANCE.lock().unwrap() = Some(Instance {
             instance,
             system,
-            required_device_extension_properties,
-            required_instance_extension_properties,
+            required_device_extension_properties: Vec::new(),
+            required_instance_extension_properties: Vec::new(),
             requirements,
             space: None,
             session: None,
@@ -166,12 +148,28 @@ pub(crate) fn in_use() -> bool {
 
 #[cfg(feature = "use-openxr")]
 impl Instance {
-    pub(crate) fn get_device(&self, vk_instance: vk::Instance) -> vk::PhysicalDevice {
+    pub(crate) fn get_device(&mut self, vk_instance: vk::Instance) -> vk::PhysicalDevice {
         let vk_physical_device = vk::PhysicalDevice::from_raw(
             self.instance
                 .vulkan_graphics_device(self.system, vk_instance.as_raw() as _)
                 .unwrap() as _,
         );
+
+        self.required_device_extension_properties = self
+            .instance
+            .vulkan_device_extensions(self.system)
+            .unwrap()
+            .split(' ')
+            .map(|x| CString::new(x).unwrap())
+            .collect::<Vec<_>>();
+
+        self.required_instance_extension_properties = self
+            .instance
+            .vulkan_instance_extensions(self.system)
+            .unwrap()
+            .split(' ')
+            .map(|x| CString::new(x).unwrap())
+            .collect::<Vec<_>>();
 
         vk_physical_device
     }
