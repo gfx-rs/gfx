@@ -753,7 +753,7 @@ impl PhysicalDevice {
         };
 
         let display_control = if enabled_extensions.contains(&vk::ExtDisplayControlFn::name()) {
-            Some(ExtensionFn::Extension(vk::ExtDisplayControlFn::load(
+            Some(vk::ExtDisplayControlFn::load(
                 |name| {
                     std::mem::transmute(
                         self.instance
@@ -761,7 +761,7 @@ impl PhysicalDevice {
                             .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
                     )
                 },
-            )))
+            ))
         } else {
             None
         };

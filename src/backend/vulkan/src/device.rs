@@ -1872,7 +1872,7 @@ impl d::Device<B> for super::Device {
         power_state: &hal::display::control::PowerState,
     ) -> Result<(), hal::display::control::DisplayControlError> {
         let display_control_extension = match self.shared.extension_fns.display_control {
-            Some(super::ExtensionFn::Extension(ref display_control_extension)) => {
+            Some(ref display_control_extension) => {
                 display_control_extension
             }
             _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
@@ -1907,7 +1907,7 @@ impl d::Device<B> for super::Device {
         fence: &mut <B as hal::Backend>::Fence,
     ) -> Result<(), hal::display::control::DisplayControlError> {
         let display_control_extension = match self.shared.extension_fns.display_control {
-            Some(super::ExtensionFn::Extension(ref display_control_extension)) => {
+            Some(ref display_control_extension) => {
                 display_control_extension
             }
             _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
@@ -1948,7 +1948,7 @@ impl d::Device<B> for super::Device {
         fence: &mut <B as hal::Backend>::Fence,
     ) -> Result<(), hal::display::control::DisplayControlError> {
         let display_control_extension = match self.shared.extension_fns.display_control {
-            Some(super::ExtensionFn::Extension(ref display_control_extension)) => {
+            Some(ref display_control_extension) => {
                 display_control_extension
             }
             _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
