@@ -1934,7 +1934,10 @@ impl d::Device<B> for super::Device {
             vk::Result::ERROR_FEATURE_NOT_PRESENT => {
                 Err(hal::display::DisplayControlError::UnsupportedFeature)
             } // This is a non-standard error returned on Linux Intel Haswell
-            err => {error!("Unexpected error: {:#?}", err);Err(hal::display::DisplayControlError::UnsupportedFeature)},
+            err => {
+                error!("Unexpected error: {:#?}", err);
+                Err(hal::display::DisplayControlError::UnsupportedFeature)
+            }
         }
     }
 

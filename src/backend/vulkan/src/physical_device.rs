@@ -803,7 +803,7 @@ impl PhysicalDevice {
                 extension_fns: DeviceExtensionFunctions {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
-                    display_control
+                    display_control,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
                     || self
@@ -1424,13 +1424,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
-        let display_properties =
-            match display_extension.get_physical_device_display_properties(self.handle) {
-                Ok(display_properties) => display_properties,
-                Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
-                Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
-                Err(err) =>panic!("Unexpected error on `get_physical_device_display_properties`: {:#?}",err),
-            };
+        let display_properties = match display_extension
+            .get_physical_device_display_properties(self.handle)
+        {
+            Ok(display_properties) => display_properties,
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
+            Err(err) => panic!(
+                "Unexpected error on `get_physical_device_display_properties`: {:#?}",
+                err
+            ),
+        };
 
         let mut displays = Vec::new();
         for display_property in display_properties {
@@ -1469,8 +1473,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             {
                 Ok(display_modes) => display_modes,
                 Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
-                Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
-                Err(err) =>panic!("Unexpected error on `get_display_mode_properties`: {:#?}",err),
+                Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                    return Err(OutOfMemory::Device.into())
+                }
+                Err(err) => panic!(
+                    "Unexpected error on `get_display_mode_properties`: {:#?}",
+                    err
+                ),
             }
             .iter()
             .map(|display_mode_properties| display::DisplayMode {
@@ -1514,9 +1523,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         .get_display_plane_supported_displays(self.handle, index as u32)
                     {
                         Ok(compatible_displays) => compatible_displays,
-                        Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
-                        Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
-                        Err(err) =>panic!("Unexpected error on `get_display_plane_supported_displays`: {:#?}",err),
+                        Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                            return Err(OutOfMemory::Host.into())
+                        }
+                        Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                            return Err(OutOfMemory::Device.into())
+                        }
+                        Err(err) => panic!(
+                            "Unexpected error on `get_display_plane_supported_displays`: {:#?}",
+                            err
+                        ),
                     };
                     if compatible_displays.contains(&display.handle.0) {
                         planes.push(display::Plane {
@@ -1529,7 +1545,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
-            Err(err) =>panic!("Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",err),
+            Err(err) => panic!(
+                "Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",
+                err
+            ),
         }
     }
 
@@ -1570,8 +1589,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
-            Err(vk::Result::ERROR_INITIALIZATION_FAILED) => return Err(display::DisplayModeError::UnsupportedDisplayMode.into()),
-            Err(err) =>panic!("Unexpected error on `create_display_mode`: {:#?}",err),
+            Err(vk::Result::ERROR_INITIALIZATION_FAILED) => {
+                return Err(display::DisplayModeError::UnsupportedDisplayMode.into())
+            }
+            Err(err) => panic!("Unexpected error on `create_display_mode`: {:#?}", err),
         }
     }
 
@@ -1590,7 +1611,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             Ok(display_plane_capabilities) => display_plane_capabilities,
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
-            Err(err) =>panic!("Unexpected error on `get_display_plane_capabilities`: {:#?}",err),
+            Err(err) => panic!(
+                "Unexpected error on `get_display_plane_capabilities`: {:#?}",
+                err
+            ),
         };
 
         let mut supported_alpha_capabilities = Vec::new();

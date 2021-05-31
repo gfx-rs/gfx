@@ -527,7 +527,7 @@ impl Instance {
                 handle_is_external,
                 debug_messenger,
                 get_physical_device_properties,
-                display
+                display,
             }),
             extensions,
             entry,
@@ -755,10 +755,13 @@ impl hal::Instance<Backend> for Instance {
         let surface = match display_extension
             .create_display_plane_surface(&display_surface_ci, None)
         {
-            Ok(surface)=>surface,
+            Ok(surface) => surface,
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
-            err =>panic!("Unexpected error on `create_display_plane_surface`: {:#?}",err)
+            err => panic!(
+                "Unexpected error on `create_display_plane_surface`: {:#?}",
+                err
+            ),
         };
 
         Ok(self.create_surface_from_vk_surface_khr(surface))
