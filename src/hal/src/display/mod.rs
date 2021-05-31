@@ -6,6 +6,8 @@ use crate::{
     window::{Extent2D, Offset2D},
     Backend,
 };
+use std::ops::Range;
+
 pub mod control;
 
 bitflags! {
@@ -170,10 +172,6 @@ pub enum DisplayModeError {
     /// Unsupported resolution and refresh rate combination
     #[error("Unsupported resolution and refresh rate combination")]
     UnsupportedDisplayMode,
-
-    /// Unsupported feature
-    #[error("Unsupported feature")]
-    UnsupportedFeature,
 }
 
 /// Error occurring while creating a display plane surface.
@@ -236,20 +234,12 @@ pub struct DisplayPlane<'a, B: Backend> {
     pub plane: &'a Plane,
     /// Supported alpha capabilities
     pub supported_alpha: Vec<DisplayPlaneAlpha>,
-    /// The minimum source rectangle offset supported by this plane using the specified mode.
-    pub min_src_position: Offset2D,
-    /// The maximum source rectangle offset supported by this plane using the specified mode. The x and y components of max_src_position must each be greater than or equal to the x and y components of min_src_position, respectively.
-    pub max_src_position: Offset2D,
-    /// The minimum source rectangle size supported by this plane using the specified mode.
-    pub min_src_extent: Extent2D,
-    /// The maximum source rectangle size supported by this plane using the specified mode.
-    pub max_src_extent: Extent2D,
-    /// Same as min_src_position. but applied to destination.
-    pub min_dst_position: Offset2D,
-    /// Same as max_src_position. but applied to destination.
-    pub max_dst_position: Offset2D,
-    /// Same as min_src_extent. but applied to destination.
-    pub min_dst_extent: Extent2D,
-    /// Same as max_src_extent. but applied to destination.
-    pub max_dst_extent: Extent2D,
+    /// The minimum and the maximum source rectangle offset supported by this plane using the specified mode.
+    pub src_position: Range<Offset2D>,
+    /// The minimum and maximum source rectangle size supported by this plane using the specified mode.
+    pub src_extent: Range<Extent2D>,
+    /// Same as src_position. but applied to destination.
+    pub dst_position: Range<Offset2D>,
+    /// Same as src_extent. but applied to destination.
+    pub dst_extent: Range<Extent2D>,
 }

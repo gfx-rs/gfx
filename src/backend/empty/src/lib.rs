@@ -159,16 +159,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    unsafe fn enumerate_available_displays(
+    unsafe fn enumerate_displays(
         &self,
-    ) -> Result<Vec<display::Display<Backend>>, display::DisplayError> {
+    ) -> Vec<display::Display<Backend>> {
         unimplemented!();
     }
 
     unsafe fn enumerate_compatible_planes(
         &self,
         _display: &display::Display<Backend>,
-    ) -> Result<Vec<display::Plane>, display::DisplayError> {
+    ) -> Vec<display::Plane> {
         unimplemented!();
     }
 

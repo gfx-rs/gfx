@@ -178,8 +178,7 @@ fn main() {
         let displays = unsafe {
             adapter
                 .physical_device
-                .enumerate_available_displays()
-                .expect("Failed to enumerate displays")
+                .enumerate_displays()
         };
         if displays.len() == 0 {
             panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");
@@ -195,7 +194,6 @@ fn main() {
             adapter
                 .physical_device
                 .enumerate_compatible_planes(&display)
-                .expect("Failed to enumerate compatible planes")
         };
 
         //Get the first available plane (it is granted to have at least 1 plane compatible)
@@ -252,7 +250,7 @@ fn main() {
                     plane.z_index,                       //Z plane index
                     display::SurfaceTransform::Identity, //Surface transformation
                     display::DisplayPlaneAlpha::Opaque,  //Opacity
-                    display_plane.max_dst_extent,        //Image extent
+                    display_plane.dst_extent.end,        //Image extent
                 )
                 .expect("Failed to create a surface!")
         };

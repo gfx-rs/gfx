@@ -1413,14 +1413,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         true
     }
 
-    unsafe fn enumerate_available_displays(
+    unsafe fn enumerate_displays(
         &self,
-    ) -> Result<Vec<display::Display<Backend>>, display::DisplayError> {
+    ) -> Vec<display::Display<Backend>> {
         let display_extension = match &self.instance.display {
             Some(display_extension) => display_extension,
             None => {
                 error!("Direct display feature not supported");
-                return Err(display::DisplayError::UnsupportedFeature);
+                return Vec::new();
             }
         };
 
@@ -1428,12 +1428,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .get_physical_device_display_properties(self.handle)
         {
             Ok(display_properties) => display_properties,
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
-            Err(err) => panic!(
-                "Unexpected error on `get_physical_device_display_properties`: {:#?}",
-                err
-            ),
+            Err(err)=>{
+                match err {
+                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
+                        error!("Error returned on `get_physical_device_display_properties`: {:#?}",err),
+                    err=>error!("Unexpected error on `get_physical_device_display_properties`: {:#?}",err)
+                }
+                return Vec::new();
+            }
         };
 
         let mut displays = Vec::new();
@@ -1472,14 +1474,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .get_display_mode_properties(self.handle, display_property.display)
             {
                 Ok(display_modes) => display_modes,
-                Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
-                Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                    return Err(OutOfMemory::Device.into())
+                Err(err)=>{
+                    match err {
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
+                            error!("Error returned on `get_display_mode_properties`: {:#?}",err),
+                        err=>error!("Unexpected error on `get_display_mode_properties`: {:#?}",err)
+                    }
+                    return Vec::new();
                 }
-                Err(err) => panic!(
-                    "Unexpected error on `get_display_mode_properties`: {:#?}",
-                    err
-                ),
             }
             .iter()
             .map(|display_mode_properties| display::DisplayMode {
@@ -1500,18 +1502,18 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
             displays.push(display);
         }
-        return Ok(displays);
+        return displays;
     }
 
     unsafe fn enumerate_compatible_planes(
         &self,
         display: &display::Display<Backend>,
-    ) -> Result<Vec<display::Plane>, display::DisplayError> {
+    ) -> Vec<display::Plane> {
         let display_extension = match &self.instance.display {
             Some(display_extension) => display_extension,
             None => {
                 error!("Direct display feature not supported");
-                return Err(display::DisplayError::UnsupportedFeature);
+                return Vec::new();
             }
         };
 
@@ -1523,16 +1525,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         .get_display_plane_supported_displays(self.handle, index as u32)
                     {
                         Ok(compatible_displays) => compatible_displays,
-                        Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                            return Err(OutOfMemory::Host.into())
+                        Err(err)=>{
+                            match err {
+                                vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
+                                    error!("Error returned on `get_display_plane_supported_displays`: {:#?}",err),
+                                err=>error!("Unexpected error on `get_display_plane_supported_displays`: {:#?}",err)
+                            }
+                            return Vec::new();
                         }
-                        Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                            return Err(OutOfMemory::Device.into())
-                        }
-                        Err(err) => panic!(
-                            "Unexpected error on `get_display_plane_supported_displays`: {:#?}",
-                            err
-                        ),
                     };
                     if compatible_displays.contains(&display.handle.0) {
                         planes.push(display::Plane {
@@ -1541,14 +1541,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         });
                     }
                 }
-                Ok(planes)
+                planes
             }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
-            Err(err) => panic!(
-                "Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",
-                err
-            ),
+            Err(err)=>{
+                match err {
+                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
+                        error!("Error returned on `get_physical_device_display_plane_properties`: {:#?}",err),
+                    err=>error!("Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",err)
+                }
+                Vec::new()
+            }
         }
     }
 
@@ -1558,13 +1560,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         resolution: (u32, u32),
         refresh_rate: u32,
     ) -> Result<display::DisplayMode<Backend>, display::DisplayModeError> {
-        let display_extension = match &self.instance.display {
-            Some(display_extension) => display_extension,
-            None => {
-                error!("Direct display feature not supported");
-                return Err(display::DisplayModeError::UnsupportedFeature);
-            }
-        };
+        let display_extension = self.instance.display.as_ref().unwrap();
 
         let display_mode_ci = vk::DisplayModeCreateInfoKHR::builder()
             .parameters(vk::DisplayModeParametersKHR {
@@ -1647,46 +1643,53 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             plane: &plane,
             display_mode: &display_mode,
             supported_alpha: supported_alpha_capabilities,
-            min_src_position: (
-                display_plane_capabilities.min_src_position.x,
-                display_plane_capabilities.min_src_position.x,
-            )
+            src_position: std::ops::Range {
+                start: (
+                    display_plane_capabilities.min_src_position.x,
+                    display_plane_capabilities.min_src_position.x,
+                    )
+                    .into(),
+                end: (
+                    display_plane_capabilities.max_src_position.x,
+                    display_plane_capabilities.max_src_position.x,
+                    ).into()
+            },
+            src_extent: std::ops::Range {
+                start: (
+                    display_plane_capabilities.min_src_extent.width,
+                    display_plane_capabilities.min_src_extent.height,
+                )
                 .into(),
-            max_src_position: (
-                display_plane_capabilities.max_src_position.x,
-                display_plane_capabilities.max_src_position.x,
-            )
+                end: (
+                    display_plane_capabilities.max_src_extent.width,
+                    display_plane_capabilities.max_src_extent.height,
+                )
                 .into(),
-            min_src_extent: (
-                display_plane_capabilities.min_src_extent.width,
-                display_plane_capabilities.min_src_extent.height,
-            )
+            },
+            dst_position: std::ops::Range {
+                start: (
+                    display_plane_capabilities.min_dst_position.x,
+                    display_plane_capabilities.min_dst_position.x,
+                )
                 .into(),
-            max_src_extent: (
-                display_plane_capabilities.max_src_extent.width,
-                display_plane_capabilities.max_src_extent.height,
-            )
+                end: (
+                    display_plane_capabilities.max_dst_position.x,
+                    display_plane_capabilities.max_dst_position.x,
+                )
                 .into(),
-            min_dst_position: (
-                display_plane_capabilities.min_dst_position.x,
-                display_plane_capabilities.min_dst_position.x,
-            )
+            },
+            dst_extent: std::ops::Range {
+                start: (
+                    display_plane_capabilities.min_dst_extent.width,
+                    display_plane_capabilities.min_dst_extent.height,
+                )
                 .into(),
-            max_dst_position: (
-                display_plane_capabilities.max_dst_position.x,
-                display_plane_capabilities.max_dst_position.x,
-            )
+                end: (
+                    display_plane_capabilities.max_dst_extent.width,
+                    display_plane_capabilities.max_dst_extent.height,
+                )
                 .into(),
-            min_dst_extent: (
-                display_plane_capabilities.min_dst_extent.width,
-                display_plane_capabilities.min_dst_extent.height,
-            )
-                .into(),
-            max_dst_extent: (
-                display_plane_capabilities.max_dst_extent.width,
-                display_plane_capabilities.max_dst_extent.height,
-            )
-                .into(),
+            }
         })
     }
 }

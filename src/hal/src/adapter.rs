@@ -135,9 +135,9 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # Arguments
     ///
     /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
-    unsafe fn enumerate_available_displays(
+    unsafe fn enumerate_displays(
         &self,
-    ) -> Result<Vec<display::Display<B>>, display::DisplayError>;
+    ) -> Vec<display::Display<B>>;
 
     /// Enumerate compatibles planes with the provided display.
     /// # Arguments
@@ -146,7 +146,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn enumerate_compatible_planes(
         &self,
         display: &display::Display<B>,
-    ) -> Result<Vec<display::Plane>, display::DisplayError>;
+    ) -> Vec<display::Plane>;
 
     /// Create a new display mode from a display, a resolution, a refresh_rate and the plane index.
     /// If the builtin display modes does not satisfy the requirements, this function will try to create a new one.
