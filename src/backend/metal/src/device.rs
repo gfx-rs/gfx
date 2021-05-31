@@ -308,6 +308,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 linear_tiling: format::ImageFeature::empty(),
                 optimal_tiling: format::ImageFeature::empty(),
                 buffer_features: format::BufferFeature::empty(),
+                drm_format_properties: Vec::new()
             },
         }
     }
