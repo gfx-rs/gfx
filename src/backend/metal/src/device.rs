@@ -3547,7 +3547,7 @@ impl hal::device::Device<Backend> for Device {
         _display: &display::Display<Backend>,
         _display_event: &display::control::DisplayEvent,
         _fence: &mut <Backend as hal::Backend>::Fence,
-    ) -> Result<(), display::DisplayControlError> {
+    ) -> Result<(), display::control::DisplayControlError> {
         unimplemented!()
     }
 
