@@ -1614,7 +1614,7 @@ fn validate_line_width(width: f32) {
     assert_eq!(width, 1.0);
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct FormatInfo {
     properties: f::Properties,
     sample_count_mask: u8,
@@ -1649,7 +1649,8 @@ impl FormatProperties {
 
     fn resolve(&self, idx: usize) -> FormatInfo {
         let mut guard = self.info[idx].lock();
-        if let Some(info) = *guard {
+        use std::ops::Deref;
+        if let Some(info) = guard.deref().clone() {
             return info;
         }
         let format: f::Format = unsafe { mem::transmute(idx as u32) };
@@ -1658,7 +1659,7 @@ impl FormatProperties {
             Some(format) => format,
             None => {
                 let info = FormatInfo::default();
-                *guard = Some(info);
+                *guard = Some(info.clone());
                 return info;
             }
         };
@@ -1775,7 +1776,7 @@ impl FormatProperties {
             properties,
             sample_count_mask,
         };
-        *guard = Some(info);
+        *guard = Some(info.clone());
         info
     }
 }

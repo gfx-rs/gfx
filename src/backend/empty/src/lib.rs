@@ -168,14 +168,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         unimplemented!()
     }
 
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    unsafe fn external_image_drm_format_properties(
-        &self,
-        _format: format::Format,
-    ) -> Vec<hal::external_memory::DrmFormatProperties> {
-        unimplemented!()
-    }
-
     fn features(&self) -> hal::Features {
         hal::Features::empty()
     }

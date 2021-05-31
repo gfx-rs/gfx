@@ -25,9 +25,7 @@ raw-window-handle = "0.3"
 serde = { version = "1", features = ["serde_derive"], optional = true }
 thiserror = "1"
 external_memory = { path = "../auxil/external-memory", version = "0.0.1", package = "external-memory" }
-
+drm-fourcc = {version="2.1.1",features=["serde"]}
 [dev-dependencies]
 gfx-backend-empty = { path = "../backend/empty", version = "0.8" }
 
-[target.'cfg(any(target_os = "linux",target_os = "android"))'.dependencies]
-drm-fourcc = "2.1.1"

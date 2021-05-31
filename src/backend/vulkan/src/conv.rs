@@ -674,7 +674,7 @@ pub fn map_external_memory_handle_types(
     }
     vk_flags
 }
-
+/*
 pub fn map_vk_external_memory_handle_type_flags(
     vk_image_usage: vk::FormatFeatureFlags,
 ) -> external_memory::ImageUsage {
@@ -719,4 +719,4 @@ pub fn map_vk_external_memory_handle_type_flags(
         image_usage |= external_memory::ImageUsage::SAMPLED_IMAGE_FILTER_LINEAR;
     }
     image_usage
-}
+}*/

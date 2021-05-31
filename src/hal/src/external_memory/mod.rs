@@ -5,8 +5,6 @@ pub use errors::*;
 
 pub use external_memory::*;
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-pub use drm_fourcc::*;
 
 /// Buffer or image
 #[derive(Debug)]
@@ -432,16 +430,4 @@ bitflags::bitflags! {
         /// Format can be filtered with VK_FILTER_LINEAR when being sampled
         const SAMPLED_IMAGE_FILTER_LINEAR = (1 << 12);
     }
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-#[derive(Debug)]
-/// Drm format properties
-pub struct DrmFormatProperties {
-    /// Drm format modifier.
-    pub drm_modifier: DrmModifier,
-    /// Number of memory planes each image crated with `drm_modifier` has.
-    pub plane_count: u32,
-    /// Valid image usage with the `drm_modifier`.
-    pub valid_usages: ImageUsage,
 }

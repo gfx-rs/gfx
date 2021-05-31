@@ -134,13 +134,6 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         external_memory_type: external_memory::ExternalMemoryType,
     ) -> Result<external_memory::ExternalMemoryProperties, external_memory::ExternalImageQueryError>;
 
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    /// Fetch details for a particular image format.
-    unsafe fn external_image_drm_format_properties(
-        &self,
-        format: format::Format,
-    ) -> Vec<external_memory::DrmFormatProperties>;
-
     /// Returns the features of this `PhysicalDevice`. This usually depends on the graphics API being
     /// used, as well as the actual platform underneath.
     fn features(&self) -> Features;

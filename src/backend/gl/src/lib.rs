@@ -608,6 +608,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             linear_tiling: If::TRANSFER_SRC | If::TRANSFER_DST | If::empty(),
             optimal_tiling: If::TRANSFER_SRC | If::TRANSFER_DST | If::SAMPLED,
             buffer_features: Bf::VERTEX,
+            drm_format_properties: Vec::new()
         }
     }
 
@@ -690,14 +691,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         hal::external_memory::ExternalMemoryProperties,
         hal::external_memory::ExternalImageQueryError,
     > {
-        unimplemented!()
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    unsafe fn external_image_drm_format_properties(
-        &self,
-        _format: hal::format::Format,
-    ) -> Vec<hal::external_memory::DrmFormatProperties> {
         unimplemented!()
     }
 

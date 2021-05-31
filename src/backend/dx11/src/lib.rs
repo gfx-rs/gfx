@@ -391,7 +391,8 @@ fn get_limits(feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Limits {
 fn get_format_properties(
     device: ComPtr<d3d11::ID3D11Device>,
 ) -> [format::Properties; format::NUM_FORMATS] {
-    let mut format_properties = [format::Properties::default(); format::NUM_FORMATS];
+    let mut format_properties: [format::Properties; format::NUM_FORMATS] = unsafe{std::mem::zeroed()};
+    format_properties.iter_mut().for_each(|format_properties|*format_properties = format::Properties::default());
     for (i, props) in &mut format_properties.iter_mut().enumerate().skip(1) {
         let format: format::Format = unsafe { mem::transmute(i as u32) };
 
@@ -871,7 +872,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn format_properties(&self, fmt: Option<format::Format>) -> format::Properties {
         let idx = fmt.map(|fmt| fmt as usize).unwrap_or(0);
-        self.format_properties[idx]
+        self.format_properties[idx].clone()
     }
 
     fn image_format_properties(

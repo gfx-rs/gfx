@@ -1237,12 +1237,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
-        let properties = unsafe {
-            self.instance.inner.get_physical_device_format_properties(
-                self.handle,
-                format.map_or(vk::Format::UNDEFINED, conv::map_format),
-            )
-        };
         let supports_transfer_bits = self
             .device_info
             .supports_extension(vk::KhrMaintenance1Fn::name());
@@ -1250,6 +1244,72 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let supports_sampler_filter_minmax = self
             .available_features
             .contains(Features::SAMPLER_REDUCTION);
+
+        let (properties,drm_format_properties) = unsafe {
+            match self.instance.get_physical_device_properties {
+                None=>{
+                    let format_properties = self.instance.inner.get_physical_device_format_properties(
+                        self.handle,
+                        format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                    );
+                    (format_properties,Vec::new())
+                }
+                Some(ref extension)=>{
+                    let mut drm_format_properties = vk::DrmFormatModifierPropertiesListEXT::builder().build();
+                    let mut format_properties2 = vk::FormatProperties2::builder()
+                        .push_next(&mut drm_format_properties)
+                        .build();
+
+                    match extension {
+                        ExtensionFn::Promoted=>{
+                            use ash::version::InstanceV1_1;
+                            self.instance.inner.get_physical_device_format_properties2(
+                                self.handle,
+                                format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                                &mut format_properties2,
+                            );
+                        }
+                        ExtensionFn::Extension(extension)=>{
+                            extension.get_physical_device_format_properties2_khr(
+                                self.handle,
+                                format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                                &mut format_properties2,
+                            );
+                        }
+                    }
+
+                    let raw_format_modifiers = Vec::from_raw_parts(
+                        drm_format_properties.p_drm_format_modifier_properties,
+                        drm_format_properties.drm_format_modifier_count as usize,
+                        drm_format_properties.drm_format_modifier_count as usize,
+                    );
+
+                    let format_modifiers: Vec<format::DrmFormatProperties> = raw_format_modifiers
+                        .into_iter()
+                        .filter_map(|format_modifier_properties| {
+                            let format_modifier = format::DrmModifier::from(
+                                format_modifier_properties.drm_format_modifier,
+                            );
+                            if let format::DrmModifier::Unrecognized(value) = format_modifier {
+                                error!("Unrecognized drm format modifier: {:#?}", value);
+                                None
+                            } else {
+                                Some(format::DrmFormatProperties {
+                                    drm_modifier: format_modifier,
+                                    plane_count: format_modifier_properties.drm_format_modifier_plane_count,
+                                    valid_usages: conv::map_image_features(
+                                        format_modifier_properties.drm_format_modifier_tiling_features,
+                                        supports_transfer_bits,
+                                        supports_sampler_filter_minmax
+                                    ),
+                                })
+                            }
+                        })
+                        .collect();
+                    (format_properties2.format_properties,format_modifiers)
+                }
+            }
+        };
 
         format::Properties {
             linear_tiling: conv::map_image_features(
@@ -1263,6 +1323,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 supports_sampler_filter_minmax,
             ),
             buffer_features: conv::map_buffer_features(properties.buffer_features),
+            drm_format_properties
         }
     }
 
@@ -1513,53 +1574,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 panic!("Unexpected error: {:#?}", err);
             }
         }
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    /// Get drm format properties of a image created using `yet to be written create image using drm format modifier`.
-    unsafe fn external_image_drm_format_properties(
-        &self,
-        format: format::Format,
-    ) -> Vec<external_memory::DrmFormatProperties> {
-        use ash::version::InstanceV1_1;
-
-        let mut drm_format_properties = vk::DrmFormatModifierPropertiesListEXT::builder().build();
-        let mut vk_format_properties = vk::FormatProperties2::builder()
-            .push_next(&mut drm_format_properties)
-            .build();
-
-        self.instance.inner.get_physical_device_format_properties2(
-            self.handle,
-            conv::map_format(format),
-            &mut vk_format_properties,
-        );
-
-        let format_modifiers = Vec::from_raw_parts(
-            drm_format_properties.p_drm_format_modifier_properties,
-            drm_format_properties.drm_format_modifier_count as usize,
-            drm_format_properties.drm_format_modifier_count as usize,
-        );
-
-        format_modifiers
-            .into_iter()
-            .filter_map(|format_modifier_properties| {
-                let format_modifier = external_memory::DrmModifier::from(
-                    format_modifier_properties.drm_format_modifier,
-                );
-                if let external_memory::DrmModifier::Unrecognized(value) = format_modifier {
-                    error!("Unrecognized drm format modifier: {:#?}", value);
-                    None
-                } else {
-                    Some(external_memory::DrmFormatProperties {
-                        drm_modifier: format_modifier,
-                        plane_count: format_modifier_properties.drm_format_modifier_plane_count,
-                        valid_usages: conv::map_vk_external_memory_handle_type_flags(
-                            format_modifier_properties.drm_format_modifier_tiling_features,
-                        ),
-                    })
-                }
-            })
-            .collect()
     }
 
     fn features(&self) -> Features {
