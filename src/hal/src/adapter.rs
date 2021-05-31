@@ -9,12 +9,10 @@
 //! of that [backend][crate::Backend].
 
 use crate::{
-    device, format, image, memory,
+    device, display, format, image, memory,
     queue::{QueueGroup, QueuePriority},
     Backend, Features, PhysicalDeviceProperties,
 };
-
-use crate::display;
 
 use std::{any::Any, fmt};
 

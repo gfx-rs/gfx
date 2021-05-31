@@ -6,8 +6,7 @@ use crate::{
     window::{Extent2D, Offset2D},
     Backend,
 };
-pub mod display_control;
-pub use display_control::*;
+pub mod control;
 
 bitflags! {
     /**

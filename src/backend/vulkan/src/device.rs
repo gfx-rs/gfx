@@ -1869,19 +1869,19 @@ impl d::Device<B> for super::Device {
     unsafe fn set_display_power_state(
         &self,
         display: &hal::display::Display<B>,
-        power_state: &hal::display::PowerState,
-    ) -> Result<(), hal::display::DisplayControlError> {
+        power_state: &hal::display::control::PowerState,
+    ) -> Result<(), hal::display::control::DisplayControlError> {
         let display_control_extension = match &self.shared.extension_fns.display_control {
             Some(super::ExtensionFn::Extension(display_control_extension)) => {
                 display_control_extension
             }
-            _ => return Err(hal::display::DisplayControlError::UnsupportedFeature),
+            _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
         };
 
         let vk_power_state = match power_state {
-            hal::display::PowerState::Off => vk::DisplayPowerStateEXT::OFF,
-            hal::display::PowerState::Suspend => vk::DisplayPowerStateEXT::SUSPEND,
-            hal::display::PowerState::On => vk::DisplayPowerStateEXT::ON,
+            hal::display::control::PowerState::Off => vk::DisplayPowerStateEXT::OFF,
+            hal::display::control::PowerState::Suspend => vk::DisplayPowerStateEXT::SUSPEND,
+            hal::display::control::PowerState::On => vk::DisplayPowerStateEXT::ON,
         };
 
         let vk_power_info = vk::DisplayPowerInfoEXT::builder()
@@ -1895,7 +1895,7 @@ impl d::Device<B> for super::Device {
         ) {
             vk::Result::SUCCESS => Ok(()),
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                Err(hal::display::DisplayControlError::OutOfHostMemory)
+                Err(hal::display::control::DisplayControlError::OutOfHostMemory)
             }
             _ => unreachable!(),
         }
@@ -1903,18 +1903,18 @@ impl d::Device<B> for super::Device {
 
     unsafe fn register_device_event(
         &self,
-        device_event: &hal::display::DeviceEvent,
+        device_event: &hal::display::control::DeviceEvent,
         fence: &mut <B as hal::Backend>::Fence,
-    ) -> Result<(), hal::display::DisplayControlError> {
+    ) -> Result<(), hal::display::control::DisplayControlError> {
         let display_control_extension = match &self.shared.extension_fns.display_control {
             Some(super::ExtensionFn::Extension(display_control_extension)) => {
                 display_control_extension
             }
-            _ => return Err(hal::display::DisplayControlError::UnsupportedFeature),
+            _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
         };
 
         let vk_device_event = match device_event {
-            hal::display::DeviceEvent::DisplayHotplug => vk::DeviceEventTypeEXT::DISPLAY_HOTPLUG,
+            hal::display::control::DeviceEvent::DisplayHotplug => vk::DeviceEventTypeEXT::DISPLAY_HOTPLUG,
         };
 
         let vk_device_event_info = vk::DeviceEventInfoEXT::builder()
@@ -1929,14 +1929,14 @@ impl d::Device<B> for super::Device {
         ) {
             vk::Result::SUCCESS => Ok(()),
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                Err(hal::display::DisplayControlError::OutOfHostMemory)
+                Err(hal::display::control::DisplayControlError::OutOfHostMemory)
             }
             vk::Result::ERROR_FEATURE_NOT_PRESENT => {
-                Err(hal::display::DisplayControlError::UnsupportedFeature)
+                Err(hal::display::control::DisplayControlError::UnsupportedFeature)
             } // This is a non-standard error returned on Linux Intel Haswell
             err => {
                 error!("Unexpected error: {:#?}", err);
-                Err(hal::display::DisplayControlError::UnsupportedFeature)
+                Err(hal::display::control::DisplayControlError::UnsupportedFeature)
             }
         }
     }
@@ -1944,18 +1944,18 @@ impl d::Device<B> for super::Device {
     unsafe fn register_display_event(
         &self,
         display: &hal::display::Display<B>,
-        display_event: &hal::display::DisplayEvent,
+        display_event: &hal::display::control::DisplayEvent,
         fence: &mut <B as hal::Backend>::Fence,
-    ) -> Result<(), hal::display::DisplayControlError> {
+    ) -> Result<(), hal::display::control::DisplayControlError> {
         let display_control_extension = match &self.shared.extension_fns.display_control {
             Some(super::ExtensionFn::Extension(display_control_extension)) => {
                 display_control_extension
             }
-            _ => return Err(hal::display::DisplayControlError::UnsupportedFeature),
+            _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
         };
 
         let vk_display_event = match display_event {
-            hal::display::DisplayEvent::FirstPixelOut => vk::DisplayEventTypeEXT::FIRST_PIXEL_OUT,
+            hal::display::control::DisplayEvent::FirstPixelOut => vk::DisplayEventTypeEXT::FIRST_PIXEL_OUT,
         };
 
         let vk_display_event_info = vk::DisplayEventInfoEXT::builder()
@@ -1971,7 +1971,7 @@ impl d::Device<B> for super::Device {
         ) {
             vk::Result::SUCCESS => Ok(()),
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                Err(hal::display::DisplayControlError::OutOfHostMemory)
+                Err(hal::display::control::DisplayControlError::OutOfHostMemory)
             }
             _ => unreachable!(),
         }

@@ -718,23 +718,23 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn set_display_power_state(
         &self,
         display: &display::Display<B>,
-        power_state: &display::PowerState,
-    ) -> Result<(), display::DisplayControlError>;
+        power_state: &display::control::PowerState,
+    ) -> Result<(), display::control::DisplayControlError>;
 
     /// Register device event
     unsafe fn register_device_event(
         &self,
-        device_event: &display::DeviceEvent,
+        device_event: &display::control::DeviceEvent,
         fence: &mut B::Fence,
-    ) -> Result<(), display::DisplayControlError>;
+    ) -> Result<(), display::control::DisplayControlError>;
 
     /// Register display event
     unsafe fn register_display_event(
         &self,
         display: &display::Display<B>,
-        display_event: &display::DisplayEvent,
+        display_event: &display::control::DisplayEvent,
         fence: &mut B::Fence,
-    ) -> Result<(), display::DisplayControlError>;
+    ) -> Result<(), display::control::DisplayControlError>;
 
     /// Starts frame capture.
     fn start_capture(&self);

@@ -607,25 +607,25 @@ impl device::Device<Backend> for Device {
     unsafe fn set_display_power_state(
         &self,
         _display: &display::Display<Backend>,
-        _power_state: &display::PowerState,
-    ) -> Result<(), display::DisplayControlError> {
+        _power_state: &display::control::PowerState,
+    ) -> Result<(), display::control::DisplayControlError> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn register_device_event(
         &self,
-        _device_event: &display::DeviceEvent,
+        _device_event: &display::control::DeviceEvent,
         _fence: &mut <Backend as hal::Backend>::Fence,
-    ) -> Result<(), display::DisplayControlError> {
+    ) -> Result<(), display::control::DisplayControlError> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn register_display_event(
         &self,
         _display: &display::Display<Backend>,
-        _display_event: &display::DisplayEvent,
+        _display_event: &display::control::DisplayEvent,
         _fence: &mut <Backend as hal::Backend>::Fence,
-    ) -> Result<(), display::DisplayControlError> {
+    ) -> Result<(), display::control::DisplayControlError> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 

@@ -3779,25 +3779,25 @@ impl d::Device<B> for Device {
     unsafe fn set_display_power_state(
         &self,
         _display: &display::Display<B>,
-        _power_state: &display::PowerState,
-    ) -> Result<(), display::DisplayControlError> {
+        _power_state: &display::control::PowerState,
+    ) -> Result<(), display::control::DisplayControlError> {
         unimplemented!()
     }
 
     unsafe fn register_device_event(
         &self,
-        _device_event: &display::DeviceEvent,
+        _device_event: &display::control::DeviceEvent,
         _fence: &mut <B as hal::Backend>::Fence,
-    ) -> Result<(), display::DisplayControlError> {
+    ) -> Result<(), display::control::DisplayControlError> {
         unimplemented!()
     }
 
     unsafe fn register_display_event(
         &self,
         _display: &display::Display<B>,
-        _display_event: &display::DisplayEvent,
+        _display_event: &display::control::DisplayEvent,
         _fence: &mut <B as hal::Backend>::Fence,
-    ) -> Result<(), display::DisplayControlError> {
+    ) -> Result<(), display::control::DisplayControlError> {
         unimplemented!()
     }
 
