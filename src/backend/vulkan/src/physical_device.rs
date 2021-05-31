@@ -1416,8 +1416,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn enumerate_displays(
         &self,
     ) -> Vec<display::Display<Backend>> {
-        let display_extension = match &self.instance.display {
-            Some(display_extension) => display_extension,
+        let display_extension = match self.instance.display {
+            Some(ref display_extension) => display_extension,
             None => {
                 error!("Direct display feature not supported");
                 return Vec::new();
@@ -1442,7 +1442,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         for display_property in display_properties {
             let supported_transforms =
                 conv::map_vk_surface_transform_flags(display_property.supported_transforms);
-            let display_name = if display_property.display_name == std::ptr::null() {
+            let display_name = if display_property.display_name.is_null() {
                 None
             } else {
                 Some(
@@ -1509,8 +1509,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         display: &display::Display<Backend>,
     ) -> Vec<display::Plane> {
-        let display_extension = match &self.instance.display {
-            Some(display_extension) => display_extension,
+        let display_extension = match self.instance.display {
+            Some(ref display_extension) => display_extension,
             None => {
                 error!("Direct display feature not supported");
                 return Vec::new();

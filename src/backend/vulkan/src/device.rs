@@ -1871,8 +1871,8 @@ impl d::Device<B> for super::Device {
         display: &hal::display::Display<B>,
         power_state: &hal::display::control::PowerState,
     ) -> Result<(), hal::display::control::DisplayControlError> {
-        let display_control_extension = match &self.shared.extension_fns.display_control {
-            Some(super::ExtensionFn::Extension(display_control_extension)) => {
+        let display_control_extension = match self.shared.extension_fns.display_control {
+            Some(super::ExtensionFn::Extension(ref display_control_extension)) => {
                 display_control_extension
             }
             _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
@@ -1906,8 +1906,8 @@ impl d::Device<B> for super::Device {
         device_event: &hal::display::control::DeviceEvent,
         fence: &mut <B as hal::Backend>::Fence,
     ) -> Result<(), hal::display::control::DisplayControlError> {
-        let display_control_extension = match &self.shared.extension_fns.display_control {
-            Some(super::ExtensionFn::Extension(display_control_extension)) => {
+        let display_control_extension = match self.shared.extension_fns.display_control {
+            Some(super::ExtensionFn::Extension(ref display_control_extension)) => {
                 display_control_extension
             }
             _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
@@ -1947,8 +1947,8 @@ impl d::Device<B> for super::Device {
         display_event: &hal::display::control::DisplayEvent,
         fence: &mut <B as hal::Backend>::Fence,
     ) -> Result<(), hal::display::control::DisplayControlError> {
-        let display_control_extension = match &self.shared.extension_fns.display_control {
-            Some(super::ExtensionFn::Extension(display_control_extension)) => {
+        let display_control_extension = match self.shared.extension_fns.display_control {
+            Some(super::ExtensionFn::Extension(ref display_control_extension)) => {
                 display_control_extension
             }
             _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
