@@ -39,7 +39,7 @@ use ash::{
 use hal::{
     adapter,
     device::{DeviceLost, OutOfMemory},
-    image, memory,
+    display, image, memory,
     pso::PipelineStage,
     queue,
     window::{OutOfDate, PresentError, Suboptimal, SurfaceLost},
@@ -74,6 +74,7 @@ pub struct RawInstance {
     handle_is_external: bool,
     debug_messenger: Option<DebugMessenger>,
     get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
+    display: Option<khr::Display>,
 }
 
 pub enum DebugMessenger {
@@ -389,6 +390,9 @@ impl Instance {
             extensions.push(vk::KhrStorageBufferStorageClassFn::name());
         }
 
+        extensions.push(vk::ExtDisplaySurfaceCounterFn::name());
+        extensions.push(khr::Display::name());
+
         // Only keep available extensions.
         extensions.retain(|&ext| {
             if instance_extensions
@@ -482,6 +486,11 @@ impl Instance {
                 })
             });
 
+        let display = extensions
+            .iter()
+            .find(|&&ext| ext == khr::Display::name())
+            .map(|_| khr::Display::new(&entry, &instance));
+
         #[allow(deprecated)] // `DebugReport`
         let debug_messenger = {
             // make sure VK_EXT_debug_utils is available
@@ -518,6 +527,7 @@ impl Instance {
                 handle_is_external,
                 debug_messenger,
                 get_physical_device_properties,
+                display,
             }),
             extensions,
             entry,
@@ -695,6 +705,67 @@ impl hal::Instance<Backend> for Instance {
             .functor
             .destroy_surface(surface.raw.handle, None);
     }
+
+    unsafe fn create_display_plane_surface(
+        &self,
+        display_plane: &hal::display::DisplayPlane<Backend>,
+        plane_stack_index: u32,
+        transformation: hal::display::SurfaceTransform,
+        alpha: hal::display::DisplayPlaneAlpha,
+        image_extent: hal::window::Extent2D,
+    ) -> Result<window::Surface, hal::display::DisplayPlaneSurfaceError> {
+        let display_extension = match &self.raw.display {
+            Some(display_extension) => display_extension,
+            None => {
+                error!("Direct display feature not supported");
+                return Err(display::DisplayPlaneSurfaceError::UnsupportedFeature);
+            }
+        };
+        let surface_transform_flags = hal::display::SurfaceTransformFlags::from(transformation);
+        let vk_surface_transform_flags = vk::SurfaceTransformFlagsKHR::from_raw(surface_transform_flags.bits());
+
+        let display_surface_ci = {
+            let builder = vk::DisplaySurfaceCreateInfoKHR::builder()
+                .display_mode(display_plane.display_mode.handle.0)
+                .plane_index(display_plane.plane.handle)
+                .plane_stack_index(plane_stack_index)
+                .image_extent(vk::Extent2D {
+                    width: image_extent.width,
+                    height: image_extent.height,
+                })
+                .transform(vk_surface_transform_flags);
+
+            match alpha {
+                hal::display::DisplayPlaneAlpha::Opaque => {
+                    builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE)
+                }
+                hal::display::DisplayPlaneAlpha::Global(value) => builder
+                    .alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::GLOBAL)
+                    .global_alpha(value),
+                hal::display::DisplayPlaneAlpha::PerPixel => {
+                    builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL)
+                }
+                hal::display::DisplayPlaneAlpha::PerPixelPremultiplied => {
+                    builder.alpha_mode(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED)
+                }
+            }
+            .build()
+        };
+
+        let surface = match display_extension
+            .create_display_plane_surface(&display_surface_ci, None)
+        {
+            Ok(surface) => surface,
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
+            err => panic!(
+                "Unexpected error on `create_display_plane_surface`: {:#?}",
+                err
+            ),
+        };
+
+        Ok(self.create_surface_from_vk_surface_khr(surface))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -724,6 +795,7 @@ impl queue::QueueFamily for QueueFamily {
 struct DeviceExtensionFunctions {
     mesh_shaders: Option<ExtensionFn<MeshShader>>,
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
+    display_control: Option<vk::ExtDisplayControlFn>,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.
@@ -1123,4 +1195,7 @@ impl hal::Backend for Backend {
     type Semaphore = native::Semaphore;
     type Event = native::Event;
     type QueryPool = native::QueryPool;
+
+    type Display = native::Display;
+    type DisplayMode = native::DisplayMode;
 }

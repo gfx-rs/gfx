@@ -11,7 +11,7 @@ use cocoa_foundation::foundation::NSUInteger;
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use hal::{
-    adapter, buffer, device as d, format, image, memory,
+    adapter, buffer, device as d, display, format, image, memory,
     memory::Properties,
     pass,
     pool::CommandPoolCreateFlags,
@@ -547,6 +547,36 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
             ..hal::PhysicalDeviceProperties::default()
         }
+    }
+
+    unsafe fn enumerate_displays(
+        &self,
+    ) -> Vec<hal::display::Display<crate::Backend>> {
+        unimplemented!();
+    }
+
+    unsafe fn enumerate_compatible_planes(
+        &self,
+        _display: &hal::display::Display<crate::Backend>,
+    ) -> Vec<hal::display::Plane> {
+        unimplemented!();
+    }
+
+    unsafe fn create_display_mode(
+        &self,
+        _display: &hal::display::Display<crate::Backend>,
+        _resolution: (u32, u32),
+        _refresh_rate: u32,
+    ) -> Result<hal::display::DisplayMode<crate::Backend>, hal::display::DisplayModeError> {
+        unimplemented!();
+    }
+
+    unsafe fn create_display_plane<'a>(
+        &self,
+        _display: &'a hal::display::DisplayMode<crate::Backend>,
+        _plane: &'a hal::display::Plane,
+    ) -> Result<hal::display::DisplayPlane<'a, crate::Backend>, d::OutOfMemory> {
+        unimplemented!();
     }
 }
 
@@ -3494,6 +3524,31 @@ impl hal::device::Device<Backend> for Device {
         _name: &str,
     ) {
         // TODO
+    }
+
+    unsafe fn set_display_power_state(
+        &self,
+        _display: &display::Display<Backend>,
+        _power_state: &display::control::PowerState,
+    ) -> Result<(), display::control::DisplayControlError> {
+        unimplemented!()
+    }
+
+    unsafe fn register_device_event(
+        &self,
+        _device_event: &display::control::DeviceEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), display::control::DisplayControlError> {
+        unimplemented!()
+    }
+
+    unsafe fn register_display_event(
+        &self,
+        _display: &display::Display<Backend>,
+        _display_event: &display::control::DisplayEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), display::control::DisplayControlError> {
+        unimplemented!()
     }
 
     fn start_capture(&self) {

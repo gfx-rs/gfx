@@ -28,7 +28,7 @@ pub fn wasm_main() {
 }
 
 use hal::{
-    buffer, command, format as f,
+    buffer, command, display, format as f,
     format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle},
     image as i, memory as m, pass,
     pass::Subpass,
@@ -89,38 +89,7 @@ fn main() {
         "You are running the example with the empty backend, no graphical output is to be expected"
     );
 
-    let event_loop = winit::event_loop::EventLoop::new();
-
-    let wb = winit::window::WindowBuilder::new()
-        .with_min_inner_size(winit::dpi::Size::Logical(winit::dpi::LogicalSize::new(
-            64.0, 64.0,
-        )))
-        .with_inner_size(winit::dpi::Size::Physical(winit::dpi::PhysicalSize::new(
-            DIMS.width,
-            DIMS.height,
-        )))
-        .with_title("quad".to_string());
-
-    // instantiate backend
-    let window = wb.build(&event_loop).unwrap();
-
-    #[cfg(target_arch = "wasm32")]
-    web_sys::window()
-        .unwrap()
-        .document()
-        .unwrap()
-        .body()
-        .unwrap()
-        .append_child(&winit::platform::web::WindowExtWebSys::canvas(&window))
-        .unwrap();
-
     let instance = back::Instance::create("gfx-rs quad", 1).expect("Failed to create an instance!");
-
-    let surface = unsafe {
-        instance
-            .create_surface(&window)
-            .expect("Failed to create a surface!")
-    };
 
     let adapter = {
         let mut adapters = instance.enumerate_adapters();
@@ -130,44 +99,171 @@ fn main() {
         adapters.remove(0)
     };
 
-    let mut renderer = Renderer::new(instance, surface, adapter);
+    let direct_display = match std::env::var("DIRECT_DISPLAY") {
+        Ok(_) => true,
+        Err(_) => false,
+    };
 
-    renderer.render();
+    if !direct_display {
+        let event_loop = winit::event_loop::EventLoop::new();
 
-    // It is important that the closure move captures the Renderer,
-    // otherwise it will not be dropped when the event loop exits.
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = winit::event_loop::ControlFlow::Wait;
+        let wb = winit::window::WindowBuilder::new()
+            .with_min_inner_size(winit::dpi::Size::Logical(winit::dpi::LogicalSize::new(
+                64.0, 64.0,
+            )))
+            .with_inner_size(winit::dpi::Size::Physical(winit::dpi::PhysicalSize::new(
+                DIMS.width,
+                DIMS.height,
+            )))
+            .with_title("quad".to_string());
 
-        match event {
-            winit::event::Event::WindowEvent { event, .. } => match event {
-                winit::event::WindowEvent::CloseRequested => {
-                    *control_flow = winit::event_loop::ControlFlow::Exit
-                }
-                winit::event::WindowEvent::KeyboardInput {
-                    input:
-                        winit::event::KeyboardInput {
-                            virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
-                            ..
-                        },
-                    ..
-                } => *control_flow = winit::event_loop::ControlFlow::Exit,
-                winit::event::WindowEvent::Resized(dims) => {
-                    println!("resized to {:?}", dims);
-                    renderer.dimensions = window::Extent2D {
-                        width: dims.width,
-                        height: dims.height,
-                    };
-                    renderer.recreate_swapchain();
+        // instantiate backend
+        let window = wb.build(&event_loop).unwrap();
+
+        #[cfg(target_arch = "wasm32")]
+        web_sys::window()
+            .unwrap()
+            .document()
+            .unwrap()
+            .body()
+            .unwrap()
+            .append_child(&winit::platform::web::WindowExtWebSys::canvas(&window))
+            .unwrap();
+
+        let surface = unsafe {
+            instance
+                .create_surface(&window)
+                .expect("Failed to create a surface!")
+        };
+
+        let mut renderer = Renderer::new(instance, surface, adapter);
+
+        renderer.render();
+
+        // It is important that the closure move captures the Renderer,
+        // otherwise it will not be dropped when the event loop exits.
+        event_loop.run(move |event, _, control_flow| {
+            *control_flow = winit::event_loop::ControlFlow::Wait;
+
+            match event {
+                winit::event::Event::WindowEvent { event, .. } => match event {
+                    winit::event::WindowEvent::CloseRequested => {
+                        *control_flow = winit::event_loop::ControlFlow::Exit
+                    }
+                    winit::event::WindowEvent::KeyboardInput {
+                        input:
+                            winit::event::KeyboardInput {
+                                virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
+                                ..
+                            },
+                        ..
+                    } => *control_flow = winit::event_loop::ControlFlow::Exit,
+                    winit::event::WindowEvent::Resized(dims) => {
+                        println!("resized to {:?}", dims);
+                        renderer.dimensions = window::Extent2D {
+                            width: dims.width,
+                            height: dims.height,
+                        };
+                        renderer.recreate_swapchain();
+                    }
+                    _ => {}
+                },
+                winit::event::Event::RedrawEventsCleared => {
+                    renderer.render();
                 }
                 _ => {}
-            },
-            winit::event::Event::RedrawEventsCleared => {
-                renderer.render();
             }
-            _ => {}
+        });
+    } else {
+        let displays = unsafe {
+            adapter
+                .physical_device
+                .enumerate_displays()
+        };
+        if displays.len() == 0 {
+            panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");
         }
-    });
+        println!("Displays: {:#?}", &displays);
+
+        //Get the first available display
+        let display = &displays[0];
+        println!("Selected display: {:#?}", &display);
+
+        //Enumerate compatible planes
+        let compatible_planes = unsafe {
+            adapter
+                .physical_device
+                .enumerate_compatible_planes(&display)
+        };
+
+        //Get the first available plane (it is granted to have at least 1 plane compatible)
+        let plane = &compatible_planes[0];
+        println!("Plane: {:#?}", &plane);
+
+        //Get the first available display mode (generally the preferred one)
+        let custom_display_mode;
+        let display_mode = match display
+            .modes
+            .iter()
+            .find(|display_mode| display_mode.resolution == DIMS.into())
+        {
+            Some(display_mode) => display_mode,
+            None => {
+                println!("Monitor does not expose the resolution {:#?} as built-in mode, trying to create it",DIMS);
+                match unsafe {
+                    adapter
+                        .physical_device
+                        .create_display_mode(&display, DIMS.into(), 60)
+                } {
+                    Ok(display_mode) => {
+                        custom_display_mode = display_mode;
+                        &custom_display_mode
+                    }
+                    // If was not possible to create custom display mode, use the first built-in mode available
+                    Err(err) => {
+                        println!("Failed to create display mode: {:#?}\nUsing the first display mode available on the monitor",err);
+                        display
+                            .modes
+                            .get(0)
+                            .expect("The selected monitor does not have built-in display modes")
+                    }
+                }
+            }
+        };
+
+        println!("Display mode: {:#?}", &display_mode);
+
+        //Create display plane
+        let display_plane = unsafe {
+            adapter
+                .physical_device
+                .create_display_plane(&display_mode, &plane)
+                .expect("Failed to create display plane")
+        };
+        println!("Display plane: {:#?}", &display_plane);
+
+        //Create a surface from the display
+        let surface = unsafe {
+            instance
+                .create_display_plane_surface(
+                    &display_plane,                      //Display plane
+                    plane.z_index,                       //Z plane index
+                    display::SurfaceTransform::Identity, //Surface transformation
+                    display::DisplayPlaneAlpha::Opaque,  //Opacity
+                    display_plane.dst_extent.end,        //Image extent
+                )
+                .expect("Failed to create a surface!")
+        };
+
+        let mut renderer = Renderer::new(instance, surface, adapter);
+        if display_mode.resolution != DIMS.into() {
+            renderer.dimensions = display_mode.resolution.into();
+            renderer.recreate_swapchain();
+        }
+
+        renderer.render();
+        std::thread::sleep(std::time::Duration::from_secs(5));
+    }
 }
 
 struct Renderer<B: hal::Backend> {

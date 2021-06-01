@@ -32,7 +32,7 @@ use std::{
     thread,
 };
 
-use hal::{adapter, buffer, image, memory, queue as q};
+use hal::{adapter, buffer, display, image, memory, queue as q};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -117,6 +117,9 @@ impl hal::Backend for Backend {
     type Semaphore = native::Semaphore;
     type Event = ();
     type QueryPool = ();
+
+    type Display = ();
+    type DisplayMode = ();
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -672,6 +675,36 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn properties(&self) -> hal::PhysicalDeviceProperties {
         self.0.public_caps
+    }
+
+    unsafe fn enumerate_displays(
+        &self,
+    ) -> Vec<display::Display<crate::Backend>> {
+        unimplemented!();
+    }
+
+    unsafe fn enumerate_compatible_planes(
+        &self,
+        _display: &display::Display<crate::Backend>,
+    ) -> Vec<display::Plane> {
+        unimplemented!();
+    }
+
+    unsafe fn create_display_mode(
+        &self,
+        _display: &display::Display<crate::Backend>,
+        _resolution: (u32, u32),
+        _refresh_rate: u32,
+    ) -> Result<display::DisplayMode<crate::Backend>, display::DisplayModeError> {
+        unimplemented!();
+    }
+
+    unsafe fn create_display_plane<'a>(
+        &self,
+        _display: &'a display::DisplayMode<crate::Backend>,
+        _plane: &'a display::Plane,
+    ) -> Result<display::DisplayPlane<'a, crate::Backend>, hal::device::OutOfMemory> {
+        unimplemented!();
     }
 }
 

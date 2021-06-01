@@ -7,7 +7,7 @@ use ash::{
 use hal::{
     adapter,
     device::{CreationError, OutOfMemory},
-    format, image,
+    display, format, image,
     pso::PatchSize,
     queue, DescriptorLimits, DownlevelProperties, DynamicStates, Features, Limits,
     PhysicalDeviceProperties,
@@ -16,7 +16,7 @@ use hal::{
 use std::{ffi::CStr, fmt, mem, ptr, sync::Arc};
 
 use crate::{
-    conv, info, Backend, Device, DeviceExtensionFunctions, ExtensionFn, Queue, QueueFamily,
+    conv, info, native, Backend, Device, DeviceExtensionFunctions, ExtensionFn, Queue, QueueFamily,
     RawDevice, RawInstance, Version,
 };
 
@@ -582,6 +582,10 @@ impl PhysicalDeviceInfo {
             requested_extensions.push(vk::KhrGetDisplayProperties2Fn::name()); // TODO NOT NEEDED, RIGHT?
         }
 
+        if self.supports_extension(vk::ExtDisplayControlFn::name()){
+            requested_extensions.push(vk::ExtDisplayControlFn::name());
+        }
+
         requested_extensions
     }
 
@@ -750,6 +754,20 @@ impl PhysicalDevice {
             None
         };
 
+        let display_control = if enabled_extensions.contains(&vk::ExtDisplayControlFn::name()) {
+            Some(vk::ExtDisplayControlFn::load(
+                |name| {
+                    std::mem::transmute(
+                        self.instance
+                            .inner
+                            .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                    )
+                },
+            ))
+        } else {
+            None
+        };
+
         #[cfg(feature = "naga")]
         let naga_options = {
             use naga::back::spv;
@@ -787,6 +805,7 @@ impl PhysicalDevice {
                 extension_fns: DeviceExtensionFunctions {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
+                    display_control,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
                     || self
@@ -1394,5 +1413,284 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return false;
         }
         true
+    }
+
+    unsafe fn enumerate_displays(
+        &self,
+    ) -> Vec<display::Display<Backend>> {
+        let display_extension = match self.instance.display {
+            Some(ref display_extension) => display_extension,
+            None => {
+                error!("Direct display feature not supported");
+                return Vec::new();
+            }
+        };
+
+        let display_properties = match display_extension
+            .get_physical_device_display_properties(self.handle)
+        {
+            Ok(display_properties) => display_properties,
+            Err(err)=>{
+                match err {
+                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
+                        error!("Error returned on `get_physical_device_display_properties`: {:#?}",err),
+                    err=>error!("Unexpected error on `get_physical_device_display_properties`: {:#?}",err)
+                }
+                return Vec::new();
+            }
+        };
+
+        let mut displays = Vec::new();
+        for display_property in display_properties {
+            let supported_transforms = hal::display::SurfaceTransformFlags::from_bits(display_property.supported_transforms.as_raw()).unwrap();
+            let display_name = if display_property.display_name.is_null() {
+                None
+            } else {
+                Some(
+                    std::ffi::CStr::from_ptr(display_property.display_name)
+                        .to_str()
+                        .unwrap()
+                        .to_owned(),
+                )
+            };
+
+            let display_info = display::DisplayInfo {
+                name: display_name,
+                physical_dimensions: (
+                    display_property.physical_dimensions.width,
+                    display_property.physical_dimensions.height,
+                )
+                    .into(),
+                physical_resolution: (
+                    display_property.physical_resolution.width,
+                    display_property.physical_resolution.height,
+                )
+                    .into(),
+                supported_transforms: supported_transforms,
+                plane_reorder_possible: display_property.plane_reorder_possible == 1,
+                persistent_content: display_property.persistent_content == 1,
+            };
+
+            let display_modes = match display_extension
+                .get_display_mode_properties(self.handle, display_property.display)
+            {
+                Ok(display_modes) => display_modes,
+                Err(err)=>{
+                    match err {
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
+                            error!("Error returned on `get_display_mode_properties`: {:#?}",err),
+                        err=>error!("Unexpected error on `get_display_mode_properties`: {:#?}",err)
+                    }
+                    return Vec::new();
+                }
+            }
+            .iter()
+            .map(|display_mode_properties| display::DisplayMode {
+                handle: native::DisplayMode(display_mode_properties.display_mode),
+                resolution: (
+                    display_mode_properties.parameters.visible_region.width,
+                    display_mode_properties.parameters.visible_region.height,
+                ),
+                refresh_rate: display_mode_properties.parameters.refresh_rate,
+            })
+            .collect();
+
+            let display = display::Display {
+                handle: native::Display(display_property.display),
+                info: display_info,
+                modes: display_modes,
+            };
+
+            displays.push(display);
+        }
+        return displays;
+    }
+
+    unsafe fn enumerate_compatible_planes(
+        &self,
+        display: &display::Display<Backend>,
+    ) -> Vec<display::Plane> {
+        let display_extension = match self.instance.display {
+            Some(ref display_extension) => display_extension,
+            None => {
+                error!("Direct display feature not supported");
+                return Vec::new();
+            }
+        };
+
+        match display_extension.get_physical_device_display_plane_properties(self.handle) {
+            Ok(planes_properties) => {
+                let mut planes = Vec::new();
+                for index in 0..planes_properties.len() {
+                    let compatible_displays = match display_extension
+                        .get_display_plane_supported_displays(self.handle, index as u32)
+                    {
+                        Ok(compatible_displays) => compatible_displays,
+                        Err(err)=>{
+                            match err {
+                                vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
+                                    error!("Error returned on `get_display_plane_supported_displays`: {:#?}",err),
+                                err=>error!("Unexpected error on `get_display_plane_supported_displays`: {:#?}",err)
+                            }
+                            return Vec::new();
+                        }
+                    };
+                    if compatible_displays.contains(&display.handle.0) {
+                        planes.push(display::Plane {
+                            handle: index as u32,
+                            z_index: planes_properties[index].current_stack_index,
+                        });
+                    }
+                }
+                planes
+            }
+            Err(err)=>{
+                match err {
+                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
+                        error!("Error returned on `get_physical_device_display_plane_properties`: {:#?}",err),
+                    err=>error!("Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",err)
+                }
+                Vec::new()
+            }
+        }
+    }
+
+    unsafe fn create_display_mode(
+        &self,
+        display: &display::Display<Backend>,
+        resolution: (u32, u32),
+        refresh_rate: u32,
+    ) -> Result<display::DisplayMode<Backend>, display::DisplayModeError> {
+        let display_extension = self.instance.display.as_ref().unwrap();
+
+        let display_mode_ci = vk::DisplayModeCreateInfoKHR::builder()
+            .parameters(vk::DisplayModeParametersKHR {
+                visible_region: vk::Extent2D {
+                    width: resolution.0,
+                    height: resolution.1,
+                },
+                refresh_rate: refresh_rate,
+            })
+            .build();
+
+        match display_extension.create_display_mode(
+            self.handle,
+            display.handle.0,
+            &display_mode_ci,
+            None,
+        ) {
+            Ok(display_mode_handle) => Ok(display::DisplayMode {
+                handle: native::DisplayMode(display_mode_handle),
+                resolution: resolution,
+                refresh_rate: refresh_rate,
+            }),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
+            Err(vk::Result::ERROR_INITIALIZATION_FAILED) => {
+                return Err(display::DisplayModeError::UnsupportedDisplayMode.into())
+            }
+            Err(err) => panic!("Unexpected error on `create_display_mode`: {:#?}", err),
+        }
+    }
+
+    unsafe fn create_display_plane<'a>(
+        &self,
+        display_mode: &'a display::DisplayMode<Backend>,
+        plane: &'a display::Plane,
+    ) -> Result<display::DisplayPlane<'a, Backend>, OutOfMemory> {
+        let display_extension = self.instance.display.as_ref().unwrap();
+
+        let display_plane_capabilities = match display_extension.get_display_plane_capabilities(
+            self.handle,
+            display_mode.handle.0,
+            plane.handle,
+        ) {
+            Ok(display_plane_capabilities) => display_plane_capabilities,
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => return Err(OutOfMemory::Device.into()),
+            Err(err) => panic!(
+                "Unexpected error on `get_display_plane_capabilities`: {:#?}",
+                err
+            ),
+        };
+
+        let mut supported_alpha_capabilities = Vec::new();
+        if display_plane_capabilities
+            .supported_alpha
+            .contains(vk::DisplayPlaneAlphaFlagsKHR::OPAQUE)
+        {
+            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::Opaque);
+        }
+        if display_plane_capabilities
+            .supported_alpha
+            .contains(vk::DisplayPlaneAlphaFlagsKHR::GLOBAL)
+        {
+            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::Global(1.0));
+        }
+        if display_plane_capabilities
+            .supported_alpha
+            .contains(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL)
+        {
+            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::PerPixel);
+        }
+        if display_plane_capabilities
+            .supported_alpha
+            .contains(vk::DisplayPlaneAlphaFlagsKHR::PER_PIXEL_PREMULTIPLIED)
+        {
+            supported_alpha_capabilities.push(display::DisplayPlaneAlpha::PerPixelPremultiplied);
+        }
+
+        Ok(display::DisplayPlane {
+            plane: &plane,
+            display_mode: &display_mode,
+            supported_alpha: supported_alpha_capabilities,
+            src_position: std::ops::Range {
+                start: (
+                    display_plane_capabilities.min_src_position.x,
+                    display_plane_capabilities.min_src_position.x,
+                    )
+                    .into(),
+                end: (
+                    display_plane_capabilities.max_src_position.x,
+                    display_plane_capabilities.max_src_position.x,
+                    ).into()
+            },
+            src_extent: std::ops::Range {
+                start: (
+                    display_plane_capabilities.min_src_extent.width,
+                    display_plane_capabilities.min_src_extent.height,
+                )
+                .into(),
+                end: (
+                    display_plane_capabilities.max_src_extent.width,
+                    display_plane_capabilities.max_src_extent.height,
+                )
+                .into(),
+            },
+            dst_position: std::ops::Range {
+                start: (
+                    display_plane_capabilities.min_dst_position.x,
+                    display_plane_capabilities.min_dst_position.x,
+                )
+                .into(),
+                end: (
+                    display_plane_capabilities.max_dst_position.x,
+                    display_plane_capabilities.max_dst_position.x,
+                )
+                .into(),
+            },
+            dst_extent: std::ops::Range {
+                start: (
+                    display_plane_capabilities.min_dst_extent.width,
+                    display_plane_capabilities.min_dst_extent.height,
+                )
+                .into(),
+                end: (
+                    display_plane_capabilities.max_dst_extent.width,
+                    display_plane_capabilities.max_dst_extent.height,
+                )
+                .into(),
+            }
+        })
     }
 }

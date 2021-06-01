@@ -56,6 +56,9 @@ impl hal::Backend for Backend {
     type Semaphore = ();
     type Event = ();
     type QueryPool = ();
+
+    type Display = ();
+    type DisplayMode = ();
 }
 
 #[derive(Debug)]
@@ -84,6 +87,16 @@ impl hal::Instance<Backend> for Instance {
     unsafe fn destroy_surface(&self, _surface: Surface) {
         todo!()
     }
+    /*
+    fn create_display_plane_surface(
+        &self,
+        _display_plane: &hal::display::DisplayPlane<crate::Backend>,
+        _plane_stack_index: u32,
+        _transformation: hal::display::SurfaceTransform,
+        _alpha: hal::display::DisplayPlaneAlpha,
+        _image_extent: hal::window::Extent2D
+    ) -> Result<Surface, hal::display::DisplayPlaneSurfaceError> {unimplemented!();}
+    */
 }
 
 impl Instance {
