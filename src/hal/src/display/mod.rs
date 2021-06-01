@@ -16,23 +16,23 @@ bitflags! {
     */
     pub struct SurfaceTransformFlags : u32 {
         /// Specify that image content is presented without being transformed.
-        const IDENTITY = 1;
+        const IDENTITY = 0x00000001;
         /// Specify that image content is rotated 90 degrees clockwise.
-        const ROTATE_90 = 2;
+        const ROTATE_90 = 0x00000002;
         /// Specify that image content is rotated 180 degrees clockwise.
-        const ROTATE_180 = 4;
+        const ROTATE_180 = 0x00000004;
         /// Specify that image content is rotated 270 degrees clockwise.
-        const ROTATE_270 = 8;
+        const ROTATE_270 = 0x00000008;
         /// Specify that image content is mirrored horizontally.
-        const HORIZONTAL_MIRROR = 16;
+        const HORIZONTAL_MIRROR = 0x00000010;
         /// Specify that image content is mirrored horizontally, then rotated 90 degrees clockwise.
-        const HORIZONTAL_MIRROR_ROTATE_90 = 32;
+        const HORIZONTAL_MIRROR_ROTATE_90 = 0x00000020;
         /// Specify that image content is mirrored horizontally, then rotated 180 degrees clockwise.
-        const HORIZONTAL_MIRROR_ROTATE_180 = 64;
+        const HORIZONTAL_MIRROR_ROTATE_180 = 0x00000040;
         /// Specify that image content is mirrored horizontally, then rotated 270 degrees clockwise.
-        const HORIZONTAL_MIRROR_ROTATE_270 = 128;
+        const HORIZONTAL_MIRROR_ROTATE_270 = 0x00000080;
         /// Specify that the presentation transform is not specified, and is instead determined by platform-specific considerations and mechanisms outside Vulkan.
-        const INHERIT = 256;
+        const INHERIT = 0x00000100;
     }
 }
 impl From<SurfaceTransform> for SurfaceTransformFlags {

@@ -721,8 +721,8 @@ impl hal::Instance<Backend> for Instance {
                 return Err(display::DisplayPlaneSurfaceError::UnsupportedFeature);
             }
         };
-
-        let vk_surface_transform_flags = conv::map_surface_transform_flags(transformation.into());
+        let surface_transform_flags = hal::display::SurfaceTransformFlags::from(transformation);
+        let vk_surface_transform_flags = vk::SurfaceTransformFlagsKHR::from_raw(surface_transform_flags.bits());
 
         let display_surface_ci = {
             let builder = vk::DisplaySurfaceCreateInfoKHR::builder()

@@ -1440,8 +1440,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         let mut displays = Vec::new();
         for display_property in display_properties {
-            let supported_transforms =
-                conv::map_vk_surface_transform_flags(display_property.supported_transforms);
+            let supported_transforms = hal::display::SurfaceTransformFlags::from_bits(display_property.supported_transforms.as_raw()).unwrap();
             let display_name = if display_property.display_name.is_null() {
                 None
             } else {
