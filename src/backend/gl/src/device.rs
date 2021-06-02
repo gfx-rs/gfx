@@ -9,7 +9,7 @@ use crate::{
 
 use hal::{
     buffer, device as d,
-    format::{Format, Swizzle},
+    format::{ChannelType, Format, Swizzle},
     image as i, memory, pass,
     pool::CommandPoolCreateFlags,
     pso, query, queue,
@@ -1505,6 +1505,21 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
+                    match channel {
+                        ChannelType::Uint | ChannelType::Sint => {
+                            gl.tex_parameter_i32(
+                                glow::TEXTURE_2D,
+                                glow::TEXTURE_MIN_FILTER,
+                                glow::NEAREST as _,
+                            );
+                            gl.tex_parameter_i32(
+                                glow::TEXTURE_2D,
+                                glow::TEXTURE_MAG_FILTER,
+                                glow::NEAREST as _,
+                            );
+                        }
+                        _ => {}
+                    };
                     glow::TEXTURE_2D
                 }
                 i::Kind::D2(w, h, l, 1) => {
@@ -1545,6 +1560,21 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
+                    match channel {
+                        ChannelType::Uint | ChannelType::Sint => {
+                            gl.tex_parameter_i32(
+                                glow::TEXTURE_2D,
+                                glow::TEXTURE_MIN_FILTER,
+                                glow::NEAREST as _,
+                            );
+                            gl.tex_parameter_i32(
+                                glow::TEXTURE_2D,
+                                glow::TEXTURE_MAG_FILTER,
+                                glow::NEAREST as _,
+                            );
+                        }
+                        _ => {}
+                    };
                     glow::TEXTURE_2D_ARRAY
                 }
                 _ => unimplemented!(),
