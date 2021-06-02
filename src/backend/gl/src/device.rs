@@ -1679,7 +1679,7 @@ impl d::Device<B> for Device {
                 };
                 match conv::describe_format(view_format) {
                     Some(description) => {
-                        let raw_view_format = description.tex_internal;
+                        let raw_view_format = description.tex_external;
                         if format != raw_view_format {
                             log::warn!(
                                 "View format {:?} is different from base {:?}",
