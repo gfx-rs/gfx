@@ -9,7 +9,7 @@ use crate::{
 
 use hal::{
     buffer, device as d,
-    format::{Format, Swizzle},
+    format::{ChannelType, Format, Swizzle},
     image as i, memory, pass,
     pool::CommandPoolCreateFlags,
     pso, query, queue,
@@ -145,6 +145,8 @@ impl Device {
             name_binding_map: &mut name_binding_map,
         };
 
+        let mut shaders_to_delete = arrayvec::ArrayVec::<[_; 3]>::new();
+
         for &(stage, point_maybe) in shaders {
             if let Some(point) = point_maybe {
                 match stage {
@@ -161,7 +163,7 @@ impl Device {
                     })?;
                 unsafe {
                     gl.attach_shader(program, shader);
-                    gl.delete_shader(shader);
+                    shaders_to_delete.push(shader);
                 }
             }
         }
@@ -188,13 +190,20 @@ impl Device {
             .unwrap();
             unsafe {
                 gl.attach_shader(program, shader);
-                gl.delete_shader(shader);
+                shaders_to_delete.push(shader);
             }
         }
 
         unsafe {
             gl.link_program(program);
         }
+
+        for shader in shaders_to_delete {
+            unsafe {
+                gl.delete_shader(shader);
+            }
+        }
+
         log::info!("\tLinked program {:?}", program);
         if let Err(err) = self.share.check() {
             panic!("Error linking program: {:?}", err);
@@ -1496,6 +1505,21 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
+                    match channel {
+                        ChannelType::Uint | ChannelType::Sint => {
+                            gl.tex_parameter_i32(
+                                glow::TEXTURE_2D,
+                                glow::TEXTURE_MIN_FILTER,
+                                glow::NEAREST as _,
+                            );
+                            gl.tex_parameter_i32(
+                                glow::TEXTURE_2D,
+                                glow::TEXTURE_MAG_FILTER,
+                                glow::NEAREST as _,
+                            );
+                        }
+                        _ => {}
+                    };
                     glow::TEXTURE_2D
                 }
                 i::Kind::D2(w, h, l, 1) => {
@@ -1536,6 +1560,21 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
+                    match channel {
+                        ChannelType::Uint | ChannelType::Sint => {
+                            gl.tex_parameter_i32(
+                                glow::TEXTURE_2D,
+                                glow::TEXTURE_MIN_FILTER,
+                                glow::NEAREST as _,
+                            );
+                            gl.tex_parameter_i32(
+                                glow::TEXTURE_2D,
+                                glow::TEXTURE_MAG_FILTER,
+                                glow::NEAREST as _,
+                            );
+                        }
+                        _ => {}
+                    };
                     glow::TEXTURE_2D_ARRAY
                 }
                 _ => unimplemented!(),
@@ -1670,7 +1709,7 @@ impl d::Device<B> for Device {
                 };
                 match conv::describe_format(view_format) {
                     Some(description) => {
-                        let raw_view_format = description.tex_internal;
+                        let raw_view_format = description.tex_external;
                         if format != raw_view_format {
                             log::warn!(
                                 "View format {:?} is different from base {:?}",
