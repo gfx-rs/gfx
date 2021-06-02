@@ -145,6 +145,8 @@ impl Device {
             name_binding_map: &mut name_binding_map,
         };
 
+        let mut shaders_to_delete = arrayvec::ArrayVec::<[_; 3]>::new();
+
         for &(stage, point_maybe) in shaders {
             if let Some(point) = point_maybe {
                 match stage {
@@ -161,7 +163,7 @@ impl Device {
                     })?;
                 unsafe {
                     gl.attach_shader(program, shader);
-                    gl.delete_shader(shader);
+                    shaders_to_delete.push(shader);
                 }
             }
         }
@@ -188,13 +190,20 @@ impl Device {
             .unwrap();
             unsafe {
                 gl.attach_shader(program, shader);
-                gl.delete_shader(shader);
+                shaders_to_delete.push(shader);
             }
         }
 
         unsafe {
             gl.link_program(program);
         }
+
+        for shader in shaders_to_delete {
+            unsafe {
+                gl.delete_shader(shader);
+            }
+        }
+
         log::info!("\tLinked program {:?}", program);
         if let Err(err) = self.share.check() {
             panic!("Error linking program: {:?}", err);
