@@ -1,20 +1,6 @@
 use crate::native::VertexAttribFunction;
 use hal::{format::Format, image as i, pso};
 
-/*
-pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
-    match kind {
-        i::Kind::D1(_) => glow::TEXTURE_1D,
-        i::Kind::D1Array(_, _) => glow::TEXTURE_1D_ARRAY,
-        i::Kind::D2(_, _, i::AaMode::Single) => glow::TEXTURE_2D,
-        i::Kind::D2(_, _, _) => glow::TEXTURE_2D_MULTISAMPLE,
-        i::Kind::D2Array(_, _, _, i::AaMode::Single) => glow::TEXTURE_2D_ARRAY,
-        i::Kind::D2Array(_, _, _, _) => glow::TEXTURE_2D_MULTISAMPLE_ARRAY,
-        i::Kind::D3(_, _, _) => glow::TEXTURE_3D,
-        i::Kind::Cube(_) => glow::TEXTURE_CUBE_MAP,
-        i::Kind::CubeArray(_, _) => glow::TEXTURE_CUBE_MAP_ARRAY,
-    }
-}*/
 
 pub fn filter_to_gl(mag: i::Filter, min: i::Filter, mip: i::Filter) -> (u32, u32) {
     use hal::image::Filter::*;

@@ -908,21 +908,17 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                         level_count,
                         layer_count,
                         ..
-                    } => {
-                        let is_3d = layer_count == 1; //TODO?
-                        n::ImageView::Texture {
-                            target,
-                            raw,
-                            is_3d,
-                            sub: image::SubresourceRange {
-                                aspects: Aspects::COLOR,
-                                layer_start: 0,
-                                layer_count: Some(layer_count),
-                                level_start: 0,
-                                level_count: Some(level_count),
-                            },
-                        }
-                    }
+                    } => n::ImageView::Texture {
+                        target,
+                        raw,
+                        sub: image::SubresourceRange {
+                            aspects: Aspects::COLOR,
+                            layer_start: 0,
+                            layer_count: Some(layer_count),
+                            level_start: 0,
+                            level_count: Some(level_count),
+                        },
+                    },
                 };
                 self.data.push_cmd(Command::BindFramebuffer {
                     target: glow::DRAW_FRAMEBUFFER,

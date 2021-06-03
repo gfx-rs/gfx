@@ -173,7 +173,6 @@ pub enum ImageView {
     Texture {
         target: TextureTarget,
         raw: Texture,
-        is_3d: bool,
         sub: i::SubresourceRange,
     },
 }
