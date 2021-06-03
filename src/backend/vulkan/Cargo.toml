@@ -30,11 +30,11 @@ parking_lot = "0.11"
 smallvec = "1.0"
 raw-window-handle = "0.3"
 inplace_it = "0.3.3"
+gfx-renderdoc = { path = "../../auxil/renderdoc", version = "0.1.0" }
 
 [dependencies.naga]
-#git = "https://github.com/gfx-rs/naga"
-#tag = "gfx-23"
-version = "0.4"
+git = "https://github.com/gfx-rs/naga"
+tag = "gfx-25"
 features = ["spv-out"]
 optional = true
 

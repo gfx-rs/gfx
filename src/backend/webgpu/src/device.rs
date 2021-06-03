@@ -8,7 +8,7 @@ use hal::{
     device::{
         AllocationError, BindError, DeviceLost, MapError, OutOfMemory, ShaderError, WaitError,
     },
-    format, image, memory,
+    display, format, image, memory,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -515,6 +515,31 @@ impl hal::device::Device<Backend> for Device {
         _name: &str,
     ) {
         // TODO
+    }
+
+    unsafe fn set_display_power_state(
+        &self,
+        _display: &display::Display<Backend>,
+        _power_state: &display::PowerState,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!()
+    }
+
+    unsafe fn register_device_event(
+        &self,
+        _device_event: &display::DeviceEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!()
+    }
+
+    unsafe fn register_display_event(
+        &self,
+        _display: &display::Display<Backend>,
+        _display_event: &display::DisplayEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), display::DisplayControlError> {
+        unimplemented!()
     }
 
     fn start_capture(&self) {}

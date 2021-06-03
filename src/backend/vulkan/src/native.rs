@@ -239,4 +239,10 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 pub struct QueryPool(pub vk::QueryPool);
 
 #[derive(Debug, Hash)]
+pub struct Display(pub vk::DisplayKHR);
+
+#[derive(Debug, Hash)]
+pub struct DisplayMode(pub vk::DisplayModeKHR);
+
+#[derive(Debug, Hash)]
 pub struct AccelerationStructure(pub vk::AccelerationStructureKHR);

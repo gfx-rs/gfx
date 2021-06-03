@@ -12,7 +12,7 @@
 //! and is used to actually do things.
 
 use crate::{
-    acceleration_structure, buffer, format, image, memory,
+    acceleration_structure, buffer, display, format, image, memory,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -571,7 +571,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// [queue submission][crate::queue::Queue::submit] command.
     ///
     /// Fences **can** be unsignaled on the host with
-    /// [`reset_fences`][Device::reset_fences].
+    /// [`reset_fence`][Device::reset_fence].
     ///
     /// Fences **can** be waited on by the host with the
     /// [`wait_for_fences`][Device::wait_for_fences] command.
@@ -814,6 +814,28 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) {
         unimplemented!()
     }
+
+    /// Control the power state of the provided display
+    unsafe fn set_display_power_state(
+        &self,
+        display: &display::Display<B>,
+        power_state: &display::control::PowerState,
+    ) -> Result<(), display::control::DisplayControlError>;
+
+    /// Register device event
+    unsafe fn register_device_event(
+        &self,
+        device_event: &display::control::DeviceEvent,
+        fence: &mut B::Fence,
+    ) -> Result<(), display::control::DisplayControlError>;
+
+    /// Register display event
+    unsafe fn register_display_event(
+        &self,
+        display: &display::Display<B>,
+        display_event: &display::control::DisplayEvent,
+        fence: &mut B::Fence,
+    ) -> Result<(), display::control::DisplayControlError>;
 
     /// Starts frame capture.
     fn start_capture(&self);

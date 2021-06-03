@@ -24,8 +24,9 @@ extern crate log;
 use crate::{debug::set_debug_name, device::DepthStencilState};
 use auxil::ShaderStage;
 use hal::{
-    adapter, buffer, command, format, image, memory, pass, pso, query, queue, window, DrawCount,
-    IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
+    adapter, buffer, command, display, format, image, memory, pass, pso, query, queue, window,
+    DrawCount, IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset,
+    WorkGroupCount,
 };
 use range_alloc::RangeAllocator;
 use smallvec::SmallVec;
@@ -660,6 +661,17 @@ impl hal::Instance<Backend> for Instance {
     unsafe fn destroy_surface(&self, _surface: Surface) {
         // TODO: Implement Surface cleanup
     }
+
+    unsafe fn create_display_plane_surface(
+        &self,
+        _display_plane: &display::DisplayPlane<crate::Backend>,
+        _plane_stack_index: u32,
+        _transformation: display::SurfaceTransform,
+        _alpha: display::DisplayPlaneAlpha,
+        _image_extent: hal::window::Extent2D,
+    ) -> Result<Surface, display::DisplayPlaneSurfaceError> {
+        unimplemented!();
+    }
 }
 
 pub struct PhysicalDevice {
@@ -971,6 +983,36 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn properties(&self) -> hal::PhysicalDeviceProperties {
         self.properties
+    }
+
+    unsafe fn enumerate_displays(
+        &self,
+    ) -> Vec<display::Display<crate::Backend>> {
+        unimplemented!();
+    }
+
+    unsafe fn enumerate_compatible_planes(
+        &self,
+        _display: &display::Display<crate::Backend>,
+    ) -> Vec<display::Plane> {
+        unimplemented!();
+    }
+
+    unsafe fn create_display_mode(
+        &self,
+        _display: &display::Display<crate::Backend>,
+        _resolution: (u32, u32),
+        _refresh_rate: u32,
+    ) -> Result<display::DisplayMode<crate::Backend>, display::DisplayModeError> {
+        unimplemented!();
+    }
+
+    unsafe fn create_display_plane<'a>(
+        &self,
+        _display: &'a display::DisplayMode<crate::Backend>,
+        _plane: &'a display::Plane,
+    ) -> Result<display::DisplayPlane<'a, crate::Backend>, hal::device::OutOfMemory> {
+        unimplemented!();
     }
 }
 
@@ -4447,6 +4489,9 @@ impl hal::Backend for Backend {
     type Semaphore = Semaphore;
     type Event = ();
     type QueryPool = QueryPool;
+
+    type Display = ();
+    type DisplayMode = ();
 }
 
 fn validate_line_width(width: f32) {

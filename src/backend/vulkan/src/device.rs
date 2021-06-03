@@ -15,6 +15,7 @@ use hal::{
 use std::{ffi::CString, marker::PhantomData, mem, ops::Range, ptr, sync::Arc};
 
 use crate::{command as cmd, conv, native as n, pool::RawCommandPool, window as w, Backend as B};
+use ash::vk::Handle;
 
 #[derive(Debug, Default)]
 struct GraphicsPipelineInfoBuf<'a> {
@@ -1337,37 +1338,12 @@ impl d::Device<B> for super::Device {
         let is_cube = image
             .flags
             .intersects(vk::ImageCreateFlags::CUBE_COMPATIBLE);
-        let mut image_view_info;
-        let mut info = vk::ImageViewCreateInfo::builder()
-            .flags(vk::ImageViewCreateFlags::empty())
-            .image(image.raw)
-            .view_type(match conv::map_view_kind(kind, image.ty, is_cube) {
-                Some(ty) => ty,
-                None => return Err(image::ViewCreationError::BadKind(kind)),
-            })
-            .format(conv::map_format(format))
-            .components(conv::map_swizzle(swizzle))
-            .subresource_range(conv::map_subresource_range(&range));
+        let view_type = match conv::map_view_kind(kind, image.ty, is_cube) {
+            Some(ty) => ty,
+            None => return Err(image::ViewCreationError::BadKind(kind)),
+        };
 
-        if self.shared.image_view_usage {
-            image_view_info = vk::ImageViewUsageCreateInfo::builder()
-                .usage(conv::map_image_usage(usage))
-                .build();
-            info = info.push_next(&mut image_view_info);
-        }
-
-        let result = self.shared.raw.create_image_view(&info, None);
-
-        match result {
-            Ok(raw) => Ok(n::ImageView {
-                image: image.raw,
-                raw,
-                range,
-            }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
-            _ => unreachable!(),
-        }
+        self.image_view_from_raw(image.raw, view_type, format, swizzle, usage, range)
     }
 
     unsafe fn create_descriptor_pool<T>(
@@ -2236,12 +2212,129 @@ impl d::Device<B> for super::Device {
         )
     }
 
+    unsafe fn set_display_power_state(
+        &self,
+        display: &hal::display::Display<B>,
+        power_state: &hal::display::control::PowerState,
+    ) -> Result<(), hal::display::control::DisplayControlError> {
+        let display_control_extension = match self.shared.extension_fns.display_control {
+            Some(ref display_control_extension) => {
+                display_control_extension
+            }
+            _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
+        };
+
+        let vk_power_state = match power_state {
+            hal::display::control::PowerState::Off => vk::DisplayPowerStateEXT::OFF,
+            hal::display::control::PowerState::Suspend => vk::DisplayPowerStateEXT::SUSPEND,
+            hal::display::control::PowerState::On => vk::DisplayPowerStateEXT::ON,
+        };
+
+        let vk_power_info = vk::DisplayPowerInfoEXT::builder()
+            .power_state(vk_power_state)
+            .build();
+
+        match display_control_extension.display_power_control_ext(
+            self.shared.raw.handle(),
+            display.handle.0,
+            &vk_power_info,
+        ) {
+            vk::Result::SUCCESS => Ok(()),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                Err(hal::display::control::DisplayControlError::OutOfHostMemory)
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn register_device_event(
+        &self,
+        device_event: &hal::display::control::DeviceEvent,
+        fence: &mut <B as hal::Backend>::Fence,
+    ) -> Result<(), hal::display::control::DisplayControlError> {
+        let display_control_extension = match self.shared.extension_fns.display_control {
+            Some(ref display_control_extension) => {
+                display_control_extension
+            }
+            _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
+        };
+
+        let vk_device_event = match device_event {
+            hal::display::control::DeviceEvent::DisplayHotplug => vk::DeviceEventTypeEXT::DISPLAY_HOTPLUG,
+        };
+
+        let vk_device_event_info = vk::DeviceEventInfoEXT::builder()
+            .device_event(vk_device_event)
+            .build();
+
+        match display_control_extension.register_device_event_ext(
+            self.shared.raw.handle(),
+            &vk_device_event_info,
+            std::ptr::null(),
+            &mut fence.0,
+        ) {
+            vk::Result::SUCCESS => Ok(()),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                Err(hal::display::control::DisplayControlError::OutOfHostMemory)
+            }
+            vk::Result::ERROR_FEATURE_NOT_PRESENT => {
+                Err(hal::display::control::DisplayControlError::UnsupportedFeature)
+            } // This is a non-standard error returned on Linux Intel Haswell
+            err => {
+                error!("Unexpected error: {:#?}", err);
+                Err(hal::display::control::DisplayControlError::UnsupportedFeature)
+            }
+        }
+    }
+
+    unsafe fn register_display_event(
+        &self,
+        display: &hal::display::Display<B>,
+        display_event: &hal::display::control::DisplayEvent,
+        fence: &mut <B as hal::Backend>::Fence,
+    ) -> Result<(), hal::display::control::DisplayControlError> {
+        let display_control_extension = match self.shared.extension_fns.display_control {
+            Some(ref display_control_extension) => {
+                display_control_extension
+            }
+            _ => return Err(hal::display::control::DisplayControlError::UnsupportedFeature),
+        };
+
+        let vk_display_event = match display_event {
+            hal::display::control::DisplayEvent::FirstPixelOut => vk::DisplayEventTypeEXT::FIRST_PIXEL_OUT,
+        };
+
+        let vk_display_event_info = vk::DisplayEventInfoEXT::builder()
+            .display_event(vk_display_event)
+            .build();
+
+        match display_control_extension.register_display_event_ext(
+            self.shared.raw.handle(),
+            display.handle.0,
+            &vk_display_event_info,
+            std::ptr::null(),
+            &mut fence.0,
+        ) {
+            vk::Result::SUCCESS => Ok(()),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                Err(hal::display::control::DisplayControlError::OutOfHostMemory)
+            }
+            _ => unreachable!(),
+        }
+    }
+
     fn start_capture(&self) {
-        //TODO: RenderDoc
+        unsafe {
+            self.render_doc
+                .start_frame_capture(self.shared.raw.handle().as_raw() as *mut _, ptr::null_mut())
+        }
     }
 
     fn stop_capture(&self) {
-        //TODO: RenderDoc
+        unsafe {
+            self.render_doc
+                .end_frame_capture(self.shared.raw.handle().as_raw() as *mut _, ptr::null_mut())
+        }
     }
 }
 
@@ -2368,6 +2461,45 @@ impl super::Device {
             .collect();
 
         Ok((swapchain, images))
+    }
+
+    pub unsafe fn image_view_from_raw(
+        &self,
+        raw_image: vk::Image,
+        view_type: vk::ImageViewType,
+        format: format::Format,
+        swizzle: format::Swizzle,
+        usage: image::Usage,
+        range: image::SubresourceRange,
+    ) -> Result<n::ImageView, image::ViewCreationError> {
+        let mut image_view_info;
+        let mut info = vk::ImageViewCreateInfo::builder()
+            .flags(vk::ImageViewCreateFlags::empty())
+            .image(raw_image)
+            .view_type(view_type)
+            .format(conv::map_format(format))
+            .components(conv::map_swizzle(swizzle))
+            .subresource_range(conv::map_subresource_range(&range));
+
+        if self.shared.image_view_usage {
+            image_view_info = vk::ImageViewUsageCreateInfo::builder()
+                .usage(conv::map_image_usage(usage))
+                .build();
+            info = info.push_next(&mut image_view_info);
+        }
+
+        let result = self.shared.raw.create_image_view(&info, None);
+
+        match result {
+            Ok(raw) => Ok(n::ImageView {
+                image: raw_image,
+                raw,
+                range,
+            }),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
+            _ => unreachable!(),
+        }
     }
 }
 

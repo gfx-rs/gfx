@@ -16,8 +16,8 @@ use winapi::{
 
 use auxil::{spirv_cross_specialize_ast, ShaderStage};
 use hal::{
-    buffer, device as d, format, format::Aspects, image, memory, memory::Requirements, pass,
-    pool::CommandPoolCreateFlags, pso, pso::VertexInputRate, query, queue::QueueFamilyId,
+    buffer, device as d, display, format, format::Aspects, image, memory, memory::Requirements,
+    pass, pool::CommandPoolCreateFlags, pso, pso::VertexInputRate, query, queue::QueueFamilyId,
     window as w,
 };
 
@@ -3776,12 +3776,43 @@ impl d::Device<B> for Device {
         pipeline_layout.shared.signature.SetName(cwstr.as_ptr());
     }
 
+    unsafe fn set_display_power_state(
+        &self,
+        _display: &display::Display<B>,
+        _power_state: &display::control::PowerState,
+    ) -> Result<(), display::control::DisplayControlError> {
+        unimplemented!()
+    }
+
+    unsafe fn register_device_event(
+        &self,
+        _device_event: &display::control::DeviceEvent,
+        _fence: &mut <B as hal::Backend>::Fence,
+    ) -> Result<(), display::control::DisplayControlError> {
+        unimplemented!()
+    }
+
+    unsafe fn register_display_event(
+        &self,
+        _display: &display::Display<B>,
+        _display_event: &display::control::DisplayEvent,
+        _fence: &mut <B as hal::Backend>::Fence,
+    ) -> Result<(), display::control::DisplayControlError> {
+        unimplemented!()
+    }
+
     fn start_capture(&self) {
-        //TODO
+        unsafe {
+            self.render_doc
+                .start_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+        }
     }
 
     fn stop_capture(&self) {
-        //TODO
+        unsafe {
+            self.render_doc
+                .end_frame_capture(self.raw.as_mut_ptr() as *mut _, ptr::null_mut())
+        }
     }
 }
 

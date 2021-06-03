@@ -55,6 +55,7 @@ pub struct Device {
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     features: hal::Features,
     memory_properties: MemoryProperties,
+    render_doc: gfx_renderdoc::RenderDoc,
     pub(crate) internal: Arc<internal::Internal>,
 }
 
@@ -99,6 +100,7 @@ impl Device {
             context,
             features,
             memory_properties,
+            render_doc: Default::default(),
         }
     }
 
@@ -2459,11 +2461,42 @@ impl device::Device<Backend> for Device {
         // TODO
     }
 
+    unsafe fn set_display_power_state(
+        &self,
+        _display: &hal::display::Display<Backend>,
+        _power_state: &hal::display::control::PowerState,
+    ) -> Result<(), hal::display::control::DisplayControlError> {
+        unimplemented!()
+    }
+
+    unsafe fn register_device_event(
+        &self,
+        _device_event: &hal::display::control::DeviceEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), hal::display::control::DisplayControlError> {
+        unimplemented!()
+    }
+
+    unsafe fn register_display_event(
+        &self,
+        _display: &hal::display::Display<Backend>,
+        _display_event: &hal::display::control::DisplayEvent,
+        _fence: &mut <Backend as hal::Backend>::Fence,
+    ) -> Result<(), hal::display::control::DisplayControlError> {
+        unimplemented!()
+    }
+
     fn start_capture(&self) {
-        //TODO
+        unsafe {
+            self.render_doc
+                .start_frame_capture(self.raw.as_raw() as *mut _, ptr::null_mut())
+        }
     }
 
     fn stop_capture(&self) {
-        //TODO
+        unsafe {
+            self.render_doc
+                .end_frame_capture(self.raw.as_raw() as *mut _, ptr::null_mut())
+        }
     }
 }

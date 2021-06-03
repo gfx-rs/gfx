@@ -53,6 +53,7 @@ pub mod adapter;
 pub mod buffer;
 pub mod command;
 pub mod device;
+pub mod display;
 pub mod format;
 pub mod image;
 pub mod memory;
@@ -782,6 +783,23 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     /// # Safety
     ///
     unsafe fn destroy_surface(&self, surface: B::Surface);
+
+    /// Create a new [surface][window::Surface] from a [display plane][display::DisplayPlane].
+    ///
+    /// Surfaces can be used to render to windows.
+    ///
+    /// # Safety
+    ///
+    /// This method can cause undefined behavior if `raw_window_handle` isn't
+    /// a handle to a valid window for the current platform.
+    unsafe fn create_display_plane_surface<'a>(
+        &self,
+        display_plane: &display::DisplayPlane<'a, B>,
+        plane_stack_index: u32,
+        transformation: display::SurfaceTransform,
+        alpha: display::DisplayPlaneAlpha,
+        image_extent: window::Extent2D,
+    ) -> Result<B::Surface, display::DisplayPlaneSurfaceError>;
 }
 
 /// A strongly-typed index to a particular `MemoryType`.
@@ -874,6 +892,11 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type Event: fmt::Debug + Any + Send + Sync;
     /// The corresponding query pool type for this backend.
     type QueryPool: fmt::Debug + Any + Send + Sync;
+
+    /// The corresponding display type for this backend.
+    type Display: fmt::Debug + Any + Send + Sync;
+    /// The corresponding display mode type for this backend
+    type DisplayMode: fmt::Debug + Any + Send + Sync;
 
     /// The corresponding acceleration structure type for this backend.
     type AccelerationStructure: fmt::Debug + Any + Send + Sync;
