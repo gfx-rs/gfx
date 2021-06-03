@@ -39,27 +39,19 @@ pub enum GroupShader {
     Intersection,
 }
 
-/// TODO docs
-// https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkRayTracingShaderGroupTypeKHR.html
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum GroupType {
-    /// TODO docs
-    General,
-    /// TODO docs
-    TrianglesHitGroup,
-    /// TODO docs
-    ProceduralHitGroup,
-}
-
 /// A description of the data needed to construct a ray tracing pipeline.
 // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkRayTracingPipelineCreateInfoKHR.html
 #[derive(Debug)]
 pub struct RayTracingPipelineDesc<'a, B: Backend> {
+    /// Pipeline label
+    pub label: Option<&'a str>,
+
     /// TODO docs
     pub flags: PipelineCreationFlags,
 
     /// TODO docs
-    pub stages: &'a [(ShaderStageFlags, EntryPoint<'a, B>)],
+    // todo shaderstagecreatedesc instead
+    pub stages: &'a [ShaderStageDesc<'a, B>],
 
     /// TODO docs
     pub groups: &'a [ShaderGroupDesc],
@@ -77,30 +69,62 @@ pub struct RayTracingPipelineDesc<'a, B: Backend> {
     pub parent: BasePipeline<'a, B::RayTracingPipeline>,
 }
 
+impl<'a, B: Backend> RayTracingPipelineDesc<'a, B> {
+    /// Create a new empty PSO descriptor.
+    pub fn new(
+        stages: &'a [ShaderStageDesc<'a, B>],
+        groups: &'a [ShaderGroupDesc],
+        max_pipeline_ray_recursion_depth: u32,
+        layout: &'a B::PipelineLayout,
+    ) -> Self {
+        Self {
+            label: None,
+            flags: PipelineCreationFlags::empty(),
+            stages,
+            groups,
+            max_pipeline_ray_recursion_depth,
+            layout,
+            parent: BasePipeline::None,
+        }
+    }
+}
+
+/// TODO docs
+// https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkPipelineShaderStageCreateInfo.html
+#[derive(Debug)]
+pub struct ShaderStageDesc<'a, B: Backend> {
+    /// TODO docs
+    pub stage: ShaderStageFlags,
+    /// TODO docs
+    pub entry_point: EntryPoint<'a, B>,
+}
+
 /// TODO docs
 // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkRayTracingShaderGroupCreateInfoKHR.html
-#[derive(Debug)]
-pub struct ShaderGroupDesc {
-    /// TODO docs
-    pub ty: GroupType,
-
-    /// TODO docs
-    /// is the index of the ray generation, miss, or callable shader from `RayTracingPipelineDesc::stages` in the group if the shader group has type of `GroupType::General`, and VK_SHADER_UNUSED_KHR otherwise.
-    pub general_shader: u32,
-
-    /// TODO docs
-    /// is the optional index of the closest hit shader from `RayTracingPipelineDesc::stages` in the group if the shader group has type of `GroupType::TrianglesHitGroup` or `GroupType::ProceduralHitGroup`, and VK_SHADER_UNUSED_KHR otherwise.
-    pub closest_hit_shader: u32,
-
-    /// TODO docs
-    /// is the optional index of the any-hit shader from `RayTracingPipelineDesc::stages` in the group if the shader group has type of `GroupType::TrianglesHitGroup` or `GroupType::ProceduralHitGroup`, and VK_SHADER_UNUSED_KHR otherwise.
-    pub any_hit_shader: u32,
-
-    /// TODO docs
-    /// is the index of the intersection shader from `RayTracingPipelineDesc::stages` in the group if the shader group has type of `GroupType::ProceduralHitGroup`, and VK_SHADER_UNUSED_KHR otherwise.
-    pub intersection_shader: u32,
-    // TODO(capture-replay)
-    // const void*                       pShaderGroupCaptureReplayHandle;
+// https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkRayTracingShaderGroupTypeKHR.html
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShaderGroupDesc {
+    /// Specifies a shader group with a single shader in it.
+    General {
+        /// The index into the ray generation, miss, or callable shader from [`RayTracingPipelineDesc::stages`].
+        general_shader: u32,
+    },
+    /// Specifies a shader group that only hits triangles.
+    TrianglesHitGroup {
+        /// The optional index into the closest hit shader from [`RayTracingPipelineDesc::stages`].
+        closest_hit_shader: Option<u32>,
+        /// The optional index into the any hit shader from [`RayTracingPipelineDesc::stages`].
+        any_hit_shader: Option<u32>,
+    },
+    /// Specifies a shader group that only intersects with custom geometry.
+    ProceduralHitGroup {
+        /// The optional index into the closest hit shader from [`RayTracingPipelineDesc::stages`].
+        closest_hit_shader: Option<u32>,
+        /// The optional index into the any hit shader from [`RayTracingPipelineDesc::stages`].
+        any_hit_shader: Option<u32>,
+        /// The index into the intersection shader from [`RayTracingPipelineDesc::stages`].
+        intersection_shader: u32,
+    },
 }
 
 /// TODO docs

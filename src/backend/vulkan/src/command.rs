@@ -1080,6 +1080,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         desc: &'a hal::acceleration_structure::BuildDesc<'a, Backend>,
         ranges: &'a [hal::acceleration_structure::BuildRangeDesc],
     ) {
+        let geometries = conv::map_geometries(&self.device, desc.geometry.geometries.iter());
         self.device
             .extension_fns
             .acceleration_structure
@@ -1087,11 +1088,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .expect("Feature ACCELERATION_STRUCTURE must be enabled to call build_acceleration_structure").unwrap_extension()
             .cmd_build_acceleration_structures(
                 self.raw,
-                &[conv::map_geometry_info(&self.device, desc)],
-                &[mem::transmute::<
-                    &[hal::acceleration_structure::BuildRangeDesc],
-                    &[vk::AccelerationStructureBuildRangeInfoKHR],
-                >(ranges)],
+                &[conv::map_geometry_info_without_geometries(&self.device, desc).geometries(&geometries).build()],
+                &[conv::map_build_ranges_infos(ranges)],
             );
     }
 
@@ -1103,6 +1101,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         stride: buffer::Stride,
         max_primitive_counts: &'a [u32],
     ) {
+        let geometries = conv::map_geometries(&self.device, desc.geometry.geometries.iter());
         self.device
             .extension_fns
             .acceleration_structure
@@ -1110,7 +1109,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .expect("Feature ACCELERATION_STRUCTURE must be enabled to call build_acceleration_structure_indirect").unwrap_extension()
             .cmd_build_acceleration_structures_indirect(
                 self.raw,
-                &[conv::map_geometry_info(&self.device, desc)],
+                &[conv::map_geometry_info_without_geometries(&self.device, desc).geometries(&geometries).build()],
                 &[self.device.get_buffer_device_address(buffer, offset)],
                 &[stride],
                 &[max_primitive_counts],
@@ -1228,7 +1227,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .extension_fns
             .ray_tracing_pipeline
             .as_ref()
-            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call set_ray_tracing_pipeline_stack_size")
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call set_ray_tracing_pipeline_stack_size")
+            .unwrap_extension()
             .cmd_set_ray_tracing_pipeline_stack_size(self.raw, pipeline_stack_size);
     }
 
@@ -1244,7 +1244,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .extension_fns
             .ray_tracing_pipeline
             .as_ref()
-            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call trace_rays")
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call trace_rays")
+            .unwrap_extension()
             .cmd_trace_rays(
                 self.raw,
                 &conv::map_shader_binding_table(&self.device, raygen_shader_binding_table),
@@ -1271,7 +1272,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .extension_fns
             .ray_tracing_pipeline
             .as_ref()
-            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call trace_rays_indirect")
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call trace_rays_indirect")
+            .unwrap_extension()
             .cmd_trace_rays_indirect(
                 self.raw,
                 &[conv::map_shader_binding_table(

@@ -782,10 +782,11 @@ pub unsafe fn map_geometries<'a>(
         .collect::<Vec<_>>()
 }
 
-pub unsafe fn map_geometry_info(
+/// Convert all fields of `desc`, except `geometries`. The caller should call `map_geometries` and add it to the builder manually to ensure the lifetime of the resulting collection lives long enough.
+pub unsafe fn map_geometry_info_without_geometries<'a>(
     device: &crate::RawDevice,
-    desc: &hal::acceleration_structure::BuildDesc<crate::Backend>,
-) -> vk::AccelerationStructureBuildGeometryInfoKHR {
+    desc: &'a hal::acceleration_structure::BuildDesc<crate::Backend>,
+) -> vk::AccelerationStructureBuildGeometryInfoKHRBuilder<'a> {
     vk::AccelerationStructureBuildGeometryInfoKHR::builder()
         .ty(map_acceleration_structure_type(desc.geometry.ty))
         .flags(map_acceleration_structure_flags(desc.geometry.flags))
@@ -796,14 +797,16 @@ pub unsafe fn map_geometry_info(
         })
         .src_acceleration_structure(desc.src.map(|a| a.0).unwrap_or_default())
         .dst_acceleration_structure(desc.dst.0)
-        .geometries(
-            // TODO: this is unsafe since the lifetime of this vec could be shorter than its caller?
-            map_geometries(device, desc.geometry.geometries.iter()).as_slice(),
-        )
         .scratch_data(vk::DeviceOrHostAddressKHR {
             device_address: device.get_buffer_device_address(desc.scratch, desc.scratch_offset),
         })
-        .build()
+}
+
+pub unsafe fn map_build_ranges_infos(
+    build_ranges: &[hal::acceleration_structure::BuildRangeDesc],
+) -> &[vk::AccelerationStructureBuildRangeInfoKHR] {
+    // Safe because `BuildRangeDesc` and `AccelerationStructureBuildRangeInfoKHR` have the same layout.
+    mem::transmute(build_ranges)
 }
 
 pub fn map_group_shader(group_shader: pso::GroupShader) -> vk::ShaderGroupShaderKHR {
@@ -913,39 +916,57 @@ pub fn map_shader_stage(stage: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
     flags
 }
 
-pub fn map_group_type(group_type: pso::GroupType) -> vk::RayTracingShaderGroupTypeKHR {
-    match group_type {
-        pso::GroupType::General => vk::RayTracingShaderGroupTypeKHR::GENERAL,
-        pso::GroupType::TrianglesHitGroup => vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP,
-        pso::GroupType::ProceduralHitGroup => {
-            vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP
-        }
-    }
-}
-
 pub fn map_shader_group_desc(
     desc: &pso::ShaderGroupDesc,
 ) -> vk::RayTracingShaderGroupCreateInfoKHR {
-    vk::RayTracingShaderGroupCreateInfoKHR::builder()
-        .ty(map_group_type(desc.ty))
-        .general_shader(desc.general_shader)
-        .closest_hit_shader(desc.closest_hit_shader)
-        .any_hit_shader(desc.any_hit_shader)
-        .intersection_shader(desc.intersection_shader)
-        .build()
+    match desc {
+        pso::ShaderGroupDesc::General { general_shader } => {
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                .general_shader(*general_shader)
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
+                .build()
+        }
+
+        pso::ShaderGroupDesc::TrianglesHitGroup {
+            closest_hit_shader,
+            any_hit_shader,
+        } => vk::RayTracingShaderGroupCreateInfoKHR::builder()
+            .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
+            .general_shader(vk::SHADER_UNUSED_KHR)
+            .closest_hit_shader(closest_hit_shader.unwrap_or(vk::SHADER_UNUSED_KHR))
+            .any_hit_shader(any_hit_shader.unwrap_or(vk::SHADER_UNUSED_KHR))
+            .intersection_shader(vk::SHADER_UNUSED_KHR)
+            .build(),
+
+        pso::ShaderGroupDesc::ProceduralHitGroup {
+            closest_hit_shader,
+            any_hit_shader,
+            intersection_shader,
+        } => vk::RayTracingShaderGroupCreateInfoKHR::builder()
+            .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
+            .general_shader(vk::SHADER_UNUSED_KHR)
+            .closest_hit_shader(closest_hit_shader.unwrap_or(vk::SHADER_UNUSED_KHR))
+            .any_hit_shader(any_hit_shader.unwrap_or(vk::SHADER_UNUSED_KHR))
+            .intersection_shader(*intersection_shader)
+            .build(),
+    }
 }
 
 pub unsafe fn map_shader_binding_table(
     device: &crate::RawDevice,
     table: Option<pso::ShaderBindingTable<crate::Backend>>,
 ) -> vk::StridedDeviceAddressRegionKHR {
-    if let Some(table) = table {
-        vk::StridedDeviceAddressRegionKHR::builder()
-            .device_address(device.get_buffer_device_address(table.buffer, table.offset))
-            .stride(table.stride as u64)
-            .size(table.size)
-            .build()
-    } else {
-        vk::StridedDeviceAddressRegionKHR::default()
-    }
+    table.map_or_else(
+        || vk::StridedDeviceAddressRegionKHR::default(),
+        |table| {
+            vk::StridedDeviceAddressRegionKHR::builder()
+                .device_address(device.get_buffer_device_address(table.buffer, table.offset))
+                .stride(table.stride as u64)
+                .size(table.size)
+                .build()
+        },
+    )
 }

@@ -744,14 +744,14 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     // }
 
     /// TODO docs
-    // `data` must be at least `shaderGroupHandleCaptureReplaySize * groupCount`
+    // `data_size` must be at least `shaderGroupHandleSize * groupCount`
     unsafe fn get_ray_tracing_shader_group_handles<'a>(
         &self,
         _pipeline: &'a B::RayTracingPipeline,
         _first_group: u32,
         _group_count: u32,
-        _data: &mut [u8],
-    ) -> Result<(), OutOfMemory> {
+        _data_size: usize,
+    ) -> Result<Vec<u8>, OutOfMemory> {
         unimplemented!()
     }
 

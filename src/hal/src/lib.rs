@@ -293,7 +293,7 @@ bitflags! {
 
         /// Supports acceleration structures.
         ///
-        /// Requires `RAY_TRACING_PIPELINES` or `RAY_QUERY` to also be enabled.
+        /// Requires `RAY_TRACING_PIPELINE` or `RAY_QUERY` to also be enabled.
         const ACCELERATION_STRUCTURE = 0x0000_0008 << 96;
         /// Supports a command to indirectly build an acceleration structure.
         // TODO should this be part of `AccelerationStructureProperties`? The diff would be if app can depend on this feature vs. check for its availability.

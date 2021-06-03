@@ -43,7 +43,6 @@ use hal::{
     window::{OutOfDate, PresentError, Suboptimal, SurfaceLost},
     Features,
 };
-use vk::PhysicalDeviceProperties2;
 
 use std::{
     borrow::Cow,

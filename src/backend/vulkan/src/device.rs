@@ -463,10 +463,11 @@ impl<'a> RayTracingPipelineInfoBuf<'a> {
         this.shader_groups = desc
             .stages
             .iter()
-            .map(|(_stage, entry_point)| {
+            .map(|stage_desc| {
                 let mut buf = ComputePipelineInfoBuf::default();
-                buf.c_string = CString::new(entry_point.entry).unwrap();
-                buf.entries = entry_point
+                buf.c_string = CString::new(stage_desc.entry_point.entry).unwrap();
+                buf.entries = stage_desc
+                    .entry_point
                     .specialization
                     .constants
                     .iter()
@@ -479,8 +480,8 @@ impl<'a> RayTracingPipelineInfoBuf<'a> {
                 buf.specialization = vk::SpecializationInfo {
                     map_entry_count: buf.entries.len() as _,
                     p_map_entries: buf.entries.as_ptr(),
-                    data_size: entry_point.specialization.data.len() as _,
-                    p_data: entry_point.specialization.data.as_ptr() as _,
+                    data_size: stage_desc.entry_point.specialization.data.len() as _,
+                    p_data: stage_desc.entry_point.specialization.data.as_ptr() as _,
                 };
                 buf
             })
@@ -927,6 +928,26 @@ impl d::Device<B> for super::Device {
     ) -> Result<n::RayTracingPipeline, pso::CreationError> {
         let buf = RayTracingPipelineInfoBuf::new(desc);
 
+        let stages = desc
+            .stages
+            .iter()
+            .zip(&buf.shader_groups)
+            .map(|(stage_desc, buf)| {
+                vk::PipelineShaderStageCreateInfo::builder()
+                    .flags(vk::PipelineShaderStageCreateFlags::empty())
+                    .stage(conv::map_shader_stage(stage_desc.stage))
+                    .module(stage_desc.entry_point.module.raw)
+                    .name(buf.c_string.as_c_str())
+                    .specialization_info(&buf.specialization)
+                    .build()
+            })
+            .collect::<Vec<_>>();
+        let groups = desc
+            .groups
+            .iter()
+            .map(conv::map_shader_group_desc)
+            .collect::<Vec<_>>();
+
         let info = {
             let (base_handle, base_index) = match desc.parent {
                 pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
@@ -936,29 +957,8 @@ impl d::Device<B> for super::Device {
 
             vk::RayTracingPipelineCreateInfoKHR::builder()
                 .flags(conv::map_pipeline_create_flags(desc.flags, &desc.parent))
-                .stages(
-                    desc.stages
-                        .iter()
-                        .zip(&buf.shader_groups)
-                        .map(|((stage, entry), buf)| {
-                            vk::PipelineShaderStageCreateInfo::builder()
-                                .flags(vk::PipelineShaderStageCreateFlags::empty())
-                                .stage(conv::map_shader_stage(*stage))
-                                .module(entry.module.raw)
-                                .name(buf.c_string.as_c_str())
-                                .specialization_info(&buf.specialization)
-                                .build()
-                        })
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                )
-                .groups(
-                    desc.groups
-                        .iter()
-                        .map(conv::map_shader_group_desc)
-                        .collect::<Vec<_>>()
-                        .as_slice(),
-                )
+                .stages(&stages)
+                .groups(&groups)
                 .max_pipeline_ray_recursion_depth(desc.max_pipeline_ray_recursion_depth)
                 // .library_info()
                 // .library_interface()
@@ -966,7 +966,6 @@ impl d::Device<B> for super::Device {
                 .layout(desc.layout.raw)
                 .base_pipeline_handle(base_handle)
                 .base_pipeline_index(base_index)
-                .build()
         };
 
         // TODO create_ray_tracing_pipelines also returns VK_OPERATION_DEFERRED_KHR, VK_OPERATION_NOT_DEFERRED_KHR, VK_PIPELINE_COMPILE_REQUIRED_EXT on success, but ash does not support this.
@@ -975,11 +974,14 @@ impl d::Device<B> for super::Device {
             .extension_fns
             .ray_tracing_pipeline
             .as_ref()
-            .expect("TODO msg")
+            .expect(
+                "Feature RAY_TRACING_PIPELINE must be enabled to call create_ray_tracing_pipeline",
+            )
+            .unwrap_extension()
             .create_ray_tracing_pipelines(
                 vk::DeferredOperationKHR::null(),
                 cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
-                &[info],
+                &[info.build()],
                 None,
             ) {
             Ok(pipelines) => {
@@ -2012,24 +2014,21 @@ impl d::Device<B> for super::Device {
         pipeline: &'a n::RayTracingPipeline,
         first_group: u32,
         group_count: u32,
-        data: &mut [u8],
-    ) -> Result<(), d::OutOfMemory> {
-        // TODO: data_size? ash returns a vec<>, but vulkan takes a pointer. either way needs data_size, which must be user-provided based on the physical device limits
-        // let result = self
-        //     .shared
-        //     .extension_fns
-        //     .ray_tracing_pipeline
-        //     .as_ref()
-        //     .expect("TODO msg")
-        //     .get_ray_tracing_shader_group_handles(pipeline.0, first_group, group_count);
+        data_size: usize,
+    ) -> Result<Vec<u8>, d::OutOfMemory> {
+        let result = self
+            .shared
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call get_ray_tracing_shader_group_handles").unwrap_extension()
+            .get_ray_tracing_shader_group_handles(pipeline.0, first_group, group_count, data_size);
 
-        // match result {
-        //     Ok(_) => Ok(()),
-        //     Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
-        //     _ => unreachable!(),
-        // }
-
-        todo!()
+        match result {
+            Ok(data) => Ok(data),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
+            _ => unreachable!(),
+        }
     }
 
     unsafe fn get_ray_tracing_shader_group_stack_size<'a>(
@@ -2042,9 +2041,9 @@ impl d::Device<B> for super::Device {
             .extension_fns
             .ray_tracing_pipeline
             .as_ref()
-            .expect("TODO msg")
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call get_ray_tracing_shader_group_stack_size")
+            .unwrap_extension()
             .get_ray_tracing_shader_group_stack_size(
-                self.shared.raw.handle(),
                 pipeline.0,
                 group,
                 conv::map_group_shader(group_shader),
