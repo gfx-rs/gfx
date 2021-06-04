@@ -3588,7 +3588,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn import_external_buffer(
         &self,
-        _external_memory: hal::external_memory::ExternalMemory,
+        _external_memory: hal::external_memory::ExternalBufferMemory,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
         _mem_types: u32,
@@ -3614,7 +3614,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn import_external_image(
         &self,
-        _external_memory: hal::external_memory::ExternalMemory,
+        _external_memory: hal::external_memory::ExternalImageMemory,
         _kind: image::Kind,
         _num_levels: image::Level,
         _format: hal::format::Format,
@@ -3631,10 +3631,14 @@ impl hal::device::Device<Backend> for Device {
         &self,
         _external_memory_type: hal::external_memory::ExternalMemoryType,
         _memory: &n::Memory,
-    ) -> Result<hal::external_memory::ExternalMemory, hal::external_memory::ExternalMemoryExportError>
+    ) -> Result<hal::external_memory::PlatformMemory, hal::external_memory::ExternalMemoryExportError>
     {
         unimplemented!()
     }
+
+    /// Query the underlying drm format modifier from an image.
+    unsafe fn drm_format_modifier(&self, _image: &n::Image) -> Option<hal::format::DrmModifier>{None}
+
 
     fn start_capture(&self) {
         let device = self.shared.device.lock();
