@@ -592,7 +592,7 @@ impl PhysicalDeviceInfo {
             requested_extensions.push(vk::KhrGetDisplayProperties2Fn::name()); // TODO NOT NEEDED, RIGHT?
         }
 
-        if self.supports_extension(vk::ExtDisplayControlFn::name()){
+        if self.supports_extension(vk::ExtDisplayControlFn::name()) {
             requested_extensions.push(vk::ExtDisplayControlFn::name());
         }
 
@@ -680,18 +680,18 @@ impl PhysicalDeviceInfo {
             }
 
             match get_device_properties {
-                ExtensionFn::Promoted=>{
+                ExtensionFn::Promoted => {
                     use ash::version::InstanceV1_1;
                     unsafe {
-                        instance.inner.get_physical_device_features2(device, &mut features2 );
+                        instance
+                            .inner
+                            .get_physical_device_features2(device, &mut features2);
                     }
                 }
-                ExtensionFn::Extension(get_device_properties)=>{
-                    unsafe {
-                        get_device_properties
-                            .get_physical_device_features2_khr(device, &mut features2 as *mut _);
-                    }
-                }
+                ExtensionFn::Extension(get_device_properties) => unsafe {
+                    get_device_properties
+                        .get_physical_device_features2_khr(device, &mut features2 as *mut _);
+                },
             }
 
             features2.features
@@ -801,15 +801,13 @@ impl PhysicalDevice {
         };
 
         let display_control = if enabled_extensions.contains(&vk::ExtDisplayControlFn::name()) {
-            Some(vk::ExtDisplayControlFn::load(
-                |name| {
-                    std::mem::transmute(
-                        self.instance
-                            .inner
-                            .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
-                    )
-                },
-            ))
+            Some(vk::ExtDisplayControlFn::load(|name| {
+                std::mem::transmute(
+                    self.instance
+                        .inner
+                        .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                )
+            }))
         } else {
             None
         };
@@ -895,15 +893,11 @@ impl PhysicalDevice {
             }
             #[cfg(unix)]
             {
-                external_memory_fd =
-                    if enabled_extensions.contains(&ExternalMemoryFd::name()) {
-                        Some(ExternalMemoryFd::new(
-                            &self.instance.inner,
-                            &device_raw,
-                        ))
-                    } else {
-                        None
-                    };
+                external_memory_fd = if enabled_extensions.contains(&ExternalMemoryFd::name()) {
+                    Some(ExternalMemoryFd::new(&self.instance.inner, &device_raw))
+                } else {
+                    None
+                };
 
                 #[cfg(any(target_os = "linux", target_os = "android"))]
                 {
@@ -949,7 +943,6 @@ impl PhysicalDevice {
                 external_memory_win32 = None;
             }
         }
-
 
         #[cfg(feature = "naga")]
         let naga_options = {
@@ -1245,23 +1238,25 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .available_features
             .contains(Features::SAMPLER_REDUCTION);
 
-        let (properties,drm_format_properties) = unsafe {
+        let (properties, drm_format_properties) = unsafe {
             match self.instance.get_physical_device_properties {
-                None=>{
-                    let format_properties = self.instance.inner.get_physical_device_format_properties(
-                        self.handle,
-                        format.map_or(vk::Format::UNDEFINED, conv::map_format),
-                    );
-                    (format_properties,Vec::new())
+                None => {
+                    let format_properties =
+                        self.instance.inner.get_physical_device_format_properties(
+                            self.handle,
+                            format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                        );
+                    (format_properties, Vec::new())
                 }
-                Some(ref extension)=>{
-                    let mut drm_format_properties = vk::DrmFormatModifierPropertiesListEXT::builder().build();
+                Some(ref extension) => {
+                    let mut drm_format_properties =
+                        vk::DrmFormatModifierPropertiesListEXT::builder().build();
                     let mut format_properties2 = vk::FormatProperties2::builder()
                         .push_next(&mut drm_format_properties)
                         .build();
 
                     match extension {
-                        ExtensionFn::Promoted=>{
+                        ExtensionFn::Promoted => {
                             use ash::version::InstanceV1_1;
                             self.instance.inner.get_physical_device_format_properties2(
                                 self.handle,
@@ -1269,7 +1264,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                                 &mut format_properties2,
                             );
                         }
-                        ExtensionFn::Extension(extension)=>{
+                        ExtensionFn::Extension(extension) => {
                             extension.get_physical_device_format_properties2_khr(
                                 self.handle,
                                 format.map_or(vk::Format::UNDEFINED, conv::map_format),
@@ -1296,17 +1291,19 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                             } else {
                                 Some(format::DrmFormatProperties {
                                     drm_modifier: format_modifier,
-                                    plane_count: format_modifier_properties.drm_format_modifier_plane_count,
+                                    plane_count: format_modifier_properties
+                                        .drm_format_modifier_plane_count,
                                     valid_usages: conv::map_image_features(
-                                        format_modifier_properties.drm_format_modifier_tiling_features,
+                                        format_modifier_properties
+                                            .drm_format_modifier_tiling_features,
                                         supports_transfer_bits,
-                                        supports_sampler_filter_minmax
+                                        supports_sampler_filter_minmax,
                                     ),
                                 })
                             }
                         })
                         .collect();
-                    (format_properties2.format_properties,format_modifiers)
+                    (format_properties2.format_properties, format_modifiers)
                 }
             }
         };
@@ -1323,7 +1320,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 supports_sampler_filter_minmax,
             ),
             buffer_features: conv::map_buffer_features(properties.buffer_features),
-            drm_format_properties
+            drm_format_properties,
         }
     }
 
@@ -1414,9 +1411,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         usage: hal::buffer::Usage,
         sparse: hal::memory::SparseFlags,
-        memory_type: external_memory::ExternalMemoryType,
+        external_memory_type: external_memory::ExternalMemoryType,
     ) -> external_memory::ExternalMemoryProperties {
-        let vk_external_memory_type = conv::map_external_memory_handle_types(memory_type.into());
+        let external_memory_type_flags: hal::external_memory::ExternalMemoryTypeFlags =
+            external_memory_type.into();
+        let vk_external_memory_type =
+            vk::ExternalMemoryHandleTypeFlags::from_raw(external_memory_type_flags.bits());
 
         let external_buffer_info = vk::PhysicalDeviceExternalBufferInfo::builder()
             .flags(conv::map_buffer_create_flags(sparse))
@@ -1501,8 +1501,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         use ash::version::InstanceV1_1;
+        let external_memory_type_flags: hal::external_memory::ExternalMemoryTypeFlags =
+            external_memory_type.into();
         let vk_external_memory_type =
-            conv::map_external_memory_handle_types(external_memory_type.into());
+            vk::ExternalMemoryHandleTypeFlags::from_raw(external_memory_type_flags.bits());
+
         let mut external_image_format_info = vk::PhysicalDeviceExternalImageFormatInfo::builder()
             .handle_type(vk_external_memory_type)
             .build();
@@ -1709,25 +1712,28 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 vk::PhysicalDeviceExternalMemoryHostPropertiesEXT::builder();
 
             let mut physical_device_properties2 = vk::PhysicalDeviceProperties2::builder()
-                        .push_next(&mut descriptor_indexing_properties)
-                        .push_next(&mut mesh_shader_properties)
-                        .push_next(&mut sampler_reduction_properties)
-                        .push_next(&mut memory_host_properties)
-                        .build();
+                .push_next(&mut descriptor_indexing_properties)
+                .push_next(&mut mesh_shader_properties)
+                .push_next(&mut sampler_reduction_properties)
+                .push_next(&mut memory_host_properties)
+                .build();
 
             match get_physical_device_properties {
-                ExtensionFn::Promoted=>{
+                ExtensionFn::Promoted => {
                     use ash::version::InstanceV1_1;
                     unsafe {
-                        self.instance.inner.get_physical_device_properties2(self.handle, &mut physical_device_properties2 );
+                        self.instance.inner.get_physical_device_properties2(
+                            self.handle,
+                            &mut physical_device_properties2,
+                        );
                     }
                 }
-                ExtensionFn::Extension(get_physical_device_properties)=>{
-                    unsafe {
-                        get_physical_device_properties
-                            .get_physical_device_properties2_khr(self.handle,&mut physical_device_properties2);
-                    }
-                }
+                ExtensionFn::Extension(get_physical_device_properties) => unsafe {
+                    get_physical_device_properties.get_physical_device_properties2_khr(
+                        self.handle,
+                        &mut physical_device_properties2,
+                    );
+                },
             }
 
             descriptor_indexing_capabilities = hal::DescriptorIndexingProperties {
@@ -1857,9 +1863,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         true
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<display::Display<Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<display::Display<Backend>> {
         let display_extension = match self.instance.display {
             Some(ref display_extension) => display_extension,
             None => {
@@ -1868,23 +1872,31 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
-        let display_properties = match display_extension
-            .get_physical_device_display_properties(self.handle)
-        {
-            Ok(display_properties) => display_properties,
-            Err(err)=>{
-                match err {
-                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
-                        error!("Error returned on `get_physical_device_display_properties`: {:#?}",err),
-                    err=>error!("Unexpected error on `get_physical_device_display_properties`: {:#?}",err)
+        let display_properties =
+            match display_extension.get_physical_device_display_properties(self.handle) {
+                Ok(display_properties) => display_properties,
+                Err(err) => {
+                    match err {
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                        | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => error!(
+                            "Error returned on `get_physical_device_display_properties`: {:#?}",
+                            err
+                        ),
+                        err => error!(
+                            "Unexpected error on `get_physical_device_display_properties`: {:#?}",
+                            err
+                        ),
+                    }
+                    return Vec::new();
                 }
-                return Vec::new();
-            }
-        };
+            };
 
         let mut displays = Vec::new();
         for display_property in display_properties {
-            let supported_transforms = hal::display::SurfaceTransformFlags::from_bits(display_property.supported_transforms.as_raw()).unwrap();
+            let supported_transforms = hal::display::SurfaceTransformFlags::from_bits(
+                display_property.supported_transforms.as_raw(),
+            )
+            .unwrap();
             let display_name = if display_property.display_name.is_null() {
                 None
             } else {
@@ -1917,11 +1929,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .get_display_mode_properties(self.handle, display_property.display)
             {
                 Ok(display_modes) => display_modes,
-                Err(err)=>{
+                Err(err) => {
                     match err {
-                        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
-                            error!("Error returned on `get_display_mode_properties`: {:#?}",err),
-                        err=>error!("Unexpected error on `get_display_mode_properties`: {:#?}",err)
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                        | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => error!(
+                            "Error returned on `get_display_mode_properties`: {:#?}",
+                            err
+                        ),
+                        err => error!(
+                            "Unexpected error on `get_display_mode_properties`: {:#?}",
+                            err
+                        ),
                     }
                     return Vec::new();
                 }
@@ -1968,7 +1986,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         .get_display_plane_supported_displays(self.handle, index as u32)
                     {
                         Ok(compatible_displays) => compatible_displays,
-                        Err(err)=>{
+                        Err(err) => {
                             match err {
                                 vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
                                     error!("Error returned on `get_display_plane_supported_displays`: {:#?}",err),
@@ -1986,11 +2004,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 }
                 planes
             }
-            Err(err)=>{
+            Err(err) => {
                 match err {
-                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
-                        error!("Error returned on `get_physical_device_display_plane_properties`: {:#?}",err),
-                    err=>error!("Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",err)
+                    vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                    | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => error!(
+                        "Error returned on `get_physical_device_display_plane_properties`: {:#?}",
+                        err
+                    ),
+                    err => error!(
+                        "Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",
+                        err
+                    ),
                 }
                 Vec::new()
             }
@@ -2090,49 +2114,50 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 start: (
                     display_plane_capabilities.min_src_position.x,
                     display_plane_capabilities.min_src_position.x,
-                    )
+                )
                     .into(),
                 end: (
                     display_plane_capabilities.max_src_position.x,
                     display_plane_capabilities.max_src_position.x,
-                    ).into()
+                )
+                    .into(),
             },
             src_extent: std::ops::Range {
                 start: (
                     display_plane_capabilities.min_src_extent.width,
                     display_plane_capabilities.min_src_extent.height,
                 )
-                .into(),
+                    .into(),
                 end: (
                     display_plane_capabilities.max_src_extent.width,
                     display_plane_capabilities.max_src_extent.height,
                 )
-                .into(),
+                    .into(),
             },
             dst_position: std::ops::Range {
                 start: (
                     display_plane_capabilities.min_dst_position.x,
                     display_plane_capabilities.min_dst_position.x,
                 )
-                .into(),
+                    .into(),
                 end: (
                     display_plane_capabilities.max_dst_position.x,
                     display_plane_capabilities.max_dst_position.x,
                 )
-                .into(),
+                    .into(),
             },
             dst_extent: std::ops::Range {
                 start: (
                     display_plane_capabilities.min_dst_extent.width,
                     display_plane_capabilities.min_dst_extent.height,
                 )
-                .into(),
+                    .into(),
                 end: (
                     display_plane_capabilities.max_dst_extent.width,
                     display_plane_capabilities.max_dst_extent.height,
                 )
-                .into(),
-            }
+                    .into(),
+            },
         })
     }
 }

@@ -474,9 +474,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.properties
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<display::Display<crate::Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<display::Display<crate::Backend>> {
         unimplemented!();
     }
 

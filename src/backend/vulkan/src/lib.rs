@@ -489,15 +489,17 @@ impl Instance {
             Some(ExtensionFn::Promoted)
         } else {
             extensions
-            .iter()
-            .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
-            .map(|_| {
-                ExtensionFn::Extension(vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| unsafe {
-                    std::mem::transmute(
-                        entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
-                    )
-                }))
-            })
+                .iter()
+                .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
+                .map(|_| {
+                    ExtensionFn::Extension(vk::KhrGetPhysicalDeviceProperties2Fn::load(
+                        |name| unsafe {
+                            std::mem::transmute(
+                                entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
+                            )
+                        },
+                    ))
+                })
         };
 
         let display = extensions
@@ -559,7 +561,7 @@ impl Instance {
                 debug_messenger,
                 get_physical_device_properties,
                 display,
-                external_memory_capabilities
+                external_memory_capabilities,
             }),
             extensions,
             entry,
@@ -753,7 +755,8 @@ impl hal::Instance<Backend> for Instance {
             }
         };
         let surface_transform_flags = hal::display::SurfaceTransformFlags::from(transformation);
-        let vk_surface_transform_flags = vk::SurfaceTransformFlagsKHR::from_raw(surface_transform_flags.bits());
+        let vk_surface_transform_flags =
+            vk::SurfaceTransformFlagsKHR::from_raw(surface_transform_flags.bits());
 
         let display_surface_ci = {
             let builder = vk::DisplaySurfaceCreateInfoKHR::builder()

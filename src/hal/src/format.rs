@@ -140,13 +140,12 @@ pub struct DrmFormatProperties {
     pub valid_usages: ImageFeature,
 }
 impl Default for DrmFormatProperties {
-    fn default()->Self {
+    fn default() -> Self {
         Self {
             drm_modifier: DrmModifier::Invalid,
             plane_count: 0,
-            valid_usages: ImageFeature::default()
+            valid_usages: ImageFeature::default(),
         }
-
     }
 }
 
@@ -164,7 +163,7 @@ pub struct Properties {
     /// The features supported by buffers.
     pub buffer_features: BufferFeature,
     /// Drm format properties
-    pub drm_format_properties: Vec<DrmFormatProperties>
+    pub drm_format_properties: Vec<DrmFormatProperties>,
 }
 
 //Note: these are detached from Vulkan!

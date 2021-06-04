@@ -608,7 +608,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             linear_tiling: If::TRANSFER_SRC | If::TRANSFER_DST | If::empty(),
             optimal_tiling: If::TRANSFER_SRC | If::TRANSFER_DST | If::SAMPLED,
             buffer_features: Bf::VERTEX,
-            drm_format_properties: Vec::new()
+            drm_format_properties: Vec::new(),
         }
     }
 
@@ -702,9 +702,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.0.public_caps
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<display::Display<crate::Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<display::Display<crate::Backend>> {
         unimplemented!();
     }
 

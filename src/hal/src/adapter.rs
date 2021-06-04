@@ -154,9 +154,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # Arguments
     ///
     /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<display::Display<B>>;
+    unsafe fn enumerate_displays(&self) -> Vec<display::Display<B>>;
 
     /// Enumerate compatibles planes with the provided display.
     /// # Arguments

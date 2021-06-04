@@ -736,11 +736,10 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         fence: &mut B::Fence,
     ) -> Result<(), display::control::DisplayControlError>;
 
-
     /// Create, allocate and bind an external buffer
     unsafe fn create_allocate_external_buffer(
         &self,
-        external_memory_type_flags: external_memory::ExternalMemoryTypeFlags,
+        external_memory_type_flags: external_memory::ExternalBufferMemoryType,
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
         type_mask: u32,
@@ -750,7 +749,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Import external memory as binded buffer and memory
     unsafe fn import_external_buffer(
         &self,
-        external_memory: external_memory::ExternalMemory,
+        external_memory: external_memory::ExternalBufferMemory,
         usage: buffer::Usage,
         sparse: memory::SparseFlags,
         type_mask: u32,
@@ -760,7 +759,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Create, allocate and bind an external image
     unsafe fn create_allocate_external_image(
         &self,
-        external_memory_type_flags: external_memory::ExternalMemoryTypeFlags,
+        external_memory_type: external_memory::ExternalImageMemoryType,
         kind: image::Kind,
         mip_levels: image::Level,
         format: format::Format,
@@ -774,7 +773,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Import external memory as binded image and memory
     unsafe fn import_external_image(
         &self,
-        external_memory: external_memory::ExternalMemory,
+        external_memory: external_memory::ExternalImageMemory,
         kind: image::Kind,
         mip_levels: image::Level,
         format: format::Format,
@@ -790,7 +789,10 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         external_memory_type: external_memory::ExternalMemoryType,
         memory: &B::Memory,
-    ) -> Result<external_memory::ExternalMemory, external_memory::ExternalMemoryExportError>;
+    ) -> Result<external_memory::PlatformMemory, external_memory::ExternalMemoryExportError>;
+
+    /// Query the underlying drm format modifier from an image.
+    unsafe fn drm_format_modifier(&self, image: &B::Image) -> Option<format::DrmModifier>;
 
     /// Starts frame capture.
     fn start_capture(&self);

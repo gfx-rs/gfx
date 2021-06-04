@@ -3803,7 +3803,7 @@ impl d::Device<B> for Device {
 
     unsafe fn create_allocate_external_buffer(
         &self,
-        _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        _external_memory_type: hal::external_memory::ExternalBufferMemoryType,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
         _type_mask: u32,
@@ -3815,7 +3815,7 @@ impl d::Device<B> for Device {
 
     unsafe fn import_external_buffer(
         &self,
-        _external_memory: hal::external_memory::ExternalMemory,
+        _external_memory: hal::external_memory::ExternalBufferMemory,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
         _type_mask: u32,
@@ -3826,7 +3826,7 @@ impl d::Device<B> for Device {
 
     unsafe fn create_allocate_external_image(
         &self,
-        _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        _external_memory_type: hal::external_memory::ExternalImageMemoryType,
         _kind: hal::image::Kind,
         _mip_levels: hal::image::Level,
         _format: hal::format::Format,
@@ -3841,7 +3841,7 @@ impl d::Device<B> for Device {
 
     unsafe fn import_external_image(
         &self,
-        _external_memory: hal::external_memory::ExternalMemory,
+        _external_memory: hal::external_memory::ExternalImageMemory,
         _kind: hal::image::Kind,
         _mip_levels: hal::image::Level,
         _format: hal::format::Format,
@@ -3858,9 +3858,13 @@ impl d::Device<B> for Device {
         &self,
         _external_memory_type: hal::external_memory::ExternalMemoryType,
         _memory: &r::Memory,
-    ) -> Result<hal::external_memory::ExternalMemory, hal::external_memory::ExternalMemoryExportError>
+    ) -> Result<hal::external_memory::PlatformMemory, hal::external_memory::ExternalMemoryExportError>
     {
         unimplemented!()
+    }
+
+    unsafe fn drm_format_modifier(&self, _image: &r::Image) -> Option<hal::format::DrmModifier> {
+        None
     }
 
     fn start_capture(&self) {

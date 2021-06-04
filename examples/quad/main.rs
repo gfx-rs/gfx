@@ -175,11 +175,7 @@ fn main() {
             }
         });
     } else {
-        let displays = unsafe {
-            adapter
-                .physical_device
-                .enumerate_displays()
-        };
+        let displays = unsafe { adapter.physical_device.enumerate_displays() };
         if displays.len() == 0 {
             panic!("No display is available to create a surface. This means no display is connected or the connected ones are already managed by some other programs. If that is the case, try running the program from a tty terminal.");
         }

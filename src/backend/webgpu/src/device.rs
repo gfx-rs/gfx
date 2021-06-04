@@ -544,7 +544,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn create_allocate_external_buffer(
         &self,
-        _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        _external_memory_type: hal::external_memory::ExternalBufferMemoryType,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
         _type_mask: u32,

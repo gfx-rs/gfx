@@ -625,7 +625,7 @@ pub fn map_vk_memory_heap_flags(flags: vk::MemoryHeapFlags) -> hal::memory::Heap
 }
 
 use hal::external_memory;
-
+/*
 pub fn map_external_memory_handle_types(
     flags: external_memory::ExternalMemoryTypeFlags,
 ) -> vk::ExternalMemoryHandleTypeFlags {
@@ -674,6 +674,7 @@ pub fn map_external_memory_handle_types(
     }
     vk_flags
 }
+*/
 /*
 pub fn map_vk_external_memory_handle_type_flags(
     vk_image_usage: vk::FormatFeatureFlags,

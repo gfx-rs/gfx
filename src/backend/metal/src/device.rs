@@ -308,7 +308,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 linear_tiling: format::ImageFeature::empty(),
                 optimal_tiling: format::ImageFeature::empty(),
                 buffer_features: format::BufferFeature::empty(),
-                drm_format_properties: Vec::new()
+                drm_format_properties: Vec::new(),
             },
         }
     }
@@ -574,9 +574,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<hal::display::Display<crate::Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<hal::display::Display<crate::Backend>> {
         unimplemented!();
     }
 
@@ -3578,7 +3576,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn create_allocate_external_buffer(
         &self,
-        _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        _external_memory_type: hal::external_memory::ExternalBufferMemoryType,
         _usage: hal::buffer::Usage,
         _sparse: hal::memory::SparseFlags,
         _type_mask: u32,
@@ -3599,10 +3597,9 @@ impl hal::device::Device<Backend> for Device {
         unimplemented!()
     }
 
-
     unsafe fn create_allocate_external_image(
         &self,
-        _external_memory_types: hal::external_memory::ExternalMemoryTypeFlags,
+        _external_memory_type: hal::external_memory::ExternalImageMemoryType,
         _kind: image::Kind,
         _num_levels: image::Level,
         _format: hal::format::Format,
@@ -3626,8 +3623,7 @@ impl hal::device::Device<Backend> for Device {
         _sparse: memory::SparseFlags,
         _view_caps: image::ViewCapabilities,
         _type_mask: u32,
-    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError>
-    {
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError> {
         unimplemented!()
     }
 
