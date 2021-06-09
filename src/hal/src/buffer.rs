@@ -85,6 +85,14 @@ bitflags!(
         const VERTEX = 0x80;
         ///
         const INDIRECT = 0x100;
+        ///
+        const SHADER_DEVICE_ADDRESS = 0x20000;
+        ///
+        const ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY = 0x80000;
+        ///
+        const ACCELERATION_STRUCTURE_STORAGE = 0x100000;
+        ///
+        const SHADER_BINDING_TABLE = 0x400;
     }
 );
 
@@ -144,5 +152,9 @@ bitflags!(
         const MEMORY_READ = 0x8000;
         ///
         const MEMORY_WRITE = 0x10000;
+        ///
+        const ACCELERATION_STRUCTURE_READ = 0x200000;
+        ///
+        const ACCELERATION_STRUCTURE_WRITE = 0x400000;
     }
 );

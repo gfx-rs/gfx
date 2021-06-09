@@ -12,7 +12,7 @@
 //! and is used to actually do things.
 
 use crate::{
-    buffer, display, format, image, memory,
+    acceleration_structure, buffer, display, format, image, memory,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -23,7 +23,7 @@ use crate::{
     Backend, MemoryTypeId,
 };
 
-use std::{any::Any, fmt, iter, ops::Range};
+use std::{any::Any, fmt, iter, ops::Range, unimplemented};
 
 /// Error occurred caused device to be lost.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -328,6 +328,22 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// The compute pipeline shouldn't be destroyed before any submitted command buffer,
     /// which references the compute pipeline, has finished execution.
     unsafe fn destroy_compute_pipeline(&self, pipeline: B::ComputePipeline);
+
+    /// TODO docs
+    // TODO(capture-replay) can return VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS
+    // TODO(host-operations) deferredOperation
+    unsafe fn create_ray_tracing_pipeline<'a>(
+        &self,
+        _desc: &pso::RayTracingPipelineDesc<'a, B>,
+        _cache: Option<&B::PipelineCache>,
+    ) -> Result<B::RayTracingPipeline, pso::CreationError> {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    unsafe fn destroy_ray_tracing_pipeline(&self, _pipeline: B::RayTracingPipeline) {
+        unimplemented!()
+    }
 
     /// Create a new framebuffer object.
     ///
@@ -673,6 +689,82 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         flags: query::ResultFlags,
     ) -> Result<bool, WaitError>;
 
+    /// Create an acceleration structure object.
+    unsafe fn create_acceleration_structure(
+        &self,
+        _desc: &acceleration_structure::CreateDesc<B>,
+    ) -> Result<B::AccelerationStructure, OutOfMemory> {
+        unimplemented!()
+    }
+
+    /// Destroy an acceleration structure object.
+    unsafe fn destroy_acceleration_structure(&self, _accel_struct: B::AccelerationStructure) {
+        unimplemented!()
+    }
+
+    /// Get the size requirements for the buffers needed to build an acceleration structure.
+    ///
+    /// `max_primitive_counts` must contain a number of entries equal to the number of geometries described in `desc`.
+    unsafe fn get_acceleration_structure_build_requirements(
+        &self,
+        _desc: &acceleration_structure::GeometryDesc<B>,
+        _max_primitive_counts: &[u32],
+    ) -> acceleration_structure::SizeRequirements {
+        unimplemented!()
+    }
+
+    /// Get the device address of a bottom-level acceleration structure for use in top-level acceleration structures `acceleration_structure::Instance`s.
+    unsafe fn get_acceleration_structure_address(
+        &self,
+        _accel_struct: &B::AccelerationStructure,
+    ) -> acceleration_structure::DeviceAddress {
+        unimplemented!()
+    }
+
+    /// Determine if a previously serialized acceleration structure (e.g. loaded from disk) is compatible with the current device.
+    ///
+    /// `version_header` is the first 32 bytes of a serialized acceleration struct. If you have a `&[u8]` from loading an acceleration structure, consider using `try_into()` to convert to `&[u8; 32]`.
+    unsafe fn get_device_acceleration_structure_compatibility(
+        &self,
+        _version_header: &[u8; 32],
+    ) -> acceleration_structure::Compatibility {
+        unimplemented!()
+    }
+
+    // // TODO(capture-replay)
+    // // TODO return a buffer of size shaderGroupHandleCaptureReplaySize * groupCount
+    // unsafe fn get_ray_tracing_capture_replay_shader_group_handles<'a>(
+    //     &self,
+    //     _pipeline: &'a B::RayTracingPipeline,
+    //     _first_group: u32,
+    //     _group_count: u32,
+    //     _data: &mut [u8]
+    // ) -> Result<(), OutOfMemory> {
+    //     unimplemented!()
+    // }
+
+    /// TODO docs
+    // `data_size` must be at least `shaderGroupHandleSize * groupCount`
+    unsafe fn get_ray_tracing_shader_group_handles<'a>(
+        &self,
+        _pipeline: &'a B::RayTracingPipeline,
+        _first_group: u32,
+        _group_count: u32,
+        _data_size: usize,
+    ) -> Result<Vec<u8>, OutOfMemory> {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    unsafe fn get_ray_tracing_shader_group_stack_size<'a>(
+        &self,
+        _pipeline: &'a B::RayTracingPipeline,
+        _group: u32,
+        _group_shader: pso::GroupShader,
+    ) -> u64 {
+        unimplemented!()
+    }
+
     /// Wait for all queues associated with this device to idle.
     ///
     /// Host access to all queues needs to be **externally** sycnhronized!
@@ -713,6 +805,15 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Associate a name with a pipeline layout, for easier debugging in external tools or with
     /// validation layers that can print a friendly name when referring to objects in error messages
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut B::PipelineLayout, name: &str);
+    /// Associate a name with an acceleration structure, for easier debugging in external tools or with
+    /// validation layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_acceleration_structure_name(
+        &self,
+        _accel_struct: &mut B::AccelerationStructure,
+        _name: &str,
+    ) {
+        unimplemented!()
+    }
 
     /// Control the power state of the provided display
     unsafe fn set_display_power_state(

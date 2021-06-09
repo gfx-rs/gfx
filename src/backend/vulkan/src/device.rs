@@ -454,15 +454,58 @@ impl<'a> ComputePipelineInfoBuf<'a> {
     }
 }
 
+#[derive(Debug, Default)]
+struct RayTracingPipelineInfoBuf<'a> {
+    shader_groups: Vec<ComputePipelineInfoBuf<'a>>,
+}
+impl<'a> RayTracingPipelineInfoBuf<'a> {
+    unsafe fn new(desc: &pso::RayTracingPipelineDesc<'a, B>) -> Self {
+        let mut this = Self::default();
+        this.shader_groups = desc
+            .stages
+            .iter()
+            .map(|stage_desc| {
+                let mut buf = ComputePipelineInfoBuf::default();
+                buf.c_string = CString::new(stage_desc.entry_point.entry).unwrap();
+                buf.entries = stage_desc
+                    .entry_point
+                    .specialization
+                    .constants
+                    .iter()
+                    .map(|c| vk::SpecializationMapEntry {
+                        constant_id: c.id,
+                        offset: c.range.start as _,
+                        size: (c.range.end - c.range.start) as _,
+                    })
+                    .collect();
+                buf.specialization = vk::SpecializationInfo {
+                    map_entry_count: buf.entries.len() as _,
+                    p_map_entries: buf.entries.as_ptr(),
+                    data_size: stage_desc.entry_point.specialization.data.len() as _,
+                    p_data: stage_desc.entry_point.specialization.data.as_ptr() as _,
+                };
+                buf
+            })
+            .collect();
+        this
+    }
+}
+
 impl d::Device<B> for super::Device {
     unsafe fn allocate_memory(
         &self,
         mem_type: MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
+        let mut flags_info = vk::MemoryAllocateFlagsInfo::builder().flags(
+            // TODO needs Vulkan 1.2? Also either expose in hal or infer from usage?
+            vk::MemoryAllocateFlags::DEVICE_ADDRESS,
+        );
+
         let info = vk::MemoryAllocateInfo::builder()
             .allocation_size(size)
-            .memory_type_index(self.get_ash_memory_type_index(mem_type));
+            .memory_type_index(self.get_ash_memory_type_index(mem_type))
+            .push_next(&mut flags_info);
 
         let result = self.shared.raw.allocate_memory(&info, None);
 
@@ -875,6 +918,85 @@ impl d::Device<B> for super::Device {
             }
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
             vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
+            _ => Err(pso::CreationError::Other),
+        }
+    }
+
+    unsafe fn create_ray_tracing_pipeline<'a>(
+        &self,
+        desc: &pso::RayTracingPipelineDesc<'a, B>,
+        cache: Option<&n::PipelineCache>,
+    ) -> Result<n::RayTracingPipeline, pso::CreationError> {
+        let buf = RayTracingPipelineInfoBuf::new(desc);
+
+        let stages = desc
+            .stages
+            .iter()
+            .zip(&buf.shader_groups)
+            .map(|(stage_desc, buf)| {
+                vk::PipelineShaderStageCreateInfo::builder()
+                    .flags(vk::PipelineShaderStageCreateFlags::empty())
+                    .stage(conv::map_shader_stage(stage_desc.stage))
+                    .module(stage_desc.entry_point.module.raw)
+                    .name(buf.c_string.as_c_str())
+                    .specialization_info(&buf.specialization)
+                    .build()
+            })
+            .collect::<Vec<_>>();
+        let groups = desc
+            .groups
+            .iter()
+            .map(conv::map_shader_group_desc)
+            .collect::<Vec<_>>();
+
+        let info = {
+            let (base_handle, base_index) = match desc.parent {
+                pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
+                pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
+                pso::BasePipeline::None => (vk::Pipeline::null(), -1),
+            };
+
+            vk::RayTracingPipelineCreateInfoKHR::builder()
+                .flags(conv::map_pipeline_create_flags(desc.flags, &desc.parent))
+                .stages(&stages)
+                .groups(&groups)
+                .max_pipeline_ray_recursion_depth(desc.max_pipeline_ray_recursion_depth)
+                // .library_info()
+                // .library_interface()
+                // .dynamic_state()
+                .layout(desc.layout.raw)
+                .base_pipeline_handle(base_handle)
+                .base_pipeline_index(base_index)
+        };
+
+        // TODO create_ray_tracing_pipelines also returns VK_OPERATION_DEFERRED_KHR, VK_OPERATION_NOT_DEFERRED_KHR, VK_PIPELINE_COMPILE_REQUIRED_EXT on success, but ash does not support this.
+        match self
+            .shared
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect(
+                "Feature RAY_TRACING_PIPELINE must be enabled to call create_ray_tracing_pipeline",
+            )
+            .unwrap_extension()
+            .create_ray_tracing_pipelines(
+                vk::DeferredOperationKHR::null(),
+                cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
+                &[info.build()],
+                None,
+            ) {
+            Ok(pipelines) => {
+                // if let Some(name) = desc.label {
+                //     self.shared
+                //         .set_object_name(vk::ObjectType::PIPELINE, pipeline, name);
+                // }
+                Ok(n::RayTracingPipeline(pipelines[0]))
+            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
+            Err(vk::Result::ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS) => {
+                todo!()
+            }
             _ => Err(pso::CreationError::Other),
         }
     }
@@ -1313,12 +1435,23 @@ impl d::Device<B> for super::Device {
     where
         I: Iterator<Item = pso::Descriptor<'a, B>>,
     {
+        /// Stores the
+        struct RawWriteOffsets {
+            image_info: usize,
+            buffer_info: usize,
+            texel_buffer_view: usize,
+            accel_struct: usize,
+        }
+
         let descriptors = op.descriptors;
         let mut raw_writes =
             Vec::<vk::WriteDescriptorSet>::with_capacity(descriptors.size_hint().0);
+        // Parallel array to `raw_writes`.
+        let mut raw_writes_indices = Vec::<RawWriteOffsets>::new();
         let mut image_infos = Vec::new();
         let mut buffer_infos = Vec::new();
         let mut texel_buffer_views = Vec::new();
+        let mut accel_structs = Vec::new();
 
         // gfx-hal allows the type and stages to be different between the descriptor
         // in a single write, while Vulkan requires them to be the same.
@@ -1358,9 +1491,15 @@ impl d::Device<B> for super::Device {
                     },
                     descriptor_count: 1,
                     descriptor_type,
-                    p_image_info: image_infos.len() as _,
-                    p_buffer_info: buffer_infos.len() as _,
-                    p_texel_buffer_view: texel_buffer_views.len() as _,
+                    p_image_info: ptr::null(),
+                    p_buffer_info: ptr::null(),
+                    p_texel_buffer_view: ptr::null(),
+                });
+                raw_writes_indices.push(RawWriteOffsets {
+                    image_info: image_infos.len(),
+                    buffer_info: buffer_infos.len(),
+                    texel_buffer_view: texel_buffer_views.len(),
+                    accel_struct: accel_structs.len(),
                 });
             }
 
@@ -1404,11 +1543,18 @@ impl d::Device<B> for super::Device {
                 pso::Descriptor::TexelBuffer(view) => {
                     texel_buffer_views.push(view.raw);
                 }
+                pso::Descriptor::AccelerationStructure(accel_struct) => {
+                    accel_structs.push(accel_struct.0);
+                }
             }
         }
 
+        let mut accel_structure_writes =
+            Vec::<vk::WriteDescriptorSetAccelerationStructureKHR>::new();
+
         // Patch the pointers now that we have all the storage allocated.
-        for raw in raw_writes.iter_mut() {
+        debug_assert_eq!(raw_writes.len(), raw_writes_indices.len());
+        for (raw, offsets) in raw_writes.iter_mut().zip(raw_writes_indices) {
             use crate::vk::DescriptorType as Dt;
             match raw.descriptor_type {
                 Dt::SAMPLER
@@ -1416,23 +1562,27 @@ impl d::Device<B> for super::Device {
                 | Dt::STORAGE_IMAGE
                 | Dt::COMBINED_IMAGE_SAMPLER
                 | Dt::INPUT_ATTACHMENT => {
-                    raw.p_buffer_info = ptr::null();
-                    raw.p_texel_buffer_view = ptr::null();
-                    raw.p_image_info = image_infos[raw.p_image_info as usize..].as_ptr();
+                    raw.p_image_info = image_infos[offsets.image_info..].as_ptr();
                 }
                 Dt::UNIFORM_TEXEL_BUFFER | Dt::STORAGE_TEXEL_BUFFER => {
-                    raw.p_buffer_info = ptr::null();
-                    raw.p_image_info = ptr::null();
                     raw.p_texel_buffer_view =
-                        texel_buffer_views[raw.p_texel_buffer_view as usize..].as_ptr();
+                        texel_buffer_views[offsets.texel_buffer_view..].as_ptr();
                 }
                 Dt::UNIFORM_BUFFER
                 | Dt::STORAGE_BUFFER
                 | Dt::STORAGE_BUFFER_DYNAMIC
                 | Dt::UNIFORM_BUFFER_DYNAMIC => {
-                    raw.p_image_info = ptr::null();
-                    raw.p_texel_buffer_view = ptr::null();
-                    raw.p_buffer_info = buffer_infos[raw.p_buffer_info as usize..].as_ptr();
+                    raw.p_buffer_info = buffer_infos[offsets.buffer_info..].as_ptr();
+                }
+                Dt::ACCELERATION_STRUCTURE_KHR => {
+                    accel_structure_writes.push(vk::WriteDescriptorSetAccelerationStructureKHR {
+                        s_type: vk::StructureType::WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+                        p_next: ptr::null(),
+                        acceleration_structure_count: 1,
+                        p_acceleration_structures: accel_structs[offsets.accel_struct..].as_ptr(),
+                    });
+
+                    raw.p_next = accel_structure_writes.last_mut().unwrap() as *mut _ as *mut _;
                 }
                 _ => panic!("unknown descriptor type"),
             }
@@ -1658,6 +1808,14 @@ impl d::Device<B> for super::Device {
                 vk::QueryType::TIMESTAMP,
                 vk::QueryPipelineStatisticFlags::empty(),
             ),
+            query::Type::AccelerationStructureCompactedSize => (
+                vk::QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
+                vk::QueryPipelineStatisticFlags::empty(),
+            ),
+            query::Type::AccelerationStructureSerializationSize => (
+                vk::QueryType::ACCELERATION_STRUCTURE_SERIALIZATION_SIZE_KHR,
+                vk::QueryPipelineStatisticFlags::empty(),
+            ),
         };
 
         let info = vk::QueryPoolCreateInfo::builder()
@@ -1705,6 +1863,169 @@ impl d::Device<B> for super::Device {
         }
     }
 
+    unsafe fn create_acceleration_structure(
+        &self,
+        desc: &hal::acceleration_structure::CreateDesc<B>,
+    ) -> Result<n::AccelerationStructure, d::OutOfMemory> {
+        let result = self
+            .shared
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call create_acceleration_structure").unwrap_extension()
+            .create_acceleration_structure(
+                &vk::AccelerationStructureCreateInfoKHR::builder()
+                    .buffer(desc.buffer.raw)
+                    .offset(desc.buffer_offset)
+                    .size(desc.size)
+                    .ty(match desc.ty {
+                        hal::acceleration_structure::Type::TopLevel => {
+                            vk::AccelerationStructureTypeKHR::TOP_LEVEL
+                        }
+                        hal::acceleration_structure::Type::BottomLevel => {
+                            vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL
+                        }
+                        hal::acceleration_structure::Type::Generic => {
+                            vk::AccelerationStructureTypeKHR::GENERIC
+                        }
+                    })
+                    // TODO(capture-replay)
+                    // .create_flags(vk::AccelerationStructureCreateFlagsKHR::empty())
+                    // .device_address()
+                    .build(),
+                None,
+            );
+
+        match result {
+            Ok(acceleration_structure) => Ok(n::AccelerationStructure(acceleration_structure)),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
+            // TODO(capture-replay)
+            Err(vk::Result::ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS) => todo!(),
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn get_acceleration_structure_build_requirements(
+        &self,
+        desc: &hal::acceleration_structure::GeometryDesc<B>,
+        max_primitive_counts: &[u32],
+    ) -> hal::acceleration_structure::SizeRequirements {
+        let geometries = desc
+            .geometries
+            .iter()
+            .map(|&geometry| conv::map_geometry(&self.shared, geometry))
+            .collect::<Vec<_>>();
+
+        let build_info = vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+            .ty(conv::map_acceleration_structure_type(desc.ty))
+            .flags(conv::map_acceleration_structure_flags(desc.flags))
+            .geometries(geometries.as_slice());
+
+        let build_size_info = self
+            .shared
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect(
+                // TODO: this string prevents rustfmt from running?
+                "Feature ACCELERATION_STRUCTURE must be enabled to call get_acceleration_structure_build_requirements",
+            ).unwrap_extension()
+            .get_acceleration_structure_build_sizes(
+                vk::AccelerationStructureBuildTypeKHR::DEVICE,
+                &build_info,
+                max_primitive_counts,
+            );
+
+        hal::acceleration_structure::SizeRequirements {
+            acceleration_structure_size: build_size_info.acceleration_structure_size,
+            update_scratch_size: build_size_info.update_scratch_size,
+            build_scratch_size: build_size_info.build_scratch_size,
+        }
+    }
+
+    unsafe fn get_acceleration_structure_address(
+        &self,
+        accel_struct: &n::AccelerationStructure,
+    ) -> hal::acceleration_structure::DeviceAddress {
+        hal::acceleration_structure::DeviceAddress(
+            self.shared
+                .extension_fns
+                .acceleration_structure
+                .as_ref()
+                .expect("Feature ACCELERATION_STRUCTURE must be enabled to call get_acceleration_structure_address").unwrap_extension()
+                .get_acceleration_structure_device_address(
+                    &vk::AccelerationStructureDeviceAddressInfoKHR::builder()
+                        .acceleration_structure(accel_struct.0)
+                        .build(),
+                ),
+        )
+    }
+
+    unsafe fn get_device_acceleration_structure_compatibility(
+        &self,
+        serialized_accel_struct: &[u8; 32],
+    ) -> hal::acceleration_structure::Compatibility {
+        match self
+            .shared
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call get_device_acceleration_structure_compatibility").unwrap_extension()
+            .get_device_acceleration_structure_compatibility(
+                &vk::AccelerationStructureVersionInfoKHR::builder()
+                    .version_data(serialized_accel_struct),
+            ) {
+            vk::AccelerationStructureCompatibilityKHR::COMPATIBLE => {
+                hal::acceleration_structure::Compatibility::Compatible
+            }
+            vk::AccelerationStructureCompatibilityKHR::INCOMPATIBLE => {
+                hal::acceleration_structure::Compatibility::Incompatible
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn get_ray_tracing_shader_group_handles<'a>(
+        &self,
+        pipeline: &'a n::RayTracingPipeline,
+        first_group: u32,
+        group_count: u32,
+        data_size: usize,
+    ) -> Result<Vec<u8>, d::OutOfMemory> {
+        let result = self
+            .shared
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call get_ray_tracing_shader_group_handles").unwrap_extension()
+            .get_ray_tracing_shader_group_handles(pipeline.0, first_group, group_count, data_size);
+
+        match result {
+            Ok(data) => Ok(data),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn get_ray_tracing_shader_group_stack_size<'a>(
+        &self,
+        pipeline: &'a n::RayTracingPipeline,
+        group: u32,
+        group_shader: pso::GroupShader,
+    ) -> u64 {
+        self.shared
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call get_ray_tracing_shader_group_stack_size")
+            .unwrap_extension()
+            .get_ray_tracing_shader_group_stack_size(
+                pipeline.0,
+                group,
+                conv::map_group_shader(group_shader),
+            )
+    }
+
     unsafe fn destroy_query_pool(&self, pool: n::QueryPool) {
         self.shared.raw.destroy_query_pool(pool.0, None);
     }
@@ -1726,6 +2047,10 @@ impl d::Device<B> for super::Device {
     }
 
     unsafe fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
+        self.shared.raw.destroy_pipeline(pipeline.0, None);
+    }
+
+    unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: n::RayTracingPipeline) {
         self.shared.raw.destroy_pipeline(pipeline.0, None);
     }
 
@@ -1782,6 +2107,15 @@ impl d::Device<B> for super::Device {
 
     unsafe fn destroy_event(&self, event: n::Event) {
         self.shared.raw.destroy_event(event.0, None);
+    }
+
+    unsafe fn destroy_acceleration_structure(&self, accel_struct: n::AccelerationStructure) {
+        self.shared
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call destroy_acceleration_structure").unwrap_extension()
+            .destroy_acceleration_structure(accel_struct.0, None);
     }
 
     fn wait_idle(&self) -> Result<(), d::OutOfMemory> {
@@ -1864,6 +2198,18 @@ impl d::Device<B> for super::Device {
     unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut n::PipelineLayout, name: &str) {
         self.shared
             .set_object_name(vk::ObjectType::PIPELINE_LAYOUT, pipeline_layout.raw, name)
+    }
+
+    unsafe fn set_acceleration_structure_name(
+        &self,
+        accel_struct: &mut n::AccelerationStructure,
+        name: &str,
+    ) {
+        self.shared.set_object_name(
+            vk::ObjectType::ACCELERATION_STRUCTURE_KHR,
+            accel_struct.0,
+            name,
+        )
     }
 
     unsafe fn set_display_power_state(

@@ -26,6 +26,9 @@ pub struct GraphicsPipeline(pub vk::Pipeline);
 pub struct ComputePipeline(pub vk::Pipeline);
 
 #[derive(Debug, Hash)]
+pub struct RayTracingPipeline(pub vk::Pipeline);
+
+#[derive(Debug, Hash)]
 pub struct Memory {
     pub(crate) raw: vk::DeviceMemory,
 }
@@ -240,3 +243,6 @@ pub struct Display(pub vk::DisplayKHR);
 
 #[derive(Debug, Hash)]
 pub struct DisplayMode(pub vk::DisplayModeKHR);
+
+#[derive(Debug, Hash)]
+pub struct AccelerationStructure(pub vk::AccelerationStructureKHR);

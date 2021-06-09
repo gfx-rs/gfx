@@ -34,6 +34,10 @@ path = "mesh-shading/main.rs"
 name = "bench"
 path = "bench/main.rs"
 
+[[bin]]
+name = "ray-tracing"
+path = "ray-tracing/main.rs"
+
 [dependencies]
 image = "0.23.12"
 log = "0.4"
@@ -41,6 +45,7 @@ hal = { path = "../src/hal", version = "0.8", package = "gfx-hal" }
 auxil = { path = "../src/auxil/auxil", version = "0.9", package = "gfx-auxil" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.8" }
 winit = { version = "0.24", features = ["web-sys"] }
+cgmath = "0.18.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.8"

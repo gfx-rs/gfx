@@ -50,6 +50,7 @@ impl hal::Backend for Backend {
 
     type ComputePipeline = ();
     type GraphicsPipeline = ();
+    type RayTracingPipeline = ();
     type PipelineCache = ();
     type PipelineLayout = ();
     type DescriptorSetLayout = DescriptorSetLayout;
@@ -63,6 +64,8 @@ impl hal::Backend for Backend {
 
     type Display = ();
     type DisplayMode = ();
+
+    type AccelerationStructure = ();
 }
 
 /// Dummy physical device.

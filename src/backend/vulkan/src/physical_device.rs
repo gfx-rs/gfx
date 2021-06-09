@@ -1,5 +1,8 @@
 use ash::{
-    extensions::{khr::DrawIndirectCount, khr::Swapchain, nv::MeshShader},
+    extensions::{
+        khr::AccelerationStructure, khr::DeferredHostOperations, khr::DrawIndirectCount,
+        khr::RayTracingPipeline, khr::Swapchain, nv::MeshShader,
+    },
     version::{DeviceV1_0, InstanceV1_0},
     vk,
 };
@@ -28,6 +31,10 @@ pub struct PhysicalDeviceFeatures {
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
     mesh_shader: Option<vk::PhysicalDeviceMeshShaderFeaturesNV>,
     imageless_framebuffer: Option<vk::PhysicalDeviceImagelessFramebufferFeaturesKHR>,
+    buffer_device_address: Option<vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR>,
+    acceleration_structure: Option<vk::PhysicalDeviceAccelerationStructureFeaturesKHR>,
+    ray_query: Option<vk::PhysicalDeviceRayQueryFeaturesKHR>,
+    ray_tracing_pipeline: Option<vk::PhysicalDeviceRayTracingPipelineFeaturesKHR>,
 }
 
 // This is safe because the structs have `p_next: *mut c_void`, which we null out/never read.
@@ -52,6 +59,18 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.imageless_framebuffer {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.buffer_device_address {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.acceleration_structure {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.ray_query {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.ray_tracing_pipeline {
             info = info.push_next(feature);
         }
 
@@ -184,6 +203,7 @@ impl PhysicalDeviceFeatures {
                         )
                         .sampler_filter_minmax(features.contains(Features::SAMPLER_REDUCTION))
                         .imageless_framebuffer(supports_vulkan12_imageless_framebuffer)
+                        .buffer_device_address(true) // TODO, either this or the extension
                         .build(),
                 )
             } else {
@@ -230,6 +250,51 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDeviceImagelessFramebufferFeaturesKHR::builder()
                         .imageless_framebuffer(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            // TODO add bit vector for dependencies? like "wants buffer device address", etc?
+            buffer_device_address: if enabled_extensions
+                .contains(&vk::KhrBufferDeviceAddressFn::name())
+            {
+                Some(
+                    vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::builder()
+                        .buffer_device_address(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            acceleration_structure: if enabled_extensions.contains(&AccelerationStructure::name()) {
+                Some(
+                    vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder()
+                        .acceleration_structure(features.contains(Features::ACCELERATION_STRUCTURE))
+                        .acceleration_structure_indirect_build(
+                            features.contains(Features::ACCELERATION_STRUCTURE_INDIRECT_BUILD),
+                        )
+                        .build(),
+                )
+            } else {
+                None
+            },
+            ray_query: if enabled_extensions.contains(&vk::KhrRayQueryFn::name()) {
+                Some(
+                    vk::PhysicalDeviceRayQueryFeaturesKHR::builder()
+                        .ray_query(true)
+                        .build(),
+                )
+            } else {
+                None
+            },
+            ray_tracing_pipeline: if enabled_extensions.contains(&RayTracingPipeline::name()) {
+                Some(
+                    vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder()
+                        .ray_tracing_pipeline(true)
+                        .ray_tracing_pipeline_trace_rays_indirect(
+                            features.contains(Features::TRACE_RAYS_INDIRECT),
+                        )
                         .build(),
                 )
             } else {
@@ -493,6 +558,34 @@ impl PhysicalDeviceFeatures {
             }
         }
 
+        if let Some(acceleration_structure) = self.acceleration_structure {
+            if acceleration_structure.acceleration_structure == vk::TRUE {
+                bits |= Features::ACCELERATION_STRUCTURE;
+            }
+            if acceleration_structure.acceleration_structure_indirect_build == vk::TRUE {
+                bits |= Features::ACCELERATION_STRUCTURE_INDIRECT_BUILD;
+            }
+        }
+
+        if let Some(ray_query) = self.ray_query {
+            if ray_query.ray_query == vk::TRUE {
+                bits |= Features::RAY_QUERY;
+            }
+        }
+
+        if let Some(ray_tracing_pipeline) = self.ray_tracing_pipeline {
+            if ray_tracing_pipeline.ray_tracing_pipeline == vk::TRUE {
+                bits |= Features::RAY_TRACING_PIPELINE;
+            }
+            if ray_tracing_pipeline.ray_tracing_pipeline_trace_rays_indirect == vk::TRUE {
+                bits |= Features::TRACE_RAYS_INDIRECT;
+            }
+        }
+
+        if let Some(buffer_device_address) = self.buffer_device_address {
+            // TODO there's not hal feature for this
+        }
+
         bits
     }
 }
@@ -582,8 +675,41 @@ impl PhysicalDeviceInfo {
             requested_extensions.push(vk::KhrGetDisplayProperties2Fn::name()); // TODO NOT NEEDED, RIGHT?
         }
 
-        if self.supports_extension(vk::ExtDisplayControlFn::name()){
+        if self.supports_extension(vk::ExtDisplayControlFn::name()) {
             requested_extensions.push(vk::ExtDisplayControlFn::name());
+        }
+
+        if requested_features.intersects(Features::ACCELERATION_STRUCTURE_MASK) {
+            requested_extensions.push(AccelerationStructure::name());
+
+            if self.api_version() < Version::V1_2 {
+                requested_extensions.push(vk::ExtDescriptorIndexingFn::name());
+                // `VK_KHR_acceleration_structure` requires 1.1, which means we don't have to request `VK_KHR_maintenance3`.
+                requested_extensions.push(vk::KhrBufferDeviceAddressFn::name());
+            }
+            requested_extensions.push(DeferredHostOperations::name());
+        }
+
+        if requested_features.contains(Features::RAY_QUERY) {
+            requested_extensions.push(vk::KhrRayQueryFn::name());
+
+            if self.api_version() < Version::V1_2 {
+                requested_extensions.push(vk::KhrSpirv14Fn::name());
+                requested_extensions.push(vk::KhrShaderFloatControlsFn::name());
+            }
+        }
+
+        if requested_features.intersects(
+            Features::RAY_TRACING_PIPELINE
+                | Features::TRACE_RAYS_INDIRECT
+                | Features::RAY_TRAVERSAL_PRIMITIVE_CULLING,
+        ) {
+            requested_extensions.push(RayTracingPipeline::name());
+
+            if self.api_version() < Version::V1_2 {
+                requested_extensions.push(vk::KhrSpirv14Fn::name());
+                requested_extensions.push(vk::KhrShaderFloatControlsFn::name());
+            }
         }
 
         requested_extensions
@@ -644,6 +770,37 @@ impl PhysicalDeviceInfo {
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
+            if device_properties.supports_extension(vk::KhrBufferDeviceAddressFn::name()) {
+                features.buffer_device_address =
+                    Some(vk::PhysicalDeviceBufferDeviceAddressFeaturesKHR::builder().build());
+
+                let mut_ref = features.buffer_device_address.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
+            if device_properties.supports_extension(AccelerationStructure::name()) {
+                features.acceleration_structure =
+                    Some(vk::PhysicalDeviceAccelerationStructureFeaturesKHR::builder().build());
+
+                let mut_ref = features.acceleration_structure.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
+            if device_properties.supports_extension(vk::KhrRayQueryFn::name()) {
+                features.ray_query = Some(vk::PhysicalDeviceRayQueryFeaturesKHR::builder().build());
+
+                let mut_ref = features.ray_query.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
+            if device_properties.supports_extension(RayTracingPipeline::name()) {
+                features.ray_tracing_pipeline =
+                    Some(vk::PhysicalDeviceRayTracingPipelineFeaturesKHR::builder().build());
+
+                let mut_ref = features.ray_tracing_pipeline.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
             unsafe {
                 get_device_properties
                     .get_physical_device_features2_khr(device, &mut features2 as *mut _);
@@ -662,11 +819,17 @@ impl PhysicalDeviceInfo {
             }
         }
 
+        // Null out all of the `pNext` fields in `features` to prevent any accidental unsafe derefs later on.
+        // We need to do this because `features` has internal pointers to itself, but we're moving it out of this function.
         unsafe {
             null_p_next(&mut features.vulkan_1_2);
             null_p_next(&mut features.descriptor_indexing);
             null_p_next(&mut features.mesh_shader);
             null_p_next(&mut features.imageless_framebuffer);
+            null_p_next(&mut features.buffer_device_address);
+            null_p_next(&mut features.acceleration_structure);
+            null_p_next(&mut features.ray_query);
+            null_p_next(&mut features.ray_tracing_pipeline);
         }
 
         (device_properties, features)
@@ -755,15 +918,49 @@ impl PhysicalDevice {
         };
 
         let display_control = if enabled_extensions.contains(&vk::ExtDisplayControlFn::name()) {
-            Some(vk::ExtDisplayControlFn::load(
-                |name| {
-                    std::mem::transmute(
-                        self.instance
-                            .inner
-                            .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
-                    )
-                },
-            ))
+            Some(vk::ExtDisplayControlFn::load(|name| {
+                std::mem::transmute(
+                    self.instance
+                        .inner
+                        .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                )
+            }))
+        } else {
+            None
+        };
+
+        let buffer_device_address_fn =
+            if enabled_extensions.contains(&vk::KhrBufferDeviceAddressFn::name()) {
+                Some(ExtensionFn::Extension(vk::KhrBufferDeviceAddressFn::load(
+                    |name| {
+                        mem::transmute(
+                            self.instance
+                                .inner
+                                .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                        )
+                    },
+                )))
+            } else if self.device_info.api_version() >= Version::V1_2 {
+                Some(ExtensionFn::Promoted)
+            } else {
+                None
+            };
+
+        let acceleration_structure_fn =
+            if enabled_extensions.contains(&AccelerationStructure::name()) {
+                Some(ExtensionFn::Extension(AccelerationStructure::new(
+                    &self.instance.inner,
+                    &device_raw,
+                )))
+            } else {
+                None
+            };
+
+        let ray_tracing_pipeline_fn = if enabled_extensions.contains(&RayTracingPipeline::name()) {
+            Some(ExtensionFn::Extension(RayTracingPipeline::new(
+                &self.instance.inner,
+                &device_raw,
+            )))
         } else {
             None
         };
@@ -806,6 +1003,9 @@ impl PhysicalDevice {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
                     display_control,
+                    buffer_device_address: buffer_device_address_fn,
+                    acceleration_structure: acceleration_structure_fn,
+                    ray_tracing_pipeline: ray_tracing_pipeline_fn,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
                     || self
@@ -1273,6 +1473,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let mut descriptor_indexing_capabilities = hal::DescriptorIndexingProperties::default();
         let mut mesh_shader_capabilities = hal::MeshShaderProperties::default();
         let mut sampler_reduction_capabilities = hal::SamplerReductionProperties::default();
+        let mut acceleration_structure_capabilities =
+            hal::AccelerationStructureProperties::default();
+        let mut ray_tracing_pipeline_capabilities = hal::RayTracingPipelineProperties::default();
 
         if let Some(get_physical_device_properties) =
             self.instance.get_physical_device_properties.as_ref()
@@ -1282,6 +1485,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             let mut mesh_shader_properties = vk::PhysicalDeviceMeshShaderPropertiesNV::builder();
             let mut sampler_reduction_properties =
                 vk::PhysicalDeviceSamplerFilterMinmaxProperties::builder();
+            let mut acceleration_structure_properties =
+                vk::PhysicalDeviceAccelerationStructurePropertiesKHR::builder();
+            let mut ray_tracing_pipeline_properties =
+                vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::builder();
 
             unsafe {
                 get_physical_device_properties.get_physical_device_properties2_khr(
@@ -1290,6 +1497,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         .push_next(&mut descriptor_indexing_properties)
                         .push_next(&mut mesh_shader_properties)
                         .push_next(&mut sampler_reduction_properties)
+                        .push_next(&mut acceleration_structure_properties)
+                        .push_next(&mut ray_tracing_pipeline_properties)
                         .build() as *mut _,
                 );
             }
@@ -1348,6 +1557,36 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     .filter_minmax_image_component_mapping
                     == vk::TRUE,
             };
+
+            acceleration_structure_capabilities = hal::AccelerationStructureProperties {
+                max_acceleration_structure_bottom_level_geometry_count:
+                    acceleration_structure_properties.max_geometry_count,
+                max_acceleration_structure_top_level_instance_count:
+                    acceleration_structure_properties.max_instance_count,
+                max_acceleration_structure_bottom_level_total_primitive_count:
+                    acceleration_structure_properties.max_primitive_count,
+                max_per_stage_descriptor_acceleration_structures: acceleration_structure_properties
+                    .max_per_stage_descriptor_acceleration_structures,
+                max_descriptor_set_acceleration_structures: acceleration_structure_properties
+                    .max_descriptor_set_acceleration_structures,
+                min_acceleration_structure_scratch_offset_alignment:
+                    acceleration_structure_properties
+                        .min_acceleration_structure_scratch_offset_alignment,
+            };
+
+            ray_tracing_pipeline_capabilities = hal::RayTracingPipelineProperties {
+                shader_group_handle_size: ray_tracing_pipeline_properties.shader_group_handle_size,
+                max_ray_recursion_depth: ray_tracing_pipeline_properties.max_ray_recursion_depth,
+                max_shader_group_stride: ray_tracing_pipeline_properties.max_shader_group_stride,
+                shader_group_base_alignment: ray_tracing_pipeline_properties
+                    .shader_group_base_alignment,
+                max_ray_dispatch_invocation_count: ray_tracing_pipeline_properties
+                    .max_ray_dispatch_invocation_count,
+                shader_group_handle_alignment: ray_tracing_pipeline_properties
+                    .shader_group_handle_alignment,
+                max_ray_hit_attribute_size: ray_tracing_pipeline_properties
+                    .max_ray_hit_attribute_size,
+            };
         }
 
         PhysicalDeviceProperties {
@@ -1355,6 +1594,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             descriptor_indexing: descriptor_indexing_capabilities,
             mesh_shader: mesh_shader_capabilities,
             sampler_reduction: sampler_reduction_capabilities,
+            acceleration_structure: acceleration_structure_capabilities,
+            ray_tracing_pipeline: ray_tracing_pipeline_capabilities,
             performance_caveats: Default::default(),
             dynamic_pipeline_states: DynamicStates::all(),
             downlevel: DownlevelProperties::all_enabled(),
@@ -1415,9 +1656,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         true
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<display::Display<Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<display::Display<Backend>> {
         let display_extension = match self.instance.display {
             Some(ref display_extension) => display_extension,
             None => {
@@ -1426,23 +1665,31 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
-        let display_properties = match display_extension
-            .get_physical_device_display_properties(self.handle)
-        {
-            Ok(display_properties) => display_properties,
-            Err(err)=>{
-                match err {
-                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
-                        error!("Error returned on `get_physical_device_display_properties`: {:#?}",err),
-                    err=>error!("Unexpected error on `get_physical_device_display_properties`: {:#?}",err)
+        let display_properties =
+            match display_extension.get_physical_device_display_properties(self.handle) {
+                Ok(display_properties) => display_properties,
+                Err(err) => {
+                    match err {
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                        | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => error!(
+                            "Error returned on `get_physical_device_display_properties`: {:#?}",
+                            err
+                        ),
+                        err => error!(
+                            "Unexpected error on `get_physical_device_display_properties`: {:#?}",
+                            err
+                        ),
+                    }
+                    return Vec::new();
                 }
-                return Vec::new();
-            }
-        };
+            };
 
         let mut displays = Vec::new();
         for display_property in display_properties {
-            let supported_transforms = hal::display::SurfaceTransformFlags::from_bits(display_property.supported_transforms.as_raw()).unwrap();
+            let supported_transforms = hal::display::SurfaceTransformFlags::from_bits(
+                display_property.supported_transforms.as_raw(),
+            )
+            .unwrap();
             let display_name = if display_property.display_name.is_null() {
                 None
             } else {
@@ -1475,11 +1722,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .get_display_mode_properties(self.handle, display_property.display)
             {
                 Ok(display_modes) => display_modes,
-                Err(err)=>{
+                Err(err) => {
                     match err {
-                        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
-                            error!("Error returned on `get_display_mode_properties`: {:#?}",err),
-                        err=>error!("Unexpected error on `get_display_mode_properties`: {:#?}",err)
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                        | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => error!(
+                            "Error returned on `get_display_mode_properties`: {:#?}",
+                            err
+                        ),
+                        err => error!(
+                            "Unexpected error on `get_display_mode_properties`: {:#?}",
+                            err
+                        ),
                     }
                     return Vec::new();
                 }
@@ -1526,7 +1779,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         .get_display_plane_supported_displays(self.handle, index as u32)
                     {
                         Ok(compatible_displays) => compatible_displays,
-                        Err(err)=>{
+                        Err(err) => {
                             match err {
                                 vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
                                     error!("Error returned on `get_display_plane_supported_displays`: {:#?}",err),
@@ -1544,11 +1797,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 }
                 planes
             }
-            Err(err)=>{
+            Err(err) => {
                 match err {
-                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
-                        error!("Error returned on `get_physical_device_display_plane_properties`: {:#?}",err),
-                    err=>error!("Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",err)
+                    vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                    | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => error!(
+                        "Error returned on `get_physical_device_display_plane_properties`: {:#?}",
+                        err
+                    ),
+                    err => error!(
+                        "Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",
+                        err
+                    ),
                 }
                 Vec::new()
             }
@@ -1648,49 +1907,50 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 start: (
                     display_plane_capabilities.min_src_position.x,
                     display_plane_capabilities.min_src_position.x,
-                    )
+                )
                     .into(),
                 end: (
                     display_plane_capabilities.max_src_position.x,
                     display_plane_capabilities.max_src_position.x,
-                    ).into()
+                )
+                    .into(),
             },
             src_extent: std::ops::Range {
                 start: (
                     display_plane_capabilities.min_src_extent.width,
                     display_plane_capabilities.min_src_extent.height,
                 )
-                .into(),
+                    .into(),
                 end: (
                     display_plane_capabilities.max_src_extent.width,
                     display_plane_capabilities.max_src_extent.height,
                 )
-                .into(),
+                    .into(),
             },
             dst_position: std::ops::Range {
                 start: (
                     display_plane_capabilities.min_dst_position.x,
                     display_plane_capabilities.min_dst_position.x,
                 )
-                .into(),
+                    .into(),
                 end: (
                     display_plane_capabilities.max_dst_position.x,
                     display_plane_capabilities.max_dst_position.x,
                 )
-                .into(),
+                    .into(),
             },
             dst_extent: std::ops::Range {
                 start: (
                     display_plane_capabilities.min_dst_extent.width,
                     display_plane_capabilities.min_dst_extent.height,
                 )
-                .into(),
+                    .into(),
                 end: (
                     display_plane_capabilities.max_dst_extent.width,
                     display_plane_capabilities.max_dst_extent.height,
                 )
-                .into(),
-            }
+                    .into(),
+            },
         })
     }
 }

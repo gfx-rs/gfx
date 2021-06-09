@@ -48,6 +48,7 @@ extern crate serde;
 
 use std::{any::Any, fmt, hash::Hash};
 
+pub mod acceleration_structure;
 pub mod adapter;
 pub mod buffer;
 pub mod command;
@@ -283,13 +284,32 @@ bitflags! {
         // Bits for Extensions
 
         /// Supports task shader stage.
-        const TASK_SHADER = 0x0001 << 96;
+        const TASK_SHADER = 0x0000_0001 << 96;
         /// Supports mesh shader stage.
-        const MESH_SHADER = 0x0002 << 96;
+        const MESH_SHADER = 0x0000_0002 << 96;
         /// Mask for all the features associated with mesh shader stages.
         const MESH_SHADER_MASK = Features::TASK_SHADER.bits | Features::MESH_SHADER.bits;
         /// Support sampler min/max reduction mode.
-        const SAMPLER_REDUCTION = 0x0004 << 96;
+        const SAMPLER_REDUCTION = 0x0000_0004 << 96;
+
+        /// Supports acceleration structures.
+        ///
+        /// Requires `RAY_TRACING_PIPELINE` or `RAY_QUERY` to also be enabled.
+        const ACCELERATION_STRUCTURE = 0x0000_0008 << 96;
+        /// Supports a command to indirectly build an acceleration structure.
+        // TODO should this be part of `AccelerationStructureProperties`? The diff would be if app can depend on this feature vs. check for its availability.
+        const ACCELERATION_STRUCTURE_INDIRECT_BUILD = 0x0000_0010 << 96;
+        /// Mask for all the features associated with acceleration structures.
+        const ACCELERATION_STRUCTURE_MASK = Features::ACCELERATION_STRUCTURE.bits | Features::ACCELERATION_STRUCTURE_INDIRECT_BUILD.bits;
+
+        /// Support ray query functionality in shaders.
+        const RAY_QUERY = 0x0000_0020 << 96;
+        /// Supports ray tracing pipelines.
+        const RAY_TRACING_PIPELINE = 0x0000_0040 << 96;
+        /// Supports the indirect trace rays call.
+        const TRACE_RAYS_INDIRECT = 0x0000_0080 << 96;
+        /// TODO docs
+        const RAY_TRAVERSAL_PRIMITIVE_CULLING = 0x0000_0100 << 96;
     }
 }
 
@@ -327,6 +347,8 @@ bitflags! {
         const STENCIL_WRITE_MASK = 0x0200;
         /// Supports `StencilTest::reference_values == State::Dynamic(_)`
         const STENCIL_REFERENCE = 0x0400;
+        /// TODO docs
+        const RAY_TRACING_PIPELINE_STACK_SIZE = 1000347000;
     }
 }
 
@@ -347,6 +369,10 @@ pub struct PhysicalDeviceProperties {
     pub sampler_reduction: SamplerReductionProperties,
     /// Downlevel properties.
     pub downlevel: DownlevelProperties,
+    /// Acceleration Structure properties.
+    pub acceleration_structure: AccelerationStructureProperties,
+    /// Ray Tracing Pipeline properties.
+    pub ray_tracing_pipeline: RayTracingPipelineProperties,
     /// Performance caveats.
     pub performance_caveats: PerformanceCaveats,
     /// Dynamic pipeline states.
@@ -576,6 +602,50 @@ pub struct MeshShaderProperties {
     pub mesh_output_per_primitive_granularity: u32,
 }
 
+/// Resource limits related to the Acceleration Structure.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AccelerationStructureProperties {
+    /// The maximum number of geometries in a bottom level acceleration structure.
+    pub max_acceleration_structure_bottom_level_geometry_count: u64,
+    /// The maximum number of instances in a top level acceleration structure.
+    pub max_acceleration_structure_top_level_instance_count: u64,
+    /// The maximum total number of triangles or AABBs in all geometries in a bottom level acceleration structure.
+    pub max_acceleration_structure_bottom_level_total_primitive_count: u64,
+    /// The maximum number of acceleration structure bindings that can be accessible to a single shader stage in a pipeline layout.
+    pub max_per_stage_descriptor_acceleration_structures: u32,
+    ///    
+    pub max_descriptor_set_acceleration_structures: u32,
+    /// The minimum alignment in bytes for scratch data passed in to an acceleration structure build command.
+    pub min_acceleration_structure_scratch_offset_alignment: u32,
+}
+
+/// Resource limits related to the Ray Tracing Pipeline.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct RayTracingPipelineProperties {
+    // TODO since we don't use `vk::DescriptorSetLayoutCreateFlags`, I'm leaving this out
+    // pub max_per_stage_descriptor_update_after_bind_acceleration_structures: u32,
+    // pub max_descriptor_set_update_after_bind_acceleration_structures: u32,
+    /// TODO docs
+    pub shader_group_handle_size: u32,
+    /// TODO docs
+    pub max_ray_recursion_depth: u32,
+    /// TODO docs
+    pub max_shader_group_stride: u32,
+    /// TODO docs
+    pub shader_group_base_alignment: u32,
+    // TODO(capture-replay)
+    // /// TODO docs
+    // pub shader_group_handle_capture_replay_size: u32,
+    /// TODO docs
+    pub max_ray_dispatch_invocation_count: u32,
+    /// TODO docs
+    pub shader_group_handle_alignment: u32,
+    /// TODO docs
+    pub max_ray_hit_attribute_size: u32,
+}
+
 /// Resource limits related to the reduction samplers.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -801,6 +871,8 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type ComputePipeline: fmt::Debug + Any + Send + Sync;
     /// The corresponding graphics pipeline type for this backend.
     type GraphicsPipeline: fmt::Debug + Any + Send + Sync;
+    /// The corresponding ray tracing pipeline type for this backend.
+    type RayTracingPipeline: fmt::Debug + Any + Send + Sync;
     /// The corresponding pipeline cache type for this backend.
     type PipelineCache: fmt::Debug + Any + Send + Sync;
     /// The corresponding pipeline layout type for this backend.
@@ -820,8 +892,12 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type Event: fmt::Debug + Any + Send + Sync;
     /// The corresponding query pool type for this backend.
     type QueryPool: fmt::Debug + Any + Send + Sync;
+
     /// The corresponding display type for this backend.
     type Display: fmt::Debug + Any + Send + Sync;
     /// The corresponding display mode type for this backend
     type DisplayMode: fmt::Debug + Any + Send + Sync;
+
+    /// The corresponding acceleration structure type for this backend.
+    type AccelerationStructure: fmt::Debug + Any + Send + Sync;
 }

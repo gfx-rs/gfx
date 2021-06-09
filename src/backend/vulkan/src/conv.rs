@@ -9,6 +9,7 @@ use hal::{
     window::{CompositeAlphaMode, PresentMode},
     IndexType,
 };
+use pso::{BasePipeline, ShaderBindingTable, ShaderStageFlags};
 
 use std::mem;
 
@@ -199,6 +200,9 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
             },
         },
         pso::DescriptorType::InputAttachment => vk::DescriptorType::INPUT_ATTACHMENT,
+        pso::DescriptorType::AccelerationStructure => {
+            vk::DescriptorType::ACCELERATION_STRUCTURE_KHR
+        }
     }
 }
 
@@ -622,4 +626,347 @@ pub fn map_vk_memory_heap_flags(flags: vk::MemoryHeapFlags) -> hal::memory::Heap
     }
 
     hal_flags
+}
+
+pub fn map_acceleration_structure_type(
+    ty: hal::acceleration_structure::Type,
+) -> vk::AccelerationStructureTypeKHR {
+    match ty {
+        hal::acceleration_structure::Type::TopLevel => vk::AccelerationStructureTypeKHR::TOP_LEVEL,
+        hal::acceleration_structure::Type::BottomLevel => {
+            vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL
+        }
+        hal::acceleration_structure::Type::Generic => vk::AccelerationStructureTypeKHR::GENERIC,
+    }
+}
+
+pub fn map_acceleration_structure_copy_mode(
+    ty: hal::acceleration_structure::CopyMode,
+) -> vk::CopyAccelerationStructureModeKHR {
+    match ty {
+        hal::acceleration_structure::CopyMode::Copy => vk::CopyAccelerationStructureModeKHR::CLONE,
+        hal::acceleration_structure::CopyMode::Compact => {
+            vk::CopyAccelerationStructureModeKHR::COMPACT
+        }
+    }
+}
+
+pub fn map_acceleration_structure_flags(
+    accel_flags: hal::acceleration_structure::Flags,
+) -> vk::BuildAccelerationStructureFlagsKHR {
+    let mut flags = vk::BuildAccelerationStructureFlagsKHR::empty();
+    if accel_flags.contains(hal::acceleration_structure::Flags::ALLOW_UPDATE) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_UPDATE;
+    }
+    if accel_flags.contains(hal::acceleration_structure::Flags::ALLOW_COMPACTION) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::ALLOW_COMPACTION;
+    }
+    if accel_flags.contains(hal::acceleration_structure::Flags::PREFER_FAST_TRACE) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE;
+    }
+    if accel_flags.contains(hal::acceleration_structure::Flags::PREFER_FAST_BUILD) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_BUILD;
+    }
+    if accel_flags.contains(hal::acceleration_structure::Flags::LOW_MEMORY) {
+        flags |= vk::BuildAccelerationStructureFlagsKHR::LOW_MEMORY;
+    }
+    flags
+}
+
+pub fn map_geometry_flags(
+    geometry_flags: hal::acceleration_structure::GeometryFlags,
+) -> vk::GeometryFlagsKHR {
+    let mut flags = vk::GeometryFlagsKHR::empty();
+    if geometry_flags.contains(hal::acceleration_structure::GeometryFlags::OPAQUE) {
+        flags |= vk::GeometryFlagsKHR::OPAQUE;
+    }
+    if geometry_flags
+        .contains(hal::acceleration_structure::GeometryFlags::NO_DUPLICATE_ANY_HIT_INVOCATION)
+    {
+        flags |= vk::GeometryFlagsKHR::NO_DUPLICATE_ANY_HIT_INVOCATION;
+    }
+    flags
+}
+
+pub fn map_geometry_type(
+    geometry_data: &hal::acceleration_structure::GeometryData<crate::Backend>,
+) -> vk::GeometryTypeKHR {
+    match geometry_data {
+        hal::acceleration_structure::GeometryData::Triangles(_) => vk::GeometryTypeKHR::TRIANGLES,
+        hal::acceleration_structure::GeometryData::Aabbs(_) => vk::GeometryTypeKHR::AABBS,
+        hal::acceleration_structure::GeometryData::Instances(_) => vk::GeometryTypeKHR::INSTANCES,
+    }
+}
+
+pub unsafe fn map_geometry(
+    device: &crate::RawDevice,
+    geometry: &hal::acceleration_structure::Geometry<crate::Backend>,
+) -> vk::AccelerationStructureGeometryKHR {
+    vk::AccelerationStructureGeometryKHR::builder()
+        .geometry_type(map_geometry_type(&geometry.geometry))
+        .geometry(match geometry.geometry {
+            hal::acceleration_structure::GeometryData::Triangles(ref triangles) => {
+                vk::AccelerationStructureGeometryDataKHR {
+                    triangles: vk::AccelerationStructureGeometryTrianglesDataKHR::builder()
+                        .vertex_format(map_format(triangles.vertex_format))
+                        .vertex_data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: device.get_buffer_device_address(
+                                triangles.vertex_buffer,
+                                triangles.vertex_buffer_offset,
+                            ),
+                        })
+                        .vertex_stride(triangles.vertex_buffer_stride as u64)
+                        .max_vertex(triangles.max_vertex as u32)
+                        .index_type(
+                            triangles
+                                .index_buffer
+                                .map(|index_buffer| map_index_type(index_buffer.2))
+                                .unwrap_or(vk::IndexType::NONE_KHR),
+                        )
+                        .index_data(
+                            triangles
+                                .index_buffer
+                                .map(|index_buffer| vk::DeviceOrHostAddressConstKHR {
+                                    device_address: device
+                                        .get_buffer_device_address(index_buffer.0, index_buffer.1),
+                                })
+                                .unwrap_or_default(),
+                        )
+                        .transform_data(
+                            triangles
+                                .transform
+                                .map(|transform| vk::DeviceOrHostAddressConstKHR {
+                                    device_address: device
+                                        .get_buffer_device_address(transform.0, transform.1),
+                                })
+                                .unwrap_or_default(),
+                        )
+                        .build(),
+                }
+            }
+            hal::acceleration_structure::GeometryData::Aabbs(ref aabbs) => {
+                vk::AccelerationStructureGeometryDataKHR {
+                    aabbs: vk::AccelerationStructureGeometryAabbsDataKHR::builder()
+                        .data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: device
+                                .get_buffer_device_address(aabbs.buffer, aabbs.buffer_offset),
+                        })
+                        .stride(aabbs.buffer_stride as u64)
+                        .build(),
+                }
+            }
+            hal::acceleration_structure::GeometryData::Instances(ref instances) => {
+                vk::AccelerationStructureGeometryDataKHR {
+                    instances: vk::AccelerationStructureGeometryInstancesDataKHR::builder()
+                        .array_of_pointers(false)
+                        .data(vk::DeviceOrHostAddressConstKHR {
+                            device_address: device.get_buffer_device_address(
+                                instances.buffer,
+                                instances.buffer_offset,
+                            ),
+                        })
+                        .build(),
+                }
+            }
+        })
+        .flags(map_geometry_flags(geometry.flags))
+        .build()
+}
+
+pub unsafe fn map_geometries<'a>(
+    device: &crate::RawDevice,
+    geometries: impl Iterator<Item = &'a &'a hal::acceleration_structure::Geometry<'a, crate::Backend>>,
+) -> Vec<vk::AccelerationStructureGeometryKHR> {
+    geometries
+        .map(|geometry| map_geometry(device, geometry))
+        .collect::<Vec<_>>()
+}
+
+/// Convert all fields of `desc`, except `geometries`. The caller should call `map_geometries` and add it to the builder manually to ensure the lifetime of the resulting collection lives long enough.
+pub unsafe fn map_geometry_info_without_geometries<'a>(
+    device: &crate::RawDevice,
+    desc: &'a hal::acceleration_structure::BuildDesc<crate::Backend>,
+) -> vk::AccelerationStructureBuildGeometryInfoKHRBuilder<'a> {
+    vk::AccelerationStructureBuildGeometryInfoKHR::builder()
+        .ty(map_acceleration_structure_type(desc.geometry.ty))
+        .flags(map_acceleration_structure_flags(desc.geometry.flags))
+        .mode(if desc.src.is_some() {
+            vk::BuildAccelerationStructureModeKHR::UPDATE
+        } else {
+            vk::BuildAccelerationStructureModeKHR::BUILD
+        })
+        .src_acceleration_structure(desc.src.map(|a| a.0).unwrap_or_default())
+        .dst_acceleration_structure(desc.dst.0)
+        .scratch_data(vk::DeviceOrHostAddressKHR {
+            device_address: device.get_buffer_device_address(desc.scratch, desc.scratch_offset),
+        })
+}
+
+pub unsafe fn map_build_ranges_infos(
+    build_ranges: &[hal::acceleration_structure::BuildRangeDesc],
+) -> &[vk::AccelerationStructureBuildRangeInfoKHR] {
+    // Safe because `BuildRangeDesc` and `AccelerationStructureBuildRangeInfoKHR` have the same layout.
+    mem::transmute(build_ranges)
+}
+
+pub fn map_group_shader(group_shader: pso::GroupShader) -> vk::ShaderGroupShaderKHR {
+    match group_shader {
+        pso::GroupShader::General => vk::ShaderGroupShaderKHR::GENERAL,
+        pso::GroupShader::ClosestHit => vk::ShaderGroupShaderKHR::CLOSEST_HIT,
+        pso::GroupShader::AnyHit => vk::ShaderGroupShaderKHR::ANY_HIT,
+        pso::GroupShader::Intersection => vk::ShaderGroupShaderKHR::INTERSECTION,
+    }
+}
+
+// TODO reuse for other pipelines?
+pub fn map_pipeline_create_flags<'a, P: 'a>(
+    pipeline_create_flags: pso::PipelineCreationFlags,
+    parent: &BasePipeline<'a, P>,
+) -> vk::PipelineCreateFlags {
+    let mut flags = vk::PipelineCreateFlags::empty();
+    match parent {
+        pso::BasePipeline::None => (),
+        _ => {
+            flags |= vk::PipelineCreateFlags::DERIVATIVE;
+        }
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
+        flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
+        flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
+    }
+    if pipeline_create_flags
+        .contains(pso::PipelineCreationFlags::RAY_TRACING_NO_NULL_ANY_HIT_SHADERS)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_NO_NULL_ANY_HIT_SHADERS_KHR;
+    }
+    if pipeline_create_flags
+        .contains(pso::PipelineCreationFlags::RAY_TRACING_NO_NULL_CLOSEST_HIT_SHADERS)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_NO_NULL_CLOSEST_HIT_SHADERS_KHR;
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::RAY_TRACING_NO_NULL_MISS_SHADERS)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_NO_NULL_MISS_SHADERS_KHR;
+    }
+    if pipeline_create_flags
+        .contains(pso::PipelineCreationFlags::RAY_TRACING_NO_NULL_INTERSECTION_SHADERS)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_NO_NULL_INTERSECTION_SHADERS_KHR;
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::RAY_TRACING_SKIP_TRIANGLES) {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_SKIP_TRIANGLES_KHR;
+    }
+    if pipeline_create_flags.contains(pso::PipelineCreationFlags::RAY_TRACING_SKIP_AABBS) {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_SKIP_AABBS_KHR;
+    }
+    if pipeline_create_flags
+        .contains(pso::PipelineCreationFlags::RAY_TRACING_SHADER_GROUP_HANDLE_CAPTURE_REPLAY)
+    {
+        flags |= vk::PipelineCreateFlags::RAY_TRACING_SHADER_GROUP_HANDLE_CAPTURE_REPLAY_KHR;
+    }
+    flags
+}
+
+pub fn map_shader_stage(stage: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
+    let mut flags = vk::ShaderStageFlags::empty();
+    if stage.contains(pso::ShaderStageFlags::VERTEX) {
+        flags |= vk::ShaderStageFlags::VERTEX;
+    }
+    if stage.contains(pso::ShaderStageFlags::HULL) {
+        flags |= vk::ShaderStageFlags::TESSELLATION_CONTROL;
+    }
+    if stage.contains(pso::ShaderStageFlags::DOMAIN) {
+        flags |= vk::ShaderStageFlags::TESSELLATION_EVALUATION;
+    }
+    if stage.contains(pso::ShaderStageFlags::GEOMETRY) {
+        flags |= vk::ShaderStageFlags::GEOMETRY;
+    }
+    if stage.contains(pso::ShaderStageFlags::FRAGMENT) {
+        flags |= vk::ShaderStageFlags::FRAGMENT;
+    }
+    if stage.contains(pso::ShaderStageFlags::COMPUTE) {
+        flags |= vk::ShaderStageFlags::COMPUTE;
+    }
+    if stage.contains(pso::ShaderStageFlags::TASK) {
+        flags |= vk::ShaderStageFlags::TASK_NV;
+    }
+    if stage.contains(pso::ShaderStageFlags::MESH) {
+        flags |= vk::ShaderStageFlags::MESH_NV;
+    }
+    if stage.contains(pso::ShaderStageFlags::RAYGEN) {
+        flags |= vk::ShaderStageFlags::RAYGEN_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::ANY_HIT) {
+        flags |= vk::ShaderStageFlags::ANY_HIT_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::CLOSEST_HIT) {
+        flags |= vk::ShaderStageFlags::CLOSEST_HIT_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::MISS) {
+        flags |= vk::ShaderStageFlags::MISS_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::INTERSECTION) {
+        flags |= vk::ShaderStageFlags::INTERSECTION_KHR;
+    }
+    if stage.contains(pso::ShaderStageFlags::CALLABLE) {
+        flags |= vk::ShaderStageFlags::CALLABLE_KHR;
+    }
+    flags
+}
+
+pub fn map_shader_group_desc(
+    desc: &pso::ShaderGroupDesc,
+) -> vk::RayTracingShaderGroupCreateInfoKHR {
+    match desc {
+        pso::ShaderGroupDesc::General { general_shader } => {
+            vk::RayTracingShaderGroupCreateInfoKHR::builder()
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                .general_shader(*general_shader)
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR)
+                .build()
+        }
+
+        pso::ShaderGroupDesc::TrianglesHitGroup {
+            closest_hit_shader,
+            any_hit_shader,
+        } => vk::RayTracingShaderGroupCreateInfoKHR::builder()
+            .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
+            .general_shader(vk::SHADER_UNUSED_KHR)
+            .closest_hit_shader(closest_hit_shader.unwrap_or(vk::SHADER_UNUSED_KHR))
+            .any_hit_shader(any_hit_shader.unwrap_or(vk::SHADER_UNUSED_KHR))
+            .intersection_shader(vk::SHADER_UNUSED_KHR)
+            .build(),
+
+        pso::ShaderGroupDesc::ProceduralHitGroup {
+            closest_hit_shader,
+            any_hit_shader,
+            intersection_shader,
+        } => vk::RayTracingShaderGroupCreateInfoKHR::builder()
+            .ty(vk::RayTracingShaderGroupTypeKHR::PROCEDURAL_HIT_GROUP)
+            .general_shader(vk::SHADER_UNUSED_KHR)
+            .closest_hit_shader(closest_hit_shader.unwrap_or(vk::SHADER_UNUSED_KHR))
+            .any_hit_shader(any_hit_shader.unwrap_or(vk::SHADER_UNUSED_KHR))
+            .intersection_shader(*intersection_shader)
+            .build(),
+    }
+}
+
+pub unsafe fn map_shader_binding_table(
+    device: &crate::RawDevice,
+    table: Option<pso::ShaderBindingTable<crate::Backend>>,
+) -> vk::StridedDeviceAddressRegionKHR {
+    table.map_or_else(
+        || vk::StridedDeviceAddressRegionKHR::default(),
+        |table| {
+            vk::StridedDeviceAddressRegionKHR::builder()
+                .device_address(device.get_buffer_device_address(table.buffer, table.offset))
+                .stride(table.stride as u64)
+                .size(table.size)
+                .build()
+        },
+    )
 }

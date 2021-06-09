@@ -17,7 +17,7 @@ mod clear;
 mod structs;
 
 use crate::{
-    buffer,
+    acceleration_structure, buffer,
     image::{Filter, Layout, SubresourceRange},
     memory::{Barrier, Dependencies},
     pass, pso, query, Backend, DrawCount, IndexCount, IndexType, InstanceCount, TaskCount,
@@ -353,6 +353,25 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         I: Iterator<Item = &'a B::DescriptorSet>,
         J: Iterator<Item = DescriptorSetOffset>;
 
+    /// TODO docs
+    unsafe fn bind_ray_tracing_pipeline(&mut self, _pipeline: &B::RayTracingPipeline) {
+        unimplemented!();
+    }
+
+    /// TODO docs
+    unsafe fn bind_ray_tracing_descriptor_sets<'a, I, J>(
+        &mut self,
+        _layout: &B::PipelineLayout,
+        _first_set: usize,
+        _sets: I,
+        _offsets: J,
+    ) where
+        I: Iterator<Item = &'a B::DescriptorSet>,
+        J: Iterator<Item = DescriptorSetOffset>,
+    {
+        unimplemented!();
+    }
+
     /// Execute a workgroup in the compute pipeline. `x`, `y` and `z` are the
     /// number of local workgroups to dispatch along each "axis"; a total of `x`*`y`*`z`
     /// local workgroups will be created.
@@ -573,6 +592,103 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Requests a timestamp to be written.
     unsafe fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>);
+
+    /// Build an acceleration structure.
+    ///
+    /// `ranges` must contain a number of entries equal to the number of geometries described in `desc`.
+    unsafe fn build_acceleration_structure<'a>(
+        &self,
+        _desc: &'a acceleration_structure::BuildDesc<'a, B>,
+        _ranges: &'a [acceleration_structure::BuildRangeDesc],
+    ) {
+        unimplemented!()
+    }
+
+    /// Functions identically to `build_acceleration_structure()`, except the parameters are read from the given buffer, starting at `offset` and increasing `stride` bytes for each geometry in `desc`.
+    ///
+    /// `max_primitive_counts` must contain a number of entries equal to the number of geometries described in `desc`.
+    unsafe fn build_acceleration_structure_indirect<'a>(
+        &self,
+        _desc: &'a acceleration_structure::BuildDesc<'a, B>,
+        _buffer: &'a B::Buffer,
+        _offset: buffer::Offset,
+        _stride: buffer::Stride,
+        _max_primitive_counts: &'a [u32],
+    ) {
+        unimplemented!()
+    }
+
+    /// Copy an acceleration structure from `src` to `dst`.
+    unsafe fn copy_acceleration_structure(
+        &self,
+        _src: &B::AccelerationStructure,
+        _dst: &B::AccelerationStructure,
+        _mode: acceleration_structure::CopyMode,
+    ) {
+        unimplemented!()
+    }
+
+    /// Serialize acceleration structure from `src` to `dst`.
+    unsafe fn serialize_acceleration_structure_to_memory(
+        &self,
+        _src: &B::AccelerationStructure,
+        _dst_buffer: &B::Buffer,
+        _dst_offset: buffer::Offset,
+    ) {
+        unimplemented!()
+    }
+
+    /// Deserialize acceleration structure from `src` to `dst`.
+    unsafe fn deserialize_memory_to_acceleration_structure(
+        &self,
+        _src_buffer: &B::Buffer,
+        _src_offset: buffer::Offset,
+        _dst: &B::AccelerationStructure,
+    ) {
+        unimplemented!()
+    }
+
+    /// Write some property `query_type` about `accel_structs` to `pool`.
+    unsafe fn write_acceleration_structures_properties(
+        &self,
+        _accel_structs: &[&B::AccelerationStructure],
+        _query_type: query::Type,
+        _pool: &B::QueryPool,
+        _first_query: u32,
+    ) {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    unsafe fn set_ray_tracing_pipeline_stack_size(&self, _pipeline_stack_size: u32) {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    unsafe fn trace_rays(
+        &self,
+        _raygen_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _miss_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _hit_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _callable_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _count: WorkGroupCount,
+    ) {
+        unimplemented!()
+    }
+
+    /// TODO docs
+    /// `buffer` points to a `WorkGroupCount`.
+    unsafe fn trace_rays_indirect<'a>(
+        &self,
+        _raygen_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _miss_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _hit_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _callable_shader_binding_table: Option<pso::ShaderBindingTable<B>>,
+        _buffer: &'a B::Buffer,
+        _offset: buffer::Offset,
+    ) {
+        unimplemented!()
+    }
 
     /// Modify constant data in a graphics pipeline. Push constants are intended to modify data in a
     /// pipeline more quickly than a updating the values inside a descriptor set.

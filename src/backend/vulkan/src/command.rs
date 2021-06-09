@@ -661,6 +661,33 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
+    unsafe fn bind_ray_tracing_pipeline(&mut self, pipeline: &n::RayTracingPipeline) {
+        self.device.raw.cmd_bind_pipeline(
+            self.raw,
+            vk::PipelineBindPoint::RAY_TRACING_KHR,
+            pipeline.0,
+        )
+    }
+
+    unsafe fn bind_ray_tracing_descriptor_sets<'a, I, J>(
+        &mut self,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: I,
+        offsets: J,
+    ) where
+        I: Iterator<Item = &'a n::DescriptorSet>,
+        J: Iterator<Item = com::DescriptorSetOffset>,
+    {
+        self.bind_descriptor_sets(
+            vk::PipelineBindPoint::RAY_TRACING_KHR,
+            layout,
+            first_set,
+            sets,
+            offsets,
+        );
+    }
+
     unsafe fn dispatch(&mut self, count: WorkGroupCount) {
         self.device
             .raw
@@ -1046,6 +1073,227 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             query.pool.0,
             query.id,
         )
+    }
+
+    unsafe fn build_acceleration_structure<'a>(
+        &self,
+        desc: &'a hal::acceleration_structure::BuildDesc<'a, Backend>,
+        ranges: &'a [hal::acceleration_structure::BuildRangeDesc],
+    ) {
+        let geometries = conv::map_geometries(&self.device, desc.geometry.geometries.iter());
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call build_acceleration_structure").unwrap_extension()
+            .cmd_build_acceleration_structures(
+                self.raw,
+                &[conv::map_geometry_info_without_geometries(&self.device, desc).geometries(&geometries).build()],
+                &[conv::map_build_ranges_infos(ranges)],
+            );
+    }
+
+    unsafe fn build_acceleration_structure_indirect<'a>(
+        &self,
+        desc: &'a hal::acceleration_structure::BuildDesc<'a, Backend>,
+        buffer: &'a n::Buffer,
+        offset: buffer::Offset,
+        stride: buffer::Stride,
+        max_primitive_counts: &'a [u32],
+    ) {
+        let geometries = conv::map_geometries(&self.device, desc.geometry.geometries.iter());
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call build_acceleration_structure_indirect").unwrap_extension()
+            .cmd_build_acceleration_structures_indirect(
+                self.raw,
+                &[conv::map_geometry_info_without_geometries(&self.device, desc).geometries(&geometries).build()],
+                &[self.device.get_buffer_device_address(buffer, offset)],
+                &[stride],
+                &[max_primitive_counts],
+            );
+    }
+
+    unsafe fn copy_acceleration_structure(
+        &self,
+        src: &n::AccelerationStructure,
+        dst: &n::AccelerationStructure,
+        mode: hal::acceleration_structure::CopyMode,
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call copy_acceleration_structure").unwrap_extension()
+            .cmd_copy_acceleration_structure(
+                self.raw,
+                &vk::CopyAccelerationStructureInfoKHR::builder()
+                    .src(src.0)
+                    .dst(dst.0)
+                    .mode(conv::map_acceleration_structure_copy_mode(mode))
+                    .build(),
+            );
+    }
+
+    unsafe fn serialize_acceleration_structure_to_memory(
+        &self,
+        src: &n::AccelerationStructure,
+        dst_buffer: &n::Buffer,
+        dst_offset: buffer::Offset,
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call serialize_acceleration_structure_to_memory").unwrap_extension()
+            .cmd_copy_acceleration_structure_to_memory(
+                self.raw,
+                &vk::CopyAccelerationStructureToMemoryInfoKHR::builder()
+                    .src(src.0)
+                    .dst(vk::DeviceOrHostAddressKHR {
+                        device_address: self
+                            .device
+                            .get_buffer_device_address(dst_buffer, dst_offset),
+                    })
+                    .mode(vk::CopyAccelerationStructureModeKHR::SERIALIZE)
+                    .build(),
+            );
+    }
+
+    unsafe fn deserialize_memory_to_acceleration_structure(
+        &self,
+        src_buffer: &n::Buffer,
+        src_offset: buffer::Offset,
+        dst: &n::AccelerationStructure,
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call deserialize_memory_to_acceleration_structure").unwrap_extension()
+            .cmd_copy_memory_to_acceleration_structure(
+                self.raw,
+                &vk::CopyMemoryToAccelerationStructureInfoKHR::builder()
+                    .src(vk::DeviceOrHostAddressConstKHR {
+                        device_address: self
+                            .device
+                            .get_buffer_device_address(src_buffer, src_offset),
+                    })
+                    .dst(dst.0)
+                    .mode(vk::CopyAccelerationStructureModeKHR::DESERIALIZE)
+                    .build(),
+            );
+    }
+
+    unsafe fn write_acceleration_structures_properties(
+        &self,
+        accel_structs: &[&n::AccelerationStructure],
+        query_type: query::Type,
+        pool: &n::QueryPool,
+        first_query: u32,
+    ) {
+        self.device
+            .extension_fns
+            .acceleration_structure
+            .as_ref()
+            .expect("Feature ACCELERATION_STRUCTURE must be enabled to call write_acceleration_structures_properties").unwrap_extension()
+            .cmd_write_acceleration_structures_properties(
+                self.raw,
+                accel_structs
+                    .iter()
+                    .map(|a| a.0)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+                match query_type {
+                    query::Type::AccelerationStructureCompactedSize => {
+                        vk::QueryType::ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR
+                    }
+                    query::Type::AccelerationStructureSerializationSize => {
+                        vk::QueryType::ACCELERATION_STRUCTURE_SERIALIZATION_SIZE_KHR
+                    }
+                    _ => {
+                        panic!("Unsupported query type")
+                    }
+                },
+                pool.0,
+                first_query,
+            );
+    }
+
+    unsafe fn set_ray_tracing_pipeline_stack_size(&self, pipeline_stack_size: u32) {
+        self.device
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call set_ray_tracing_pipeline_stack_size")
+            .unwrap_extension()
+            .cmd_set_ray_tracing_pipeline_stack_size(self.raw, pipeline_stack_size);
+    }
+
+    unsafe fn trace_rays(
+        &self,
+        raygen_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        miss_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        hit_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        callable_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        count: WorkGroupCount,
+    ) {
+        self.device
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call trace_rays")
+            .unwrap_extension()
+            .cmd_trace_rays(
+                self.raw,
+                &conv::map_shader_binding_table(&self.device, raygen_shader_binding_table),
+                &conv::map_shader_binding_table(&self.device, miss_shader_binding_table),
+                &conv::map_shader_binding_table(&self.device, hit_shader_binding_table),
+                &conv::map_shader_binding_table(&self.device, callable_shader_binding_table),
+                count[0],
+                count[1],
+                count[2],
+            );
+    }
+
+    /// `buffer` points to a `WorkGroupCount`.
+    unsafe fn trace_rays_indirect<'a>(
+        &self,
+        raygen_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        miss_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        hit_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        callable_shader_binding_table: Option<pso::ShaderBindingTable<Backend>>,
+        buffer: &'a n::Buffer,
+        offset: buffer::Offset,
+    ) {
+        self.device
+            .extension_fns
+            .ray_tracing_pipeline
+            .as_ref()
+            .expect("Feature RAY_TRACING_PIPELINE must be enabled to call trace_rays_indirect")
+            .unwrap_extension()
+            .cmd_trace_rays_indirect(
+                self.raw,
+                &[conv::map_shader_binding_table(
+                    &self.device,
+                    raygen_shader_binding_table,
+                )],
+                &[conv::map_shader_binding_table(
+                    &self.device,
+                    miss_shader_binding_table,
+                )],
+                &[conv::map_shader_binding_table(
+                    &self.device,
+                    hit_shader_binding_table,
+                )],
+                &[conv::map_shader_binding_table(
+                    &self.device,
+                    callable_shader_binding_table,
+                )],
+                self.device.get_buffer_device_address(buffer, offset),
+            );
     }
 
     unsafe fn push_compute_constants(
