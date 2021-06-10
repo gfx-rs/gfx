@@ -736,36 +736,13 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         fence: &mut B::Fence,
     ) -> Result<(), display::control::DisplayControlError>;
 
-    /// Create, allocate and bind a buffer that can be exported. Parameters are more or less the combined parameters of [create_buffer][Device::create_buffer] and [allocate_memory][Device::allocate_memory].
-    /// An important difference is the `type_mask` parameter, that is a bitflag where all the desired memory type ids are setted to 1.
-    /// Then one among the desired memory type id that also satify implementation dependant memory requirements will be selected.
-    /// So instead of selecting just one memory type id, multiple memory type ids that satisfy the desired properties are selected.
-    /// A code example:
-    /// ```
-    /// let memory_types: u32 = adapter
-    ///     .physical_device
-    ///     .memory_properties()
-    ///     .memory_types
-    ///     .into_iter()
-    ///     .enumerate()
-    ///     .map(|(id, mem_type)| {
-    ///         if mem_type
-    ///             .properties
-    ///             .contains(hal::memory::Properties::CPU_VISIBLE)
-    ///         {
-    ///             1 << id
-    ///         } else {
-    ///             0
-    ///         }
-    ///     })
-    ///     .sum();
-    /// ```
+    /// Create, allocate and bind a buffer that can be exported.
     /// # Arguments
     ///
     /// * `external_memory_type_flags` - the external memory types the buffer will be valid to be used.
     /// * `usage` - the usage of the buffer.
     /// * `sparse` - the sparse flags of the buffer.
-    /// * `type_mask` - a memory type mask of the desired memory type ids.
+    /// * `type_mask` - a memory type mask containing all the desired memory type ids.
     /// * `size` - the size of the buffer.
     /// # Errors
     ///
@@ -789,7 +766,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// * `external_memory` - the external memory types the buffer will be valid to be used.
     /// * `usage` - the usage of the buffer.
     /// * `sparse` - the sparse flags of the buffer.
-    /// * `type_mask` - a memory type mask of the desired memory type ids.
+    /// * `type_mask` - a memory type mask containing all the desired memory type ids.
     /// * `size` - the size of the buffer.
     /// # Errors
     ///
@@ -819,7 +796,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// * `usage` - the usage of the image.
     /// * `sparse` - the sparse flags of the image.
     /// * `view_caps` - the view capabilities of the image.
-    /// * `type_mask` - a memory type mask of the desired memory type ids.
+    /// * `type_mask` - a memory type mask containing all the desired memory type ids.
     /// # Errors
     ///
     /// - Returns `OutOfMemory` if the implementation goes out of memory during the operation.
@@ -852,7 +829,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// * `usage` - the usage of the image.
     /// * `sparse` - the sparse flags of the image.
     /// * `view_caps` - the view capabilities of the image.
-    /// * `type_mask` - a memory type mask of the desired memory type ids.
+    /// * `type_mask` - a memory type mask containing all the desired memory type ids.
     /// # Errors
     ///
     /// - Returns `OutOfMemory` if the implementation goes out of memory during the operation.
