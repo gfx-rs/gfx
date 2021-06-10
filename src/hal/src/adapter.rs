@@ -115,7 +115,12 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Fetch details for the memory regions provided by the device.
     fn memory_properties(&self) -> MemoryProperties;
 
-    /// Get external buffer properties
+    /// Get external buffer properties. The parameters specify how the buffer is going to used.
+    /// # Arguments
+    ///
+    /// * `usage` - the usage of the buffer.
+    /// * `sparse` - the sparse flags of the buffer.
+    /// * `memory_type` - the external memory type for the buffer.
     fn external_buffer_properties(
         &self,
         usage: buffer::Usage,
@@ -123,7 +128,20 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         memory_type: external_memory::ExternalMemoryType,
     ) -> external_memory::ExternalMemoryProperties;
 
-    /// Get external image properties
+    /// Get external image properties. The parameters specify how the image is going to used.
+    /// # Arguments
+    ///
+    /// * `format` - the format of the image.
+    /// * `dimensions` - the dimensions of the image.
+    /// * `tiling` - the tiling mode of the image.
+    /// * `usage` - the usage of the image.
+    /// * `view_caps` - the view capabilities of the image.
+    /// * `external_memory_type` - the external memory type for the image.
+    /// # Errors
+    ///
+    /// - Returns `OutOfMemory` if the implementation goes out of memory during the operation.
+    /// - Returns `FormatNotSupported` if the implementation does not support the requested image format.
+    ///
     fn external_image_properties(
         &self,
         format: format::Format,
@@ -132,7 +150,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
         external_memory_type: external_memory::ExternalMemoryType,
-    ) -> Result<external_memory::ExternalMemoryProperties, external_memory::ExternalImageQueryError>;
+    ) -> Result<external_memory::ExternalMemoryProperties, external_memory::ExternalImagePropertiesError>;
 
     /// Returns the features of this `PhysicalDevice`. This usually depends on the graphics API being
     /// used, as well as the actual platform underneath.
@@ -153,7 +171,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Since, generally, while compositor are running they take the control of every display connected, it could be better to run the application directly from the tty to avoid the return of an empty list.
     /// # Arguments
     ///
-    /// * `adapter` - the [adapter][adapter::Adapter] from which the displays will be enumerated.
+    /// * `adapter` - the [adapter][crate::adapter::Adapter] from which the displays will be enumerated.
     unsafe fn enumerate_displays(&self) -> Vec<display::Display<B>>;
 
     /// Enumerate compatibles planes with the provided display.

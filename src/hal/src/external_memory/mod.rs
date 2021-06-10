@@ -1,22 +1,13 @@
-//! Structures related to the import external memory functionality
+//! Structures related to the import external memory functionality.
 
 mod errors;
 pub use errors::*;
 
 pub use external_memory::*;
 
-/// Buffer or image
-#[derive(Debug)]
-pub enum Resource<B: crate::Backend> {
-    /// Buffer
-    Buffer(B::Buffer),
-    /// Image
-    Image(B::Image),
-}
-
 bitflags!(
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    /// External memory properties
+    /// External memory properties.
     pub struct ExternalMemoryProperties: u32 {
         /// The memory can be exported using [Device::export_memory][Device::export_memory].
         const EXPORTABLE = (1 << 0);
@@ -142,48 +133,48 @@ impl From<ExternalImageMemoryType> for ExternalMemoryTypeFlags {
     }
 }
 
-/// External memory types
+/// External memory types.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ExternalMemoryType {
     #[cfg(any(unix, doc))]
     /// This is supported on Unix only.
-    /// Same as [ExternalMemoryTypeFlags::OPAQUE_FD][ExternalMemoryTypeFlags::OPAQUE_FD]
+    /// Same as [ExternalMemoryTypeFlags::OPAQUE_FD][ExternalMemoryTypeFlags::OPAQUE_FD].
     OpaqueFd,
     #[cfg(any(windows, doc))]
     /// This is supported on Windows only.
-    /// Same as [ExternalMemoryTypeFlags::OPAQUE_WIN32][ExternalMemoryTypeFlags::OPAQUE_WIN32]
+    /// Same as [ExternalMemoryTypeFlags::OPAQUE_WIN32][ExternalMemoryTypeFlags::OPAQUE_WIN32].
     OpaqueWin32,
     #[cfg(any(windows, doc))]
     /// This is supported on Windows only.
-    /// Same as [ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT][ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT]
+    /// Same as [ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT][ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT].
     OpaqueWin32Kmt,
     #[cfg(any(windows, doc))]
     /// This is supported on Windows only.
-    /// Same as [ExternalMemoryTypeFlags::D3D11_TEXTURE][ExternalMemoryTypeFlags::D3D11_TEXTURE]
+    /// Same as [ExternalMemoryTypeFlags::D3D11_TEXTURE][ExternalMemoryTypeFlags::D3D11_TEXTURE].
     D3D11Texture,
     #[cfg(any(windows, doc))]
     /// This is supported on Windows only.
-    /// Same as [ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT][ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT]
+    /// Same as [ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT][ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT].
     D3D11TextureKmt,
     #[cfg(any(windows, doc))]
     /// This is supported on Windows only.
-    /// Same as [ExternalMemoryTypeFlags::D3D12_HEAP][ExternalMemoryTypeFlags::D3D12_HEAP]
+    /// Same as [ExternalMemoryTypeFlags::D3D12_HEAP][ExternalMemoryTypeFlags::D3D12_HEAP].
     D3D12Heap,
     #[cfg(any(windows, doc))]
     /// This is supported on Windows only.
-    /// Same as [ExternalMemoryTypeFlags::D3D12_RESOURCE][ExternalMemoryTypeFlags::D3D12_RESOURCE]
+    /// Same as [ExternalMemoryTypeFlags::D3D12_RESOURCE][ExternalMemoryTypeFlags::D3D12_RESOURCE].
     D3D12Resource,
     #[cfg(any(target_os = "linux", target_os = "android", doc))]
     /// This is supported on Linux or Android only.
-    /// Same as [ExternalMemoryTypeFlags::DMA_BUF][ExternalMemoryTypeFlags::DMA_BUF]
+    /// Same as [ExternalMemoryTypeFlags::DMA_BUF][ExternalMemoryTypeFlags::DMA_BUF].
     DmaBuf,
     #[cfg(any(target_os = "android", doc))]
     /// This is supported on Android only.
-    /// Same as [ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER][ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER]
+    /// Same as [ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER][ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER].
     AndroidHardwareBuffer,
-    /// Same as [ExternalMemoryTypeFlags::HOST_ALLOCATION][ExternalMemoryTypeFlags::HOST_ALLOCATION]
+    /// Same as [ExternalMemoryTypeFlags::HOST_ALLOCATION][ExternalMemoryTypeFlags::HOST_ALLOCATION].
     HostAllocation,
-    /// Same as [ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY][ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY]
+    /// Same as [ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY][ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY].
     HostMappedForeignMemory,
 }
 
@@ -214,43 +205,52 @@ impl Into<PlatformMemoryType> for ExternalMemoryType {
     }
 }
 
-/// External memory handle
+/// Representation of an external memory for buffer creation.
 #[derive(Debug)]
 pub enum ExternalBufferMemory {
     #[cfg(unix)]
-    /// Tmp
+    /// This is supported on Unix only.
+    /// Same as [ExternalMemoryTypeFlags::OPAQUE_FD][ExternalMemoryTypeFlags::OPAQUE_FD] while holding a [Fd][Fd].
     OpaqueFd(Fd),
     #[cfg(windows)]
-    /// Tmp
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::OPAQUE_WIN32][ExternalMemoryTypeFlags::OPAQUE_WIN32] while holding a [Handle][Handle].
     OpaqueWin32(Handle),
     #[cfg(windows)]
-    /// Tmp
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT][ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT] while holding a [Handle][Handle].
     OpaqueWin32Kmt(Handle),
     #[cfg(windows)]
-    /// Tmp. Size is ignored.
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::D3D11_TEXTURE][ExternalMemoryTypeFlags::D3D11_TEXTURE] while holding a [Handle][Handle].
     D3D11Texture(Handle),
     #[cfg(windows)]
-    /// Tmp. Size is ignored
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT][ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT] while holding a [Handle][Handle].
     D3D11TextureKmt(Handle),
     #[cfg(windows)]
-    /// Tmp
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::D3D12_HEAP][ExternalMemoryTypeFlags::D3D12_HEAP] while holding a [Handle][Handle].
     D3D12Heap(Handle),
     #[cfg(windows)]
-    /// Tmp. Size is ignored
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::D3D12_RESOURCE][ExternalMemoryTypeFlags::D3D12_RESOURCE] while holding a [Handle][Handle].
     D3D12Resource(Handle),
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    /// Tmp
+    /// This is supported on Linux or Android only.
+    /// Same as [ExternalMemoryTypeFlags::DMA_BUF][ExternalMemoryTypeFlags::DMA_BUF] while holding a [Fd][Fd].
     DmaBuf(Fd),
     #[cfg(any(target_os = "android"))]
-    /// Tmp
+    /// This is supported on Android only.
+    /// Same as [ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER][ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER] while holding a [Fd][Fd].
     AndroidHardwareBuffer(Fd),
-    /// Tmp
+    /// Same as [ExternalMemoryTypeFlags::HOST_ALLOCATION][ExternalMemoryTypeFlags::HOST_ALLOCATION] while holding a [Ptr][Ptr].
     HostAllocation(Ptr),
-    /// Tmp
+    /// Same as [ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY][ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY] while holding a [Ptr][Ptr].
     HostMappedForeignMemory(Ptr),
 }
 impl ExternalBufferMemory {
-    /// Get the type of this external memory
+    /// Get the [ExternalMemoryType][ExternalMemoryType] from this enum.
     pub fn external_memory_type(&self) -> ExternalMemoryType {
         match self {
             #[cfg(unix)]
@@ -276,7 +276,7 @@ impl ExternalBufferMemory {
         }
     }
 
-    /// Get the type of this external memory
+    /// Get the [PlatformMemoryType][PlatformMemoryType] from this enum.
     pub fn platform_memory_type(&self) -> PlatformMemoryType {
         match self {
             #[cfg(unix)]
@@ -303,7 +303,7 @@ impl ExternalBufferMemory {
     }
 
     #[cfg(unix)]
-    /// Get the unix file descriptor of this external memory
+    /// Get the associated unix file descriptor as ([Fd][Fd]).
     pub fn fd(&self) -> Option<&Fd> {
         match self {
             Self::OpaqueFd(fd) => Some(fd),
@@ -315,7 +315,7 @@ impl ExternalBufferMemory {
         }
     }
     #[cfg(windows)]
-    /// Get the windows handle of this external memory
+    /// Get the associated windows handle as ([Handle][Handle]).
     pub fn handle(&self) -> Option<&Handle> {
         match self {
             Self::OpaqueWin32(handle) => Some(handle),
@@ -328,7 +328,7 @@ impl ExternalBufferMemory {
         }
     }
 
-    /// Get the host pointer of this external memory
+    /// Get the associated host pointer as ([Ptr][Ptr]).
     pub fn ptr(&self) -> Option<&Ptr> {
         match self {
             Self::HostAllocation(ptr) => Some(ptr),
@@ -340,46 +340,55 @@ impl ExternalBufferMemory {
     }
 }
 
-/// External buffer memory type
+/// Representation of an external memory type for buffers.
 pub type ExternalBufferMemoryType = ExternalMemoryType;
 
-/// External image memory
+/// Representation of an external memory for image creation.
 #[derive(Debug)]
 pub enum ExternalImageMemory {
     #[cfg(unix)]
-    /// Tmp
+    /// This is supported on Unix only.
+    /// Same as [ExternalMemoryTypeFlags::OPAQUE_FD][ExternalMemoryTypeFlags::OPAQUE_FD] while holding a [Fd][Fd].
     OpaqueFd(Fd),
     #[cfg(windows)]
-    /// Tmp
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::OPAQUE_WIN32][ExternalMemoryTypeFlags::OPAQUE_WIN32] while holding a [Handle][Handle].
     OpaqueWin32(Handle),
     #[cfg(windows)]
-    /// Tmp
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT][ExternalMemoryTypeFlags::OPAQUE_WIN32_KMT] while holding a [Handle][Handle].
     OpaqueWin32Kmt(Handle),
     #[cfg(windows)]
-    /// Tmp. Size is ignored.
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::D3D11_TEXTURE][ExternalMemoryTypeFlags::D3D11_TEXTURE] while holding a [Handle][Handle].
     D3D11Texture(Handle),
     #[cfg(windows)]
-    /// Tmp. Size is ignored
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT][ExternalMemoryTypeFlags::D3D11_TEXTURE_KMT] while holding a [Handle][Handle].
     D3D11TextureKmt(Handle),
     #[cfg(windows)]
-    /// Tmp
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::D3D12_HEAP][ExternalMemoryTypeFlags::D3D12_HEAP] while holding a [Handle][Handle].
     D3D12Heap(Handle),
     #[cfg(windows)]
-    /// Tmp. Size is ignored
+    /// This is supported on Windows only.
+    /// Same as [ExternalMemoryTypeFlags::D3D12_RESOURCE][ExternalMemoryTypeFlags::D3D12_RESOURCE] while holding a [Handle][Handle].
     D3D12Resource(Handle),
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    /// Tmp
+    /// This is supported on Linux or Android only.
+    /// Same as [ExternalMemoryTypeFlags::DMA_BUF][ExternalMemoryTypeFlags::DMA_BUF] while holding a [Fd][Fd].
     DmaBuf(Fd, Option<crate::image::DrmFormatImageProperties>),
     #[cfg(any(target_os = "android"))]
-    /// Tmp
+    /// This is supported on Android only.
+    /// Same as [ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER][ExternalMemoryTypeFlags::ANDROID_HARDWARE_BUFFER] while holding a [Fd][Fd].
     AndroidHardwareBuffer(Fd),
-    /// Tmp
+    /// Same as [ExternalMemoryTypeFlags::HOST_ALLOCATION][ExternalMemoryTypeFlags::HOST_ALLOCATION] while holding a [Ptr][Ptr].
     HostAllocation(Ptr),
-    /// Tmp
+    /// Same as [ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY][ExternalMemoryTypeFlags::HOST_MAPPED_FOREIGN_MEMORY] while holding a [Ptr][Ptr].
     HostMappedForeignMemory(Ptr),
 }
 impl ExternalImageMemory {
-    /// Get the type of this external memory
+    /// Get the [ExternalMemoryType][ExternalMemoryType] from this enum.
     pub fn external_memory_type(&self) -> ExternalMemoryType {
         match self {
             #[cfg(unix)]
@@ -405,7 +414,7 @@ impl ExternalImageMemory {
         }
     }
 
-    /// Get the type of this external memory
+    /// Get the [PlatformMemoryType][PlatformMemoryType] from this enum.
     pub fn platform_memory_type(&self) -> PlatformMemoryType {
         match self {
             #[cfg(unix)]
@@ -432,7 +441,7 @@ impl ExternalImageMemory {
     }
 
     #[cfg(unix)]
-    /// Get the unix file descriptor of this external memory
+    /// Get the associated unix file descriptor as ([Fd][Fd]).
     pub fn fd(&self) -> Option<&Fd> {
         match self {
             Self::OpaqueFd(fd) => Some(fd),
@@ -445,7 +454,7 @@ impl ExternalImageMemory {
     }
 
     #[cfg(windows)]
-    /// Get the windows handle of this external memory
+    /// Get the associated windows handle as ([Handle][Handle]).
     pub fn handle(&self) -> Option<&Handle> {
         match self {
             Self::OpaqueWin32(handle) => Some(handle),
@@ -458,7 +467,7 @@ impl ExternalImageMemory {
         }
     }
 
-    /// Get the host pointer of this external memory
+    /// Get the associated host pointer as ([Ptr][Ptr]).
     pub fn ptr(&self) -> Option<&Ptr> {
         match self {
             Self::HostAllocation(ptr) => Some(ptr),
@@ -470,7 +479,7 @@ impl ExternalImageMemory {
     }
 }
 
-/// External image memory types
+/// Representation of an external memory type for images.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExternalImageMemoryType {
     #[cfg(any(unix, doc))]
@@ -515,7 +524,7 @@ pub enum ExternalImageMemoryType {
     HostMappedForeignMemory,
 }
 impl ExternalImageMemoryType {
-    /// Get the type of this external memory
+    /// Get the [ExternalMemoryType][ExternalMemoryType] from this enum.
     pub fn external_memory_type(&self) -> ExternalMemoryType {
         match self {
             #[cfg(unix)]

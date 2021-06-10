@@ -1,5 +1,5 @@
-/// Windows handle
 #[derive(Debug)]
+/// Windows handle.
 pub struct Handle(*mut std::ffi::c_void);
 impl From<*mut std::ffi::c_void> for Handle {
     fn from(ptr: *mut std::ffi::c_void) -> Self {

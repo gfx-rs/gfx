@@ -2027,7 +2027,7 @@ impl d::Device<B> for super::Device {
             .find(|id| buffer_req.type_mask & type_mask & (1 << id) != 0)
         {
             Some(id) => id.into(),
-            None => unreachable!(),
+            None => return Err(hal::external_memory::ExternalBufferCreateAllocateError::NoValidMemoryTypeId),
         };
 
         let mut export_memori_ai = vk::ExportMemoryAllocateInfo::builder()
@@ -2077,10 +2077,10 @@ impl d::Device<B> for super::Device {
             return Err(match err {
                 d::BindError::OutOfMemory(out_of_memory) => out_of_memory.into(),
                 d::BindError::WrongMemory => {
-                    hal::external_memory::ExternalBufferCreateAllocateError::WrongMemory
+                    panic!("This error should never happen and it is likely a vulkan backend bug.")
                 }
                 d::BindError::OutOfBounds => {
-                    hal::external_memory::ExternalBufferCreateAllocateError::OutOfBounds
+                    panic!("Since external memory use a dedicated allocation, this should never happen and it is likely a vulkan backend bug.")
                 }
             });
         }
@@ -2154,10 +2154,7 @@ impl d::Device<B> for super::Device {
                     && external_memory_type_flags
                         .contains(hal::external_memory::ExternalMemoryTypeFlags::DMA_BUF)
                 {
-                    error!("Export to dma buf not supported");
-                    return Err(
-                        hal::external_memory::ExternalBufferImportError::UnsupportedExternalHandle,
-                    );
+                    panic!("Requested to import a dma buf that is not supported by the system. Use `PhysicalDevice::external_image_properties` to check what is supported on the system.");
                 }
 
                 let vk_memory_bits = if external_memory_type
@@ -2190,7 +2187,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => unreachable!(),
+                    None => return Err(hal::external_memory::ExternalBufferImportError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryFdInfoKHR::builder()
@@ -2242,7 +2239,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => unreachable!(),
+                    None => return Err(hal::external_memory::ExternalBufferImportError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::builder()
@@ -2294,7 +2291,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => unreachable!(),
+                    None => return Err(hal::external_memory::ExternalBufferImportError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryHostPointerInfoEXT::builder()
@@ -2348,10 +2345,10 @@ impl d::Device<B> for super::Device {
             return Err(match err {
                 d::BindError::OutOfMemory(out_of_memory) => out_of_memory.into(),
                 d::BindError::WrongMemory => {
-                    hal::external_memory::ExternalBufferImportError::WrongMemory
+                    panic!("This error should never happen and it is likely a vulkan backend bug.")
                 }
                 d::BindError::OutOfBounds => {
-                    hal::external_memory::ExternalBufferImportError::OutOfBounds
+                    panic!("Since external memory use a dedicated allocation, this should never happen and it is likely a vulkan backend bug.")
                 }
             });
         }
@@ -2534,10 +2531,10 @@ impl d::Device<B> for super::Device {
             return Err(match err {
                 d::BindError::OutOfMemory(out_of_memory) => out_of_memory.into(),
                 d::BindError::WrongMemory => {
-                    hal::external_memory::ExternalImageCreateAllocateError::WrongMemory
+                    panic!("This error should never happen and it is likely a vulkan backend bug.")
                 }
                 d::BindError::OutOfBounds => {
-                    hal::external_memory::ExternalImageCreateAllocateError::OutOfBounds
+                    panic!("Since external memory use a dedicated allocation, this should never happen and it is likely a vulkan backend bug.")
                 }
             });
         }
@@ -2691,10 +2688,7 @@ impl d::Device<B> for super::Device {
                 if self.shared.extension_fns.external_memory_dma_buf.is_none()
                     && external_memory_type == hal::external_memory::ExternalMemoryType::DmaBuf
                 {
-                    error!("Export to dma buf not supported");
-                    return Err(
-                        hal::external_memory::ExternalImageImportError::UnsupportedExternalHandle,
-                    );
+                    panic!("Requested to import a dma buf that is not supported by the system. Use `PhysicalDevice::external_image_properties` to check what is supported on the system.");
                 }
 
                 let vk_memory_bits = if external_memory_type
@@ -2730,7 +2724,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| image_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => unreachable!(),
+                    None => return Err(hal::external_memory::ExternalImageImportError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryFdInfoKHR::builder()
@@ -2762,10 +2756,7 @@ impl d::Device<B> for super::Device {
                 {
                     Some(ref functor) => functor,
                     _ => {
-                        error!("External memory windows handle extension not supported");
-                        return Err(
-                                hal::external_memory::ExternalImageImportError::UnsupportedExternalHandle,
-                            );
+                        panic!("External memory windows handle extension not supported");
                     }
                 };
 
@@ -2796,7 +2787,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| image_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => unreachable!(),
+                    None => return Err(hal::external_memory::ExternalImageImportError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::builder()
@@ -2848,7 +2839,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| image_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => unreachable!(),
+                    None => return Err(hal::external_memory::ExternalImageImportError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryHostPointerInfoEXT::builder()
@@ -2904,10 +2895,10 @@ impl d::Device<B> for super::Device {
             return Err(match err {
                 d::BindError::OutOfMemory(out_of_memory) => out_of_memory.into(),
                 d::BindError::WrongMemory => {
-                    hal::external_memory::ExternalImageImportError::WrongMemory
+                    panic!("This error should never happen and it is likely a vulkan backend bug.")
                 }
                 d::BindError::OutOfBounds => {
-                    hal::external_memory::ExternalImageImportError::OutOfBounds
+                    panic!("Since external memory use a dedicated allocation, this should never happen and it is likely a vulkan backend bug.")
                 }
             });
         }
@@ -2940,10 +2931,7 @@ impl d::Device<B> for super::Device {
                 let external_memory_extension = match self.shared.extension_fns.external_memory_fd {
                     Some(ref functor) => functor,
                     _ => {
-                        error!("External memory fd not supported");
-                        return Err(
-                            hal::external_memory::ExternalMemoryExportError::UnsupportedExternalHandle,
-                        );
+                        panic!("External memory fd not supported");
                     }
                 };
 

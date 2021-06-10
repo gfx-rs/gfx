@@ -1492,7 +1492,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
         external_memory_type: external_memory::ExternalMemoryType,
-    ) -> Result<external_memory::ExternalMemoryProperties, external_memory::ExternalImageQueryError>
+    ) -> Result<external_memory::ExternalMemoryProperties, external_memory::ExternalImagePropertiesError>
     {
         if self.instance.external_memory_capabilities.is_none() {
             panic!(
@@ -1571,7 +1571,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device.into()),
             Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED) => {
-                Err(external_memory::ExternalImageQueryError::FormatNotSupported)
+                Err(external_memory::ExternalImagePropertiesError::FormatNotSupported)
             }
             Err(err) => {
                 panic!("Unexpected error: {:#?}", err);

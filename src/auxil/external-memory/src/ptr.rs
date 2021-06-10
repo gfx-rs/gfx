@@ -1,5 +1,5 @@
-/// Pointer to a host allocated memory
 #[derive(Debug)]
+/// Pointer to a host allocated memory.
 pub struct Ptr(*mut std::ffi::c_void);
 impl Ptr {
     /// Get the inner ptr

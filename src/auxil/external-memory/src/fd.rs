@@ -1,5 +1,5 @@
-/// Unix file descriptor
 #[derive(Debug)]
+/// Unix file descriptor.
 pub struct Fd(i32);
 impl From<i32> for Fd {
     fn from(fd: i32) -> Self {

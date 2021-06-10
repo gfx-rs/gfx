@@ -461,7 +461,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         _memory_type: hal::external_memory::ExternalMemoryType,
     ) -> Result<
         hal::external_memory::ExternalMemoryProperties,
-        hal::external_memory::ExternalImageQueryError,
+        hal::external_memory::ExternalImagePropertiesError,
     > {
         unimplemented!()
     }
