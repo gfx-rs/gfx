@@ -1572,7 +1572,8 @@ impl d::Device<B> for Device {
             n::ImageType::Texture {
                 target,
                 raw: name,
-                format: desc.tex_external,
+                format_internal: desc.tex_internal,
+                format_external: desc.tex_external,
                 pixel_type: desc.data_type,
                 layer_count: kind.num_layers(),
                 level_count: num_levels,
@@ -1690,7 +1691,7 @@ impl d::Device<B> for Device {
             n::ImageType::Texture {
                 target,
                 raw,
-                format,
+                format_external: format,
                 ..
             } => {
                 match conv::describe_format(view_format) {

@@ -1356,8 +1356,8 @@ impl hal::Instance<Backend> for Instance {
                     Features::UNSIZED_DESCRIPTOR_ARRAY |
                     Features::DRAW_INDIRECT_COUNT |
                     Features::INDEPENDENT_BLENDING |
-                    Features::SAMPLE_RATE_SHADING | 
-                    Features::FRAGMENT_STORES_AND_ATOMICS | 
+                    Features::SAMPLE_RATE_SHADING |
+                    Features::FRAGMENT_STORES_AND_ATOMICS |
                     tiled_resource_features |
                     conservative_faster_features,
                 properties: PhysicalDeviceProperties {

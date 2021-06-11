@@ -127,6 +127,7 @@ pub enum Command {
         dst_texture: n::Texture,
         texture_target: n::TextureTarget,
         texture_format: n::TextureFormat,
+        internal_format: n::TextureFormat,
         pixel_type: n::DataType,
         data: command::BufferImageCopy,
     },
@@ -1346,14 +1347,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 n::ImageType::Texture {
                     raw,
                     target,
-                    format,
+                    format_external,
+                    format_internal,
                     pixel_type,
                     ..
                 } => Command::CopyBufferToTexture {
                     src_buffer: src_bounded_buffer.raw,
                     dst_texture: raw,
                     texture_target: target,
-                    texture_format: format,
+                    texture_format: format_external,
+                    internal_format: format_internal,
                     pixel_type,
                     data: r,
                 },
@@ -1387,13 +1390,13 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 n::ImageType::Texture {
                     raw,
                     target,
-                    format,
+                    format_external,
                     pixel_type,
                     ..
                 } => Command::CopyTextureToBuffer {
                     src_texture: raw,
                     texture_target: target,
-                    texture_format: format,
+                    texture_format: format_external,
                     pixel_type: pixel_type,
                     dst_buffer: dst_bounded_buffer.raw,
                     data: r,

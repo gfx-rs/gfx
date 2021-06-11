@@ -1,6 +1,9 @@
 use crate::native::VertexAttribFunction;
-use hal::{format::Format, image as i, pso};
-
+use hal::{
+    format::Format,
+    image::{self as i, Extent},
+    pso,
+};
 
 pub fn filter_to_gl(mag: i::Filter, min: i::Filter, mip: i::Filter) -> (u32, u32) {
     use hal::image::Filter::*;
@@ -71,6 +74,70 @@ impl FormatDescription {
             va_fun,
         }
     }
+}
+
+pub const COMPRESSED_RGB_S3TC_DXT1_EXT: u32 = 0x83F0;
+pub const COMPRESSED_RGBA_S3TC_DXT1_EXT: u32 = 0x83F1;
+pub const COMPRESSED_SRGB_S3TC_DXT1_EXT: u32 = 0x8C4C;
+pub const COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT: u32 = 0x8C4D;
+pub const COMPRESSED_RGBA_S3TC_DXT3_EXT: u32 = 0x83F2;
+pub const COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT: u32 = 0x8C4E;
+pub const COMPRESSED_RGBA_S3TC_DXT5_EXT: u32 = 0x83F3;
+pub const COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT: u32 = 0x8C4F;
+
+#[derive(Clone, Debug)]
+pub struct CompressedFormatInfo {
+    pub internal_format: u32,
+    pub compressed_block_width: u32,
+    pub compressed_block_height: u32,
+    pub compressed_block_depth: u32,
+    pub compressed_block_size: u32,
+    pub component_count: u32,
+    pub srgb: bool,
+}
+
+impl CompressedFormatInfo {
+    const fn new(
+        internal_format: u32,
+        compressed_block_width: u32,
+        compressed_block_height: u32,
+        compressed_block_depth: u32,
+        compressed_block_size: u32,
+        component_count: u32,
+        srgb: bool,
+    ) -> Self {
+        Self {
+            internal_format,
+            compressed_block_width,
+            compressed_block_height,
+            compressed_block_depth,
+            compressed_block_size,
+            component_count,
+            srgb,
+        }
+    }
+
+    pub const fn compute_compressed_image_size(&self, size: Extent) -> u32 {
+        let num_blocks_wide =
+            (size.width + self.compressed_block_width - 1) / self.compressed_block_width;
+        let num_blocks_high =
+            (size.height + self.compressed_block_height - 1) / self.compressed_block_height;
+        num_blocks_wide * num_blocks_high * (self.compressed_block_size / 8) * size.depth
+    }
+}
+
+pub const fn compressed_format_info(f: u32) -> Option<CompressedFormatInfo> {
+    Some(match f {
+        COMPRESSED_RGB_S3TC_DXT1_EXT => CompressedFormatInfo::new(f, 4, 4, 1, 64, 3, false),
+        COMPRESSED_RGBA_S3TC_DXT1_EXT => CompressedFormatInfo::new(f, 4, 4, 1, 64, 4, false),
+        COMPRESSED_SRGB_S3TC_DXT1_EXT => CompressedFormatInfo::new(f, 4, 4, 1, 64, 3, true),
+        COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT => CompressedFormatInfo::new(f, 4, 4, 1, 64, 4, true),
+        COMPRESSED_RGBA_S3TC_DXT3_EXT => CompressedFormatInfo::new(f, 4, 4, 1, 128, 4, false),
+        COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT => CompressedFormatInfo::new(f, 4, 4, 1, 128, 4, true),
+        COMPRESSED_RGBA_S3TC_DXT5_EXT => CompressedFormatInfo::new(f, 4, 4, 1, 128, 4, false),
+        COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT => CompressedFormatInfo::new(f, 4, 4, 1, 128, 4, true),
+        _ => return None,
+    })
 }
 
 pub fn describe_format(format: Format) -> Option<FormatDescription> {
@@ -236,7 +303,62 @@ pub fn describe_format(format: Format) -> Option<FormatDescription> {
             2,
             Float,
         ),
-
+        Bc1RgbUnorm => FormatDescription::new(
+            COMPRESSED_RGB_S3TC_DXT1_EXT,
+            glow::RGB,
+            glow::INVALID_ENUM,
+            3,
+            Float,
+        ),
+        Bc1RgbSrgb => FormatDescription::new(
+            COMPRESSED_SRGB_S3TC_DXT1_EXT,
+            glow::RGB,
+            glow::INVALID_ENUM,
+            3,
+            Float,
+        ),
+        Bc1RgbaUnorm => FormatDescription::new(
+            COMPRESSED_RGBA_S3TC_DXT1_EXT,
+            glow::RGBA,
+            glow::INVALID_ENUM,
+            4,
+            Float,
+        ),
+        Bc1RgbaSrgb => FormatDescription::new(
+            COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT,
+            glow::RGBA,
+            glow::INVALID_ENUM,
+            4,
+            Float,
+        ),
+        Bc2Unorm => FormatDescription::new(
+            COMPRESSED_RGBA_S3TC_DXT3_EXT,
+            glow::RGBA,
+            glow::INVALID_ENUM,
+            4,
+            Float,
+        ),
+        Bc2Srgb => FormatDescription::new(
+            COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT,
+            glow::RGBA,
+            glow::INVALID_ENUM,
+            4,
+            Float,
+        ),
+        Bc3Unorm => FormatDescription::new(
+            COMPRESSED_RGBA_S3TC_DXT5_EXT,
+            glow::RGBA,
+            glow::INVALID_ENUM,
+            4,
+            Float,
+        ),
+        Bc3Srgb => FormatDescription::new(
+            COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT,
+            glow::RGBA,
+            glow::INVALID_ENUM,
+            4,
+            Float,
+        ),
         _ => return None,
     })
 }

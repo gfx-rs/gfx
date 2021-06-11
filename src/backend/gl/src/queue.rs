@@ -1,6 +1,6 @@
 use crate::{
-    command as com, device, info::LegacyFeatures, native, state, Backend, Device, GlContext, Share,
-    Starc, Surface, MAX_COLOR_ATTACHMENTS,
+    command as com, conv, device, info::LegacyFeatures, native, state, Backend, Device, GlContext,
+    Share, Starc, Surface, MAX_COLOR_ATTACHMENTS,
 };
 
 use arrayvec::ArrayVec;
@@ -637,7 +637,6 @@ impl Queue {
                     glow::COPY_WRITE_BUFFER
                 };
                 let gl = &self.share.context;
-
                 gl.bind_buffer(copy_src_target, Some(src_buffer));
                 gl.bind_buffer(copy_dst_target, Some(dst_buffer));
 
@@ -668,6 +667,7 @@ impl Queue {
                 dst_texture,
                 texture_target,
                 texture_format,
+                internal_format,
                 pixel_type,
                 ref data,
             } => unsafe {
@@ -680,8 +680,19 @@ impl Queue {
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(src_buffer));
                 gl.bind_texture(texture_target, Some(dst_texture));
 
-                match texture_target {
-                    glow::TEXTURE_2D => {
+                let compressed_format = conv::compressed_format_info(internal_format);
+
+                const CUBEMAP_FACES: [u32; 6] = [
+                    glow::TEXTURE_CUBE_MAP_POSITIVE_X,
+                    glow::TEXTURE_CUBE_MAP_NEGATIVE_X,
+                    glow::TEXTURE_CUBE_MAP_POSITIVE_Y,
+                    glow::TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                    glow::TEXTURE_CUBE_MAP_POSITIVE_Z,
+                    glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
+                ];
+
+                match (texture_target, compressed_format) {
+                    (glow::TEXTURE_2D, None) => {
                         gl.tex_sub_image_2d(
                             texture_target,
                             data.image_layers.level as _,
@@ -694,7 +705,24 @@ impl Queue {
                             glow::PixelUnpackData::BufferOffset(data.buffer_offset as u32),
                         );
                     }
-                    glow::TEXTURE_2D_ARRAY | glow::TEXTURE_3D => {
+                    (glow::TEXTURE_2D, Some(compressed_info)) => {
+                        let layer_size =
+                            compressed_info.compute_compressed_image_size(data.image_extent);
+                        let mut buffer_offset = data.buffer_offset as u32;
+                        gl.compressed_tex_sub_image_2d(
+                            texture_target,
+                            data.image_layers.level as _,
+                            data.image_offset.x,
+                            data.image_offset.y,
+                            data.image_extent.width as _,
+                            data.image_extent.height as _,
+                            internal_format,
+                            glow::CompressedPixelUnpackData::BufferRange(
+                                buffer_offset..buffer_offset + layer_size,
+                            ),
+                        );
+                    }
+                    (glow::TEXTURE_2D_ARRAY, None) | (glow::TEXTURE_3D, None) => {
                         gl.tex_sub_image_3d(
                             texture_target,
                             data.image_layers.level as _,
@@ -710,7 +738,7 @@ impl Queue {
                             glow::PixelUnpackData::BufferOffset(data.buffer_offset as u32),
                         );
                     }
-                    glow::TEXTURE_CUBE_MAP => {
+                    (glow::TEXTURE_CUBE_MAP, None) => {
                         let components = match texture_format {
                             glow::RED
                             | glow::RED_INTEGER
@@ -738,15 +766,7 @@ impl Queue {
 
                         let faces_range = data.image_layers.layers.start as usize
                             ..data.image_layers.layers.end as usize;
-                        for &face in &[
-                            glow::TEXTURE_CUBE_MAP_POSITIVE_X,
-                            glow::TEXTURE_CUBE_MAP_NEGATIVE_X,
-                            glow::TEXTURE_CUBE_MAP_POSITIVE_Y,
-                            glow::TEXTURE_CUBE_MAP_NEGATIVE_Y,
-                            glow::TEXTURE_CUBE_MAP_POSITIVE_Z,
-                            glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
-                        ][faces_range]
-                        {
+                        for &face in &CUBEMAP_FACES[faces_range] {
                             gl.tex_sub_image_2d(
                                 face,
                                 data.image_layers.level as _,
@@ -757,6 +777,29 @@ impl Queue {
                                 texture_format,
                                 pixel_type,
                                 glow::PixelUnpackData::BufferOffset(buffer_offset),
+                            );
+                            buffer_offset += layer_size;
+                        }
+                    }
+                    (glow::TEXTURE_CUBE_MAP, Some(compressed_info)) => {
+                        let mut buffer_offset = data.buffer_offset as u32;
+                        let layer_size =
+                            compressed_info.compute_compressed_image_size(data.image_extent);
+
+                        let faces_range = data.image_layers.layers.start as usize
+                            ..data.image_layers.layers.end as usize;
+                        for &face in &CUBEMAP_FACES[faces_range] {
+                            gl.compressed_tex_sub_image_2d(
+                                face,
+                                data.image_layers.level as _,
+                                data.image_offset.x,
+                                data.image_offset.y,
+                                data.image_extent.width as _,
+                                data.image_extent.height as _,
+                                internal_format,
+                                glow::CompressedPixelUnpackData::BufferRange(
+                                    buffer_offset..buffer_offset + layer_size,
+                                ),
                             );
                             buffer_offset += layer_size;
                         }

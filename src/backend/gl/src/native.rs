@@ -151,7 +151,8 @@ pub enum ImageType {
         raw: Texture,
         level_count: i::Level,
         layer_count: i::Layer,
-        format: TextureFormat,
+        format_internal: TextureFormat,
+        format_external: TextureFormat,
         pixel_type: DataType,
     },
 }

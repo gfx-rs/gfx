@@ -25,7 +25,8 @@ bitflags = "1"
 fxhash = "0.2.1"
 log = "0.4"
 hal = { package = "gfx-hal", path = "../../hal", version = "0.8" }
-glow = "0.9"
+glow = "0.10"
+
 parking_lot = "0.11"
 raw-window-handle = "0.3"
 
