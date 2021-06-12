@@ -2400,27 +2400,26 @@ impl d::Device<B> for super::Device {
             if let hal::external_memory::ExternalImageMemoryType::DmaBuf(dma_modifiers) =
                 external_memory_type
             {
-                let drm_modifier_list: Vec<u64> = dma_modifiers
-                    .iter()
-                    .filter_map(|drm_modifier| {
-                        use std::convert::TryInto;
-                        match drm_modifier.clone().try_into() {
-                            Ok(drm_modifier) => Some(drm_modifier),
-                            Err(err) => {
-                                error!("Invalid drm format modifier: {:#?}", err);
-                                None
+                if dma_modifiers.is_empty() {(None, None)}
+                else {
+                    let drm_modifier_list: Vec<u64> = dma_modifiers
+                        .iter()
+                        .filter_map(|drm_modifier| {
+                            use std::convert::TryInto;
+                            match drm_modifier.clone().try_into() {
+                                Ok(drm_modifier) => Some(drm_modifier),
+                                Err(err) => {
+                                    error!("Invalid drm format modifier: {:#?}", err);
+                                    None
+                                }
                             }
-                        }
-                    })
-                    .collect();
-                (
-                    Some(
-                        vk::ImageDrmFormatModifierListCreateInfoEXT::builder()
+                        })
+                        .collect();
+                    let image_format_modifier_list = vk::ImageDrmFormatModifierListCreateInfoEXT::builder()
                             .drm_format_modifiers(drm_modifier_list.as_slice())
-                            .build(),
-                    ),
-                    Some(drm_modifier_list),
-                )
+                            .build();
+                    (Some(image_format_modifier_list),Some(drm_modifier_list),)
+                }
             } else {
                 (None, None)
             };

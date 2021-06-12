@@ -22,6 +22,61 @@ pub enum PlatformMemory {
     /// Host pointer.
     Ptr(Ptr),
 }
+impl PlatformMemory {
+    #[cfg(any(unix, doc))]
+    pub fn fd(&self)->Option<&Fd> {
+        match self {
+            Self::Fd(fd)=>Some(fd),
+            _=>None
+        }
+    }
+    #[cfg(any(windows, doc))]
+    pub fn handle(&self)->Option<&Handle> {
+        match self {
+            Self::Handle(handle)=>Some(handle),
+            _=>None
+        }
+    }
+    pub fn ptr(&self)->Option<&Ptr> {
+        match self {
+            Self::Ptr(ptr)=>Some(ptr),
+            _=>None
+        }
+    }
+}
+
+#[cfg(any(unix, doc))]
+impl std::convert::TryInto<Fd> for PlatformMemory{
+    type Error = &'static str;
+    fn try_into(self) -> Result<Fd, Self::Error>{
+        match self {
+            Self::Fd(fd)=>Ok(fd),
+            _=>Err("PlatformMemory does not contain an fd")
+        }
+    }
+}
+
+#[cfg(any(windows, doc))]
+impl std::convert::TryInto<Handle> for PlatformMemory{
+    type Error = &'static str;
+    fn try_into(self) -> Result<Handle, Self::Error>{
+        match self {
+            Self::Handle(handle)=>Ok(handle),
+            _=>Err("PlatformMemory does not contain an handle")
+        }
+    }
+}
+
+
+impl std::convert::TryInto<Ptr> for PlatformMemory{
+    type Error = &'static str;
+    fn try_into(self) -> Result<Ptr, Self::Error>{
+        match self {
+            Self::Ptr(ptr)=>Ok(ptr),
+            _=>Err("PlatformMemory does not contain a ptr")
+        }
+    }
+}
 
 #[cfg(any(unix,docs))]
 impl From<Fd> for PlatformMemory {

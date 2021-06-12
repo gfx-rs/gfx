@@ -1249,12 +1249,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     (format_properties, Vec::new())
                 }
                 Some(ref extension) => {
+                    let mut raw_format_modifiers: Vec<vk::DrmFormatModifierPropertiesEXT> = Vec::new();
                     let mut drm_format_properties =
                         vk::DrmFormatModifierPropertiesListEXT::builder().build();
                     let mut format_properties2 = vk::FormatProperties2::builder()
                         .push_next(&mut drm_format_properties)
                         .build();
-
+                    // Ash does not implement the "double call" behaviour for this function, so it is implemented here.
                     match extension {
                         ExtensionFn::Promoted => {
                             use ash::version::InstanceV1_1;
@@ -1263,6 +1264,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                                 format.map_or(vk::Format::UNDEFINED, conv::map_format),
                                 &mut format_properties2,
                             );
+                            raw_format_modifiers.reserve_exact(drm_format_properties.drm_format_modifier_count as usize);
+                            drm_format_properties.p_drm_format_modifier_properties = raw_format_modifiers.as_mut_ptr();
+                            self.instance.inner.get_physical_device_format_properties2(
+                                self.handle,
+                                format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                                &mut format_properties2,
+                            );
+                            raw_format_modifiers.set_len(drm_format_properties.drm_format_modifier_count as usize);
                         }
                         ExtensionFn::Extension(extension) => {
                             extension.get_physical_device_format_properties2_khr(
@@ -1270,14 +1279,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                                 format.map_or(vk::Format::UNDEFINED, conv::map_format),
                                 &mut format_properties2,
                             );
+                            raw_format_modifiers.reserve_exact(drm_format_properties.drm_format_modifier_count as usize);
+                            drm_format_properties.p_drm_format_modifier_properties = raw_format_modifiers.as_mut_ptr();
+                            extension.get_physical_device_format_properties2_khr(
+                                self.handle,
+                                format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                                &mut format_properties2,
+                            );
+                            raw_format_modifiers.set_len(drm_format_properties.drm_format_modifier_count as usize);
                         }
                     }
-
-                    let raw_format_modifiers = Vec::from_raw_parts(
-                        drm_format_properties.p_drm_format_modifier_properties,
-                        drm_format_properties.drm_format_modifier_count as usize,
-                        drm_format_properties.drm_format_modifier_count as usize,
-                    );
 
                     let format_modifiers: Vec<format::DrmFormatProperties> = raw_format_modifiers
                         .into_iter()
