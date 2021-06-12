@@ -630,7 +630,7 @@ impl device::Device<Backend> for Device {
             <Backend as gfx_hal::Backend>::Buffer,
             <Backend as gfx_hal::Backend>::Memory,
         ),
-        hal::external_memory::ExternalBufferCreateAllocateError,
+        hal::external_memory::ExternalResourceError,
     > {
         unimplemented!()
     }
@@ -647,7 +647,7 @@ impl device::Device<Backend> for Device {
             <Backend as gfx_hal::Backend>::Buffer,
             <Backend as gfx_hal::Backend>::Memory,
         ),
-        hal::external_memory::ExternalBufferImportError,
+        hal::external_memory::ExternalResourceError,
     > {
         unimplemented!()
     }
@@ -668,7 +668,7 @@ impl device::Device<Backend> for Device {
             <Backend as gfx_hal::Backend>::Image,
             <Backend as gfx_hal::Backend>::Memory,
         ),
-        hal::external_memory::ExternalImageCreateAllocateError,
+        hal::external_memory::ExternalResourceError,
     > {
         unimplemented!()
     }
@@ -689,7 +689,7 @@ impl device::Device<Backend> for Device {
             <Backend as gfx_hal::Backend>::Image,
             <Backend as gfx_hal::Backend>::Memory,
         ),
-        hal::external_memory::ExternalImageImportError,
+        hal::external_memory::ExternalResourceError,
     > {
         unimplemented!()
     }

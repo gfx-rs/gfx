@@ -554,7 +554,7 @@ impl hal::device::Device<Backend> for Device {
             <Backend as hal::Backend>::Buffer,
             <Backend as hal::Backend>::Memory,
         ),
-        hal::external_memory::ExternalBufferCreateAllocateError,
+        hal::external_memory::ExternalResourceError,
     > {
         unimplemented!()
     }
@@ -571,7 +571,7 @@ impl hal::device::Device<Backend> for Device {
             <Backend as hal::Backend>::Buffer,
             <Backend as hal::Backend>::Memory,
         ),
-        hal::external_memory::ExternalBufferImportError,
+        hal::external_memory::ExternalResourceError,
     > {
         unimplemented!()
     }

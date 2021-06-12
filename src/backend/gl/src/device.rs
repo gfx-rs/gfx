@@ -2177,7 +2177,7 @@ impl d::Device<B> for Device {
         _sparse: hal::memory::SparseFlags,
         _type_mask: u32,
         _size: u64,
-    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferCreateAllocateError>
+    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalResourceError>
     {
         unimplemented!()
     }
@@ -2189,7 +2189,7 @@ impl d::Device<B> for Device {
         _sparse: hal::memory::SparseFlags,
         _type_mask: u32,
         _size: u64,
-    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferImportError> {
+    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalResourceError> {
         unimplemented!()
     }
 
@@ -2204,7 +2204,7 @@ impl d::Device<B> for Device {
         _sparse: memory::SparseFlags,
         _view_caps: i::ViewCapabilities,
         _type_mask: u32,
-    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageCreateAllocateError> {
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalResourceError> {
         unimplemented!()
     }
 
@@ -2219,7 +2219,7 @@ impl d::Device<B> for Device {
         _sparse: memory::SparseFlags,
         _view_caps: i::ViewCapabilities,
         _type_mask: u32,
-    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError> {
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalResourceError> {
         unimplemented!()
     }
 

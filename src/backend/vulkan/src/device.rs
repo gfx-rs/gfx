@@ -1982,7 +1982,7 @@ impl d::Device<B> for super::Device {
         sparse: hal::memory::SparseFlags,
         type_mask: u32,
         size: u64,
-    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferCreateAllocateError>
+    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalResourceError>
     {
         if self.shared.extension_fns.external_memory.is_none() {
             panic!(
@@ -2014,7 +2014,7 @@ impl d::Device<B> for super::Device {
             }
             Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
                 return Err(
-                    hal::external_memory::ExternalBufferCreateAllocateError::InvalidExternalHandle,
+                    hal::external_memory::ExternalResourceError::InvalidExternalHandle,
                 )
             }
             _ => unreachable!(),
@@ -2027,7 +2027,7 @@ impl d::Device<B> for super::Device {
             .find(|id| buffer_req.type_mask & type_mask & (1 << id) != 0)
         {
             Some(id) => id.into(),
-            None => return Err(hal::external_memory::ExternalBufferCreateAllocateError::NoValidMemoryTypeId),
+            None => return Err(hal::external_memory::ExternalResourceError::NoValidMemoryTypeId),
         };
 
         let mut export_memori_ai = vk::ExportMemoryAllocateInfo::builder()
@@ -2063,7 +2063,7 @@ impl d::Device<B> for super::Device {
         let memory = match result {
             Ok(memory) => n::Memory { raw: memory },
             Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => {
-                return Err(hal::external_memory::ExternalBufferCreateAllocateError::TooManyObjects)
+                return Err(hal::external_memory::ExternalResourceError::TooManyObjects)
             }
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => return Err(d::OutOfMemory::Host.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
@@ -2095,7 +2095,7 @@ impl d::Device<B> for super::Device {
         sparse: hal::memory::SparseFlags,
         type_mask: u32,
         size: u64,
-    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalBufferImportError> {
+    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalResourceError> {
         if self.shared.extension_fns.external_memory.is_none() {
             panic!(
                 "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled"
@@ -2126,7 +2126,7 @@ impl d::Device<B> for super::Device {
                 return Err(d::OutOfMemory::Device.into())
             }
             Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
-                return Err(hal::external_memory::ExternalBufferImportError::InvalidExternalHandle)
+                return Err(hal::external_memory::ExternalResourceError::InvalidExternalHandle)
             }
             _ => unreachable!(),
         };
@@ -2173,7 +2173,7 @@ impl d::Device<B> for super::Device {
                         Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
                             error!("Failed to get memory fd properties");
                             return Err(
-                                    hal::external_memory::ExternalBufferImportError::InvalidExternalHandle,
+                                    hal::external_memory::ExternalResourceError::InvalidExternalHandle,
                                 );
                         }
                         err => {
@@ -2187,7 +2187,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => return Err(hal::external_memory::ExternalBufferImportError::NoValidMemoryTypeId),
+                    None => return Err(hal::external_memory::ExternalResourceError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryFdInfoKHR::builder()
@@ -2227,7 +2227,7 @@ impl d::Device<B> for super::Device {
                             return Err(d::OutOfMemory::Host.into())
                         }
                         vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => return Err(
-                            hal::external_memory::ExternalBufferImportError::InvalidExternalHandle,
+                            hal::external_memory::ExternalResourceError::InvalidExternalHandle,
                         ),
                         _ => unreachable!(),
                     };
@@ -2239,7 +2239,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => return Err(hal::external_memory::ExternalBufferImportError::NoValidMemoryTypeId),
+                    None => return Err(hal::external_memory::ExternalResourceError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::builder()
@@ -2277,7 +2277,7 @@ impl d::Device<B> for super::Device {
                             return Err(d::OutOfMemory::Host.into())
                         }
                         vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => return Err(
-                            hal::external_memory::ExternalBufferImportError::InvalidExternalHandle,
+                            hal::external_memory::ExternalResourceError::InvalidExternalHandle,
                         ),
                         err => {
                             panic!("Unexpected error: {:#?}", err);
@@ -2291,7 +2291,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| buffer_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => return Err(hal::external_memory::ExternalBufferImportError::NoValidMemoryTypeId),
+                    None => return Err(hal::external_memory::ExternalResourceError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryHostPointerInfoEXT::builder()
@@ -2319,7 +2319,7 @@ impl d::Device<B> for super::Device {
                 self.destroy_buffer(buffer);
                 match err {
                     vk::Result::ERROR_TOO_MANY_OBJECTS => {
-                        return Err(hal::external_memory::ExternalBufferImportError::TooManyObjects)
+                        return Err(hal::external_memory::ExternalResourceError::TooManyObjects)
                     }
                     vk::Result::ERROR_OUT_OF_HOST_MEMORY => return Err(d::OutOfMemory::Host.into()),
                     vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
@@ -2327,7 +2327,7 @@ impl d::Device<B> for super::Device {
                     }
                     vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => {
                         return Err(
-                            hal::external_memory::ExternalBufferImportError::InvalidExternalHandle,
+                            hal::external_memory::ExternalResourceError::InvalidExternalHandle,
                         )
                     }
                     unexpected_error => {
@@ -2366,7 +2366,7 @@ impl d::Device<B> for super::Device {
         sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
         type_mask: u32,
-    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageCreateAllocateError> {
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalResourceError> {
         if self.shared.extension_fns.external_memory.is_none() {
             panic!(
                 "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled"
@@ -2509,7 +2509,7 @@ impl d::Device<B> for super::Device {
                 match err {
                     vk::Result::ERROR_TOO_MANY_OBJECTS => {
                         return Err(
-                            hal::external_memory::ExternalImageCreateAllocateError::TooManyObjects,
+                            hal::external_memory::ExternalResourceError::TooManyObjects,
                         );
                     }
                     vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
@@ -2552,7 +2552,7 @@ impl d::Device<B> for super::Device {
         sparse: memory::SparseFlags,
         view_caps: image::ViewCapabilities,
         type_mask: u32,
-    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalImageImportError> {
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalResourceError> {
         if self.shared.extension_fns.external_memory.is_none() {
             panic!(
                 "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled"
@@ -2706,7 +2706,7 @@ impl d::Device<B> for super::Device {
                         Err(vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR) => {
                             error!("Failed to get memory fd properties");
                             return Err(
-                                    hal::external_memory::ExternalImageImportError::InvalidExternalHandle,
+                                    hal::external_memory::ExternalResourceError::InvalidExternalHandle,
                                 );
                         }
                         unexpected_error => {
@@ -2723,7 +2723,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| image_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => return Err(hal::external_memory::ExternalImageImportError::NoValidMemoryTypeId),
+                    None => return Err(hal::external_memory::ExternalResourceError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryFdInfoKHR::builder()
@@ -2774,7 +2774,7 @@ impl d::Device<B> for super::Device {
                             return Err(d::OutOfMemory::Host.into())
                         }
                         vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => return Err(
-                            hal::external_memory::ExternalImageImportError::InvalidExternalHandle,
+                            hal::external_memory::ExternalResourceError::InvalidExternalHandle,
                         ),
                         _ => unreachable!(),
                     };
@@ -2786,7 +2786,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| image_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => return Err(hal::external_memory::ExternalImageImportError::NoValidMemoryTypeId),
+                    None => return Err(hal::external_memory::ExternalResourceError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryWin32HandleInfoKHR::builder()
@@ -2824,7 +2824,7 @@ impl d::Device<B> for super::Device {
                             return Err(d::OutOfMemory::Host.into())
                         }
                         vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => return Err(
-                            hal::external_memory::ExternalImageImportError::InvalidExternalHandle,
+                            hal::external_memory::ExternalResourceError::InvalidExternalHandle,
                         ),
                         unexpected_error => {
                             panic!("Unexpected error on `get_memory_host_pointer_properties_ext`: {:#?}", unexpected_error);
@@ -2838,7 +2838,7 @@ impl d::Device<B> for super::Device {
                     .find(|id| image_req.type_mask & type_mask & (1 << id) & vk_memory_bits != 0)
                 {
                     Some(id) => id.into(),
-                    None => return Err(hal::external_memory::ExternalImageImportError::NoValidMemoryTypeId),
+                    None => return Err(hal::external_memory::ExternalResourceError::NoValidMemoryTypeId),
                 };
 
                 let mut import_memory_info = vk::ImportMemoryHostPointerInfoEXT::builder()
@@ -2866,7 +2866,7 @@ impl d::Device<B> for super::Device {
                 self.destroy_image(image);
                 match err {
                     vk::Result::ERROR_TOO_MANY_OBJECTS => {
-                        return Err(hal::external_memory::ExternalImageImportError::TooManyObjects)
+                        return Err(hal::external_memory::ExternalResourceError::TooManyObjects)
                     }
                     vk::Result::ERROR_OUT_OF_HOST_MEMORY => return Err(d::OutOfMemory::Host.into()),
                     vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
@@ -2874,7 +2874,7 @@ impl d::Device<B> for super::Device {
                     }
                     vk::Result::ERROR_INVALID_EXTERNAL_HANDLE_KHR => {
                         return Err(
-                            hal::external_memory::ExternalImageImportError::InvalidExternalHandle,
+                            hal::external_memory::ExternalResourceError::InvalidExternalHandle,
                         )
                     }
                     unexpected_error => {
