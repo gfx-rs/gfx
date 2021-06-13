@@ -9,7 +9,7 @@
 //! for instance `R32_G32_B32_A32`.  The `ChannelType` specifies how the
 //! components are interpreted, for instance `Sfloat` or `Sint`.
 
-pub use drm_fourcc::DrmModifier;
+pub use external_memory::DrmModifier;
 
 bitflags!(
     /// Bitflags which describe what properties of an image
