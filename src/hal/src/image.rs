@@ -771,12 +771,3 @@ pub struct FramebufferAttachment {
     /// The image view format.
     pub format: format::Format,
 }
-
-/// Description of drm format properties used to create an image using drm format modifier.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DrmFormatImageProperties {
-    /// Drm format modifier
-    pub drm_modifier: format::DrmModifier,
-    /// Plane subresource layouts
-    pub plane_layouts: Vec<SubresourceFootprint>,
-}
