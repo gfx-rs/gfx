@@ -442,6 +442,30 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.memory_properties.clone()
     }
 
+    fn external_buffer_properties(
+        &self,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> hal::external_memory::ExternalMemoryProperties {
+        unimplemented!()
+    }
+
+    fn external_image_properties(
+        &self,
+        _format: hal::format::Format,
+        _dimensions: u8,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _view_caps: hal::image::ViewCapabilities,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalImagePropertiesError,
+    > {
+        unimplemented!()
+    }
+
     fn features(&self) -> Features {
         self.features
     }
@@ -450,9 +474,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.properties
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<display::Display<crate::Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<display::Display<crate::Backend>> {
         unimplemented!();
     }
 
@@ -1590,7 +1612,7 @@ fn validate_line_width(width: f32) {
     assert_eq!(width, 1.0);
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct FormatInfo {
     properties: f::Properties,
     sample_count_mask: u8,
@@ -1625,7 +1647,8 @@ impl FormatProperties {
 
     fn resolve(&self, idx: usize) -> FormatInfo {
         let mut guard = self.info[idx].lock();
-        if let Some(info) = *guard {
+        use std::ops::Deref;
+        if let Some(info) = guard.deref().clone() {
             return info;
         }
         let format: f::Format = unsafe { mem::transmute(idx as u32) };
@@ -1634,7 +1657,7 @@ impl FormatProperties {
             Some(format) => format,
             None => {
                 let info = FormatInfo::default();
-                *guard = Some(info);
+                *guard = Some(info.clone());
                 return info;
             }
         };
@@ -1751,7 +1774,7 @@ impl FormatProperties {
             properties,
             sample_count_mask,
         };
-        *guard = Some(info);
+        *guard = Some(info.clone());
         info
     }
 }

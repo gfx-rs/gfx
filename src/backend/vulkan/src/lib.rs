@@ -73,8 +73,9 @@ pub struct RawInstance {
     inner: ash::Instance,
     handle_is_external: bool,
     debug_messenger: Option<DebugMessenger>,
-    get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
+    get_physical_device_properties: Option<ExtensionFn<vk::KhrGetPhysicalDeviceProperties2Fn>>,
     display: Option<khr::Display>,
+    external_memory_capabilities: Option<ExtensionFn<vk::KhrExternalMemoryCapabilitiesFn>>,
 }
 
 pub enum DebugMessenger {
@@ -393,6 +394,15 @@ impl Instance {
         extensions.push(vk::ExtDisplaySurfaceCounterFn::name());
         extensions.push(khr::Display::name());
 
+        if driver_api_version < Version::V1_1 {
+            extensions.push(vk::KhrExternalMemoryCapabilitiesFn::name());
+        }
+
+        // VK_KHR_storage_buffer_storage_class required for `Naga` on Vulkan 1.0 devices
+        if driver_api_version == Version::V1_0 {
+            extensions.push(vk::KhrStorageBufferStorageClassFn::name());
+        }
+
         // Only keep available extensions.
         extensions.retain(|&ext| {
             if instance_extensions
@@ -475,21 +485,44 @@ impl Instance {
                 hal::UnsupportedBackend
             })?;
 
-        let get_physical_device_properties = extensions
-            .iter()
-            .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
-            .map(|_| {
-                vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| unsafe {
-                    std::mem::transmute(
-                        entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
-                    )
+        let get_physical_device_properties = if driver_api_version >= Version::V1_1 {
+            Some(ExtensionFn::Promoted)
+        } else {
+            extensions
+                .iter()
+                .find(|&&ext| ext == vk::KhrGetPhysicalDeviceProperties2Fn::name())
+                .map(|_| {
+                    ExtensionFn::Extension(vk::KhrGetPhysicalDeviceProperties2Fn::load(
+                        |name| unsafe {
+                            std::mem::transmute(
+                                entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
+                            )
+                        },
+                    ))
                 })
-            });
+        };
 
         let display = extensions
             .iter()
             .find(|&&ext| ext == khr::Display::name())
             .map(|_| khr::Display::new(&entry, &instance));
+
+        let external_memory_capabilities = if driver_api_version >= Version::V1_1 {
+            Some(ExtensionFn::Promoted)
+        } else {
+            extensions
+                .iter()
+                .find(|&&ext| ext == vk::KhrExternalMemoryCapabilitiesFn::name())
+                .map(|_| {
+                    ExtensionFn::Extension(vk::KhrExternalMemoryCapabilitiesFn::load(
+                        |name| unsafe {
+                            std::mem::transmute(
+                                entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
+                            )
+                        },
+                    ))
+                })
+        };
 
         #[allow(deprecated)] // `DebugReport`
         let debug_messenger = {
@@ -528,6 +561,7 @@ impl Instance {
                 debug_messenger,
                 get_physical_device_properties,
                 display,
+                external_memory_capabilities,
             }),
             extensions,
             entry,
@@ -625,7 +659,6 @@ impl hal::Instance<Backend> for Instance {
                 hal::UnsupportedBackend
             })?
         };
-
         Instance::inner_create(entry, instance, false, driver_api_version, extensions)
     }
 
@@ -722,7 +755,8 @@ impl hal::Instance<Backend> for Instance {
             }
         };
         let surface_transform_flags = hal::display::SurfaceTransformFlags::from(transformation);
-        let vk_surface_transform_flags = vk::SurfaceTransformFlagsKHR::from_raw(surface_transform_flags.bits());
+        let vk_surface_transform_flags =
+            vk::SurfaceTransformFlagsKHR::from_raw(surface_transform_flags.bits());
 
         let display_surface_ci = {
             let builder = vk::DisplaySurfaceCreateInfoKHR::builder()
@@ -796,6 +830,21 @@ struct DeviceExtensionFunctions {
     mesh_shaders: Option<ExtensionFn<MeshShader>>,
     draw_indirect_count: Option<ExtensionFn<khr::DrawIndirectCount>>,
     display_control: Option<vk::ExtDisplayControlFn>,
+    memory_requirements2: Option<ExtensionFn<vk::KhrGetMemoryRequirements2Fn>>,
+    // The extension does not have its own functions.
+    dedicated_allocation: Option<ExtensionFn<()>>,
+    // The extension does not have its own functions.
+    external_memory: Option<ExtensionFn<()>>,
+    external_memory_host: Option<vk::ExtExternalMemoryHostFn>,
+    #[cfg(windows)]
+    external_memory_win32: Option<vk::KhrExternalMemoryWin32Fn>,
+    #[cfg(unix)]
+    external_memory_fd: Option<khr::ExternalMemoryFd>,
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    // The extension does not have its own functions.
+    external_memory_dma_buf: Option<()>,
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    image_drm_format_modifier: Option<vk::ExtImageDrmFormatModifierFn>,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.

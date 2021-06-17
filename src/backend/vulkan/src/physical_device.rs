@@ -4,13 +4,16 @@ use ash::{
     vk,
 };
 
+#[cfg(unix)]
+use ash::extensions::khr::ExternalMemoryFd;
+
 use hal::{
     adapter,
     device::{CreationError, OutOfMemory},
-    display, format, image,
+    display, external_memory, format, image,
     pso::PatchSize,
-    queue, DescriptorLimits, DownlevelProperties, DynamicStates, Features, Limits,
-    PhysicalDeviceProperties,
+    queue, DescriptorLimits, DownlevelProperties, DynamicStates, ExternalMemoryLimits, Features,
+    Limits, PhysicalDeviceProperties,
 };
 
 use std::{ffi::CStr, fmt, mem, ptr, sync::Arc};
@@ -439,6 +442,13 @@ impl PhysicalDeviceFeatures {
             bits |= Features::CONSERVATIVE_RASTERIZATION
         }
 
+        if info.api_version() >= Version::V1_1
+            || (info.supports_extension(vk::KhrGetPhysicalDeviceProperties2Fn::name())
+                && info.supports_extension(vk::KhrExternalMemoryFn::name()))
+        {
+            bits |= Features::EXTERNAL_MEMORY
+        }
+
         if let Some(ref vulkan_1_2) = self.vulkan_1_2 {
             if vulkan_1_2.shader_sampled_image_array_non_uniform_indexing != 0 {
                 bits |= Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING;
@@ -582,10 +592,35 @@ impl PhysicalDeviceInfo {
             requested_extensions.push(vk::KhrGetDisplayProperties2Fn::name()); // TODO NOT NEEDED, RIGHT?
         }
 
-        if self.supports_extension(vk::ExtDisplayControlFn::name()){
+        if self.supports_extension(vk::ExtDisplayControlFn::name()) {
             requested_extensions.push(vk::ExtDisplayControlFn::name());
         }
 
+        if requested_features.contains(Features::EXTERNAL_MEMORY) {
+            if self.api_version() < Version::V1_1 {
+                requested_extensions.push(vk::KhrGetPhysicalDeviceProperties2Fn::name());
+                requested_extensions.push(vk::KhrExternalMemoryFn::name());
+
+                // External memory interact with DedicatedAllocation extension, but it is not a strict dependency.
+                requested_extensions.push(vk::KhrGetMemoryRequirements2Fn::name()); // TODO Functions should be added because they are useful
+                requested_extensions.push(vk::KhrDedicatedAllocationFn::name());
+            }
+
+            requested_extensions.push(vk::ExtExternalMemoryHostFn::name());
+            #[cfg(window)]
+            requested_extensions.push(vk::KhrExternalMemoryWin32Fn::name());
+            #[cfg(unix)]
+            {
+                requested_extensions.push(vk::KhrExternalMemoryFdFn::name());
+                requested_extensions.push(vk::ExtExternalMemoryDmaBufFn::name());
+
+                requested_extensions.push(vk::KhrBindMemory2Fn::name());
+
+                requested_extensions.push(vk::KhrImageFormatListFn::name());
+                requested_extensions.push(vk::KhrSamplerYcbcrConversionFn::name());
+                requested_extensions.push(vk::ExtImageDrmFormatModifierFn::name());
+            }
+        }
         requested_extensions
     }
 
@@ -644,10 +679,21 @@ impl PhysicalDeviceInfo {
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
-            unsafe {
-                get_device_properties
-                    .get_physical_device_features2_khr(device, &mut features2 as *mut _);
+            match get_device_properties {
+                ExtensionFn::Promoted => {
+                    use ash::version::InstanceV1_1;
+                    unsafe {
+                        instance
+                            .inner
+                            .get_physical_device_features2(device, &mut features2);
+                    }
+                }
+                ExtensionFn::Extension(get_device_properties) => unsafe {
+                    get_device_properties
+                        .get_physical_device_features2_khr(device, &mut features2 as *mut _);
+                },
             }
+
             features2.features
         } else {
             unsafe { instance.inner.get_physical_device_features(device) }
@@ -755,18 +801,148 @@ impl PhysicalDevice {
         };
 
         let display_control = if enabled_extensions.contains(&vk::ExtDisplayControlFn::name()) {
-            Some(vk::ExtDisplayControlFn::load(
-                |name| {
-                    std::mem::transmute(
-                        self.instance
-                            .inner
-                            .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
-                    )
-                },
-            ))
+            Some(vk::ExtDisplayControlFn::load(|name| {
+                std::mem::transmute(
+                    self.instance
+                        .inner
+                        .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                )
+            }))
         } else {
             None
         };
+
+        let memory_requirements2 =
+            if enabled_extensions.contains(&vk::KhrGetMemoryRequirements2Fn::name()) {
+                Some(ExtensionFn::Extension(
+                    vk::KhrGetMemoryRequirements2Fn::load(|name| {
+                        std::mem::transmute(
+                            self.instance
+                                .inner
+                                .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                        )
+                    }),
+                ))
+            } else {
+                None
+            };
+
+        let dedicated_allocation;
+        let external_memory;
+        let external_memory_host;
+
+        #[cfg(unix)]
+        let external_memory_fd;
+
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let external_memory_dma_buf;
+
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        let image_drm_format_modifier;
+
+        #[cfg(windows)]
+        let external_memory_win32;
+
+        if requested_features.contains(Features::EXTERNAL_MEMORY) {
+            if self.device_info.api_version() < Version::V1_1 {
+                external_memory = if enabled_extensions.contains(&vk::KhrExternalMemoryFn::name()) {
+                    Some(ExtensionFn::Extension(()))
+                } else {
+                    None
+                };
+
+                // External memory interact with DedicatedAllocation extension, but it is not a strict dependency.
+                dedicated_allocation =
+                    if enabled_extensions.contains(&vk::KhrDedicatedAllocationFn::name()) {
+                        Some(ExtensionFn::Extension(()))
+                    } else {
+                        None
+                    };
+            } else {
+                external_memory = Some(ExtensionFn::Promoted);
+                dedicated_allocation = Some(ExtensionFn::Promoted);
+            }
+
+            external_memory_host =
+                if enabled_extensions.contains(&vk::ExtExternalMemoryHostFn::name()) {
+                    Some(vk::ExtExternalMemoryHostFn::load(|name| {
+                        std::mem::transmute(
+                            self.instance
+                                .inner
+                                .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                        )
+                    }))
+                } else {
+                    None
+                };
+
+            #[cfg(windows)]
+            {
+                external_memory_win32 =
+                    if enabled_extensions.contains(&vk::KhrExternalMemoryWin32Fn::name()) {
+                        Some(vk::KhrExternalMemoryWin32Fn::load(|name| {
+                            std::mem::transmute(
+                                self.instance
+                                    .inner
+                                    .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                            )
+                        }))
+                    } else {
+                        None
+                    };
+            }
+            #[cfg(unix)]
+            {
+                external_memory_fd = if enabled_extensions.contains(&ExternalMemoryFd::name()) {
+                    Some(ExternalMemoryFd::new(&self.instance.inner, &device_raw))
+                } else {
+                    None
+                };
+
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                {
+                    external_memory_dma_buf =
+                        if enabled_extensions.contains(&vk::ExtExternalMemoryDmaBufFn::name()) {
+                            Some(())
+                        } else {
+                            None
+                        };
+
+                    image_drm_format_modifier =
+                        if enabled_extensions.contains(&vk::ExtImageDrmFormatModifierFn::name()) {
+                            Some(vk::ExtImageDrmFormatModifierFn::load(|name| {
+                                std::mem::transmute(
+                                    self.instance
+                                        .inner
+                                        .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
+                                )
+                            }))
+                        } else {
+                            None
+                        };
+                }
+            }
+        } else {
+            dedicated_allocation = None;
+            external_memory = None;
+            external_memory_host = None;
+
+            #[cfg(unix)]
+            {
+                external_memory_fd = None;
+            }
+
+            #[cfg(any(target_os = "linux", target_os = "android"))]
+            {
+                external_memory_dma_buf = None;
+                image_drm_format_modifier = None;
+            }
+
+            #[cfg(windows)]
+            {
+                external_memory_win32 = None;
+            }
+        }
 
         #[cfg(feature = "naga")]
         let naga_options = {
@@ -806,6 +982,18 @@ impl PhysicalDevice {
                     mesh_shaders: mesh_fn,
                     draw_indirect_count: indirect_count_fn,
                     display_control,
+                    memory_requirements2: memory_requirements2,
+                    dedicated_allocation: dedicated_allocation,
+                    external_memory,
+                    external_memory_host,
+                    #[cfg(unix)]
+                    external_memory_fd,
+                    #[cfg(windows)]
+                    external_memory_win32,
+                    #[cfg(any(target_os = "linux", target_os = "android"))]
+                    external_memory_dma_buf,
+                    #[cfg(any(target_os = "linux", target_os = "android"))]
+                    image_drm_format_modifier,
                 },
                 flip_y_requires_shift: self.device_info.api_version() >= Version::V1_1
                     || self
@@ -1042,12 +1230,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
-        let properties = unsafe {
-            self.instance.inner.get_physical_device_format_properties(
-                self.handle,
-                format.map_or(vk::Format::UNDEFINED, conv::map_format),
-            )
-        };
         let supports_transfer_bits = self
             .device_info
             .supports_extension(vk::KhrMaintenance1Fn::name());
@@ -1055,6 +1237,87 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let supports_sampler_filter_minmax = self
             .available_features
             .contains(Features::SAMPLER_REDUCTION);
+
+        let (properties, drm_format_properties) = unsafe {
+            match self.instance.get_physical_device_properties {
+                None => {
+                    let format_properties =
+                        self.instance.inner.get_physical_device_format_properties(
+                            self.handle,
+                            format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                        );
+                    (format_properties, Vec::new())
+                }
+                Some(ref extension) => {
+                    let mut raw_format_modifiers: Vec<vk::DrmFormatModifierPropertiesEXT> = Vec::new();
+                    let mut drm_format_properties =
+                        vk::DrmFormatModifierPropertiesListEXT::builder().build();
+                    let mut format_properties2 = vk::FormatProperties2::builder()
+                        .push_next(&mut drm_format_properties)
+                        .build();
+                    // Ash does not implement the "double call" behaviour for this function, so it is implemented here.
+                    match extension {
+                        ExtensionFn::Promoted => {
+                            use ash::version::InstanceV1_1;
+                            self.instance.inner.get_physical_device_format_properties2(
+                                self.handle,
+                                format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                                &mut format_properties2,
+                            );
+                            raw_format_modifiers.reserve_exact(drm_format_properties.drm_format_modifier_count as usize);
+                            drm_format_properties.p_drm_format_modifier_properties = raw_format_modifiers.as_mut_ptr();
+                            self.instance.inner.get_physical_device_format_properties2(
+                                self.handle,
+                                format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                                &mut format_properties2,
+                            );
+                            raw_format_modifiers.set_len(drm_format_properties.drm_format_modifier_count as usize);
+                        }
+                        ExtensionFn::Extension(extension) => {
+                            extension.get_physical_device_format_properties2_khr(
+                                self.handle,
+                                format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                                &mut format_properties2,
+                            );
+                            raw_format_modifiers.reserve_exact(drm_format_properties.drm_format_modifier_count as usize);
+                            drm_format_properties.p_drm_format_modifier_properties = raw_format_modifiers.as_mut_ptr();
+                            extension.get_physical_device_format_properties2_khr(
+                                self.handle,
+                                format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                                &mut format_properties2,
+                            );
+                            raw_format_modifiers.set_len(drm_format_properties.drm_format_modifier_count as usize);
+                        }
+                    }
+
+                    let format_modifiers: Vec<format::DrmFormatProperties> = raw_format_modifiers
+                        .into_iter()
+                        .filter_map(|format_modifier_properties| {
+                            let format_modifier = format::DrmModifier::from(
+                                format_modifier_properties.drm_format_modifier,
+                            );
+                            if let format::DrmModifier::Unrecognized(value) = format_modifier {
+                                error!("Unrecognized drm format modifier: {:#?}", value);
+                                None
+                            } else {
+                                Some(format::DrmFormatProperties {
+                                    drm_modifier: format_modifier,
+                                    plane_count: format_modifier_properties
+                                        .drm_format_modifier_plane_count,
+                                    valid_usages: conv::map_image_features(
+                                        format_modifier_properties
+                                            .drm_format_modifier_tiling_features,
+                                        supports_transfer_bits,
+                                        supports_sampler_filter_minmax,
+                                    ),
+                                })
+                            }
+                        })
+                        .collect();
+                    (format_properties2.format_properties, format_modifiers)
+                }
+            }
+        };
 
         format::Properties {
             linear_tiling: conv::map_image_features(
@@ -1068,6 +1331,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 supports_sampler_filter_minmax,
             ),
             buffer_features: conv::map_buffer_features(properties.buffer_features),
+            drm_format_properties,
         }
     }
 
@@ -1151,6 +1415,178 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         adapter::MemoryProperties {
             memory_heaps,
             memory_types,
+        }
+    }
+
+    fn external_buffer_properties(
+        &self,
+        usage: hal::buffer::Usage,
+        sparse: hal::memory::SparseFlags,
+        external_memory_type: external_memory::ExternalMemoryType,
+    ) -> external_memory::ExternalMemoryProperties {
+        let external_memory_type_flags: hal::external_memory::ExternalMemoryTypeFlags =
+            external_memory_type.into();
+        let vk_external_memory_type =
+            vk::ExternalMemoryHandleTypeFlags::from_raw(external_memory_type_flags.bits());
+
+        let external_buffer_info = vk::PhysicalDeviceExternalBufferInfo::builder()
+            .flags(conv::map_buffer_create_flags(sparse))
+            .usage(conv::map_buffer_usage(usage))
+            .handle_type(vk_external_memory_type)
+            .build();
+
+        let vk_mem_properties = match self.instance.external_memory_capabilities.as_ref() {
+            Some(ExtensionFn::Extension(external_memory_capabilities_extension)) => {
+                let mut external_buffer_properties =
+                    vk::ExternalBufferProperties::builder().build();
+                unsafe {
+                    external_memory_capabilities_extension
+                        .get_physical_device_external_buffer_properties_khr(
+                            self.handle,
+                            &external_buffer_info,
+                            &mut external_buffer_properties,
+                        )
+                };
+                external_buffer_properties.external_memory_properties
+            }
+            Some(ExtensionFn::Promoted) => {
+                use ash::version::InstanceV1_1;
+                let mut external_buffer_properties =
+                    vk::ExternalBufferProperties::builder().build();
+                unsafe {
+                    self.instance
+                        .inner
+                        .get_physical_device_external_buffer_properties(
+                            self.handle,
+                            &external_buffer_info,
+                            &mut external_buffer_properties,
+                        )
+                }
+                external_buffer_properties.external_memory_properties
+            }
+            None => panic!(
+                "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled"
+            ),
+        };
+
+        let mut external_memory_properties = external_memory::ExternalMemoryProperties::empty();
+        if vk_mem_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE)
+        {
+            external_memory_properties |= external_memory::ExternalMemoryProperties::EXPORTABLE;
+        }
+
+        if vk_mem_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE)
+        {
+            external_memory_properties |= external_memory::ExternalMemoryProperties::IMPORTABLE;
+        }
+
+        if vk_mem_properties
+            .export_from_imported_handle_types
+            .contains(vk_external_memory_type)
+        {
+            external_memory_properties |=
+                external_memory::ExternalMemoryProperties::EXPORTABLE_FROM_IMPORTED;
+        }
+
+        external_memory_properties
+    }
+
+    fn external_image_properties(
+        &self,
+        format: format::Format,
+        dimensions: u8,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        view_caps: image::ViewCapabilities,
+        external_memory_type: external_memory::ExternalMemoryType,
+    ) -> Result<external_memory::ExternalMemoryProperties, external_memory::ExternalImagePropertiesError>
+    {
+        if self.instance.external_memory_capabilities.is_none() {
+            panic!(
+                "This function rely on `Feature::EXTERNAL_MEMORY`, but the feature is not enabled"
+            );
+        }
+
+        use ash::version::InstanceV1_1;
+        let external_memory_type_flags: hal::external_memory::ExternalMemoryTypeFlags =
+            external_memory_type.into();
+        let vk_external_memory_type =
+            vk::ExternalMemoryHandleTypeFlags::from_raw(external_memory_type_flags.bits());
+
+        let mut external_image_format_info = vk::PhysicalDeviceExternalImageFormatInfo::builder()
+            .handle_type(vk_external_memory_type)
+            .build();
+        let image_format_info = vk::PhysicalDeviceImageFormatInfo2::builder()
+            .push_next(&mut external_image_format_info)
+            .format(conv::map_format(format))
+            .ty(match dimensions {
+                1 => vk::ImageType::TYPE_1D,
+                2 => vk::ImageType::TYPE_2D,
+                3 => vk::ImageType::TYPE_3D,
+                _ => panic!("Unexpected image dimensionality: {}", dimensions),
+            })
+            .tiling(conv::map_tiling(tiling))
+            .usage(conv::map_image_usage(usage))
+            .flags(conv::map_view_capabilities(view_caps))
+            .build();
+
+        let mut external_image_format_properties =
+            vk::ExternalImageFormatProperties::builder().build();
+        let mut image_format_properties = vk::ImageFormatProperties2::builder()
+            .push_next(&mut external_image_format_properties)
+            .build();
+
+        match unsafe {
+            self.instance
+                .inner
+                .get_physical_device_image_format_properties2(
+                    self.handle,
+                    &image_format_info,
+                    &mut image_format_properties,
+                )
+        } {
+            Ok(_) => {
+                let vk_mem_properties = external_image_format_properties.external_memory_properties;
+
+                let mut external_memory_properties =
+                    external_memory::ExternalMemoryProperties::empty();
+                if vk_mem_properties
+                    .external_memory_features
+                    .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE)
+                {
+                    external_memory_properties |=
+                        external_memory::ExternalMemoryProperties::EXPORTABLE;
+                }
+
+                if vk_mem_properties
+                    .external_memory_features
+                    .contains(vk::ExternalMemoryFeatureFlags::IMPORTABLE)
+                {
+                    external_memory_properties |=
+                        external_memory::ExternalMemoryProperties::IMPORTABLE;
+                }
+
+                if vk_mem_properties
+                    .export_from_imported_handle_types
+                    .contains(vk_external_memory_type)
+                {
+                    external_memory_properties |=
+                        external_memory::ExternalMemoryProperties::EXPORTABLE_FROM_IMPORTED;
+                }
+                Ok(external_memory_properties)
+            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host.into()),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device.into()),
+            Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED) => {
+                Err(external_memory::ExternalImagePropertiesError::FormatNotSupported)
+            }
+            Err(err) => {
+                panic!("Unexpected error: {:#?}", err);
+            }
         }
     }
 
@@ -1273,6 +1709,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let mut descriptor_indexing_capabilities = hal::DescriptorIndexingProperties::default();
         let mut mesh_shader_capabilities = hal::MeshShaderProperties::default();
         let mut sampler_reduction_capabilities = hal::SamplerReductionProperties::default();
+        let mut external_memory_limits = hal::ExternalMemoryLimits::default();
 
         if let Some(get_physical_device_properties) =
             self.instance.get_physical_device_properties.as_ref()
@@ -1282,16 +1719,32 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             let mut mesh_shader_properties = vk::PhysicalDeviceMeshShaderPropertiesNV::builder();
             let mut sampler_reduction_properties =
                 vk::PhysicalDeviceSamplerFilterMinmaxProperties::builder();
+            let mut memory_host_properties =
+                vk::PhysicalDeviceExternalMemoryHostPropertiesEXT::builder();
 
-            unsafe {
-                get_physical_device_properties.get_physical_device_properties2_khr(
-                    self.handle,
-                    &mut vk::PhysicalDeviceProperties2::builder()
-                        .push_next(&mut descriptor_indexing_properties)
-                        .push_next(&mut mesh_shader_properties)
-                        .push_next(&mut sampler_reduction_properties)
-                        .build() as *mut _,
-                );
+            let mut physical_device_properties2 = vk::PhysicalDeviceProperties2::builder()
+                .push_next(&mut descriptor_indexing_properties)
+                .push_next(&mut mesh_shader_properties)
+                .push_next(&mut sampler_reduction_properties)
+                .push_next(&mut memory_host_properties)
+                .build();
+
+            match get_physical_device_properties {
+                ExtensionFn::Promoted => {
+                    use ash::version::InstanceV1_1;
+                    unsafe {
+                        self.instance.inner.get_physical_device_properties2(
+                            self.handle,
+                            &mut physical_device_properties2,
+                        );
+                    }
+                }
+                ExtensionFn::Extension(get_physical_device_properties) => unsafe {
+                    get_physical_device_properties.get_physical_device_properties2_khr(
+                        self.handle,
+                        &mut physical_device_properties2,
+                    );
+                },
             }
 
             descriptor_indexing_capabilities = hal::DescriptorIndexingProperties {
@@ -1348,6 +1801,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     .filter_minmax_image_component_mapping
                     == vk::TRUE,
             };
+
+            external_memory_limits = ExternalMemoryLimits {
+                min_imported_host_pointer_alignment: memory_host_properties
+                    .min_imported_host_pointer_alignment,
+            };
         }
 
         PhysicalDeviceProperties {
@@ -1358,6 +1816,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             performance_caveats: Default::default(),
             dynamic_pipeline_states: DynamicStates::all(),
             downlevel: DownlevelProperties::all_enabled(),
+            external_memory_limits,
         }
     }
 
@@ -1415,9 +1874,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         true
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<display::Display<Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<display::Display<Backend>> {
         let display_extension = match self.instance.display {
             Some(ref display_extension) => display_extension,
             None => {
@@ -1426,23 +1883,31 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
-        let display_properties = match display_extension
-            .get_physical_device_display_properties(self.handle)
-        {
-            Ok(display_properties) => display_properties,
-            Err(err)=>{
-                match err {
-                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
-                        error!("Error returned on `get_physical_device_display_properties`: {:#?}",err),
-                    err=>error!("Unexpected error on `get_physical_device_display_properties`: {:#?}",err)
+        let display_properties =
+            match display_extension.get_physical_device_display_properties(self.handle) {
+                Ok(display_properties) => display_properties,
+                Err(err) => {
+                    match err {
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                        | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => error!(
+                            "Error returned on `get_physical_device_display_properties`: {:#?}",
+                            err
+                        ),
+                        err => error!(
+                            "Unexpected error on `get_physical_device_display_properties`: {:#?}",
+                            err
+                        ),
+                    }
+                    return Vec::new();
                 }
-                return Vec::new();
-            }
-        };
+            };
 
         let mut displays = Vec::new();
         for display_property in display_properties {
-            let supported_transforms = hal::display::SurfaceTransformFlags::from_bits(display_property.supported_transforms.as_raw()).unwrap();
+            let supported_transforms = hal::display::SurfaceTransformFlags::from_bits(
+                display_property.supported_transforms.as_raw(),
+            )
+            .unwrap();
             let display_name = if display_property.display_name.is_null() {
                 None
             } else {
@@ -1475,11 +1940,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .get_display_mode_properties(self.handle, display_property.display)
             {
                 Ok(display_modes) => display_modes,
-                Err(err)=>{
+                Err(err) => {
                     match err {
-                        vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
-                            error!("Error returned on `get_display_mode_properties`: {:#?}",err),
-                        err=>error!("Unexpected error on `get_display_mode_properties`: {:#?}",err)
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                        | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => error!(
+                            "Error returned on `get_display_mode_properties`: {:#?}",
+                            err
+                        ),
+                        err => error!(
+                            "Unexpected error on `get_display_mode_properties`: {:#?}",
+                            err
+                        ),
                     }
                     return Vec::new();
                 }
@@ -1526,7 +1997,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         .get_display_plane_supported_displays(self.handle, index as u32)
                     {
                         Ok(compatible_displays) => compatible_displays,
-                        Err(err)=>{
+                        Err(err) => {
                             match err {
                                 vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
                                     error!("Error returned on `get_display_plane_supported_displays`: {:#?}",err),
@@ -1544,11 +2015,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 }
                 planes
             }
-            Err(err)=>{
+            Err(err) => {
                 match err {
-                    vk::Result::ERROR_OUT_OF_HOST_MEMORY | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
-                        error!("Error returned on `get_physical_device_display_plane_properties`: {:#?}",err),
-                    err=>error!("Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",err)
+                    vk::Result::ERROR_OUT_OF_HOST_MEMORY
+                    | vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => error!(
+                        "Error returned on `get_physical_device_display_plane_properties`: {:#?}",
+                        err
+                    ),
+                    err => error!(
+                        "Unexpected error on `get_physical_device_display_plane_properties`: {:#?}",
+                        err
+                    ),
                 }
                 Vec::new()
             }
@@ -1648,49 +2125,50 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 start: (
                     display_plane_capabilities.min_src_position.x,
                     display_plane_capabilities.min_src_position.x,
-                    )
+                )
                     .into(),
                 end: (
                     display_plane_capabilities.max_src_position.x,
                     display_plane_capabilities.max_src_position.x,
-                    ).into()
+                )
+                    .into(),
             },
             src_extent: std::ops::Range {
                 start: (
                     display_plane_capabilities.min_src_extent.width,
                     display_plane_capabilities.min_src_extent.height,
                 )
-                .into(),
+                    .into(),
                 end: (
                     display_plane_capabilities.max_src_extent.width,
                     display_plane_capabilities.max_src_extent.height,
                 )
-                .into(),
+                    .into(),
             },
             dst_position: std::ops::Range {
                 start: (
                     display_plane_capabilities.min_dst_position.x,
                     display_plane_capabilities.min_dst_position.x,
                 )
-                .into(),
+                    .into(),
                 end: (
                     display_plane_capabilities.max_dst_position.x,
                     display_plane_capabilities.max_dst_position.x,
                 )
-                .into(),
+                    .into(),
             },
             dst_extent: std::ops::Range {
                 start: (
                     display_plane_capabilities.min_dst_extent.width,
                     display_plane_capabilities.min_dst_extent.height,
                 )
-                .into(),
+                    .into(),
                 end: (
                     display_plane_capabilities.max_dst_extent.width,
                     display_plane_capabilities.max_dst_extent.height,
                 )
-                .into(),
-            }
+                    .into(),
+            },
         })
     }
 }

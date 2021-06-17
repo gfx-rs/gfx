@@ -308,6 +308,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 linear_tiling: format::ImageFeature::empty(),
                 optimal_tiling: format::ImageFeature::empty(),
                 buffer_features: format::BufferFeature::empty(),
+                drm_format_properties: Vec::new(),
             },
         }
     }
@@ -389,6 +390,30 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             ],
             memory_types: self.memory_types.to_vec(),
         }
+    }
+
+    fn external_buffer_properties(
+        &self,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> hal::external_memory::ExternalMemoryProperties {
+        unimplemented!()
+    }
+
+    fn external_image_properties(
+        &self,
+        _format: hal::format::Format,
+        _dimensions: u8,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _view_caps: hal::image::ViewCapabilities,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalImagePropertiesError,
+    > {
+        unimplemented!()
     }
 
     fn features(&self) -> hal::Features {
@@ -549,9 +574,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<hal::display::Display<crate::Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<hal::display::Display<crate::Backend>> {
         unimplemented!();
     }
 
@@ -3555,6 +3578,72 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<(), display::control::DisplayControlError> {
         unimplemented!()
     }
+
+    unsafe fn create_allocate_external_buffer(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalBufferMemoryType,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _type_mask: u32,
+        _size: u64,
+    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalResourceError>
+    {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_buffer(
+        &self,
+        _external_memory: hal::external_memory::ExternalBufferMemory,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _mem_types: u32,
+        _size: u64,
+    ) -> Result<(n::Buffer, n::Memory), hal::external_memory::ExternalResourceError> {
+        unimplemented!()
+    }
+
+    unsafe fn create_allocate_external_image(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalImageMemoryType,
+        _kind: image::Kind,
+        _num_levels: image::Level,
+        _format: hal::format::Format,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _sparse: memory::SparseFlags,
+        _view_caps: image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalResourceError> {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_image(
+        &self,
+        _external_memory: hal::external_memory::ExternalImageMemory,
+        _kind: image::Kind,
+        _num_levels: image::Level,
+        _format: hal::format::Format,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _sparse: memory::SparseFlags,
+        _view_caps: image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(n::Image, n::Memory), hal::external_memory::ExternalResourceError> {
+        unimplemented!()
+    }
+
+    unsafe fn export_memory(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalMemoryType,
+        _memory: &n::Memory,
+    ) -> Result<hal::external_memory::PlatformMemory, hal::external_memory::ExternalMemoryExportError>
+    {
+        unimplemented!()
+    }
+
+    /// Query the underlying drm format modifier from an image.
+    unsafe fn drm_format_modifier(&self, _image: &n::Image) -> Option<hal::format::DrmModifier>{None}
+
 
     fn start_capture(&self) {
         let device = self.shared.device.lock();

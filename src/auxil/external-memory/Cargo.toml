@@ -1,0 +1,18 @@
+[package]
+name = "external-memory"
+version = "0.0.1"
+description = "Generic external memory structures used by gfx-rs backends"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
+keywords = ["external-memory"]
+license = "MIT OR Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+categories = ["external-memory"]
+edition = "2018"
+
+[lib]
+name = "external_memory"
+
+[dependencies]
+bitflags = "1.0"
+drm-fourcc = {version="2.1.1",features=["serde"]}

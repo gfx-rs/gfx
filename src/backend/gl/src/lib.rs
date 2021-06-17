@@ -608,6 +608,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             linear_tiling: If::TRANSFER_SRC | If::TRANSFER_DST | If::empty(),
             optimal_tiling: If::TRANSFER_SRC | If::TRANSFER_DST | If::SAMPLED,
             buffer_features: Bf::VERTEX,
+            drm_format_properties: Vec::new(),
         }
     }
 
@@ -669,6 +670,30 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
+    fn external_buffer_properties(
+        &self,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> hal::external_memory::ExternalMemoryProperties {
+        unimplemented!()
+    }
+
+    fn external_image_properties(
+        &self,
+        _format: hal::format::Format,
+        _dimensions: u8,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _view_caps: image::ViewCapabilities,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalImagePropertiesError,
+    > {
+        unimplemented!()
+    }
+
     fn features(&self) -> hal::Features {
         self.0.supported_features
     }
@@ -677,9 +702,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         self.0.public_caps
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<display::Display<crate::Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<display::Display<crate::Backend>> {
         unimplemented!();
     }
 

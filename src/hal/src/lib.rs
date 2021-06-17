@@ -53,6 +53,7 @@ pub mod buffer;
 pub mod command;
 pub mod device;
 pub mod display;
+pub mod external_memory;
 pub mod format;
 pub mod image;
 pub mod memory;
@@ -290,6 +291,8 @@ bitflags! {
         const MESH_SHADER_MASK = Features::TASK_SHADER.bits | Features::MESH_SHADER.bits;
         /// Support sampler min/max reduction mode.
         const SAMPLER_REDUCTION = 0x0004 << 96;
+        /// Supports external memory import and export.
+        const EXTERNAL_MEMORY = 0x0008 << 96;
     }
 }
 
@@ -351,6 +354,8 @@ pub struct PhysicalDeviceProperties {
     pub performance_caveats: PerformanceCaveats,
     /// Dynamic pipeline states.
     pub dynamic_pipeline_states: DynamicStates,
+    /// External memory limits
+    pub external_memory_limits: ExternalMemoryLimits,
 }
 
 ///
@@ -651,6 +656,21 @@ pub enum IndexType {
 #[derive(Copy, Clone, Debug, Eq, PartialEq, thiserror::Error)]
 #[error("Backend is not supported on this platform")]
 pub struct UnsupportedBackend;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+/// Physical device limits for external memory management
+pub struct ExternalMemoryLimits {
+    /// Alignment required for an imported host pointer
+    pub min_imported_host_pointer_alignment: u64,
+}
+impl Default for ExternalMemoryLimits {
+    fn default() -> Self {
+        Self {
+            min_imported_host_pointer_alignment: 0,
+        }
+    }
+}
 
 /// An instantiated backend.
 ///

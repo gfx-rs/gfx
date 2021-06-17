@@ -542,6 +542,49 @@ impl hal::device::Device<Backend> for Device {
         unimplemented!()
     }
 
+    unsafe fn create_allocate_external_buffer(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalBufferMemoryType,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _type_mask: u32,
+        _size: u64,
+    ) -> Result<
+        (
+            <Backend as hal::Backend>::Buffer,
+            <Backend as hal::Backend>::Memory,
+        ),
+        hal::external_memory::ExternalResourceError,
+    > {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_buffer(
+        &self,
+        _external_memory: hal::external_memory::ExternalMemory,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _type_mask: u32,
+        _size: u64,
+    ) -> Result<
+        (
+            <Backend as hal::Backend>::Buffer,
+            <Backend as hal::Backend>::Memory,
+        ),
+        hal::external_memory::ExternalResourceError,
+    > {
+        unimplemented!()
+    }
+
+    unsafe fn export_memory(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalMemoryType,
+        _memory: &<Backend as hal::Backend>::Memory,
+    ) -> Result<hal::external_memory::ExternalMemory, hal::external_memory::ExternalMemoryExportError>
+    {
+        unimplemented!()
+    }
+
     fn start_capture(&self) {}
 
     fn stop_capture(&self) {}

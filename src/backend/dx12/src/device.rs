@@ -3801,6 +3801,72 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
+    unsafe fn create_allocate_external_buffer(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalBufferMemoryType,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _type_mask: u32,
+        _size: u64,
+    ) -> Result<(r::Buffer, r::Memory), hal::external_memory::ExternalResourceError>
+    {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_buffer(
+        &self,
+        _external_memory: hal::external_memory::ExternalBufferMemory,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _type_mask: u32,
+        _size: u64,
+    ) -> Result<(r::Buffer, r::Memory), hal::external_memory::ExternalResourceError> {
+        unimplemented!()
+    }
+
+    unsafe fn create_allocate_external_image(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalImageMemoryType,
+        _kind: hal::image::Kind,
+        _mip_levels: hal::image::Level,
+        _format: hal::format::Format,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _view_caps: hal::image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(r::Image, r::Memory), hal::external_memory::ExternalResourceError> {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_image(
+        &self,
+        _external_memory: hal::external_memory::ExternalImageMemory,
+        _kind: hal::image::Kind,
+        _mip_levels: hal::image::Level,
+        _format: hal::format::Format,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _view_caps: hal::image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<(r::Image, r::Memory), hal::external_memory::ExternalResourceError> {
+        unimplemented!()
+    }
+
+    unsafe fn export_memory(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalMemoryType,
+        _memory: &r::Memory,
+    ) -> Result<hal::external_memory::PlatformMemory, hal::external_memory::ExternalMemoryExportError>
+    {
+        unimplemented!()
+    }
+
+    unsafe fn drm_format_modifier(&self, _image: &r::Image) -> Option<hal::format::DrmModifier> {
+        None
+    }
+
     fn start_capture(&self) {
         unsafe {
             self.render_doc

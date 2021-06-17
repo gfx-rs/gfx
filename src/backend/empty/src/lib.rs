@@ -144,6 +144,30 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
+    fn external_buffer_properties(
+        &self,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> hal::external_memory::ExternalMemoryProperties {
+        unimplemented!()
+    }
+
+    fn external_image_properties(
+        &self,
+        _format: hal::format::Format,
+        _dimensions: u8,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _view_caps: hal::image::ViewCapabilities,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalMemoryProperties,
+        hal::external_memory::ExternalImagePropertiesError,
+    > {
+        unimplemented!()
+    }
+
     fn features(&self) -> hal::Features {
         hal::Features::empty()
     }
@@ -159,9 +183,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    unsafe fn enumerate_displays(
-        &self,
-    ) -> Vec<display::Display<Backend>> {
+    unsafe fn enumerate_displays(&self) -> Vec<display::Display<Backend>> {
         unimplemented!();
     }
 
@@ -594,6 +616,98 @@ impl device::Device<Backend> for Device {
 
     unsafe fn set_pipeline_layout_name(&self, _pipeline_layout: &mut (), _name: &str) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
+
+    unsafe fn create_allocate_external_buffer(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalBufferMemoryType,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _type_mask: u32,
+        _size: u64,
+    ) -> Result<
+        (
+            <Backend as gfx_hal::Backend>::Buffer,
+            <Backend as gfx_hal::Backend>::Memory,
+        ),
+        hal::external_memory::ExternalResourceError,
+    > {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_buffer(
+        &self,
+        _external_memory: hal::external_memory::ExternalBufferMemory,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _type_mask: u32,
+        _size: u64,
+    ) -> Result<
+        (
+            <Backend as gfx_hal::Backend>::Buffer,
+            <Backend as gfx_hal::Backend>::Memory,
+        ),
+        hal::external_memory::ExternalResourceError,
+    > {
+        unimplemented!()
+    }
+
+    unsafe fn create_allocate_external_image(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalImageMemoryType,
+        _kind: hal::image::Kind,
+        _num_levels: hal::image::Level,
+        _format: hal::format::Format,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _view_caps: hal::image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<
+        (
+            <Backend as gfx_hal::Backend>::Image,
+            <Backend as gfx_hal::Backend>::Memory,
+        ),
+        hal::external_memory::ExternalResourceError,
+    > {
+        unimplemented!()
+    }
+
+    unsafe fn import_external_image(
+        &self,
+        _external_memory: hal::external_memory::ExternalImageMemory,
+        _kind: hal::image::Kind,
+        _num_levels: hal::image::Level,
+        _format: hal::format::Format,
+        _tiling: hal::image::Tiling,
+        _usage: hal::image::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _view_caps: hal::image::ViewCapabilities,
+        _type_mask: u32,
+    ) -> Result<
+        (
+            <Backend as gfx_hal::Backend>::Image,
+            <Backend as gfx_hal::Backend>::Memory,
+        ),
+        hal::external_memory::ExternalResourceError,
+    > {
+        unimplemented!()
+    }
+
+    unsafe fn export_memory(
+        &self,
+        _external_memory_type: hal::external_memory::ExternalMemoryType,
+        _memory: &<Backend as gfx_hal::Backend>::Memory,
+    ) -> Result<hal::external_memory::PlatformMemory, hal::external_memory::ExternalMemoryExportError>
+    {
+        unimplemented!()
+    }
+
+    unsafe fn drm_format_modifier(
+        &self,
+        _image: &<Backend as gfx_hal::Backend>::Image,
+    ) -> Option<hal::format::DrmModifier> {
+        None
     }
 
     unsafe fn reset_fence(&self, _: &mut ()) -> Result<(), device::OutOfMemory> {

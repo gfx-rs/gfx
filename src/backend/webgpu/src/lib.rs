@@ -196,6 +196,18 @@ impl hal::adapter::PhysicalDevice<Backend> for PhysicalDevice {
         todo!()
     }
 
+    fn external_buffer_properties(
+        &self,
+        _usage: hal::buffer::Usage,
+        _sparse: hal::memory::SparseFlags,
+        _memory_type: hal::external_memory::ExternalMemoryType,
+    ) -> Result<
+        hal::external_memory::ExternalBufferProperties,
+        hal::external_memory::ExternalMemoryQueryError,
+    > {
+        unimplemented!()
+    }
+
     fn features(&self) -> hal::Features {
         todo!()
     }
