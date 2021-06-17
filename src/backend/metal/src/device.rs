@@ -29,7 +29,7 @@ use objc::{
     rc::autoreleasepool,
     runtime::{Object, BOOL, NO},
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 
 use std::collections::BTreeMap;
 #[cfg(feature = "pipeline-cache")]
@@ -592,6 +592,11 @@ impl LanguageVersion {
 }
 
 impl Device {
+    /// Provides access to the underlying Metal device.
+    pub fn lock(&self) -> MutexGuard<'_, metal::Device> {
+        self.shared.device.lock()
+    }
+
     fn _is_heap_coherent(&self, heap: &n::MemoryHeap) -> bool {
         match *heap {
             n::MemoryHeap::Private => false,
