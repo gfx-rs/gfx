@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-dx11"
-version = "0.8.0"
+version = "0.9.0"
 description = "DirectX-11 API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -20,8 +20,8 @@ name = "gfx_backend_dx11"
 
 [dependencies]
 arrayvec = "0.5"
-auxil = { path = "../../auxil/auxil", version = "0.9", package = "gfx-auxil", features = ["spirv_cross"] }
-hal = { path = "../../hal", version = "0.8", package = "gfx-hal" }
+auxil = { path = "../../auxil/auxil", version = "0.10", package = "gfx-auxil", features = ["spirv_cross"] }
+hal = { path = "../../hal", version = "0.9", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
 libloading = "0.7"

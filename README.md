@@ -19,6 +19,12 @@
 
 gfx-rs is a low-level, cross-platform graphics and compute abstraction library in Rust. It consists of the following components:
 
+## gfx-hal deprecation
+
+As of the v0.9 release, gfx-hal is now in maintenance mode. gfx-hal development was mainly driven by [wgpu](https://github.com/gfx-rs/wgpu), which has now switched to its own GPU abstraction called [wgpu-hal](https://github.com/gfx-rs/wgpu/pull/1471). For this reason, gfx-hal development has switched to maintenance only, until the developers figure out the story for gfx-portability. Read more about the transition in [#3768](https://github.com/gfx-rs/gfx/discussions/3768).
+
+## hal
+
 * `gfx-hal` which is gfx's hardware abstraction layer: a Vulkan-ic mostly unsafe API which translates to native graphics backends.
 * `gfx-backend-*` which contains graphics backends for various platforms:
   * [Vulkan](src/backend/vulkan) (runs on Linux, Windows, and Android)
