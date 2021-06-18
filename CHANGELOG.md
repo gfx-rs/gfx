@@ -1,5 +1,23 @@
 # Change Log
 
+### hal-0.9.0 (18-06-2021)
+  - This is the final crates-published release of gfx-hal. gfx-hal development was mainly driven by wgpu which has now switched to its own GPU abstraction: wgpu-hal. As such, gfx-hal will be in maintence mode until the story of gfx-portability is figured out. Read more about the transition in #3768.
+  - MTL: Prevent accessing NSView on other threads.
+  - Fix panics when android apps reopen.
+  - Support dynamic array sizes on metal.
+  - Added backend agnostic RenderDoc captures.
+  - Allow initialization of gfx objects from raw handles.
+  - Add missing features to the dx12 backend that are needed by wgpu.
+  - Made `PhysicalDevice::enabled_extensions` public.
+  - Added the ability to import formeign memory
+  - GLES: Deferred deleting shaders until after linking
+  - GLES: Fix texture views
+  - GLES: Fix nearest neighbor filtering.
+  - Assorted: Documentation fixes
+
+### backend-metal-0.8.2 (08-05-2021)
+  - fix linking to QuartzCore
+
 ### hal-0.8.0 (29-04-2021)
   - Naga is the required and preferred shader translation path in Metal and OpenGL
   - enabling SPIRV-Cross is optional behind `cross` feature

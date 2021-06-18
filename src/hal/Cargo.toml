@@ -1,6 +1,6 @@
 [package]
 name = "gfx-hal"
-version = "0.8.0"
+version = "0.9.0"
 description = "gfx-rs hardware abstraction layer"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -27,5 +27,5 @@ thiserror = "1"
 external_memory = { path = "../auxil/external-memory", version = "0.0.1", package = "external-memory" }
 
 [dev-dependencies]
-gfx-backend-empty = { path = "../backend/empty", version = "0.8" }
+gfx-backend-empty = { path = "../backend/empty", version = "0.9" }
 

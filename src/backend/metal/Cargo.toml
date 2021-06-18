@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-metal"
-version = "0.8.1"
+version = "0.9.0"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -23,7 +23,7 @@ pipeline-cache = ["tempfile", "serde", "bincode", "naga/serialize", "naga/deseri
 name = "gfx_backend_metal"
 
 [dependencies]
-hal = { package = "gfx-hal", path = "../../hal", version = "0.8" }
+hal = { package = "gfx-hal", path = "../../hal", version = "0.9" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.5"
 bitflags = "1.0"
@@ -48,7 +48,7 @@ bincode = { version = "1", optional = true }
 [dependencies.auxil]
 package = "gfx-auxil"
 path = "../../auxil/auxil"
-version = "0.9"
+version = "0.10"
 features = ["spirv_cross"]
 optional = true
 

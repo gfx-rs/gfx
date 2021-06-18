@@ -19,7 +19,7 @@ default = []
 name = "gfx_backend_webgpu"
 
 [dependencies]
-hal = { path = "../../hal", version = "0.8", package = "gfx-hal" }
+hal = { path = "../../hal", version = "0.9", package = "gfx-hal" }
 js-sys = "0.3.37"
 raw-window-handle = "0.3"
 wasm-bindgen = "=0.2.60"
