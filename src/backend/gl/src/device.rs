@@ -252,60 +252,20 @@ impl Device {
         Ok((program, sampler_map))
     }
 
-    fn _bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
-        match *view {
-            n::ImageView::Renderbuffer { raw: rb, .. } => unsafe {
-                gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
-            },
-            n::ImageView::Texture {
-                target,
-                raw,
-                ref sub,
-                is_3d: false,
-            } => unsafe {
-                gl.bind_texture(target, Some(raw));
-                gl.framebuffer_texture_2d(
-                    point,
-                    attachment,
-                    target,
-                    Some(raw),
-                    sub.level_start as _,
-                );
-            },
-            n::ImageView::Texture {
-                target,
-                raw,
-                ref sub,
-                is_3d: true,
-            } => unsafe {
-                gl.bind_texture(target, Some(raw));
-                gl.framebuffer_texture_3d(
-                    point,
-                    attachment,
-                    target,
-                    Some(raw),
-                    sub.level_start as _,
-                    sub.layer_start as _,
-                );
-            },
-        }
-    }
-
     pub(crate) fn bind_target(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
         match *view {
             n::ImageView::Renderbuffer { raw: rb, .. } => unsafe {
                 gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
             },
             n::ImageView::Texture {
-                target: _,
+                target: target @ glow::TEXTURE_2D,
                 raw,
                 ref sub,
-                is_3d: false,
             } => unsafe {
                 gl.framebuffer_texture_2d(
                     point,
                     attachment,
-                    glow::TEXTURE_2D,
+                    target,
                     Some(raw),
                     sub.level_start as _,
                 );
@@ -314,7 +274,6 @@ impl Device {
                 target: _,
                 raw,
                 ref sub,
-                is_3d: true,
             } => unsafe {
                 gl.framebuffer_texture_layer(
                     point,
@@ -1458,7 +1417,7 @@ impl d::Device<B> for Device {
         _tiling: i::Tiling,
         usage: i::Usage,
         _sparse: memory::SparseFlags,
-        _view_caps: i::ViewCapabilities,
+        view_caps: i::ViewCapabilities,
     ) -> Result<n::Image, i::CreationError> {
         let gl = &self.share.context;
 
@@ -1468,121 +1427,153 @@ impl d::Device<B> for Device {
         let mut pixel_count: u64 = 0;
         let image = if num_levels > 1 || usage.intersects(i::Usage::STORAGE | i::Usage::SAMPLED) {
             let name = gl.create_texture().unwrap();
-            let target = match kind {
-                i::Kind::D2(w, h, 1, 1) => {
-                    gl.bind_texture(glow::TEXTURE_2D, Some(name));
-                    if self.share.private_caps.image_storage {
-                        gl.tex_storage_2d(
-                            glow::TEXTURE_2D,
-                            num_levels as _,
-                            desc.tex_internal,
+            let (w, h, l, target) = match kind {
+                i::Kind::D2(w, h, 1, 1) => (w, h, 1, glow::TEXTURE_2D),
+                i::Kind::D2(w, h, 6, 1)
+                    if view_caps.contains(i::ViewCapabilities::KIND_CUBE) && w == h =>
+                {
+                    (w, h, 6, glow::TEXTURE_CUBE_MAP)
+                }
+                i::Kind::D2(w, h, l, 1) => (w, h, l as u32, glow::TEXTURE_2D_ARRAY),
+                i::Kind::D3(w, h, l) => (w, h, l, glow::TEXTURE_3D),
+                _ => unimplemented!(),
+            };
+
+            gl.bind_texture(target, Some(name));
+
+            match (self.share.private_caps.image_storage, target) {
+                (true, glow::TEXTURE_2D) | (true, glow::TEXTURE_CUBE_MAP) => {
+                    gl.tex_storage_2d(target, num_levels as _, desc.tex_internal, w as _, h as _);
+                    let mut w = w as u64;
+                    let mut h = h as u64;
+                    for i in 0..num_levels {
+                        pixel_count += w * h * h;
+                        w = std::cmp::max(w / 2, 1);
+                        h = std::cmp::max(h / 2, 1);
+                    }
+                }
+                (false, glow::TEXTURE_2D) => {
+                    gl.tex_parameter_i32(target, glow::TEXTURE_MAX_LEVEL, (num_levels - 1) as _);
+                    let mut w = w;
+                    let mut h = h;
+                    for i in 0..num_levels {
+                        gl.tex_image_2d(
+                            target,
+                            i as _,
+                            desc.tex_internal as i32,
                             w as _,
                             h as _,
+                            0,
+                            desc.tex_external,
+                            desc.data_type,
+                            None,
                         );
-                        pixel_count += (w * h) as u64 * num_levels as u64;
-                    } else {
-                        gl.tex_parameter_i32(
-                            glow::TEXTURE_2D,
-                            glow::TEXTURE_MAX_LEVEL,
-                            (num_levels - 1) as _,
-                        );
-                        let mut w = w;
-                        let mut h = h;
-                        for i in 0..num_levels {
-                            gl.tex_image_2d(
-                                glow::TEXTURE_2D,
-                                i as _,
-                                desc.tex_internal as i32,
-                                w as _,
-                                h as _,
-                                0,
-                                desc.tex_external,
-                                desc.data_type,
-                                None,
-                            );
-                            pixel_count += (w * h) as u64;
-                            w = std::cmp::max(w / 2, 1);
-                            h = std::cmp::max(h / 2, 1);
-                        }
+                        pixel_count += (w * h) as u64;
+                        w = std::cmp::max(w / 2, 1);
+                        h = std::cmp::max(h / 2, 1);
                     }
-                    match channel {
-                        ChannelType::Uint | ChannelType::Sint => {
-                            gl.tex_parameter_i32(
-                                glow::TEXTURE_2D,
-                                glow::TEXTURE_MIN_FILTER,
-                                glow::NEAREST as _,
-                            );
-                            gl.tex_parameter_i32(
-                                glow::TEXTURE_2D,
-                                glow::TEXTURE_MAG_FILTER,
-                                glow::NEAREST as _,
-                            );
-                        }
-                        _ => {}
-                    };
-                    glow::TEXTURE_2D
                 }
-                i::Kind::D2(w, h, l, 1) => {
-                    gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(name));
-                    if self.share.private_caps.image_storage {
-                        gl.tex_storage_3d(
-                            glow::TEXTURE_2D_ARRAY,
-                            num_levels as _,
-                            desc.tex_internal,
+                (true, glow::TEXTURE_2D_ARRAY) => {
+                    gl.tex_storage_3d(
+                        target,
+                        num_levels as _,
+                        desc.tex_internal,
+                        w as _,
+                        h as _,
+                        l as _,
+                    );
+                    let mut w = w as u64;
+                    let mut h = h as u64;
+                    let l = l as u64;
+                    for i in 0..num_levels {
+                        pixel_count += w * h * l;
+                        w = std::cmp::max(w / 2, 1);
+                        h = std::cmp::max(h / 2, 1);
+                    }
+                }
+                (false, glow::TEXTURE_2D_ARRAY) => {
+                    gl.tex_parameter_i32(target, glow::TEXTURE_MAX_LEVEL, (num_levels - 1) as _);
+                    let mut w = w as u64;
+                    let mut h = h as u64;
+                    let l = l as u64;
+                    for i in 0..num_levels {
+                        gl.tex_image_3d(
+                            target,
+                            i as _,
+                            desc.tex_internal as i32,
                             w as _,
                             h as _,
                             l as _,
+                            0,
+                            desc.tex_external,
+                            desc.data_type,
+                            None,
                         );
-                        pixel_count += (w * h) as u64 * l as u64 * num_levels as u64;
-                    } else {
-                        gl.tex_parameter_i32(
-                            glow::TEXTURE_2D_ARRAY,
-                            glow::TEXTURE_MAX_LEVEL,
-                            (num_levels - 1) as _,
-                        );
-                        let mut w = w;
-                        let mut h = h;
-                        for i in 0..num_levels {
-                            gl.tex_image_3d(
-                                glow::TEXTURE_2D_ARRAY,
-                                i as _,
-                                desc.tex_internal as i32,
-                                w as _,
-                                h as _,
-                                l as _,
-                                0,
-                                desc.tex_external,
-                                desc.data_type,
-                                None,
-                            );
-                            pixel_count += (w * h) as u64 * l as u64;
-                            w = std::cmp::max(w / 2, 1);
-                            h = std::cmp::max(h / 2, 1);
-                        }
+                        pixel_count += w * h * l;
+                        w = std::cmp::max(w / 2, 1);
+                        h = std::cmp::max(h / 2, 1);
                     }
-                    match channel {
-                        ChannelType::Uint | ChannelType::Sint => {
-                            gl.tex_parameter_i32(
-                                glow::TEXTURE_2D,
-                                glow::TEXTURE_MIN_FILTER,
-                                glow::NEAREST as _,
-                            );
-                            gl.tex_parameter_i32(
-                                glow::TEXTURE_2D,
-                                glow::TEXTURE_MAG_FILTER,
-                                glow::NEAREST as _,
-                            );
-                        }
-                        _ => {}
-                    };
-                    glow::TEXTURE_2D_ARRAY
+                }
+                (true, glow::TEXTURE_3D) => {
+                    gl.tex_storage_3d(
+                        target,
+                        num_levels as _,
+                        desc.tex_internal,
+                        w as _,
+                        h as _,
+                        l as _,
+                    );
+                    let mut w = w as u64;
+                    let mut h = h as u64;
+                    let mut l = l as u64;
+                    for i in 0..num_levels {
+                        pixel_count += w * h * l;
+                        w = std::cmp::max(w / 2, 1);
+                        h = std::cmp::max(h / 2, 1);
+                        l = std::cmp::max(l / 2, 1);
+                    }
+                }
+                (false, glow::TEXTURE_3D) => {
+                    gl.tex_parameter_i32(target, glow::TEXTURE_MAX_LEVEL, (num_levels - 1) as _);
+                    let mut w = w as u64;
+                    let mut h = h as u64;
+                    let mut l = l as u64;
+                    for i in 0..num_levels {
+                        gl.tex_image_3d(
+                            target,
+                            i as _,
+                            desc.tex_internal as i32,
+                            w as _,
+                            h as _,
+                            l as _,
+                            0,
+                            desc.tex_external,
+                            desc.data_type,
+                            None,
+                        );
+                        pixel_count += w * h * l;
+                        w = std::cmp::max(w / 2, 1);
+                        h = std::cmp::max(h / 2, 1);
+                        l = std::cmp::max(l / 2, 1);
+                    }
                 }
                 _ => unimplemented!(),
+            }
+
+            match channel {
+                ChannelType::Uint | ChannelType::Sint => {
+                    gl.tex_parameter_i32(target, glow::TEXTURE_MIN_FILTER, glow::NEAREST as _);
+                    gl.tex_parameter_i32(target, glow::TEXTURE_MAG_FILTER, glow::NEAREST as _);
+                }
+                _ => {}
             };
+            gl.bind_texture(target, None);
+
             n::ImageType::Texture {
                 target,
                 raw: name,
-                format: desc.tex_external,
+                format_internal: desc.tex_internal,
+                format_external: desc.tex_external,
                 pixel_type: desc.data_type,
                 layer_count: kind.num_layers(),
                 level_count: num_levels,
@@ -1700,13 +1691,9 @@ impl d::Device<B> for Device {
             n::ImageType::Texture {
                 target,
                 raw,
-                format,
+                format_external: format,
                 ..
             } => {
-                let is_3d = match kind {
-                    i::ViewKind::D1 | i::ViewKind::D2 => false,
-                    _ => true,
-                };
                 match conv::describe_format(view_format) {
                     Some(description) => {
                         let raw_view_format = description.tex_external;
@@ -1722,10 +1709,23 @@ impl d::Device<B> for Device {
                         log::warn!("View format {:?} is not supported", view_format);
                     }
                 }
+                let kind_target = match kind {
+                    i::ViewKind::D1 => glow::TEXTURE_1D,
+                    i::ViewKind::D1Array => glow::TEXTURE_1D_ARRAY,
+                    i::ViewKind::D2 => glow::TEXTURE_2D,
+                    i::ViewKind::D2Array => glow::TEXTURE_2D_ARRAY,
+                    i::ViewKind::D3 => glow::TEXTURE_3D,
+                    i::ViewKind::Cube => glow::TEXTURE_CUBE_MAP,
+                    i::ViewKind::CubeArray => glow::TEXTURE_CUBE_MAP_ARRAY,
+                };
+
+                if kind_target != target {
+                    todo!("image view of different kind than original texture");
+                }
+
                 Ok(n::ImageView::Texture {
                     target,
                     raw,
-                    is_3d,
                     sub: range,
                 })
             }

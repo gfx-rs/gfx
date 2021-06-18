@@ -1,6 +1,6 @@
 use crate::{
-    command as com, device, info::LegacyFeatures, native, state, Backend, Device, GlContext, Share,
-    Starc, Surface, MAX_COLOR_ATTACHMENTS,
+    command as com, conv, device, info::LegacyFeatures, native, state, Backend, Device, GlContext,
+    Share, Starc, Surface, MAX_COLOR_ATTACHMENTS,
 };
 
 use arrayvec::ArrayVec;
@@ -115,7 +115,7 @@ impl Queue {
                 (glow::BYTE, glow::SHORT, glow::INT),
             C::Uint | C::Unorm =>
                 (glow::UNSIGNED_BYTE, glow::UNSIGNED_SHORT, glow::UNSIGNED_INT),
-            C::Float => (glow::ZERO, glow::HALF_FLOAT, glow::FLOAT),
+            C::Float => (glow::ZERO, glow::HALF_FLOAT, glow),
             C::Srgb => {
                 log::error!("Unsupported Srgb channel type");
                 return
@@ -637,7 +637,6 @@ impl Queue {
                     glow::COPY_WRITE_BUFFER
                 };
                 let gl = &self.share.context;
-
                 gl.bind_buffer(copy_src_target, Some(src_buffer));
                 gl.bind_buffer(copy_dst_target, Some(dst_buffer));
 
@@ -668,6 +667,7 @@ impl Queue {
                 dst_texture,
                 texture_target,
                 texture_format,
+                internal_format,
                 pixel_type,
                 ref data,
             } => unsafe {
@@ -678,12 +678,23 @@ impl Queue {
 
                 gl.active_texture(glow::TEXTURE0);
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(src_buffer));
+                gl.bind_texture(texture_target, Some(dst_texture));
 
-                match texture_target {
-                    glow::TEXTURE_2D => {
-                        gl.bind_texture(glow::TEXTURE_2D, Some(dst_texture));
+                let compressed_format = conv::compressed_format_info(internal_format);
+
+                const CUBEMAP_FACES: [u32; 6] = [
+                    glow::TEXTURE_CUBE_MAP_POSITIVE_X,
+                    glow::TEXTURE_CUBE_MAP_NEGATIVE_X,
+                    glow::TEXTURE_CUBE_MAP_POSITIVE_Y,
+                    glow::TEXTURE_CUBE_MAP_NEGATIVE_Y,
+                    glow::TEXTURE_CUBE_MAP_POSITIVE_Z,
+                    glow::TEXTURE_CUBE_MAP_NEGATIVE_Z,
+                ];
+
+                match (texture_target, compressed_format) {
+                    (glow::TEXTURE_2D, None) => {
                         gl.tex_sub_image_2d(
-                            glow::TEXTURE_2D,
+                            texture_target,
                             data.image_layers.level as _,
                             data.image_offset.x,
                             data.image_offset.y,
@@ -694,10 +705,26 @@ impl Queue {
                             glow::PixelUnpackData::BufferOffset(data.buffer_offset as u32),
                         );
                     }
-                    glow::TEXTURE_2D_ARRAY => {
-                        gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(dst_texture));
+                    (glow::TEXTURE_2D, Some(compressed_info)) => {
+                        let layer_size =
+                            compressed_info.compute_compressed_image_size(data.image_extent);
+                        let mut buffer_offset = data.buffer_offset as u32;
+                        gl.compressed_tex_sub_image_2d(
+                            texture_target,
+                            data.image_layers.level as _,
+                            data.image_offset.x,
+                            data.image_offset.y,
+                            data.image_extent.width as _,
+                            data.image_extent.height as _,
+                            internal_format,
+                            glow::CompressedPixelUnpackData::BufferRange(
+                                buffer_offset..buffer_offset + layer_size,
+                            ),
+                        );
+                    }
+                    (glow::TEXTURE_2D_ARRAY, None) | (glow::TEXTURE_3D, None) => {
                         gl.tex_sub_image_3d(
-                            glow::TEXTURE_2D_ARRAY,
+                            texture_target,
                             data.image_layers.level as _,
                             data.image_offset.x,
                             data.image_offset.y,
@@ -711,9 +738,76 @@ impl Queue {
                             glow::PixelUnpackData::BufferOffset(data.buffer_offset as u32),
                         );
                     }
+                    (glow::TEXTURE_CUBE_MAP, None) => {
+                        let components = match texture_format {
+                            glow::RED
+                            | glow::RED_INTEGER
+                            | glow::DEPTH_COMPONENT
+                            | glow::DEPTH_STENCIL => 1,
+                            glow::RG | glow::RG_INTEGER => 2,
+                            glow::RGB | glow::RGB_INTEGER => 3,
+                            glow::RGBA | glow::BGRA | glow::RGBA_INTEGER => 4,
+                            _ => unreachable!(),
+                        };
+
+                        let component_size = match pixel_type {
+                            glow::BYTE | glow::UNSIGNED_BYTE => 1,
+                            glow::SHORT | glow::UNSIGNED_SHORT | glow::HALF_FLOAT => 2,
+                            glow::INT
+                            | glow::UNSIGNED_INT
+                            | glow::UNSIGNED_NORMALIZED
+                            | glow::FLOAT => 4,
+                            _ => unreachable!(),
+                        };
+
+                        let mut buffer_offset = data.buffer_offset as u32;
+                        let layer_size =
+                            data.buffer_width * data.buffer_height * component_size * components;
+
+                        let faces_range = data.image_layers.layers.start as usize
+                            ..data.image_layers.layers.end as usize;
+                        for &face in &CUBEMAP_FACES[faces_range] {
+                            gl.tex_sub_image_2d(
+                                face,
+                                data.image_layers.level as _,
+                                data.image_offset.x,
+                                data.image_offset.y,
+                                data.image_extent.width as _,
+                                data.image_extent.height as _,
+                                texture_format,
+                                pixel_type,
+                                glow::PixelUnpackData::BufferOffset(buffer_offset),
+                            );
+                            buffer_offset += layer_size;
+                        }
+                    }
+                    (glow::TEXTURE_CUBE_MAP, Some(compressed_info)) => {
+                        let mut buffer_offset = data.buffer_offset as u32;
+                        let layer_size =
+                            compressed_info.compute_compressed_image_size(data.image_extent);
+
+                        let faces_range = data.image_layers.layers.start as usize
+                            ..data.image_layers.layers.end as usize;
+                        for &face in &CUBEMAP_FACES[faces_range] {
+                            gl.compressed_tex_sub_image_2d(
+                                face,
+                                data.image_layers.level as _,
+                                data.image_offset.x,
+                                data.image_offset.y,
+                                data.image_extent.width as _,
+                                data.image_extent.height as _,
+                                internal_format,
+                                glow::CompressedPixelUnpackData::BufferRange(
+                                    buffer_offset..buffer_offset + layer_size,
+                                ),
+                            );
+                            buffer_offset += layer_size;
+                        }
+                    }
                     _ => unimplemented!(),
                 }
 
+                gl.bind_texture(texture_target, None);
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
             },
             com::Command::CopyBufferToRenderbuffer(..) => {
@@ -749,6 +843,7 @@ impl Queue {
                             glow::PixelPackData::BufferOffset(data.buffer_offset as u32),
                         );
                         gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
+                        gl.bind_texture(glow::TEXTURE_2D, None);
                     }
                 } else {
                     //TODO: use FBO

@@ -626,6 +626,7 @@ pub(crate) fn query_all(
         max_color_attachments: get_usize(gl, glow::MAX_COLOR_ATTACHMENTS)
             .unwrap_or(1)
             .min(MAX_COLOR_ATTACHMENTS),
+        max_memory_allocation_count: 4096,
         ..Limits::default()
     };
 
@@ -689,6 +690,13 @@ pub(crate) fn query_all(
     {
         features |= Features::INDEPENDENT_BLENDING;
     }
+    if info.is_supported(&[
+        Es(3, 0),
+        Ext("WEBGL_compressed_texture_s3tc"),
+        Ext("WEBGL_compressed_texture_s3tc_srgb"),
+    ]) {
+        features |= Features::FORMAT_BC;
+    }
 
     // TODO
     if false && info.is_supported(&[Core(4, 3), Es(3, 1)]) {
@@ -749,7 +757,6 @@ pub(crate) fn query_all(
     if info.is_supported(&[Core(3, 3), Es(3, 0)]) {
         legacy |= LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING;
     }
-
     let mut performance_caveats = PerformanceCaveats::empty();
     //TODO: extension
     if !info.is_supported(&[Core(4, 2)]) {

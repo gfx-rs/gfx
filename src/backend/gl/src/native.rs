@@ -151,7 +151,8 @@ pub enum ImageType {
         raw: Texture,
         level_count: i::Level,
         layer_count: i::Layer,
-        format: TextureFormat,
+        format_internal: TextureFormat,
+        format_external: TextureFormat,
         pixel_type: DataType,
     },
 }
@@ -173,7 +174,6 @@ pub enum ImageView {
     Texture {
         target: TextureTarget,
         raw: Texture,
-        is_3d: bool,
         sub: i::SubresourceRange,
     },
 }
