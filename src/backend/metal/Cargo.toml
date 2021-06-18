@@ -28,10 +28,11 @@ range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1.4"
+core-graphics-types = "0.1.1"
 fxhash = "0.2.1"
 log = "0.4"
 dispatch = { version = "0.2", optional = true }
-metal = { version = "0.22", features = ["private"] }
+metal = { version = "0.23", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"

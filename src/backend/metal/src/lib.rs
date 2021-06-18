@@ -71,7 +71,9 @@ use foreign_types::ForeignTypeRef;
 use metal::MTLFeatureSet;
 use metal::MTLGPUFamily;
 use metal::MTLLanguageVersion;
-use metal::{CGFloat, CGSize, MetalLayer, MetalLayerRef};
+use metal::{MetalLayer, MetalLayerRef};
+use core_graphics_types::base::CGFloat;
+use core_graphics_types::geometry::CGSize;
 use objc::{
     declare::ClassDecl,
     runtime::{Class, Object, Sel, BOOL, YES},
