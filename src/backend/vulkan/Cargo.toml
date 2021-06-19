@@ -33,8 +33,7 @@ inplace_it = "0.3.3"
 gfx-renderdoc = { path = "../../auxil/renderdoc", version = "0.1.0" }
 
 [dependencies.naga]
-git = "https://github.com/gfx-rs/naga"
-tag = "gfx-26"
+version = "0.5"
 features = ["spv-out"]
 optional = true
 
