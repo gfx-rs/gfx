@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.9.1 (23-06-2021)
+  - relax the thread check on swapchain configuration
+
 ### hal-0.9.0 (18-06-2021)
   - This is the final crates-published release of gfx-hal. gfx-hal development was mainly driven by wgpu which has now switched to its own GPU abstraction: wgpu-hal. As such, gfx-hal will be in maintence mode until the story of gfx-portability is figured out. Read more about the transition in #3768.
   - MTL: Prevent accessing NSView on other threads.
