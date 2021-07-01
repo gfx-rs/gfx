@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.9.1 (01-07-2021)
+  - implement support for dynamic-offset storage buffers
+
 ### backend-metal-0.9.1 (23-06-2021)
   - relax the thread check on swapchain configuration
 
