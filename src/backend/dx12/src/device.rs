@@ -1745,6 +1745,7 @@ impl d::Device<B> for Device {
                 let space = (root_space_offset + i) as u32;
                 let mut table_type = r::SetTableTypes::empty();
                 let root_table_offset = root_offset;
+                log::debug!("\tSet {} space={}, root offset={}", i, space, root_offset);
 
                 //TODO: split between sampler and non-sampler tables
                 let visibility = conv::map_shader_visibility(
@@ -1793,6 +1794,11 @@ impl d::Device<B> for Device {
                 }
                 if ranges.len() > range_base {
                     parameter_offsets.push(root_offset);
+                    log::debug!(
+                        "\tView table with {} views at root offset {}",
+                        ranges.len() - range_base,
+                        root_offset
+                    );
                     parameters.push(native::RootParameter::descriptor_table(
                         visibility,
                         &ranges[range_base..],
@@ -1810,6 +1816,11 @@ impl d::Device<B> for Device {
                     }
                 }
                 if ranges.len() > range_base {
+                    log::debug!(
+                        "\tSampler table with {} samplers at root offset {}",
+                        ranges.len() - range_base,
+                        root_offset
+                    );
                     parameter_offsets.push(root_offset);
                     parameters.push(native::RootParameter::descriptor_table(
                         visibility,
@@ -3808,8 +3819,7 @@ impl d::Device<B> for Device {
         _sparse: hal::memory::SparseFlags,
         _type_mask: u32,
         _size: u64,
-    ) -> Result<(r::Buffer, r::Memory), hal::external_memory::ExternalResourceError>
-    {
+    ) -> Result<(r::Buffer, r::Memory), hal::external_memory::ExternalResourceError> {
         unimplemented!()
     }
 
