@@ -65,6 +65,8 @@ use hal::{
 use range_alloc::RangeAllocator;
 
 use cocoa_foundation::foundation::NSInteger;
+use core_graphics_types::base::CGFloat;
+use core_graphics_types::geometry::CGSize;
 #[cfg(feature = "dispatch")]
 use dispatch;
 use foreign_types::ForeignTypeRef;
@@ -72,8 +74,6 @@ use metal::MTLFeatureSet;
 use metal::MTLGPUFamily;
 use metal::MTLLanguageVersion;
 use metal::{MetalLayer, MetalLayerRef};
-use core_graphics_types::base::CGFloat;
-use core_graphics_types::geometry::CGSize;
 use objc::{
     declare::ClassDecl,
     runtime::{Class, Object, Sel, BOOL, YES},
@@ -350,6 +350,10 @@ struct GfxManagedMetalLayerDelegate(&'static Class);
 
 impl GfxManagedMetalLayerDelegate {
     pub fn new() -> Self {
+        if let Some(class) = Class::get(CAML_DELEGATE_CLASS) {
+            return GfxManagedMetalLayerDelegate(class);
+        }
+
         CAML_DELEGATE_REGISTER.call_once(|| {
             type Fun = extern "C" fn(&Class, Sel, *mut Object, CGFloat, *mut Object) -> BOOL;
             let mut decl = ClassDecl::new(CAML_DELEGATE_CLASS, class!(NSObject)).unwrap();
