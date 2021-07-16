@@ -27,10 +27,9 @@ For Linux, a Vulkan compatible driver must also be installed. For example, the o
 ## Usage
 
 As mentioned befored, gfx is a low-level library, not necessarily intended for beginners.
-You might want to get a grasp on the fundamental graphics concepts by using [wgpu-rs](https://github.com/gfx-rs/wgpu-rs).
+You might want to get a grasp on the fundamental graphics concepts by using [wgpu-rs](https://github.com/gfx-rs/wgpu/tree/master/wgpu).
 
-Some good tutorials for learning how to use gfx  are [mistodon/gfx-hal-tutorials](https://github.com/mistodon/gfx-hal-tutorials)
-and [rust-tutorials/learn-gfx-hal](https://github.com/rust-tutorials/learn-gfx-hal).
+A good tutorial for learning how to use gfx is [mistodon/gfx-hal-tutorials](https://github.com/mistodon/gfx-hal-tutorials).
 
 The gfx repository contains a number of examples. Those examples are automatically downloaded when the repository is cloned.
 
