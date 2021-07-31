@@ -455,12 +455,10 @@ impl ServicePipes {
     pub fn new(device: &metal::DeviceRef) -> Self {
         let data = if cfg!(target_os = "macos") {
             &include_bytes!("./../shaders/gfx-shaders-macos.metallib")[..]
-        } else if cfg!(target_os = "ios") {
-            if cfg!(target_abi = "sim") {
+        } else if cfg!(target_arch = "aarch64") {
+            if env!("TARGET") == "aarch64-apple-ios-sim" { 
                 &include_bytes!("./../shaders/gfx-shaders-ios-simulator.metallib")[..]
-            } else if cfg!(target_arch = "x86_64") { 
-                &include_bytes!("./../shaders/gfx-shaders-ios-simulator.metallib")[..]
-            } else { 
+            } else {
                 &include_bytes!("./../shaders/gfx-shaders-ios.metallib")[..]
             }
         } else {
