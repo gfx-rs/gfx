@@ -11,6 +11,7 @@ readme = "README.md"
 documentation = "https://docs.rs/gfx-backend-metal"
 workspace = "../../.."
 edition = "2018"
+build = "build/build.rs"
 
 [features]
 #TODO: add a feature to enable `profiling`, so that we can CI test it
