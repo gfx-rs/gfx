@@ -95,7 +95,7 @@ macro_rules! gfx_vertex_struct_meta {
     ($(#[$attr:meta])* vertex_struct_meta $root:ident {
         $( $(#[$field_attr:meta])* $field:ident: $ty:ty = $name:expr, )*
     }) => (gfx_impl_struct_meta!{
-        $(#[$attr])* impl_struct_meta
+        $(#[$attr])* #[repr(C)] impl_struct_meta
         $crate::format::Format : $crate::format::Formatted =
         $root {
             $( $(#[$field_attr])* $field: $ty = $name, )*
@@ -121,7 +121,7 @@ macro_rules! gfx_constant_struct_meta {
     ($(#[$attr:meta])* constant_struct_meta $root:ident {
         $( $(#[$field_attr:meta])* $field:ident: $ty:ty = $name:expr, )*
     }) => (gfx_impl_struct_meta!{
-        $(#[$attr])* impl_struct_meta
+        $(#[$attr])* #[repr(C)] impl_struct_meta
         $crate::shade::ConstFormat : $crate::shade::Formatted =
         $root {
             $( $(#[$field_attr])* $field: $ty = $name, )*

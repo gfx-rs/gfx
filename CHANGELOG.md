@@ -1,5 +1,8 @@
 ## Change Log
 
+### v0.18.3
+  - `gfx_defines!` uses `#[repr(C)]` for vertex & constant structs. Fixes issues with rust 1.67 field ordering.
+
 ### v0.18 (2019-02-12)
   - changed `get_dimensions` to return a minimum of 1
   - Features:
